@@ -1,0 +1,49 @@
+extends: 
+  - "spectral:oas" 
+  - "@auditmation/types-format-spectral-ruleset"
+rules:
+  info-contact: off
+  oas3-api-servers: off
+  operation-description: off
+  propertyNamesShouldBeCamel:
+    description: Name of a property should be in camelCase.
+    given: $..properties
+    severity: error
+    then:
+      field: "@key"
+      function: casing
+      functionOptions:
+        type: camel
+  propertiesShouldHaveDescriptions:
+    description: Properties must have a description.
+    given: $..properties[*]
+    severity: warn
+    then:
+      field: description
+      function: truthy
+  enumsMustBeSnakeCase:
+    description: Enums must be snake_case.
+    given: $..enum[*]
+    severity: error
+    then:
+      function: casing
+      functionOptions:
+        type: snake
+  operationMustHaveSummary:
+    description: Operation summary should be provided.
+    given: $.paths.*[?( @property === 'get' || @property === 'put' || @property === 'post' || @property === 'delete' || @property === 'options' || @property === 'head' || @property === 'patch' || @property === 'trace' )]
+    severity: error
+    then:
+      field: summary
+      function: truthy
+  reqBodyMustBeRefedOrHaveAtitle:
+    description: Request body schema should be a $ref or have a 'title:' property
+    given: $..[requestBody,requestBodies]..content.*.schema
+    severity: error
+    resolved: false
+    then:
+      function: xor
+      functionOptions:
+        properties:
+          - $ref
+          - title
