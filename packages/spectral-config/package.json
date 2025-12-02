@@ -1,16 +1,24 @@
 {
-  "name": "@auditmation/util-spectral-config",
+  "name": "@zerobias-org/util-spectral-config",
   "description": "Zerobias spectral configuration options",
   "version": "1.0.0",
-  "main": "index.js",
-  "author": "",
+  "type": "module",
+  "author": "team@zerobias.com",
+  "license": "ISC",
+  "exports": {
+    ".": {
+      "import": "./index.js"
+    },
+    "./rules/*": "./rules/*",
+    "./functions/*": "./functions/*"
+  },
   "repository": {
     "type": "git",
-    "url": "git@github.com:auditmation/util.git",
-    "directory": "spectral-config"
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/spectral-config"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://pkg.zerobias.org/"
   },
   "dependencies": {
     "@zerobias-org/types-format-spectral-ruleset": "1.0.0",
@@ -22,5 +30,9 @@
     "rules/*.yml",
     "functions/*.js",
     "bom.json"
-  ]
+  ],
+  "engines": {
+    "node": ">=24.11.0",
+    "npm": ">=10.0.0"
+  }
 }
