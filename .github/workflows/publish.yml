@@ -58,7 +58,6 @@ jobs:
         run: |
           npm install -g nx@20.5.0
         env:
-        env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
@@ -79,7 +78,6 @@ jobs:
         run: |
           npm i
           nx affected -t build --base=${{ steps.base_ref.outputs.BASE_REF }}
-        env:
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
