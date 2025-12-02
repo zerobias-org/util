@@ -116,7 +116,7 @@ jobs:
                   type: "mrkdwn"
                   text: "${{ steps.get_package_versions.outputs.output }}"
 
-  sbom-recorder:
-    needs: publish
-    uses: auditmation/devops/.github/workflows/sbom-recorder.yml@main
-    secrets: inherit
+  # sbom-recorder:
+  #   needs: publish
+  #   uses: auditmation/devops/.github/workflows/sbom-recorder.yml@main
+  #   secrets: inherit
