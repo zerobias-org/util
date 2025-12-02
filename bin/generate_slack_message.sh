@@ -4,5 +4,5 @@ versions=($(npx lerna list --since HEAD~1 --json --no-progress | grep -v '^lerna
 dirs=($(npx lerna list --since HEAD~1 --json --no-progress | grep -v '^lerna' | jq -r '[ .[] | .location ] | @sh' | tr -d \'\"))
 
 for ((i = 0 ; i < ${#versions[@]} ; i++)); do
-  echo "${versions[$i]} https://github.com/${GITHUB_REPOSITORY}/blob/master/$(realpath --relative-to=. ${dirs[$i]})/CHANGELOG.md"
+  echo "${versions[$i]} https://github.com/${GITHUB_REPOSITORY}/blob/main/$(realpath --relative-to=. ${dirs[$i]})/CHANGELOG.md"
 done

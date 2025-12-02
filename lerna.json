@@ -20,7 +20,7 @@
       "message": "chore(release): publish"
     },
     "version": {
-      "allowBranch": ["master", "main"],
+      "allowBranch": ["main"],
       "message": "chore(release): bump version"
     }
   },
