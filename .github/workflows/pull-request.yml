@@ -54,13 +54,26 @@ jobs:
         env:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
 
+      - name: Determine base ref for nx affected
+        id: base_ref
+        run: |
+          # Get the last publish tag for nx affected base reference
+          LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "")
+          if [ -z "$LAST_PUBLISH_TAG" ]; then
+            echo "No publish tag found, using origin/main~1 as base"
+            echo "BASE_REF=origin/main~1" >> $GITHUB_OUTPUT
+          else
+            echo "Using last publish tag as base: $LAST_PUBLISH_TAG"
+            echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install and build
         run: |
           npm i
-          nx affected -t build
+          nx affected -t build --base=${{ steps.base_ref.outputs.BASE_REF }}
         env:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
 
       - name: Run tests
         run: |
-          nx affected -t test
+          nx affected -t test --base=${{ steps.base_ref.outputs.BASE_REF }}
