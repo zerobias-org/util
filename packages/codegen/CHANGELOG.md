@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.11 (2025-12-02)</small>
+
+* fix: change registry ([9bf6702](https://github.com/zerobias-org/util/commit/9bf6702))
+
+
+
+
+
 ## <small>1.0.10 (2025-12-02)</small>
 
 * fix: remove weird prepublish script ([5bd75fe](https://github.com/zerobias-org/util/commit/5bd75fe))

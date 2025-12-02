@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.5 (2025-12-02)</small>
+
+* fix: change registry ([9bf6702](https://github.com/zerobias-org/util/commit/9bf6702))
+
+
+
+
+
 ## <small>1.0.4 (2025-12-02)</small>
 
 * fix: push ver ([c6df47b](https://github.com/zerobias-org/util/commit/c6df47b))
