@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - main
 
 permissions:
   contents: write
@@ -90,12 +90,11 @@ jobs:
           webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
           webhook-type: incoming-webhook
           payload: |
-            text: ":fire: Github Workflow Failed"
             blocks:
               - type: "section"
                 text:
                   type: "mrkdwn"
-                  text: ":fire: zerobias-org ${{ github.repository }} Github Workflow Failed"
+                  text: ":fire: ${{ github.repository }} Github Workflow Failed"
               - type: "section"
                 text:
                   type: "mrkdwn"
@@ -107,23 +106,15 @@ jobs:
           webhook: ${{ env.SLACK_RELEASES_WEBHOOK }}
           webhook-type: incoming-webhook
           payload: |
-            text: ":robot: :gear: New artifacts published :tada:"
             blocks:
               - type: "section"
                 text:
                   type: "mrkdwn"
+                  text: ":robot: :gear: New artifacts published :tada:"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
                   text: "${{ steps.get_package_versions.outputs.output }}"
-
-      # - name: Slack Notification
-      #   uses: rtCamp/action-slack-notify@master
-      #   env:
-      #     SLACK_COLOR: good
-      #     SLACK_WEBHOOK: ${{ env.SLACK_RELEASES_WEBHOOK }}
-      #     SLACK_ICON_EMOJI: ':robot:'
-      #     MSG_MINIMAL: true
-      #     SLACK_TITLE: ':gear: new artifacts published :tada:'
-      #     SLACK_MESSAGE: '${{ steps.get_package_versions.outputs.output }}'
-      #     SLACK_FOOTER: ''
 
   sbom-recorder:
     needs: publish
