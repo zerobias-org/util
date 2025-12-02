@@ -19,7 +19,7 @@
     "directory": "packages/codegen"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://pkg.zerobias.org/"
   },
   "scripts": {
     "clean": "rimraf bin/*.jar generated dist && ./gradlew :clean",
