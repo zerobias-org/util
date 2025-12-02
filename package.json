@@ -37,7 +37,6 @@
     "npm": ">=10.0.0"
   },
   "devDependencies": {
-    "@zerobias-org/eslint-config": "^1.0.0",
     "@commitlint/cli": "^19.6.1",
     "@commitlint/config-conventional": "^19.6.0",
     "@types/chai": "^4.3.20",
