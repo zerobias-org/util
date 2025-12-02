@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "nx affected -t lint generate transpile",
-    "build:full": "nx run-many -t lint generate transpile sql:copy templates:copy",
+    "build": "nx affected -t build",
+    "build:full": "nx run-many -t build",
     "clean": "nx affected -t clean && nx reset && find . -name tsconfig.tsbuildinfo -delete || echo \"\"",
     "clean:full": "nx run-many -t clean && nx reset && find . -name tsconfig.tsbuildinfo -delete || echo \"\"",
     "docs": "nx run-many -t docs",

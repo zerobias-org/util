@@ -138,7 +138,7 @@ build/
 .gradletasknamecache
 
 # Package Files #
-*.jar
+**/bin/*.jar
 *.war
 *.ear
 

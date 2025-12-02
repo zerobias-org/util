@@ -62,13 +62,13 @@ jobs:
       - name: Install and build
         run: |
           npm i
-          npm run build
+          nx affected -t build
         env:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
 
       - name: Generate bom
         run: |
-          npm run generate:bom
+          nx affected -t generate:bom
 
       - name: Publish
         run: |

@@ -57,10 +57,10 @@ jobs:
       - name: Install and build
         run: |
           npm i
-          npm run build
+          nx affected -t build
         env:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
 
       - name: Run tests
         run: |
-          npm run test
+          nx affected -t test
