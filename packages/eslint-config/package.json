@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/eslint-config",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "zerobias-org eslint configuration",
   "main": "eslint.config.js",
   "author": "team@zerobias.com",
