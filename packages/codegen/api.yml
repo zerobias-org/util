@@ -1,0 +1,463 @@
+openapi: 3.0.3
+info:
+  description: REST server implementation of the Hub API
+  version: 0.34.3
+  title: '@auditmation/hub-server'
+tags:
+  - name: node
+    description: Data and configuration for your Nodes
+servers:
+  - url: /
+paths:
+  /foo/{status}:
+    get:
+      tags:
+        - foo
+      operationId: getFoo
+      parameters:
+        - name: status
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/OperationalStatus'
+        - name: statusOpt
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/OperationalStatus'
+        - name: queryStatus
+          in: query
+          schema:
+            type: string
+            enum:
+              - foo
+              - bar
+      responses:
+        '204':
+          description: Foo
+      security:
+        - hub:
+            - read:foo
+  /bar:
+    get:
+      tags:
+        - bar
+      operationId: listBar
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: Foo
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pagedCountHeader'
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourceView'
+      security:
+        - hub:
+            - read:bar
+  /tokenizedBar:
+    get:
+      tags:
+        - bar
+      operationId: listBarTokenized
+      parameters:
+        - $ref: '#/components/parameters/pageTokenParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: Foo
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pagedCountHeader'
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourceView'
+      security:
+        - hub:
+            - read:bar
+  /baz:
+    get:
+      tags:
+        - baz
+      operationId: listBaz
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/sortByParam'
+        - $ref: '#/components/parameters/sortDirParam'
+      responses:
+        '200':
+          description: PagedResults<primitive>
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pagedCountHeader'
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  type: string
+  /quux:
+    get:
+      tags:
+        - quux
+      operationId: getAnEnum
+      responses:
+        '200':
+          description: Returns an Enum
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/OperationalStatus'
+  /assets:
+    get:
+      tags:
+        - quux
+      operationId: downloadAsset
+      parameters:
+        - name: assetUrl
+          in: query
+          description: Monday asset url.
+          required: true
+          schema:
+            type: string
+            format: url
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: string
+      security:
+        - hub:
+            - read:bar
+            - read:foo
+components:
+  headers:
+    pageCountHeader:
+      $ref: ./node_modules/@auditmation/types-core/schema/pageCountHeader.yml
+    pagedLinkHeader:
+      $ref: ./node_modules/@auditmation/types-core/schema/pagedLinkHeader.yml
+  parameters:
+    pageNumberParam:
+      $ref: ./node_modules/@auditmation/types-core/schema/pageNumberParam.yml
+    pageSizeParam:
+      $ref: ./node_modules/@auditmation/types-core/schema/pageSizeParam.yml
+    pageTokenParam:
+      $ref: ./node_modules/@auditmation/types-core/schema/pageTokenParam.yml
+    sortByParam:
+      $ref: ./node_modules/@auditmation/types-core/schema/sortByParam.yml
+    sortDirParam:
+      $ref: ./node_modules/@auditmation/types-core/schema/sortDirParam.yml
+  securitySchemes:
+    hub:
+      type: oauth2
+      flows:
+        password:
+          tokenUrl: https://hub.auditmation.io/
+          scopes:
+            read:foo: Ability to see Foos
+            read:bar: Ability to see Bars
+  schemas:
+    ResourceView:
+      type: object
+      title: ResourceView
+      description: View of a resource
+      allOf:
+        - type: object
+          title: Resource
+          description: Base class representing a resource. This will not be used on its own.
+          required:
+            - id
+            - name
+            - type
+            - ownerId
+            - created
+            - updated
+          properties:
+            id:
+              description: Unique identifier
+              format: uuid
+              type: string
+            name:
+              description: Short name
+              type: string
+            type:
+              description: The type of resource this is
+              type: string
+              format: nmtoken
+            description:
+              description: A long description
+              type: string
+            ownerId:
+              description: The owner of this resource. This is a reference to a principal.
+              type: string
+              format: uuid
+            parentId:
+              description: The parent of this resource. This is a reference to another Resource.
+              type: string
+              format: uuid
+              deprecated: true
+            created:
+              description: The timestamp when this resource was created
+              type: string
+              format: date-time
+              example: 2021-02-03T14:22:19.000Z
+            updated:
+              description: The timestamp when this resource was last updated
+              type: string
+              format: date-time
+              example: 2021-02-03T14:22:19.000Z
+            deleted:
+              description: 'Timestamp when the link was deleted, if it has been soft-deleted'
+              type: string
+              format: date-time
+            imageUrl:
+              description: A URL to an image representing this resource
+              type: string
+              format: url
+            aliases:
+              description: Alternate names by which this resource may be known
+              type: array
+              items:
+                type: string
+          example:
+            id: 2d67d1ea-8f04-401f-8bcd-924fea00d6c7
+            name: My Resource
+            type: cool_resources
+            description: 'This is my resource. There are many like it, but this one is mine.'
+            ownerId: b9d69415-2b77-4382-ac7b-50a0ab63156d
+            parentId: a4b2da09-099e-4c53-aae7-ad02b327c921
+            created: 2021-05-05T14:23:24.000Z
+            updated: 2021-05-06T13:00:47.000Z
+        - type: object
+          required:
+            - tags
+          properties:
+            tags:
+              description: All tags assigned to this resource (names only)
+              type: array
+              items:
+                type: object
+                title: TagView
+                description: View of a Tag
+                allOf:
+                  - $ref: '#/components/schemas/Tag'
+                  - type: object
+                    properties:
+                      color:
+                        description: Color as defined on the tag type.
+                        type: string
+            object:
+              description: The latest version of the full Resource. Provided if `inflate=true`
+              type: object
+              additionalProperties: true
+      properties:
+        'foo': {}
+    Tag:
+      type: object
+      title: Tag
+      description: A generic tag for an object
+      required:
+        - id
+        - name
+        - ownerId
+        - type
+      properties:
+        id:
+          description: ID for this tag
+          type: string
+          format: uuid
+        name:
+          description: Name of this tag
+          type: string
+          format: nmtoken
+        description:
+          description: A longer description of the tag
+          type: string
+        ownerId:
+          type: string
+          format: uuid
+          description: The ID of the owner of this Tag
+        type:
+          description: Type of this tag
+          type: string
+          format: nmtoken
+          default: other
+      example:
+        id: d1263405-369f-4aeb-b199-02ae64cb3eb3
+        name: servers
+        description: All my servers
+        ownerId: 6e61234b-2d1f-4248-8207-7469539fe57d
+        type: it
+    AllOfWithObject:
+      type: object
+      title: ResourceView
+      description: View of a resource
+      properties:
+        test:
+          allOf:
+            - type: object
+              title: Test
+              description: Base class representing a resource. This will not be used on its own.
+              properties:
+                id:
+                  description: Unique identifier
+                  format: uuid
+                  type: string
+          type: object
+        summary:
+          type: string
+          description: This is a summary
+        password:
+          type: string
+          format: password
+          description: a password
+        value:
+          description: >-
+            the value or set of values to match the condition against. An array may be specified for the following operations:
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+            - type: array
+              items:
+                oneOf:
+                  - type: string
+                  - type: number
+                  - type: boolean
+          type: object
+    ProductEventCriteria:
+      type: object
+      properties:
+        name:
+          type: string
+    OrderEventCriteria:
+      type: object
+      properties:
+        name:
+          type: string
+    CreateSubscription:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        eventCriteria:
+          oneOf:
+            - $ref: '#/components/schemas/ProductEventCriteria'
+            - $ref: '#/components/schemas/OrderEventCriteria'
+          type: object
+    ObjectWithEnums:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/OperationalStatus'
+        inline:
+          type: string
+          enum:
+            - foo
+            - bar
+            - baz
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationalStatus'
+        map:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - val1
+              - val2
+        superInlineEnumArray:
+          type: array
+          items:
+            type: string
+            enum:
+              - foo
+              - bar
+              - baz
+    ObjectExtendingObjectWithEnums:
+      allOf:
+        - $ref: '#/components/schemas/ObjectWithEnums'
+        - type: object
+          properties:
+            expiration:
+              type: string
+              format: date-time
+              description: An optional expiration date
+    AnotherObjectWithEnums:
+      properties:
+        inlineEnumArray:
+          type: array
+          items:
+            type: string
+            enum:
+              - foo
+              - bar
+    OperationalStatus:
+      description: The operational status of an object
+      type: string
+      default: unknown
+      enum:
+        - unknown
+        - up
+        - down
+        - degraded
+        - connected
+      x-enum-descriptions:
+        - 'We don''t know the state'
+        - 'Up and responding'
+        - 'Down'
+        - 'In a non-optimal state'
+        - 'Connected but not yet "up"'
+    ObjectWithRefEnumMapProperty:
+      type: object
+      properties:
+        enumMap:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/OperationalStatus'
+    ObjectWithRefEnumArrayProperty:
+      type: object
+      properties:
+        enumArray:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationalStatus'
+    WrongDeserializedObj:
+      type: object
+      properties:
+        started:
+          type: string
+          format: date-time
+        url:
+          type: string
+          format: url
+    TestResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        items:
+          additionalProperties:
+            $ref: '#/components/schemas/WrongDeserializedObj'
+          type: object

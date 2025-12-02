@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "noImplicitAny": false,
+    "composite": true,
+    "target": "ES2023",
+    "strict": true,
+    "moduleResolution": "NodeNext",
+    "removeComments": true,
+    "sourceMap": true,
+    "noLib": false,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "declaration": true,
+    "lib": ["ES2023", "DOM"],
+    "outDir": "dist",
+    "types": ["chai", "node", "mocha"],
+    "typeRoots": [
+      "node_modules/@types"
+    ]
+  }
+}

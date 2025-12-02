@@ -1,0 +1,57 @@
+{
+  "name": "@zerobias-org/util",
+  "version": "1.0.0",
+  "description": "Utility repository for ZeroBias modules",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "nx affected -t lint generate transpile",
+    "build:full": "nx run-many -t lint generate transpile sql:copy templates:copy",
+    "clean": "nx affected -t clean && nx reset && find . -name tsconfig.tsbuildinfo -delete || echo \"\"",
+    "clean:full": "nx run-many -t clean && nx reset && find . -name tsconfig.tsbuildinfo -delete || echo \"\"",
+    "docs": "nx run-many -t docs",
+    "generate:bom": "nx run-many -t generate:bom",
+    "lerna:publish": "lerna publish --conventional-commits",
+    "lerna:publish-from-package": "lerna publish from-package",
+    "lerna:dry-run": "lerna version --no-git-tag-version --no-push --conventional-commits",
+    "lerna:version": "lerna version --no-git-tag-version --no-push --conventional-commits --yes",
+    "lerna:version:hotfix": "lerna version --no-git-tag-version --no-push --conventional-prerelease --preid hotfix --conventional-commits --yes",
+    "lint": "nx run-many -t lint",
+    "lint:full": "nx affected -t lint",
+    "lint:fix": "nx run-many -t lint:fix",
+    "reset": "npm run clean:full && npm install && npm run build:full",
+    "test": "nx affected -t test",
+    "test:full": "nx run-many -t test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git"
+  },
+  "author": "team@zerobias.com",
+  "license": "ISC",
+  "engines": {
+    "node": ">=24.11.0",
+    "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@zerobias-org/eslint-config": "^1.0.0",
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.10.1",
+    "chai": "^4.5.0",
+    "conventional-changelog-conventionalcommits": "^8.0.0",
+    "eslint": "^8.6.0",
+    "husky": "^9.1.7",
+    "lerna": "^9.0.0",
+    "mocha": "^11.7.5",
+    "nx": "^20.5.0",
+    "rimraf": "^6.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "name": "@zerobias-org/util-codegen",
+  "description": "OpenAPI Generator for models and server apis",
+  "version": "1.0.5",
+  "type": "module",
+  "author": "team@zerobias.com",
+  "license": "ISC",
+  "bin": {
+    "hub-generator": "./bin/hub-generator.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./bin/hub-generator.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/codegen"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "scripts": {
+    "clean": "rimraf bin/*.jar generated dist && ./gradlew :clean",
+    "copyDeps": "cp build/libs/hub-module-codegen-*.jar bin/hub-module-codegen.jar && cp build/dependencies/openapi-generator-cli-*.jar bin/openapi-generator-cli.jar",
+    "compile": "./gradlew :build",
+    "build": "npm run compile && npm run copyDeps",
+    "prepublishOnly": "npm run build",
+    "generate:test": "./bin/hub-generator.js generate -g hub-module -i ./api.yml -o generated -p modulePackage=../../src",
+    "generate:server:test": "./bin/hub-generator.js generate -g hub-module-server -i ./api.yml -o generated/ -p modulePackage=../../src",
+    "test:regression": "npm run build && mocha --inline-diffs --reporter=list test/unit/**/*.ts",
+    "test": "npm run generate:test"
+  },
+  "files": [
+    "bin/",
+    "bom.json"
+  ],
+  "keywords": [
+    "hub",
+    "hub-module",
+    "codegen",
+    "openapi",
+    "generator"
+  ],
+  "engines": {
+    "node": ">=24.11.0",
+    "npm": ">=10.0.0"
+  }
+}

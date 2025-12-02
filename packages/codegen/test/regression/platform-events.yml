@@ -1,0 +1,2800 @@
+openapi: 3.0.2
+info:
+  version: 0.8.0
+  description: Compliance Server OpenAPI Spec
+  title: '@auditmation/platform-events'
+servers:
+  - url: /
+paths:
+  /batches/pipelineJobs/{pipelineJobId}:
+    post:
+      tags:
+        - batch
+      summary: Trigger pipeline jobs ready batches to process
+      description: Trigger pipeline jobs ready batches to process
+      operationId: triggerBatchesForPipelineJob
+      parameters:
+        - name: pipelineJobId
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+        - name: ownerId
+          schema:
+            type: string
+            format: uuid
+          in: query
+          required: false
+      responses:
+        '200':
+          description: Triggered
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Pipeline Job was not found with given id
+        5XX:
+          description: Unexpected error occured
+  /batches/{batchId}:
+    post:
+      tags:
+        - batch
+      summary: Trigger batch to process
+      description: Trigger batch to process
+      operationId: triggerBatch
+      parameters:
+        - name: batchId
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+        - name: ownerId
+          schema:
+            type: string
+            format: uuid
+          in: query
+          required: false
+      responses:
+        '200':
+          description: Triggered
+        '400':
+          description: Invalid request body value sent
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Batch was not found with given id
+        5XX:
+          description: Unexpected error occured
+  /dynamoDBIndex:
+    post:
+      tags:
+        - batch
+      summary: Trigger index build from all collected latest versions of objects
+      description: Trigger index build from all collected latest versions of objects
+      operationId: triggerDynamoDBIndexBuild
+      parameters:
+        - name: ownerId
+          description: the id of the org to rebuild index/links for
+          schema:
+            type: string
+            format: uuid
+          in: query
+          required: false
+        - name: classId
+          description: The id of the class to rebuild index/links for. `ownerId` must also be provided when providing a classId.
+          schema:
+            type: string
+            format: uuid
+          in: query
+          required: false
+        - name: objectId
+          description: The id of an object to rebuild index/links for. May not be provided alongside `classId`
+          schema:
+            type: string
+            format: uuid
+          in: query
+          required: false
+        - name: linkerRun
+          in: query
+          description: A linker Job for all objects will be spawner by default. Set to false to skip linking.
+          required: false
+          schema:
+            type: boolean
+        - name: linkDeleteMode
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/linkDeleteMode'
+      responses:
+        '200':
+          description: Triggered
+        '400':
+          description: Invalid request body value sent
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Batch was not found with given id
+        5XX:
+          description: Unexpected error occured
+  /cleanupBoundary/{boundaryId}:
+    delete:
+      tags:
+        - cleanup
+      summary: Runs a full hard delete against a boundary and its resources
+      description: Runs a full hard delete against a boundary and its resources
+      operationId: cleanupBoundary
+      x-method-name: cleanupBoundary
+      parameters:
+        - name: boundaryId
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+      responses:
+        '204':
+          description: Successfully cleaned boundary
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Boundary was not found with given id
+        5XX:
+          description: Unexpected error occured
+  /cleanupOrg/{orgId}:
+    delete:
+      tags:
+        - cleanup
+      summary: Runs a full hard delete against an org and its resources
+      description: Runs a full hard delete against an org and its resources
+      operationId: cleanupOrg
+      x-method-name: cleanupOrg
+      parameters:
+        - name: orgId
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+        - name: dynamodbCleanup
+          schema:
+            type: boolean
+          in: query
+      responses:
+        '204':
+          description: Successfully cleaned org
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Org was not found with given id
+        5XX:
+          description: Unexpected error occured
+  /crons:
+    put:
+      operationId: schedule
+      summary: Schedules a Cron Job for execution
+      tags:
+        - cron
+      requestBody:
+        required: true
+        description: The cron body
+        content:
+          '*/*':
+            schema:
+              $ref: '#/components/schemas/schedule'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/schedule'
+  /crons/{id}:
+    parameters:
+      - name: id
+        schema:
+          type: string
+        in: path
+        required: true
+    get:
+      operationId: getSchedule
+      summary: Gets a Schedule by its id
+      tags:
+        - cron
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/schedule'
+    delete:
+      operationId: deleteSchedule
+      summary: Delete a Schedule by its id
+      tags:
+        - cron
+      responses:
+        '200':
+          description: Success
+  /events:
+    post:
+      operationId: handleEvent
+      summary: Handles events
+      tags:
+        - event
+      requestBody:
+        required: true
+        description: The event body
+        content:
+          '*/*':
+            schema:
+              $ref: '#/components/schemas/EventUnion'
+      responses:
+        '200':
+          description: Success
+  /health:
+    get:
+      tags:
+        - healthcheck
+      description: Perform a health check on the events service
+      operationId: health
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/HealthCheckBody'
+        '403':
+          description: You are not authorized to use this service
+        '503':
+          description: Service unavailable
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+        5XX:
+          description: Unexpected error
+  /job/{id}/complete:
+    put:
+      tags:
+        - job
+      summary: Callback to report cron job complete
+      description: Callback to report cron job complete
+      operationId: onComplete
+      parameters:
+        - name: id
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/jobCompletionDetails'
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request body value sent
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Job was not found with given id
+        5XX:
+          description: Unexpected error occured
+  /job/{id}/error:
+    post:
+      tags:
+        - job
+      summary: Callback to report cron job errors
+      description: Callback to report cron job errors
+      operationId: handleError
+      parameters:
+        - name: id
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/jobError'
+      responses:
+        '202':
+          description: Accepted
+        '400':
+          description: Invalid request body value sent
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Job was not found with given id
+        5XX:
+          description: Unexpected error occured
+  /job/{jobId}/link:
+    post:
+      tags:
+        - job
+      summary: Trigger job to run linker on all batches
+      description: Trigger job to run linker on all batches
+      operationId: linkJobBatches
+      x-method-name: linkJobBatches
+      parameters:
+        - name: jobId
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+        - name: ownerId
+          schema:
+            type: string
+            format: uuid
+          in: query
+          required: true
+      responses:
+        '200':
+          description: Triggered
+        '400':
+          description: Invalid request body value sent
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Job was not found with given id
+        5XX:
+          description: Unexpected error occured
+  /pipelines/{pipelineId}/previews:
+    post:
+      tags:
+        - pipeline
+      summary: Starts a preview mode run on a given pipeline
+      description: Starts a preview mode run on a given pipeline
+      operationId: startPreviewRun
+      parameters:
+        - name: pipelineId
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/previewModeBody'
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request body value sent
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Pipeline was not found with given id
+        '409':
+          description: Pipeline is in invalid state to run preview
+        5XX:
+          description: Unexpected error occured
+  /requestPrincipals:
+    post:
+      operationId: ensureRequestPrincipal
+      summary: Ensures request user or service account principal on apps pointed database
+      tags:
+        - principal
+      requestBody:
+        required: true
+        description: Principal information to ensure
+        content:
+          '*/*':
+            schema:
+              $ref: '#/components/schemas/EnsureRequestPrincipal'
+      responses:
+        '200':
+          description: Returns the user or service account principal ensured
+          content:
+            '*/*':
+              schema:
+                type: object
+                oneOf:
+                  - $ref: '#/components/schemas/User'
+                  - $ref: '#/components/schemas/ServiceAccount'
+  /sync:
+    post:
+      operationId: sync
+      summary: Start a sync
+      tags:
+        - sync
+      requestBody:
+        required: true
+        description: The sync job to sync from
+        content:
+          '*/*':
+            schema:
+              $ref: '#/components/schemas/SyncJobRequestBody'
+      responses:
+        '200':
+          description: The sync job started successfully
+  /sync/objectVersions:
+    post:
+      tags:
+        - sync
+      summary: Syncs object versions
+      description: Syncs object versions
+      operationId: syncObjectVersions
+      x-method-name: syncObjectVersions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/syncObjectVersionsBody'
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/unionTypes:
+    post:
+      tags:
+        - sync
+      summary: Syncs union type app object tables for org
+      description: Syncs union type app object tables for org
+      operationId: syncUnionTypes
+      x-method-name: syncUnionTypes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/syncUnionTypeBody'
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/connections:
+    post:
+      tags:
+        - sync
+      summary: Syncs connections from hub
+      description: Syncs connections from hub
+      operationId: syncConnections
+      x-method-name: syncConnections
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/syncConnectionsBody'
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/boundaries:
+    post:
+      tags:
+        - sync
+      summary: Syncs boundary parties/components/links/roles
+      description: Syncs boundary parties/components/links/roles
+      operationId: syncBoundaries
+      x-method-name: syncBoundaries
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/portal:
+    post:
+      tags:
+        - sync
+      summary: Syncs portal information
+      description: Syncs portal information
+      operationId: syncPortal
+      x-method-name: syncPortal
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/tags:
+    post:
+      tags:
+        - sync
+      summary: Syncs platform tags to dana
+      description: Syncs platform tags to dana
+      operationId: syncTags
+      x-method-name: syncTags
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/pitObject:
+    post:
+      tags:
+        - sync
+      summary: Syncs platform point in time object table
+      description: Syncs platform point in time object table
+      operationId: syncPitObjectTable
+      x-method-name: syncPitObjectTable
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/pipelines:
+    post:
+      tags:
+        - sync
+      summary: Syncs platform point in time object table
+      description: Syncs platform point in time object table
+      operationId: syncPipelines
+      x-method-name: syncPipelines
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/syncPipelinesBody'
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/boundarySecurityGroups:
+    post:
+      tags:
+        - sync
+      summary: Syncs boundary security groups with dana
+      description: Syncs boundary security groups with dana
+      operationId: syncBoundarySecurityGroups
+      x-method-name: syncBoundarySecurityGroups
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/syncBoundarySecurityGroupsBody'
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/sharedRoles:
+    post:
+      tags:
+        - sync
+      summary: Syncs boundary security roles
+      description: Syncs boundary security roles
+      operationId: syncSharedRoles
+      x-method-name: syncSharedRoles
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/boundarySecurityRoles:
+    post:
+      tags:
+        - sync
+      summary: Syncs boundary security roles
+      description: Syncs boundary security roles
+      operationId: syncBoundarySecurityRoles
+      x-method-name: syncBoundarySecurityRoles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/syncBoundarySecurityRolesBody'
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /sync/dynamoDbGsi:
+    post:
+      tags:
+        - sync
+      summary: Updates the dynamodb GSI. Warning this does a full Scan and will update all records in the table.
+      description: Updates the dynamodb GSI. Warning this does a full Scan and will update all records in the table.
+      operationId: syncDynamoGsi
+      x-method-name: syncDynamoGsi
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+components:
+  headers:
+    pagedLinkHeader:
+      description: |-
+        Links for paging results. The following types of links may be provided:
+          - `first`: a link to the first page of results
+          - `prev`: a link to retrieve the previous page of results
+          - `next`: a link to retrieve the next page of results
+          - `last`: a link to retrieve the last page of results
+        Not all of these links will be provided by every API response, so consumers should not assume they will be present.
+      schema:
+        type: array
+        items:
+          type: string
+    pageCountHeader:
+      description: The total count of elements in a Paginated Result set.  This header is optional and may not be set if the total number of items is unknown.
+      required: false
+      schema:
+        type: integer
+        format: int64
+  parameters:
+    pageNumberParam:
+      name: pageNumber
+      in: query
+      description: The requested page. This value is 1-indexed.
+      schema:
+        type: integer
+        format: int32
+        default: 1
+    pageSizeParam:
+      name: pageSize
+      in: query
+      description: The number of items in each page of data.
+      schema:
+        type: integer
+        format: int32
+        default: 50
+  securitySchemes:
+    platform-events:
+      type: oauth2
+      flows:
+        password:
+          tokenUrl: https://nf.auditmation.io/
+          scopes: {}
+  schemas:
+    AutoUpdateBody:
+      $ref: '#/components/schemas/autoUpdateBody'
+    DatabaseHealth:
+      type: object
+      description: Database connectivity health
+      properties:
+        connected:
+          type: boolean
+          description: True if the service can successfully connect to the database
+        poolCount:
+          type: number
+          format: int32
+          description: The total number of connections in the DB pool
+        poolIdleCount:
+          type: number
+          format: int32
+          description: The number of idle connections in the DB pool
+        poolWaitingCount:
+          type: number
+          format: int32
+          description: The number of queued requests waiting on a client from the connection pool
+    Version:
+      type: string
+      format: semver
+      description: Version of the service
+    SortObject:
+      type: object
+      description: Sort object containing direction and column
+      properties:
+        active:
+          type: string
+        direction:
+          type: string
+    CronServiceStatus:
+      $ref: '#/components/schemas/cronServiceStatus'
+    CronServiceHealth:
+      $ref: '#/components/schemas/cronServiceHealth'
+    HealthCheckBody:
+      description: Response body of the health check
+      type: object
+      properties:
+        database:
+          $ref: '#/components/schemas/DatabaseHealth'
+        version:
+          $ref: '#/components/schemas/Version'
+        other:
+          type: object
+          description: Additional per service health data
+    JobError:
+      $ref: '#/components/schemas/jobError'
+    JobCompletionDetails:
+      $ref: '#/components/schemas/jobCompletionDetails'
+    JobErrorEnvironment:
+      $ref: '#/components/schemas/jobErrorEnvironment'
+    PrincipalStatus:
+      type: string
+      enum:
+        - provisioned
+        - active
+        - inactive
+    CatalogPublishStatusEnum:
+      description: Status of the catalog publishable component
+      enum:
+        - draft
+        - publishing
+        - published
+        - released
+        - verified
+        - active
+    CpeProduct:
+      $ref: '#/components/schemas/cpeProduct'
+    Principal:
+      type: object
+      description: Schema for a Security Principal
+      required:
+        - id
+        - ownerId
+        - name
+        - type
+        - status
+        - enabled
+        - origin
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Globally-unique ID for this principal
+        ownerId:
+          type: string
+          format: uuid
+          description: ID of the principal which owns this principal
+        name:
+          type: string
+          description: The Principal's name
+        type:
+          $ref: '#/components/schemas/PrincipalType'
+        created:
+          type: string
+          nullable: true
+          format: date-time
+        deleted:
+          type: string
+          nullable: true
+          format: date-time
+        updated:
+          type: string
+          nullable: true
+          format: date-time
+        externalId:
+          type: string
+          nullable: true
+          description: Identifier for this Principal in an external system, when available
+        status:
+          $ref: '#/components/schemas/PrincipalStatus'
+        enabled:
+          type: boolean
+          description: Indicates whether or not this principal is enabled
+        origin:
+          $ref: '#/components/schemas/PrincipalOrigin'
+      discriminator:
+        propertyName: type
+        mapping:
+          ORG: '#/components/schemas/Org'
+          GROUP: '#/components/schemas/Group'
+          USER: '#/components/schemas/User'
+          API_KEY: '#/components/schemas/ApiKey'
+          SERVICE_ACCOUNT: '#/components/schemas/ServiceAccount'
+      example:
+        id: e889fa79-6d40-4c59-98db-54055ee4d0a2
+        ownerId: bec29e3e-a297-48fc-b3ca-27f435a135f2
+        name: Night's Watch
+        type: ORG
+        externalId: 123Gold
+    PrincipalOrigin:
+      description: Enumeration for the origin/source of a Principal
+      type: string
+      enum:
+        - user
+        - scim
+        - system
+    PrincipalType:
+      description: Enumeration for different types of Principals
+      type: string
+      enum:
+        - ORG
+        - GROUP
+        - USER
+        - API_KEY
+        - SERVICE_ACCOUNT
+    Org:
+      description: Schema for a Hydra Organization
+      allOf:
+        - $ref: '#/components/schemas/Principal'
+        - type: object
+          required:
+            - hidden
+            - selfRegistration
+            - invitationsEnabled
+            - adminGroupId
+            - memberGroupId
+            - slug
+          properties:
+            supportEmail:
+              type: string
+              format: email
+              description: Support email address for this Organization
+            avatarUrl:
+              type: string
+              format: url
+              description: URI to an avatar for this Organization
+            hidden:
+              type: boolean
+              description: Indicates whether or not this Organization is publicly visible
+              default: true
+            selfRegistration:
+              type: boolean
+              description: Indicates whether or not this Organization supports self-registration
+              default: false
+            invitationsEnabled:
+              type: boolean
+              description: Indicates whether or not this Organization supports creating invitations for new members
+              default: false
+            adminGroupId:
+              type: string
+              format: uuid
+              description: ID of the administrative group for this Org
+            memberGroupId:
+              type: string
+              format: uuid
+              description: ID of the group describing members of this Org
+            slug:
+              type: string
+              format: nmtoken
+              description: Human-friendly identifier
+            domains:
+              type: array
+              description: Email domains for this Org
+              items:
+                type: string
+                format: hostname
+      example:
+        id: e32aef74-3c2f-4676-8aca-0b757b143821
+        ownerId: e32aef74-3c2f-4676-8aca-0b757b143821
+        name: Casterly Rock
+        type: ORG
+        externalId: 123Gold
+        supportEmail: support@lannister.com
+        avatarUrl: https://vignette.wikia.nocookie.net/gameofthrones/images/8/8a/House-Lannister-Main-Shield.PNG/revision/latest/scale-to-width-down/310?cb=20170101095357
+        hidden: true
+        selfRegistration: true
+        invitationsEnabled: false
+        adminGroupId: 51f8d6a8-3ab8-4d34-9736-d24b6deb134d
+        memberGroupId: b29626c4-0974-432d-88e6-870f7037d4d0
+    User:
+      description: Schema for a Hydra User
+      allOf:
+        - $ref: '#/components/schemas/Principal'
+        - type: object
+          required:
+            - emails
+            - social
+          properties:
+            email:
+              description: The email address of the User (for compatibility)
+              type: string
+              format: email
+              deprecated: true
+            emails:
+              description: The email addresses of the User
+              type: array
+              items:
+                type: string
+                format: email
+            avatarUrl:
+              type: string
+              format: url
+              description: URL to an avatar for the given User
+            connection:
+              type: string
+              nullable: true
+              description: The ID of the IdP connection for this User
+            provider:
+              type: string
+              nullable: true
+              description: The ID of the IdP provider used for this User
+            social:
+              type: boolean
+              description: Indicates whether or not the IdP connection is a social one or not
+              default: false
+            subjects:
+              type: array
+              nullable: true
+              items:
+                type: string
+              description: The IdP subject(s) associated with this user. Generally, this will be a singular value. In the case  of federation, however, different IdPs may identify the same user differently.
+      example:
+        id: e889fa79-6d40-4c59-98db-54055ee4d0a2
+        ownerId: e32aef74-3c2f-4676-8aca-0b757b143821
+        name: Tyrion Lannister
+        type: USER
+        email: tyrion@casterlyrock.com
+        avatarUrl: https://upload.wikimedia.org/wikipedia/en/5/50/Tyrion_Lannister-Peter_Dinklage.jpg
+        connection: github
+        provider: github
+        social: true
+        subjects:
+          - github|123456
+    Group:
+      description: Schema for a Hydra Group
+      allOf:
+        - $ref: '#/components/schemas/Principal'
+        - type: object
+          required:
+            - groupType
+          properties:
+            groupType:
+              $ref: '#/components/schemas/GroupType'
+            boundaryId:
+              type: string
+              format: uuid
+            boundaryGroupType:
+              $ref: '#/components/schemas/BoundaryGroupType'
+            avatarUrl:
+              type: string
+              format: url
+              description: URL to an avatar for the given Group
+      example:
+        id: 507cd50d-43b8-4a38-a8a4-3faf1598d06b
+        ownerId: c2e95524-b4c7-4014-82af-06ad1f446516
+        name: My Group
+        type: GROUP
+        groupType: security
+    ServiceAccount:
+      description: Schema for an account which is not associated with a user
+      allOf:
+        - $ref: '#/components/schemas/Principal'
+      example:
+        id: 1b486ced-b741-485a-a841-76018cf55007
+        ownerId: aab49394-f415-485e-95dd-bfb739506717
+        name: System 76
+        type: SYSTEM_ACCOUNT
+    EnsureRequestPrincipal:
+      type: object
+      description: Schema for a ensure request principal
+      required:
+        - type
+        - orgs
+        - groups
+      properties:
+        type:
+          $ref: '#/components/schemas/PrincipalType'
+        user:
+          $ref: '#/components/schemas/User'
+        serviceAccount:
+          $ref: '#/components/schemas/ServiceAccount'
+        requestOrg:
+          $ref: '#/components/schemas/Org'
+        orgs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Org'
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/Group'
+    EnsurePrincipal:
+      type: object
+      description: Schema for a ensure principal
+      required:
+        - type
+      properties:
+        type:
+          $ref: '#/components/schemas/PrincipalType'
+        org:
+          $ref: '#/components/schemas/Org'
+        user:
+          $ref: '#/components/schemas/User'
+        group:
+          $ref: '#/components/schemas/Group'
+        serviceAccount:
+          $ref: '#/components/schemas/ServiceAccount'
+    PreviewModeBody:
+      $ref: '#/components/schemas/previewModeBody'
+    EventKind:
+      type: string
+      description: Describes the concrete type for this event. This may be used alongside openapi `discriminator` to get a union type.
+      enum:
+        - change
+        - base
+        - cron
+    EventModel:
+      type: object
+      description: Generic event
+      required:
+        - id
+        - kind
+        - type
+        - data
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          description: A service defined event type, e.g. `change.Tag`
+        principalId:
+          type: string
+          nullable: true
+          format: uuid
+        orgId:
+          type: string
+          nullable: true
+          format: uuid
+        service:
+          type: string
+          nullable: true
+          description: An opaque string for describing the service who caused this event. Support for this field is up to the specific implementation as is its format and meaning.
+        data:
+          type: object
+          additionalProperties: {}
+          description: The event data
+        kind:
+          $ref: '#/components/schemas/EventKind'
+    ChangeEventModel:
+      type: object
+      description: Generic event for handling data changes
+      required:
+        - op
+        - objectType
+      allOf:
+        - $ref: '#/components/schemas/EventModel'
+        - type: object
+          properties:
+            op:
+              type: string
+              description: The type of change operation
+              enum:
+                - create
+                - update
+                - delete
+            objectType:
+              type: string
+              description: the type of object that has changed
+            before:
+              type: object
+              nullable: true
+              description: The object's state before the change event. This can only be present on `update` and `delete` but may be  absent even on those events, depending on the implementation.
+    CronEventModel:
+      type: object
+      description: Generic cron event
+      required:
+        - cronId
+      allOf:
+        - $ref: '#/components/schemas/EventModel'
+        - type: object
+          properties:
+            cronId:
+              type: string
+              description: An identifier for the cron schedule which issued the event
+            cronType:
+              type: string
+              description: The type of cron event being fired.  This is part of `event.type` used for registering handlers. i.e. cron.trigger, cron.oauth_refresh
+    EventUnion:
+      type: object
+      oneOf:
+        - $ref: '#/components/schemas/ChangeEventModel'
+        - $ref: '#/components/schemas/CronEventModel'
+        - $ref: '#/components/schemas/EventModel'
+      discriminator:
+        propertyName: kind
+        mapping:
+          change: '#/components/schemas/ChangeEventModel'
+          cron: '#/components/schemas/CronEventModel'
+          base: '#/components/schemas/EventModel'
+    ReleaseAnnouncement:
+      $ref: '#/components/schemas/releaseAnnouncement'
+    Invitation:
+      $ref: '#/components/schemas/invitation'
+    ResourceTypeEnum:
+      $ref: '#/components/schemas/resourceTypeEnum'
+    Resource:
+      type: object
+      title: Resource
+      description: Base class representing a resource. This will not be used on its own.
+      required:
+        - id
+        - name
+        - type
+        - ownerId
+        - created
+        - updated
+      properties:
+        id:
+          description: Unique identifier
+          format: uuid
+          type: string
+        name:
+          description: Short name
+          type: string
+        type:
+          description: The type of resource this is
+          type: string
+          format: nmtoken
+        description:
+          description: A long description
+          type: string
+        ownerId:
+          description: The owner of this resource. This is a reference to a principal.
+          type: string
+          format: uuid
+        parentId:
+          description: The parent of this resource. This is a reference to another Resource.
+          type: string
+          format: uuid
+          deprecated: true
+        created:
+          description: The timestamp when this resource was created
+          type: string
+          format: date-time
+          example: '2021-02-03T07:22:19-07:00'
+        updated:
+          description: The timestamp when this resource was last updated
+          type: string
+          format: date-time
+          example: '2021-02-03T07:22:19-07:00'
+        deleted:
+          description: Timestamp when the link was deleted, if it has been soft-deleted
+          type: string
+          format: date-time
+        imageUrl:
+          description: A URL to an image representing this resource
+          type: string
+          format: url
+        url:
+          description: An external URL to this resource in the outside world
+          type: string
+          format: url
+        aliases:
+          description: Alternate names by which this resource may be known
+          type: array
+          items:
+            type: string
+        boundaryId:
+          description: A resource id which acts as a boundary/container for this resource.
+          type: string
+          format: uuid
+      example:
+        id: 2d67d1ea-8f04-401f-8bcd-924fea00d6c7
+        name: My Resource
+        type: cool_resources
+        description: This is my resource. There are many like it, but this one is mine.
+        ownerId: b9d69415-2b77-4382-ac7b-50a0ab63156d
+        parentId: a4b2da09-099e-4c53-aae7-ad02b327c921
+        created: '2021-05-05T07:23:24-07:00'
+        updated: '2021-05-06T06:00:47-07:00'
+    ModuleConnectionProfile:
+      $ref: '#/components/schemas/moduleConnectionProfile'
+    OAuthProvider:
+      $ref: '#/components/schemas/oAuthProvider'
+    ModuleRepository:
+      $ref: '#/components/schemas/moduleRepository'
+    ModuleVersion:
+      $ref: '#/components/schemas/moduleVersion'
+    ModuleVersionInfo:
+      $ref: '#/components/schemas/moduleVersionInfo'
+    CollectorBot:
+      $ref: '#/components/schemas/collectorBot'
+    CleanupBody:
+      $ref: '#/components/schemas/cleanupBody'
+    SyncConnectionsBody:
+      $ref: '#/components/schemas/syncConnectionsBody'
+    SyncJobType:
+      type: string
+      description: Type of data to synchronize
+      enum:
+        - tags
+        - principals
+    SyncJobRequestBody:
+      type: object
+      required:
+        - syncJobId
+        - syncJobType
+      properties:
+        syncJobId:
+          type: string
+          format: uuid
+        syncJobType:
+          $ref: '#/components/schemas/SyncJobType'
+    CatalogItem:
+      $ref: '#/components/schemas/catalogItem'
+    SyncUnionTypeBody:
+      $ref: '#/components/schemas/syncUnionTypeBody'
+    SyncObjectVersionsBody:
+      $ref: '#/components/schemas/syncObjectVersionsBody'
+    SyncPipelinesBody:
+      $ref: '#/components/schemas/syncPipelinesBody'
+    SyncBoundarySecurityGroupsBody:
+      $ref: '#/components/schemas/syncBoundarySecurityGroupsBody'
+    SyncBoundarySecurityRolesBody:
+      $ref: '#/components/schemas/syncBoundarySecurityRolesBody'
+    LinkDeleteMode:
+      $ref: '#/components/schemas/linkDeleteMode'
+    Schedule:
+      $ref: '#/components/schemas/schedule'
+    Month:
+      $ref: '#/components/schemas/month'
+    DayOfWeek:
+      $ref: '#/components/schemas/dayOfWeek'
+    CronExpression:
+      $ref: '#/components/schemas/cronExpression'
+    linkDeleteMode:
+      type: string
+      description: 'Applies only when rebuilding all links (by owner/global). Not taken into account for classId/objectId rebuild. * `soft` : All opened links will be closed as of linker start time minus 5 minutes. (this to ensure the linker does not step on its own two feet) * `hard` : All links will be dropped from the table. use with care, this is not reversible * `nodelete`: is there as an option but most likely won''t be used outside of some testing.'
+      default: soft
+      enum:
+        - nodelete
+        - soft
+        - hard
+    schedule:
+      type: object
+      description: A Cron schedule
+      required:
+        - id
+        - event
+        - service
+        - expression
+      properties:
+        id:
+          type: string
+        service:
+          type: string
+        event:
+          $ref: '#/components/schemas/CronEventModel'
+        expression:
+          description: a crontab compatible cron expression.
+          type: string
+    ServiceUnavailableError:
+      description: Service unavailable
+      type: object
+      allOf:
+        - type: object
+          description: Base class for error models
+          required:
+            - key
+            - template
+            - timestamp
+            - statusCode
+          properties:
+            key:
+              type: string
+              description: A unique message key for this error. This is used both for discrimination and i18n
+            template:
+              description: The error message. This may contain substitutions of the form `{key}` where `key` maps to a key in the `args` list.
+              type: string
+              example: The {thing} is down
+            timestamp:
+              type: string
+              format: date-time
+              description: Timestamp when this error was generated
+            statusCode:
+              description: An HTTP status code to use for this error when transmitting it over HTTP
+              type: integer
+              format: int32
+              default: 500
+              minimum: 100
+              maximum: 599
+            stack:
+              description: The stack trace, if available, for this error.
+              type: string
+        - type: object
+          description: The health check triggering this error
+          required:
+            - body
+            - msg
+          properties:
+            msg:
+              type: string
+              description: A generic message to pass on
+            body:
+              $ref: '#/components/schemas/HealthCheckBody'
+    jobCompletionDetails:
+      type: object
+      properties:
+        token:
+          description: a completion token to be presented on the next run
+          type: string
+    jobErrorEnvironment:
+      type: object
+      properties:
+        executionArn:
+          type: string
+          description: ARN of the state machine execution
+        stateMachineArn:
+          type: string
+          description: ARN of the state machine
+        state:
+          type: string
+          description: Name of the state the failure occurred
+    jobError:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        error:
+          type: object
+          additionalProperties: {}
+        environment:
+          $ref: '#/components/schemas/jobErrorEnvironment'
+    previewModeBody:
+      type: object
+      description: Request body for preview mode call
+      properties:
+        previewCount:
+          type: number
+          format: int32
+    GroupType:
+      description: Enumeration for different types of Groups
+      type: string
+      enum:
+        - security
+        - role
+    BoundaryGroupType:
+      description: Enumeration for different types of Boundary Groups, one of each type may exist for a given boundary
+      type: string
+      enum:
+        - member
+        - admin
+    ApiKey:
+      description: Schema for an API key
+      allOf:
+        - $ref: '#/components/schemas/Principal'
+        - type: object
+          properties:
+            expiration:
+              type: string
+              format: date-time
+              description: An optional expiration date for this API key
+      example:
+        id: c39f31d0-a1a2-4449-8251-d8128f3849fc
+        ownerId: e889fa79-6d40-4c59-98db-54055ee4d0a2
+        name: Tyrion's API key
+        type: API_KEY
+    syncObjectVersionsBody:
+      type: object
+      description: Request body for object version sync
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        defaults:
+          type: boolean
+          default: true
+    syncUnionTypeBody:
+      type: object
+      description: Request body for union type sync
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        mitre:
+          type: boolean
+        cpeProducts:
+          type: boolean
+        skipUnionTypes:
+          type: array
+          items:
+            type: string
+            enum:
+              - component
+              - finding
+              - testCase
+              - vulnerability
+              - weakness
+              - attackPattern
+        testMode:
+          type: boolean
+        testModeSize:
+          type: number
+    syncConnectionsBody:
+      type: object
+      description: Request body for connections sync
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        boundaryId:
+          type: string
+          format: uuid
+    syncPipelinesBody:
+      type: object
+      description: Request body for pipeline sync
+      properties:
+        orgId:
+          description: sync pipelines for a given org, defaults to all.
+          type: string
+          format: uuid
+        crons:
+          description: whether to sync crons
+          type: boolean
+    syncBoundarySecurityGroupsBody:
+      type: object
+      description: Request body for boundary security group sync
+      properties:
+        orgId:
+          description: sync security groups for a given org, defaults to all.
+          type: string
+          format: uuid
+    syncBoundarySecurityRolesBody:
+      type: object
+      description: Request body for boundary security group sync
+      properties:
+        orgId:
+          description: sync security groups for a given org, defaults to all.
+          type: string
+          format: uuid
+    autoUpdateBody:
+      type: object
+      description: Body for auto update event handler
+      required:
+        - artifactName
+        - artifactVersion
+      properties:
+        artifactName:
+          type: string
+        artifactVersion:
+          type: string
+    cronServiceStatus:
+      type: string
+      description: Status enum for the cron service
+      enum:
+        - STARTED
+        - STOPPED
+      x-enum-descriptions:
+        - Cron service has started
+        - Cron service has stopped
+    cronServiceHealth:
+      type: object
+      description: Health of the cron service
+      properties:
+        cronService:
+          type: object
+          properties:
+            status:
+              $ref: '#/components/schemas/cronServiceStatus'
+    cpeProduct:
+      type: object
+      description: A cpe product components and versions
+      required:
+        - cpeProductCode
+        - cpeVendorCode
+      properties:
+        cpeProductCode:
+          type: string
+        cpeVendorCode:
+          type: string
+        versions:
+          type: string
+    releaseAnnouncement:
+      type: object
+      description: Body sent to events for a release announcement
+      required:
+        - name
+        - version
+        - repository
+        - commitHash
+        - changelogUrl
+        - distTags
+      properties:
+        name:
+          type: string
+          description: Name of the package
+        version:
+          type: string
+          format: semver
+          description: Version of the package
+        repository:
+          type: string
+          description: Repository that created the artifact
+        commitHash:
+          type: string
+          description: Commit hash of the release
+        actionRunUrl:
+          type: string
+          format: url
+          description: Link to the action run that created the artifact
+        changelog:
+          type: string
+          description: The changelog of this release
+        changelogUrl:
+          type: string
+          description: Link to the changelog for the artifact
+        auditmation:
+          type: object
+          required:
+            - package
+            - dataloader-version
+            - import-artifact
+          properties:
+            package:
+              type: string
+              description: Dataloader package name
+            dataloader-version:
+              type: string
+              format: semver
+              description: Required dataloader version
+            import-artifact:
+              type: string
+              description: Type of artifact
+          additionalProperties: {}
+        distTags:
+          type: object
+          additionalProperties: {}
+    invitation:
+      type: object
+      description: System Invitation Definition
+      required:
+        - id
+        - orgId
+        - email
+        - expiration
+        - authorized
+        - admin
+        - groupIds
+      properties:
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        principalId:
+          type: string
+          format: uuid
+          nullable: true
+        email:
+          type: string
+          format: email
+        expiration:
+          type: string
+          format: date-time
+        authorized:
+          type: boolean
+        admin:
+          type: boolean
+        groupIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+    resourceTypeEnum:
+      description: The type of resource.
+      type: string
+      enum:
+        - action
+        - activity
+        - alert
+        - alert_bot
+        - alert_bot_version
+        - api_operation
+        - app
+        - approval
+        - artifact
+        - artifact_version
+        - attack_pattern
+        - audit
+        - baseline
+        - benchmark
+        - benchmark_element
+        - boundary
+        - boundary_alert_bot
+        - boundary_class
+        - boundary_control
+        - boundary_crosswalk_version
+        - boundary_element
+        - boundary_graphql_query
+        - boundary_product
+        - boundary_requirement
+        - boundary_role
+        - catalog_operation
+        - catalog_request
+        - class
+        - class_property
+        - collector_bot
+        - compliance_feature
+        - compliance_feature_version
+        - compliance_service
+        - component
+        - connection_profile
+        - control
+        - countermeasure
+        - crosswalk
+        - crosswalk_version
+        - cyber_artifact
+        - data_collection_request
+        - data_type
+        - document_property
+        - element
+        - env_var
+        - event
+        - evidence_bot
+        - evidence_definition
+        - evidence_request
+        - evidence_request_list
+        - evidence_request_list_request
+        - external_control
+        - field
+        - finding
+        - folder
+        - framework
+        - framework_element
+        - framework_version
+        - gql_query
+        - graphql_query_version
+        - implementation_statement
+        - internal_assertion
+        - internal_control
+        - internal_domain
+        - kb
+        - mitigation
+        - module
+        - module_version
+        - notification
+        - npm
+        - oauth_provider
+        - order
+        - org_group
+        - package
+        - page
+        - party
+        - pipeline
+        - product
+        - product_component
+        - product_component_version
+        - product_edition
+        - product_edition_version
+        - product_version
+        - query
+        - role
+        - schema
+        - section
+        - segment
+        - segment_version
+        - standard
+        - store_product_version
+        - studio_project
+        - subscription
+        - suite
+        - tactic
+        - task
+        - team
+        - technique
+        - test_case
+        - test_suite
+        - vendor
+        - vulnerability
+        - weakness
+    VspStatusEnum:
+      type: string
+      description: Statuses for store vsps
+      enum:
+        - draft
+        - active
+        - rejected
+        - deleted
+        - verified
+        - suggested
+        - publishing
+    catalogItem:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Catalog item base class
+          required:
+            - code
+            - status
+          properties:
+            status:
+              $ref: '#/components/schemas/VspStatusEnum'
+            code:
+              type: string
+            packageCode:
+              type: string
+              nullable: true
+            logo:
+              type: string
+              format: url
+              nullable: true
+            url:
+              type: string
+              format: url
+              nullable: true
+            logoFileVersionId:
+              type: string
+              format: uuid
+              nullable: true
+    vendor:
+      type: object
+      description: Describes a product vendor
+      allOf:
+        - $ref: '#/components/schemas/catalogItem'
+        - type: object
+          required:
+            - cpeVendors
+          properties:
+            orgId:
+              type: string
+              format: uuid
+            artifactVersionId:
+              type: string
+              format: uuid
+              nullable: true
+            cpeVendors:
+              type: array
+              description: a list of cpe vendor codes
+              items:
+                type: string
+    suite:
+      allOf:
+        - $ref: '#/components/schemas/catalogItem'
+        - type: object
+          description: Describes a series of suites for a vendor
+          properties:
+            artifactVersionId:
+              type: string
+              format: uuid
+              nullable: true
+    factoryTypeEnum:
+      type: string
+      description: Boundary Factory (Product) Types
+      enum:
+        - software
+        - firmware
+        - hardware
+    hostingTypeEnum:
+      type: string
+      description: Boundary Hosting (Service) Types
+      enum:
+        - iaas
+        - paas
+        - saas
+    productVersion:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: A version of a product with specific configuration and metadata
+          required:
+            - productId
+            - createdBy
+            - status
+            - code
+            - versionId
+            - versionSemver
+            - versionValue
+            - versionFloatValue
+          properties:
+            packageCode:
+              type: string
+            productId:
+              type: string
+              format: uuid
+            createdBy:
+              type: string
+              format: uuid
+            updatedBy:
+              type: string
+              format: uuid
+            status:
+              $ref: '#/components/schemas/CatalogPublishStatusEnum'
+            code:
+              type: string
+            versionId:
+              type: string
+              format: uuid
+            versionSemver:
+              type: string
+              format: semver
+            versionValue:
+              type: number
+              format: int64
+            versionFloatValue:
+              type: number
+              format: float
+            logoFileVersionId:
+              type: string
+              format: uuid
+            taskId:
+              type: string
+              format: uuid
+            apiDocsUrl:
+              type: string
+              format: url
+            segmentIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            complianceFeatureIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            productComponentIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            productEditionIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            factoryTypes:
+              type: array
+              items:
+                $ref: '#/components/schemas/factoryTypeEnum'
+            hostingTypes:
+              type: array
+              items:
+                $ref: '#/components/schemas/hostingTypeEnum'
+            artifactVersionId:
+              type: string
+              format: uuid
+            suggestedProductId:
+              type: string
+              format: uuid
+            cpeProducts:
+              type: array
+              items:
+                $ref: '#/components/schemas/cpeProduct'
+    product:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Product schema
+          required:
+            - status
+            - latestVersionId
+            - latestVersion
+          properties:
+            status:
+              $ref: '#/components/schemas/CatalogPublishStatusEnum'
+            packageCode:
+              type: string
+            latestVersionId:
+              type: string
+              format: uuid
+            artifactId:
+              type: string
+              format: uuid
+            latestVersion:
+              $ref: '#/components/schemas/productVersion'
+    oAuthProvider:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          required:
+            - url
+            - packageCode
+            - vspId
+          properties:
+            url:
+              type: string
+              format: url
+            packageCode:
+              type: string
+            vspId:
+              type: string
+              format: uuid
+            vendor:
+              $ref: '#/components/schemas/vendor'
+            suite:
+              $ref: '#/components/schemas/suite'
+            product:
+              $ref: '#/components/schemas/product'
+    moduleConnectionProfile:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          required:
+            - key
+            - path
+            - payload
+          properties:
+            key:
+              description: A language-specific key or identifier for this connection profile
+              type: string
+              example: '@devsupply/amazon-connection@1.0.0'
+            path:
+              description: The path to the connectiion profile yml snippet
+              type: string
+            payload:
+              description: The yml snippet for this connection profile
+              type: object
+              additionalProperties: {}
+            oauthProviders:
+              type: array
+              items:
+                $ref: '#/components/schemas/oAuthProvider'
+    moduleRepository:
+      type: object
+      description: Description of where to locate a module version
+      required:
+        - type
+        - location
+      properties:
+        type:
+          description: The type of repository
+          type: string
+          enum:
+            - npm
+        location:
+          type: string
+          description: 'Location string for the repository. Content is dependent on `type` - `npm`: the `location` string should be an NPM package name that the Hub server can resolve'
+    moduleVersion:
+      description: A version of a module
+      required:
+        - moduleId
+        - version
+        - connector
+        - repository
+        - fileSupport
+        - dataSupport
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          properties:
+            moduleId:
+              description: The ID of the module to which this version belongs
+              type: string
+              format: uuid
+            version:
+              description: The version number for this version. This must be a [Semver-compliant](https://semver.org) string.
+              type: string
+              format: semver
+            repository:
+              $ref: '#/components/schemas/moduleRepository'
+            connector:
+              description: Indicates whether this module is a connector and has a Connection/ConnectionProfile
+              type: boolean
+            connectionProfile:
+              $ref: '#/components/schemas/moduleConnectionProfile'
+            operations:
+              type: number
+              format: int32
+            packageNames:
+              type: array
+              description: An array of product packagenames related to this module
+              items:
+                description: A unique product package name of the form vendorCode.suiteCode.productCode.
+                type: string
+                example: amazon.aws.iam
+            productIds:
+              type: array
+              description: An array of product ids related to this module
+              items:
+                type: string
+                format: uuid
+            artifactVersionId:
+              type: string
+              format: uuid
+              nullable: true
+            fileSupport:
+              description: Whether the module support files service
+              type: boolean
+            dataSupport:
+              description: Whether the module support data producing
+              type: boolean
+            implementsInterfaceIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+    moduleVersionInfo:
+      description: Expanded details of version of a module
+      required:
+        - api
+      allOf:
+        - $ref: '#/components/schemas/moduleVersion'
+        - type: object
+          properties:
+            api:
+              description: The OpenAPI exposed by this module version
+              type: object
+              additionalProperties: {}
+            doc:
+              description: The OpenAPI documentation exposed by this module version
+              type: string
+            changeLog:
+              description: The Changelog exposed by this module version
+              type: string
+            vendorId:
+              type: string
+              format: uuid
+            vendorName:
+              type: string
+            vendorCode:
+              type: string
+    PipelineBatchModeEnum:
+      type: string
+      description: Run Mode for this batch
+      enum:
+        - full
+        - differential
+      x-enum-descriptions:
+        - Jobs run in full mode
+        - Jobs run in differential mode
+      default: full
+    collectorBot:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Collector bot schema
+          required:
+            - version
+            - batchModes
+          properties:
+            changeLog:
+              type: string
+              nullable: true
+            readMe:
+              type: string
+              nullable: true
+            remediation:
+              type: string
+              nullable: true
+            userGuide:
+              type: string
+              nullable: true
+            versionId:
+              type: string
+              format: uuid
+            version:
+              type: string
+              format: semver
+            versionValue:
+              type: number
+              format: int64
+            versionFloatValue:
+              type: number
+              format: float
+            preRelease:
+              type: boolean
+            packageCode:
+              type: string
+              nullable: true
+            parameters:
+              type: object
+              additionalProperties: {}
+            modulesInfo:
+              type: array
+              items:
+                type: object
+                additionalProperties: {}
+            products:
+              type: array
+              items:
+                type: string
+                format: uuid
+            classes:
+              type: array
+              items:
+                type: string
+                format: uuid
+            artifactVersionId:
+              type: string
+              format: uuid
+              nullable: true
+            batchModes:
+              type: array
+              items:
+                $ref: '#/components/schemas/PipelineBatchModeEnum'
+    cleanupBody:
+      type: object
+      description: Body for cleanup event
+      required:
+        - dynamodbCleanup
+      properties:
+        boundaryId:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        dynamodbCleanup:
+          type: boolean
+    month:
+      type: string
+      description: Month of the year
+      enum:
+        - january
+        - february
+        - march
+        - april
+        - may
+        - june
+        - july
+        - august
+        - september
+        - october
+        - november
+        - december
+      x-enum-description:
+        - January
+        - February
+        - March
+        - April
+        - May
+        - June
+        - July
+        - August
+        - September
+        - October
+        - November
+        - December
+    dayOfWeek:
+      type: string
+      description: Day of the week
+      enum:
+        - sunday
+        - monday
+        - tuesday
+        - wednesday
+        - thursday
+        - friday
+        - saturday
+      x-enum-description:
+        - Sunday
+        - Monday
+        - Tuesday
+        - Wednesday
+        - Thursday
+        - Friday
+        - Saturday
+    timeZone:
+      type: string
+      description: A time zone name.
+      enum:
+        - Africa/Abidjan
+        - Africa/Accra
+        - Africa/Addis_Ababa
+        - Africa/Algiers
+        - Africa/Asmara
+        - Africa/Asmera
+        - Africa/Bamako
+        - Africa/Bangui
+        - Africa/Banjul
+        - Africa/Bissau
+        - Africa/Blantyre
+        - Africa/Brazzaville
+        - Africa/Bujumbura
+        - Africa/Cairo
+        - Africa/Casablanca
+        - Africa/Ceuta
+        - Africa/Conakry
+        - Africa/Dakar
+        - Africa/Dar_es_Salaam
+        - Africa/Djibouti
+        - Africa/Douala
+        - Africa/El_Aaiun
+        - Africa/Freetown
+        - Africa/Gaborone
+        - Africa/Harare
+        - Africa/Johannesburg
+        - Africa/Juba
+        - Africa/Kampala
+        - Africa/Khartoum
+        - Africa/Kigali
+        - Africa/Kinshasa
+        - Africa/Lagos
+        - Africa/Libreville
+        - Africa/Lome
+        - Africa/Luanda
+        - Africa/Lubumbashi
+        - Africa/Lusaka
+        - Africa/Malabo
+        - Africa/Maputo
+        - Africa/Maseru
+        - Africa/Mbabane
+        - Africa/Mogadishu
+        - Africa/Monrovia
+        - Africa/Nairobi
+        - Africa/Ndjamena
+        - Africa/Niamey
+        - Africa/Nouakchott
+        - Africa/Ouagadougou
+        - Africa/Porto-Novo
+        - Africa/Sao_Tome
+        - Africa/Timbuktu
+        - Africa/Tripoli
+        - Africa/Tunis
+        - Africa/Windhoek
+        - America/Adak
+        - America/Anchorage
+        - America/Anguilla
+        - America/Antigua
+        - America/Araguaina
+        - America/Argentina/Buenos_Aires
+        - America/Argentina/Catamarca
+        - America/Argentina/ComodRivadavia
+        - America/Argentina/Cordoba
+        - America/Argentina/Jujuy
+        - America/Argentina/La_Rioja
+        - America/Argentina/Mendoza
+        - America/Argentina/Rio_Gallegos
+        - America/Argentina/Salta
+        - America/Argentina/San_Juan
+        - America/Argentina/San_Luis
+        - America/Argentina/Tucuman
+        - America/Argentina/Ushuaia
+        - America/Aruba
+        - America/Asuncion
+        - America/Atikokan
+        - America/Atka
+        - America/Bahia
+        - America/Bahia_Banderas
+        - America/Barbados
+        - America/Belem
+        - America/Belize
+        - America/Blanc-Sablon
+        - America/Boa_Vista
+        - America/Bogota
+        - America/Boise
+        - America/Buenos_Aires
+        - America/Cambridge_Bay
+        - America/Campo_Grande
+        - America/Cancun
+        - America/Caracas
+        - America/Catamarca
+        - America/Cayenne
+        - America/Cayman
+        - America/Chicago
+        - America/Chihuahua
+        - America/Coral_Harbour
+        - America/Cordoba
+        - America/Costa_Rica
+        - America/Creston
+        - America/Cuiaba
+        - America/Curacao
+        - America/Danmarkshavn
+        - America/Dawson
+        - America/Dawson_Creek
+        - America/Denver
+        - America/Detroit
+        - America/Dominica
+        - America/Edmonton
+        - America/Eirunepe
+        - America/El_Salvador
+        - America/Ensenada
+        - America/Fort_Nelson
+        - America/Fort_Wayne
+        - America/Fortaleza
+        - America/Glace_Bay
+        - America/Godthab
+        - America/Goose_Bay
+        - America/Grand_Turk
+        - America/Grenada
+        - America/Guadeloupe
+        - America/Guatemala
+        - America/Guayaquil
+        - America/Guyana
+        - America/Halifax
+        - America/Havana
+        - America/Hermosillo
+        - America/Indiana/Indianapolis
+        - America/Indiana/Knox
+        - America/Indiana/Marengo
+        - America/Indiana/Petersburg
+        - America/Indiana/Tell_City
+        - America/Indiana/Vevay
+        - America/Indiana/Vincennes
+        - America/Indiana/Winamac
+        - America/Indianapolis
+        - America/Inuvik
+        - America/Iqaluit
+        - America/Jamaica
+        - America/Jujuy
+        - America/Juneau
+        - America/Kentucky/Louisville
+        - America/Kentucky/Monticello
+        - America/Knox_IN
+        - America/Kralendijk
+        - America/La_Paz
+        - America/Lima
+        - America/Los_Angeles
+        - America/Louisville
+        - America/Lower_Princes
+        - America/Maceio
+        - America/Managua
+        - America/Manaus
+        - America/Marigot
+        - America/Martinique
+        - America/Matamoros
+        - America/Mazatlan
+        - America/Mendoza
+        - America/Menominee
+        - America/Merida
+        - America/Metlakatla
+        - America/Mexico_City
+        - America/Miquelon
+        - America/Moncton
+        - America/Monterrey
+        - America/Montevideo
+        - America/Montreal
+        - America/Montserrat
+        - America/Nassau
+        - America/New_York
+        - America/Nipigon
+        - America/Nome
+        - America/Noronha
+        - America/North_Dakota/Beulah
+        - America/North_Dakota/Center
+        - America/North_Dakota/New_Salem
+        - America/Nuuk
+        - America/Ojinaga
+        - America/Panama
+        - America/Pangnirtung
+        - America/Paramaribo
+        - America/Phoenix
+        - America/Port-au-Prince
+        - America/Port_of_Spain
+        - America/Porto_Acre
+        - America/Porto_Velho
+        - America/Puerto_Rico
+        - America/Punta_Arenas
+        - America/Rainy_River
+        - America/Rankin_Inlet
+        - America/Recife
+        - America/Regina
+        - America/Resolute
+        - America/Rio_Branco
+        - America/Rosario
+        - America/Santa_Isabel
+        - America/Santarem
+        - America/Santiago
+        - America/Santo_Domingo
+        - America/Sao_Paulo
+        - America/Scoresbysund
+        - America/Shiprock
+        - America/Sitka
+        - America/St_Barthelemy
+        - America/St_Johns
+        - America/St_Kitts
+        - America/St_Lucia
+        - America/St_Thomas
+        - America/St_Vincent
+        - America/Swift_Current
+        - America/Tegucigalpa
+        - America/Thule
+        - America/Thunder_Bay
+        - America/Tijuana
+        - America/Toronto
+        - America/Tortola
+        - America/Vancouver
+        - America/Virgin
+        - America/Whitehorse
+        - America/Winnipeg
+        - America/Yakutat
+        - America/Yellowknife
+        - Antarctica/Casey
+        - Antarctica/Davis
+        - Antarctica/DumontDUrville
+        - Antarctica/Macquarie
+        - Antarctica/Mawson
+        - Antarctica/McMurdo
+        - Antarctica/Palmer
+        - Antarctica/Rothera
+        - Antarctica/South_Pole
+        - Antarctica/Syowa
+        - Antarctica/Troll
+        - Antarctica/Vostok
+        - Arctic/Longyearbyen
+        - Asia/Aden
+        - Asia/Almaty
+        - Asia/Amman
+        - Asia/Anadyr
+        - Asia/Aqtau
+        - Asia/Aqtobe
+        - Asia/Ashgabat
+        - Asia/Ashkhabad
+        - Asia/Atyrau
+        - Asia/Baghdad
+        - Asia/Bahrain
+        - Asia/Baku
+        - Asia/Bangkok
+        - Asia/Barnaul
+        - Asia/Beirut
+        - Asia/Bishkek
+        - Asia/Brunei
+        - Asia/Calcutta
+        - Asia/Chita
+        - Asia/Choibalsan
+        - Asia/Chongqing
+        - Asia/Chungking
+        - Asia/Colombo
+        - Asia/Dacca
+        - Asia/Damascus
+        - Asia/Dhaka
+        - Asia/Dili
+        - Asia/Dubai
+        - Asia/Dushanbe
+        - Asia/Famagusta
+        - Asia/Gaza
+        - Asia/Harbin
+        - Asia/Hebron
+        - Asia/Ho_Chi_Minh
+        - Asia/Hong_Kong
+        - Asia/Hovd
+        - Asia/Irkutsk
+        - Asia/Istanbul
+        - Asia/Jakarta
+        - Asia/Jayapura
+        - Asia/Jerusalem
+        - Asia/Kabul
+        - Asia/Kamchatka
+        - Asia/Karachi
+        - Asia/Kashgar
+        - Asia/Kathmandu
+        - Asia/Katmandu
+        - Asia/Khandyga
+        - Asia/Kolkata
+        - Asia/Krasnoyarsk
+        - Asia/Kuala_Lumpur
+        - Asia/Kuching
+        - Asia/Kuwait
+        - Asia/Macao
+        - Asia/Macau
+        - Asia/Magadan
+        - Asia/Makassar
+        - Asia/Manila
+        - Asia/Muscat
+        - Asia/Nicosia
+        - Asia/Novokuznetsk
+        - Asia/Novosibirsk
+        - Asia/Omsk
+        - Asia/Oral
+        - Asia/Phnom_Penh
+        - Asia/Pontianak
+        - Asia/Pyongyang
+        - Asia/Qatar
+        - Asia/Qostanay
+        - Asia/Qyzylorda
+        - Asia/Rangoon
+        - Asia/Riyadh
+        - Asia/Saigon
+        - Asia/Sakhalin
+        - Asia/Samarkand
+        - Asia/Seoul
+        - Asia/Shanghai
+        - Asia/Singapore
+        - Asia/Srednekolymsk
+        - Asia/Taipei
+        - Asia/Tashkent
+        - Asia/Tbilisi
+        - Asia/Tehran
+        - Asia/Tel_Aviv
+        - Asia/Thimbu
+        - Asia/Thimphu
+        - Asia/Tokyo
+        - Asia/Tomsk
+        - Asia/Ujung_Pandang
+        - Asia/Ulaanbaatar
+        - Asia/Ulan_Bator
+        - Asia/Urumqi
+        - Asia/Ust-Nera
+        - Asia/Vientiane
+        - Asia/Vladivostok
+        - Asia/Yakutsk
+        - Asia/Yangon
+        - Asia/Yekaterinburg
+        - Asia/Yerevan
+        - Atlantic/Azores
+        - Atlantic/Bermuda
+        - Atlantic/Canary
+        - Atlantic/Cape_Verde
+        - Atlantic/Faeroe
+        - Atlantic/Faroe
+        - Atlantic/Jan_Mayen
+        - Atlantic/Madeira
+        - Atlantic/Reykjavik
+        - Atlantic/South_Georgia
+        - Atlantic/St_Helena
+        - Atlantic/Stanley
+        - Australia/ACT
+        - Australia/Adelaide
+        - Australia/Brisbane
+        - Australia/Broken_Hill
+        - Australia/Canberra
+        - Australia/Currie
+        - Australia/Darwin
+        - Australia/Eucla
+        - Australia/Hobart
+        - Australia/LHI
+        - Australia/Lindeman
+        - Australia/Lord_Howe
+        - Australia/Melbourne
+        - Australia/North
+        - Australia/NSW
+        - Australia/Perth
+        - Australia/Queensland
+        - Australia/South
+        - Australia/Sydney
+        - Australia/Tasmania
+        - Australia/Victoria
+        - Australia/West
+        - Australia/Yancowinna
+        - Brazil/Acre
+        - Brazil/DeNoronha
+        - Brazil/East
+        - Brazil/West
+        - Canada/Atlantic
+        - Canada/Central
+        - Canada/Eastern
+        - Canada/Mountain
+        - Canada/Newfoundland
+        - Canada/Pacific
+        - Canada/Saskatchewan
+        - Canada/Yukon
+        - CET
+        - Chile/Continental
+        - Chile/EasterIsland
+        - CST6CDT
+        - Cuba
+        - EET
+        - Egypt
+        - Eire
+        - EST
+        - EST5EDT
+        - Etc/GMT
+        - Etc/Greenwich
+        - Etc/UCT
+        - Etc/Universal
+        - Etc/UTC
+        - Etc/Zulu
+        - Europe/Amsterdam
+        - Europe/Andorra
+        - Europe/Astrakhan
+        - Europe/Athens
+        - Europe/Belfast
+        - Europe/Belgrade
+        - Europe/Berlin
+        - Europe/Bratislava
+        - Europe/Brussels
+        - Europe/Bucharest
+        - Europe/Budapest
+        - Europe/Busingen
+        - Europe/Chisinau
+        - Europe/Copenhagen
+        - Europe/Dublin
+        - Europe/Gibraltar
+        - Europe/Guernsey
+        - Europe/Helsinki
+        - Europe/Isle_of_Man
+        - Europe/Istanbul
+        - Europe/Jersey
+        - Europe/Kaliningrad
+        - Europe/Kiev
+        - Europe/Kirov
+        - Europe/Lisbon
+        - Europe/Ljubljana
+        - Europe/London
+        - Europe/Luxembourg
+        - Europe/Madrid
+        - Europe/Malta
+        - Europe/Mariehamn
+        - Europe/Minsk
+        - Europe/Monaco
+        - Europe/Moscow
+        - Europe/Nicosia
+        - Europe/Oslo
+        - Europe/Paris
+        - Europe/Podgorica
+        - Europe/Prague
+        - Europe/Riga
+        - Europe/Rome
+        - Europe/Samara
+        - Europe/San_Marino
+        - Europe/Sarajevo
+        - Europe/Saratov
+        - Europe/Simferopol
+        - Europe/Skopje
+        - Europe/Sofia
+        - Europe/Stockholm
+        - Europe/Tallinn
+        - Europe/Tirane
+        - Europe/Tiraspol
+        - Europe/Ulyanovsk
+        - Europe/Uzhgorod
+        - Europe/Vaduz
+        - Europe/Vatican
+        - Europe/Vienna
+        - Europe/Vilnius
+        - Europe/Volgograd
+        - Europe/Warsaw
+        - Europe/Zagreb
+        - Europe/Zaporozhye
+        - Europe/Zurich
+        - Factory
+        - GB
+        - GB-Eire
+        - GMT
+        - Greenwich
+        - Hongkong
+        - HST
+        - Iceland
+        - Indian/Antananarivo
+        - Indian/Chagos
+        - Indian/Christmas
+        - Indian/Cocos
+        - Indian/Comoro
+        - Indian/Kerguelen
+        - Indian/Mahe
+        - Indian/Maldives
+        - Indian/Mauritius
+        - Indian/Mayotte
+        - Indian/Reunion
+        - Iran
+        - Israel
+        - Jamaica
+        - Japan
+        - Kwajalein
+        - Libya
+        - MET
+        - Mexico/BajaNorte
+        - Mexico/BajaSur
+        - Mexico/General
+        - MST
+        - MST7MDT
+        - Navajo
+        - NZ
+        - NZ-CHAT
+        - Pacific/Apia
+        - Pacific/Auckland
+        - Pacific/Bougainville
+        - Pacific/Chatham
+        - Pacific/Chuuk
+        - Pacific/Easter
+        - Pacific/Efate
+        - Pacific/Enderbury
+        - Pacific/Fakaofo
+        - Pacific/Fiji
+        - Pacific/Funafuti
+        - Pacific/Galapagos
+        - Pacific/Gambier
+        - Pacific/Guadalcanal
+        - Pacific/Guam
+        - Pacific/Honolulu
+        - Pacific/Johnston
+        - Pacific/Kanton
+        - Pacific/Kiritimati
+        - Pacific/Kosrae
+        - Pacific/Kwajalein
+        - Pacific/Majuro
+        - Pacific/Marquesas
+        - Pacific/Midway
+        - Pacific/Nauru
+        - Pacific/Niue
+        - Pacific/Norfolk
+        - Pacific/Noumea
+        - Pacific/Pago_Pago
+        - Pacific/Palau
+        - Pacific/Pitcairn
+        - Pacific/Pohnpei
+        - Pacific/Ponape
+        - Pacific/Port_Moresby
+        - Pacific/Rarotonga
+        - Pacific/Saipan
+        - Pacific/Samoa
+        - Pacific/Tahiti
+        - Pacific/Tarawa
+        - Pacific/Tongatapu
+        - Pacific/Truk
+        - Pacific/Wake
+        - Pacific/Wallis
+        - Pacific/Yap
+        - Poland
+        - Portugal
+        - PRC
+        - PST8PDT
+        - ROC
+        - ROK
+        - Singapore
+        - Turkey
+        - UCT
+        - Universal
+        - US/Alaska
+        - US/Aleutian
+        - US/Arizona
+        - US/Central
+        - US/East-Indiana
+        - US/Eastern
+        - US/Hawaii
+        - US/Indiana-Starke
+        - US/Michigan
+        - US/Mountain
+        - US/Pacific
+        - US/Samoa
+        - UTC
+        - W-SU
+        - WET
+        - Zulu
+    cronExpression:
+      type: object
+      description: Cron Data Model
+      properties:
+        minute:
+          oneOf:
+            - type: array
+              items:
+                type: number
+                minimum: 0
+                maximum: 60
+            - type: number
+              minimum: 0
+              maximum: 60
+            - type: string
+        hour:
+          oneOf:
+            - type: array
+              items:
+                type: number
+                minimum: 0
+                maximum: 24
+            - type: number
+              minimum: 0
+              maximum: 24
+            - type: string
+        dayOfMonth:
+          oneOf:
+            - type: array
+              items:
+                type: number
+                minimum: 0
+                maximum: 31
+            - type: number
+              minimum: 0
+              maximum: 31
+            - type: string
+        month:
+          oneOf:
+            - type: array
+              items:
+                $ref: '#/components/schemas/month'
+            - $ref: '#/components/schemas/month'
+            - type: string
+        dayOfWeek:
+          oneOf:
+            - type: array
+              items:
+                $ref: '#/components/schemas/dayOfWeek'
+            - $ref: '#/components/schemas/dayOfWeek'
+            - type: string
+        timeZone:
+          $ref: '#/components/schemas/timeZone'

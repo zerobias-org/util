@@ -1,0 +1,131 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+env:
+  NPM_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+  READ_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+  DISPATCH_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+  SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Acquire cache v4
+        uses: actions/cache@v4
+        with:
+          path: .git
+          key: repo-git-folder
+
+      - name: Check out code v4
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup node v4
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Setup java v3
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'zulu'
+      
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci@neverfail.com"
+          git config --global user.name "@$GITHUB_ACTOR"
+
+      - name: Install nx
+        run: |
+          npm install -g nx@20.5.0
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+
+      - name: Install and build
+        run: |
+          npm i
+          npm run build
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+
+      - name: Generate bom
+        run: |
+          npm run generate:bom
+
+      - name: Publish
+        run: |
+          npm run lerna:publish -- --yes
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get published versions
+        id: get_package_versions
+        run: |
+          ./bin/generate_slack_message.sh
+          echo ::set-output name=output::$(./bin/generate_slack_message.sh)
+
+      - name: Slack Notification on failure
+        uses: slackapi/slack-github-action@v2.1.1
+        if: failure()
+        with:
+          webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: ":fire: Github Workflow Failed"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: ":fire: zerobias-org ${{ github.repository }} Github Workflow Failed"
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+
+      - name: Slack Notification
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          webhook: ${{ env.SLACK_RELEASES_WEBHOOK }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: ":robot: :gear: New artifacts published :tada:"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "${{ steps.get_package_versions.outputs.output }}"
+
+      # - name: Slack Notification
+      #   uses: rtCamp/action-slack-notify@master
+      #   env:
+      #     SLACK_COLOR: good
+      #     SLACK_WEBHOOK: ${{ env.SLACK_RELEASES_WEBHOOK }}
+      #     SLACK_ICON_EMOJI: ':robot:'
+      #     MSG_MINIMAL: true
+      #     SLACK_TITLE: ':gear: new artifacts published :tada:'
+      #     SLACK_MESSAGE: '${{ steps.get_package_versions.outputs.output }}'
+      #     SLACK_FOOTER: ''
+
+  sbom-recorder:
+    needs: publish
+    uses: auditmation/devops/.github/workflows/sbom-recorder.yml@main
+    secrets: inherit

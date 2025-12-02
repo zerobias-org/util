@@ -1,0 +1,33 @@
+{
+  "name": "@zerobias-org/eslint-config",
+  "version": "1.0.0",
+  "description": "zerobias-org eslint configuration",
+  "main": "eslint.config.js",
+  "author": "team@zerobias.com",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "eslint-config"
+  },
+  "engines": {
+    "node": ">=24.11.0",
+    "npm": ">=10.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "keywords": [
+    "eslint",
+    "eslintconfig"
+  ],
+  "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-unicorn": "^62.0.0"
+  },
+  "files": [
+    "eslint.config.js"
+  ]
+}

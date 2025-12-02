@@ -1,0 +1,14 @@
+{
+  "codegenVersion": "{{codegenVersion}}",
+  "operations": {
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+  {{#operation}}
+    "{{operationId}}": "{{classname}}.{{nickname}}"{{^-last}},{{/-last}}
+    {{/operation}}{{^-last}},{{/-last}}
+{{/operations}}
+{{/apis}}
+{{/apiInfo}}
+  }
+}

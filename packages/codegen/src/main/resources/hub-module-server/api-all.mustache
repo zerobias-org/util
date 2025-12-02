@@ -1,0 +1,150 @@
+{{#apiInfo}}
+{{#apis}}
+export * from './{{ classFilename }}.js';
+{{/apis}}
+
+import { Express, Request, Response, NextFunction } from 'express';
+import {
+  CoreError,
+  CoreType,
+  ParameterRequiredError,
+  NotFoundError,
+  Type,
+  IllegalArgumentError,
+  InvalidInputError,
+  UnauthorizedError,
+  InvalidCredentialsError,
+  UnexpectedError,
+} from '@auditmation/types-core-js';
+import { middleware } from 'express-openapi-validator';
+import {
+  Format,
+  InternalServerError,
+  BadRequest,
+  NotFound,
+  Unauthorized,
+  Forbidden,
+  HttpError
+} from 'express-openapi-validator/dist/framework/types';
+import { {{apiName}} } from '{{modulePackage}}';
+import * as express from 'express';
+import * as path from 'path';
+import { getLogger } from '@auditmation/util-logger';
+import { Logger } from 'winston';
+
+const logger: Logger = getLogger(
+  'console',
+  {},
+  process.env.LOG_LEVEL ? process.env.LOG_LEVEL : 'debug'
+);
+
+{{#apis}}
+import { {{classname}}Controller } from './{{ classFilename }}.js';
+{{/apis}}
+
+export interface SecurityProvider {
+  preAuthorize(scopes: string[]): Promise<void>;
+}
+
+export interface {{apiName}}Factory {
+  onRequest(req: Request, res?: Response): Promise<{{apiName}} & SecurityProvider>;
+
+  afterRequest(req: Request, api: {{apiName}} & SecurityProvider, res?: Response): Promise<void>;
+}
+
+export async function install(factory: {{apiName}}Factory, app: Express, spec: string, basePath: string): Promise<void> {
+  app.use(`${basePath}/api${path.extname(spec)}`, express.static(spec));
+  app.use(express.json());
+
+  const formats: Format[] = [];
+  CoreType.allFormats().forEach((f) => {
+    const ct = CoreType.get(f);
+    if (Type.JsonTypeEnum.String.eq(ct.jsonType)) {
+      formats.push(
+        {
+          name: f,
+          type: 'string',
+          validate: (val: any) => {
+            try {
+              ct.newInstance(val);
+              return true;
+            } catch (e) {
+              return false;
+            }
+          }
+        }
+      )
+    }
+  });
+
+  app.use(
+    middleware({
+      apiSpec: spec,
+      validateRequests: {
+        allowUnknownQueryParameters: true,
+        removeAdditional: false,
+      },
+      validateResponses: false,
+      formats,
+    })
+  );
+
+{{#apis}}
+  await new {{classname}}Controller(factory, basePath).install(app);
+{{/apis}}
+
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    let { message = 'Unknown Error', key = 'err.unknown', statusCode = 500, args = {} } = err;
+    if (statusCode >= 400 && statusCode < 500) {
+      logger.info(`Request validation failed (${statusCode}): ${req.method} ${req.path} - ${err.message}`);
+    } else {
+      logger.error(`Server error (${statusCode}): ${req.method} ${req.path} - ${err.message}`);
+    }
+    let json = {};
+    if (err instanceof CoreError) {
+      json = err.toJSON();
+    } else if (err instanceof NotFound) {
+      statusCode = err.status;
+      json = (new NotFoundError(err.errors[0].path)).toJSON();
+    } else if (err instanceof BadRequest) {
+      statusCode = err.status;
+      if (err.errors[0]['errorCode']) {
+        if (err.errors[0]['errorCode'] === 'required.openapi.validation') {
+          json = (new ParameterRequiredError(err.errors[0].path)).toJSON();
+        } else if (err.errors[0]['errorCode'] === 'format.openapi.validation') {
+          const errorObj = err.errors[0];
+          const format = (errorObj.path ? errorObj.path.split('/').pop() : undefined) || 'unknown';
+          const value = errorObj.message || 'invalid';
+          json = (new InvalidInputError(format, value)).toJSON();
+        } else if (err.errors[0]['errorCode'] === 'enum.openapi.validation') {
+          json = (new IllegalArgumentError(err.message)).toJSON();
+        }
+      }
+    } else if (err instanceof Unauthorized) {
+      statusCode = err.status;
+      json = (new UnauthorizedError()).toJSON();
+    } else if (err instanceof Forbidden) {
+      statusCode = err.status;
+      json = (new InvalidCredentialsError()).toJSON();
+    } else if (err instanceof InternalServerError) {
+      statusCode = err.status;
+      json = (new UnexpectedError(err.message, statusCode)).toJSON();
+    } else if (err instanceof HttpError
+    ) {
+      statusCode = err.status;
+      json = (new UnexpectedError(err.message, statusCode)).toJSON();
+    } else {
+      json = {
+        key,
+        timestamp: new Date().toISOString(),
+        message,
+        args,
+      };
+    }
+
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(json));
+  });
+}
+
+{{/apiInfo}}

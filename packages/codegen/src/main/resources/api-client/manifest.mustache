@@ -1,0 +1,51 @@
+{
+  "serviceName": "{{apiName}}",
+  "version": "{{version}}",
+  "codegenVersion": "{{codegenVersion}}",
+  "generatedAt": "{{generatedDate}}",
+  "clientClass": "{{apiName}}Client",
+  "factoryFunction": "new{{apiName}}",
+  "operations": [
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+{{#operation}}
+    {
+      "operationId": "{{operationId}}",
+      "nickname": "{{nickname}}",
+      "apiClass": "{{classname}}",
+      "method": "{{httpMethod}}",
+      "path": "{{path}}",
+      "summary": "{{summary}}",
+      "tags": [{{#tags}}"{{tag}}"{{^-last}}, {{/-last}}{{/tags}}],
+      "parameters": [
+{{#allParams}}
+        {
+          "name": "{{paramName}}",
+          "in": "{{#isPathParam}}path{{/isPathParam}}{{#isQueryParam}}query{{/isQueryParam}}{{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}}",
+          "required": {{required}},
+          "type": "{{dataType}}"{{#description}},
+          "description": "{{description}}"{{/description}}
+        }{{^-last}},{{/-last}}
+{{/allParams}}
+      ],
+      "returnType": "{{#returnType}}{{returnType}}{{/returnType}}{{^returnType}}void{{/returnType}}"
+    }{{^-last}},{{/-last}}
+{{/operation}}
+{{/operations}}
+{{^-last}},{{/-last}}
+{{/apis}}
+{{/apiInfo}}
+  ],
+  "operationMap": {
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+{{#operation}}
+    "{{operationId}}": "{{classname}}.{{nickname}}"{{^-last}},{{/-last}}
+{{/operation}}{{^-last}},{{/-last}}
+{{/operations}}
+{{/apis}}
+{{/apiInfo}}
+  }
+}

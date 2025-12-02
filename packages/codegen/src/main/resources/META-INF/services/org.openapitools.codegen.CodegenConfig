@@ -1,0 +1,4 @@
+io.auditmation.hub.module.codegen.HubModuleCodegenGenerator
+io.auditmation.hub.module.codegen.HubModuleDocumentationGenerator
+io.auditmation.hub.module.codegen.HubModuleServerGenerator
+io.auditmation.hub.module.codegen.ApiClientGenerator

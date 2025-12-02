@@ -1,0 +1,66 @@
+name: Pull Request
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+env:
+  READ_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Acquire cache v4
+        uses: actions/cache@v4
+        with:
+          path: .git
+          key: repo-git-folder
+
+      - name: Check out code v4
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup node v4
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Setup java v3
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'zulu'
+      
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci@neverfail.com"
+          git config --global user.name "@$GITHUB_ACTOR"
+
+      - name: Install nx
+        run: |
+          npm install -g nx@20.5.0
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+
+      - name: Install and build
+        run: |
+          npm i
+          npm run build
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+
+      - name: Run tests
+        run: |
+          npm run test

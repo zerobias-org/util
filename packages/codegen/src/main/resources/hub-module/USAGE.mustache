@@ -1,0 +1,295 @@
+# {{apiName}} Module Usage Guide
+
+This module provides {{apiName}} operations through the ZeroBias Hub platform.
+
+## Overview
+
+The {{apiName}} module is a Hub Module that executes on Hub Nodes. It can be consumed in multiple ways:
+- **Browser/Web Apps** - Use the SDK to invoke operations remotely (cookies handle auth)
+- **Collector Bots** - Automated data collection within the platform
+- **Direct Import** - Run in Node.js environments with direct access
+
+## Installation
+
+```bash
+npm install {{packageName}}-client-ts
+```
+
+## Usage in Browser Applications
+
+Browser applications authenticate via cookies (Dana session) and require a scope ID:
+
+```typescript
+import { {{apiName}}Client, new{{apiName}} } from '{{packageName}}-client-ts';
+import { getZerobiasClientUrl } from '@auditmation/zb-client-lib-js';
+
+// Get scope ID from your connection/scope selection UI
+const scopeId = 'uuid-of-selected-scope';
+
+// Create client
+const client = new{{apiName}}();
+
+// Connect using scope ID
+const hubConnectionProfile = {
+  server: getZerobiasClientUrl('hub', true, isLocalDev),
+  targetId: scopeId  // Scope ID (not connection ID)
+};
+
+await client.connect(hubConnectionProfile);
+
+// Use operations
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+{{#operation}}
+{{#-first}}
+const result = await client.get{{classname}}Api().{{nickname}}(/* parameters */);
+{{/-first}}
+{{/operation}}
+{{/operations}}
+{{/apis}}
+{{/apiInfo}}
+```
+
+### React Component Example
+
+```typescript
+import { useState, useEffect } from 'react';
+import { {{apiName}}Client, new{{apiName}} } from '{{packageName}}-client-ts';
+import { getZerobiasClientUrl } from '@auditmation/zb-client-lib-js';
+import { useCurrentUser } from '@/context/CurrentUserContext';
+
+function {{apiName}}Component({ scopeId }: { scopeId: string }) {
+  const [client, setClient] = useState<{{apiName}}Client | null>(null);
+  const [data, setData] = useState([]);
+  const { user, org } = useCurrentUser();
+
+  useEffect(() => {
+    if (scopeId && user) {
+      const initClient = async () => {
+        const newClient = new{{apiName}}();
+        
+        const hubConnectionProfile = {
+          server: getZerobiasClientUrl('hub', true),
+          targetId: scopeId
+        };
+        
+        await newClient.connect(hubConnectionProfile);
+        setClient(newClient);
+        
+        // Example: fetch initial data
+        {{#apiInfo}}
+        {{#apis}}
+        {{#operations}}
+        {{#operation}}
+        {{#-first}}
+        const result = await newClient.get{{classname}}Api().{{nickname}}();
+        setData(result.items || []);
+        {{/-first}}
+        {{/operation}}
+        {{/operations}}
+        {{/apis}}
+        {{/apiInfo}}
+      };
+      
+      initClient();
+    }
+  }, [scopeId, user]);
+
+  return (
+    <div>
+      {/* Render your data */}
+    </div>
+  );
+}
+```
+
+## Usage in Collector Bots
+
+Collector bots run within the platform and have authenticated context:
+
+```typescript
+import { {{apiName}}Client, new{{apiName}} } from '{{packageName}}-client-ts';
+
+export async function collect(context: CollectorContext) {
+  const client = new{{apiName}}();
+  
+  // Collector bots get scopeId from context
+  const hubConnectionProfile = {
+    server: context.hubUrl,
+    targetId: context.scopeId
+  };
+  
+  await client.connect(hubConnectionProfile);
+  
+  // Collect data
+  {{#apiInfo}}
+  {{#apis}}
+  {{#operations}}
+  {{#operation}}
+  {{#-first}}
+  const data = await client.get{{classname}}Api().{{nickname}}();
+  {{/-first}}
+  {{/operation}}
+  {{/operations}}
+  {{/apis}}
+  {{/apiInfo}}
+  
+  // Transform and return for storage
+  return data.map(item => ({
+    // Transform to AuditgraphDB format
+  }));
+}
+```
+
+## Direct Import (Node.js)
+
+When running in Node.js with direct access to the target system:
+
+```typescript
+import { {{apiName}}Producer } from '{{packageName}}';
+
+const producer = new {{apiName}}Producer();
+
+{{#isConnector}}
+// Connect with credentials
+await producer.connect({
+  // Connection profile properties
+});
+{{/isConnector}}
+
+// Use operations directly
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+{{#operation}}
+{{#-first}}
+const result = await producer.{{nickname}}(/* parameters */);
+{{/-first}}
+{{/operation}}
+{{/operations}}
+{{/apis}}
+{{/apiInfo}}
+
+{{#isConnector}}
+// Disconnect when done
+await producer.disconnect();
+{{/isConnector}}
+```
+
+## Finding Connections and Scopes
+
+To use this module in a browser, you need to:
+
+1. **Find Connections** that use this module:
+```typescript
+const searchBody = {
+  modules: [moduleId], // Module ID for {{apiName}}
+};
+
+const connections = await hubClient.getConnectionApi()
+  .search(searchBody, 1, 50);
+```
+
+2. **Get Scopes** for the connection:
+```typescript
+const searchScopeBody = {
+  connections: [connectionId],
+};
+
+const scopes = await hubClient.getScopeApi()
+  .search(searchScopeBody, 1, 50);
+```
+
+3. **Use Scope ID** to connect (not connection ID):
+```typescript
+const hubConnectionProfile = {
+  server: hubUrl,
+  targetId: scopeId  // This is the key!
+};
+```
+
+## API Reference
+
+{{#apiInfo}}
+{{#apis}}
+### {{classname}}
+
+{{#operations}}
+{{#operation}}
+#### {{nickname}}
+
+{{summary}}
+
+```typescript
+{{nickname}}({{#allParams}}{{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}): Promise<{{#returnType}}{{returnType}}{{/returnType}}{{^returnType}}void{{/returnType}}>
+```
+
+{{#hasParams}}
+**Parameters:**
+{{#allParams}}
+- `{{paramName}}` {{#required}}(required){{/required}}{{^required}}(optional){{/required}} - {{description}}
+{{/allParams}}
+{{/hasParams}}
+
+{{#returnType}}
+**Returns:** `{{returnType}}`{{#returnDescription}} - {{returnDescription}}{{/returnDescription}}
+{{/returnType}}
+
+{{/operation}}
+{{/operations}}
+
+{{/apis}}
+{{/apiInfo}}
+
+## Error Handling
+
+```typescript
+try {
+  const result = await client.getSomeApi().someOperation();
+} catch (error) {
+  if (error.response?.status === 404) {
+    // Scope not found
+  } else if (error.response?.status === 403) {
+    // No permission for this scope/operation
+  } else if (error.response?.status === 503) {
+    // Hub Node offline or unreachable
+  }
+}
+```
+
+## Authentication
+
+- **Browser**: Authentication handled via cookies (Dana session)
+- **Collector Bots**: Authenticated context provided by platform
+- **Direct Import**: Use connection profile credentials
+
+## Debugging
+
+Enable debug logging:
+
+```typescript
+const client = new{{apiName}}({ debug: true });
+```
+
+Check module registration:
+```bash
+hub-node module list | grep {{apiName}}
+```
+
+## Best Practices
+
+1. **Always use Scope ID** in browser/remote contexts (not Connection ID)
+2. **Handle disconnections** gracefully in long-running applications
+3. **Cache client instances** when possible to avoid reconnection overhead
+4. **Implement retry logic** for transient network failures
+5. **Use TypeScript** for type safety and better IDE support
+
+## Related Documentation
+
+- Hub Platform: https://docs.zerobias.com/hub
+- Module Repository: See module README for implementation details
+
+---
+
+Generated with [OpenAPI Generator](https://openapi-generator.tech) version {{codegenVersion}}

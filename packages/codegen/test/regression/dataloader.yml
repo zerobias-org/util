@@ -1,0 +1,753 @@
+openapi: 3.0.2
+info:
+  version: 0.8.0
+  description: Compliance Server OpenAPI Spec
+  title: '@auditmation/platform-dataloader-service'
+servers:
+  - url: /
+paths:
+  /events:
+    post:
+      operationId: handleEvent
+      summary: Handles events
+      tags:
+        - event
+      requestBody:
+        required: true
+        description: The event body
+        content:
+          '*/*':
+            schema:
+              $ref: '#/components/schemas/EventUnion'
+      responses:
+        '200':
+          description: Success
+  /health:
+    get:
+      tags:
+        - healthcheck
+      description: Perform a health check on the events service
+      operationId: health
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/HealthCheckBody'
+        '403':
+          description: You are not authorized to use this service
+        '503':
+          description: Service unavailable
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+        5XX:
+          description: Unexpected error
+  /jobs:
+    get:
+      tags:
+        - job
+      summary: List jobs with filters
+      description: List jobs with filters
+      operationId: listJobs
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - name: artifactName
+          schema:
+            type: string
+          in: query
+        - name: status
+          schema:
+            $ref: '#/components/schemas/dataloaderEventStatus'
+          in: query
+        - name: principalId
+          schema:
+            type: string
+            format: uuid
+          in: query
+        - name: orgId
+          schema:
+            type: string
+            format: uuid
+          in: query
+        - name: source
+          schema:
+            $ref: '#/components/schemas/dataloaderEventSource'
+          in: query
+        - name: overDurationSeconds
+          schema:
+            type: number
+          in: query
+        - name: sort
+          schema:
+            $ref: '#/components/schemas/SortObject'
+          in: query
+          description: Sort object
+      responses:
+        '200':
+          description: OK
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/dataloaderEventExtended'
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+    post:
+      tags:
+        - job
+      summary: Queues a job to load an artifact into the environment
+      description: Queues a job to load an artifact into the environment
+      operationId: queueJob
+      x-method-name: queueJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/queueEventRequestBody'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/dataloaderEvent'
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+    put:
+      tags:
+        - job
+      summary: Replays jobs that have been in a status for too long
+      description: Replays jobs that have been in a status for too long
+      operationId: replayJobs
+      x-method-name: replayJobs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/replayEventsRequestBody'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/dataloaderEvent'
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error
+  /jobs/{jobId}:
+    get:
+      tags:
+        - job
+      summary: Get job by id
+      description: Get job by id
+      operationId: getJob
+      x-method-name: get
+      parameters:
+        - name: jobId
+          schema:
+            type: string
+            format: uuid
+          in: path
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/dataloaderEventExtended'
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Job does not exist
+        5XX:
+          description: Unexpected error
+components:
+  headers:
+    pagedLinkHeader:
+      description: |-
+        Links for paging results. The following types of links may be provided:
+          - `first`: a link to the first page of results
+          - `prev`: a link to retrieve the previous page of results
+          - `next`: a link to retrieve the next page of results
+          - `last`: a link to retrieve the last page of results
+        Not all of these links will be provided by every API response, so consumers should not assume they will be present.
+      schema:
+        type: array
+        items:
+          type: string
+    pageCountHeader:
+      description: The total count of elements in a Paginated Result set.  This header is optional and may not be set if the total number of items is unknown.
+      required: false
+      schema:
+        type: integer
+        format: int64
+  parameters:
+    pageNumberParam:
+      name: pageNumber
+      in: query
+      description: The requested page. This value is 1-indexed.
+      schema:
+        type: integer
+        format: int32
+        default: 1
+    pageSizeParam:
+      name: pageSize
+      in: query
+      description: The number of items in each page of data.
+      schema:
+        type: integer
+        format: int32
+        default: 50
+  securitySchemes:
+    platform-dataloader-service:
+      type: oauth2
+      flows:
+        password:
+          tokenUrl: https://app.zerbias.com/
+          scopes: {}
+  schemas:
+    AutoUpdateBody:
+      $ref: '#/components/schemas/autoUpdateBody'
+    DatabaseHealth:
+      type: object
+      description: Database connectivity health
+      properties:
+        connected:
+          type: boolean
+          description: True if the service can successfully connect to the database
+        poolCount:
+          type: number
+          format: int32
+          description: The total number of connections in the DB pool
+        poolIdleCount:
+          type: number
+          format: int32
+          description: The number of idle connections in the DB pool
+        poolWaitingCount:
+          type: number
+          format: int32
+          description: The number of queued requests waiting on a client from the connection pool
+    Version:
+      type: string
+      format: semver
+      description: Version of the service
+    QueueEventRequestBody:
+      $ref: '#/components/schemas/queueEventRequestBody'
+    ReplayEventsRequestBody:
+      $ref: '#/components/schemas/replayEventsRequestBody'
+    DataloaderEvent:
+      $ref: '#/components/schemas/dataloaderEvent'
+    DataloaderEventExtended:
+      $ref: '#/components/schemas/dataloaderEventExtended'
+    DataloaderEventStatus:
+      $ref: '#/components/schemas/dataloaderEventStatus'
+    DataloaderEventSource:
+      $ref: '#/components/schemas/dataloaderEventSource'
+    DataloaderEventSortColumns:
+      $ref: '#/components/schemas/dataloaderEventSortColumns'
+    SortObject:
+      type: object
+      description: Sort object containing direction and column
+      properties:
+        active:
+          type: string
+        direction:
+          type: string
+    HealthCheckBody:
+      description: Response body of the health check
+      type: object
+      properties:
+        database:
+          $ref: '#/components/schemas/DatabaseHealth'
+        version:
+          $ref: '#/components/schemas/Version'
+        other:
+          type: object
+          description: Additional per service health data
+    EventKind:
+      type: string
+      description: Describes the concrete type for this event. This may be used alongside openapi `discriminator` to get a union type.
+      enum:
+        - change
+        - base
+        - cron
+    EventModel:
+      type: object
+      description: Generic event
+      required:
+        - id
+        - kind
+        - type
+        - data
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          description: A service defined event type, e.g. `change.Tag`
+        principalId:
+          type: string
+          nullable: true
+          format: uuid
+        orgId:
+          type: string
+          nullable: true
+          format: uuid
+        service:
+          type: string
+          nullable: true
+          description: An opaque string for describing the service who caused this event. Support for this field is up to the specific implementation as is its format and meaning.
+        data:
+          type: object
+          additionalProperties: {}
+          description: The event data
+        kind:
+          $ref: '#/components/schemas/EventKind'
+    ChangeEventModel:
+      type: object
+      description: Generic event for handling data changes
+      required:
+        - op
+        - objectType
+      allOf:
+        - $ref: '#/components/schemas/EventModel'
+        - type: object
+          properties:
+            op:
+              type: string
+              description: The type of change operation
+              enum:
+                - create
+                - update
+                - delete
+            objectType:
+              type: string
+              description: the type of object that has changed
+            before:
+              type: object
+              nullable: true
+              description: The object's state before the change event. This can only be present on `update` and `delete` but may be  absent even on those events, depending on the implementation.
+    CronEventModel:
+      type: object
+      description: Generic cron event
+      required:
+        - cronId
+      allOf:
+        - $ref: '#/components/schemas/EventModel'
+        - type: object
+          properties:
+            cronId:
+              type: string
+              description: An identifier for the cron schedule which issued the event
+            cronType:
+              type: string
+              description: The type of cron event being fired.  This is part of `event.type` used for registering handlers. i.e. cron.trigger, cron.oauth_refresh
+    EventUnion:
+      type: object
+      oneOf:
+        - $ref: '#/components/schemas/ChangeEventModel'
+        - $ref: '#/components/schemas/CronEventModel'
+        - $ref: '#/components/schemas/EventModel'
+      discriminator:
+        propertyName: kind
+        mapping:
+          change: '#/components/schemas/ChangeEventModel'
+          cron: '#/components/schemas/CronEventModel'
+          base: '#/components/schemas/EventModel'
+    ReleaseAnnouncement:
+      $ref: '#/components/schemas/releaseAnnouncement'
+    ResourceTypeEnum:
+      $ref: '#/components/schemas/resourceTypeEnum'
+    ServiceUnavailableError:
+      description: Service unavailable
+      type: object
+      allOf:
+        - type: object
+          description: Base class for error models
+          required:
+            - key
+            - template
+            - timestamp
+            - statusCode
+          properties:
+            key:
+              type: string
+              description: A unique message key for this error. This is used both for discrimination and i18n
+            template:
+              description: The error message. This may contain substitutions of the form `{key}` where `key` maps to a key in the `args` list.
+              type: string
+              example: The {thing} is down
+            timestamp:
+              type: string
+              format: date-time
+              description: Timestamp when this error was generated
+            statusCode:
+              description: An HTTP status code to use for this error when transmitting it over HTTP
+              type: integer
+              format: int32
+              default: 500
+              minimum: 100
+              maximum: 599
+            stack:
+              description: The stack trace, if available, for this error.
+              type: string
+        - type: object
+          description: The health check triggering this error
+          required:
+            - body
+            - msg
+          properties:
+            msg:
+              type: string
+              description: A generic message to pass on
+            body:
+              $ref: '#/components/schemas/HealthCheckBody'
+    dataloaderEventStatus:
+      type: string
+      enum:
+        - queued
+        - running
+        - failed
+        - completed
+    dataloaderEventSource:
+      type: string
+      enum:
+        - release
+        - api
+    dataloaderEvent:
+      type: object
+      description: Dataloader event schema
+      required:
+        - id
+        - artifactName
+        - artifactVersion
+        - forceAll
+        - forceDirect
+        - skipObjects
+        - status
+        - principalId
+        - orgId
+        - source
+      properties:
+        id:
+          type: string
+          format: uuid
+        artifactName:
+          type: string
+        artifactVersion:
+          type: string
+        forceAll:
+          type: boolean
+        forceDirect:
+          type: boolean
+        skipObjects:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/dataloaderEventStatus'
+        principalId:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        source:
+          $ref: '#/components/schemas/dataloaderEventSource'
+        queueDate:
+          type: string
+          format: date-time
+          nullable: true
+        startDate:
+          type: string
+          format: date-time
+          nullable: true
+        endDate:
+          type: string
+          format: date-time
+          nullable: true
+        durationSeconds:
+          type: number
+          format: int32
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        errorStack:
+          type: string
+          nullable: true
+    dataloaderEventExtended:
+      allOf:
+        - $ref: '#/components/schemas/dataloaderEvent'
+        - type: object
+          description: Dataloader event extended schema
+          required:
+            - principalName
+            - orgName
+          properties:
+            principalName:
+              type: string
+            orgName:
+              type: string
+    replayEventsRequestBody:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/dataloaderEventStatus'
+        hoursOld:
+          type: number
+          format: int32
+        purgeQueue:
+          type: boolean
+    queueEventRequestBody:
+      type: object
+      required:
+        - artifactName
+      properties:
+        artifactName:
+          type: string
+        artifactVersion:
+          type: string
+          nullable: true
+        force:
+          type: boolean
+          nullable: true
+        forceDirect:
+          type: boolean
+          nullable: true
+        skipObjects:
+          type: boolean
+          nullable: true
+    autoUpdateBody:
+      type: object
+      description: Body for auto update event handler
+      required:
+        - artifactName
+        - artifactVersion
+      properties:
+        artifactName:
+          type: string
+        artifactVersion:
+          type: string
+    dataloaderEventSortColumns:
+      type: string
+      enum:
+        - artifact_name
+        - artifact_version
+        - principal_name
+        - queue_date
+        - start_date
+        - end_date
+        - org_name
+        - status
+        - duration_seconds
+    releaseAnnouncement:
+      type: object
+      description: Body sent to events for a release announcement
+      required:
+        - name
+        - version
+        - repository
+        - commitHash
+        - changelogUrl
+        - distTags
+      properties:
+        name:
+          type: string
+          description: Name of the package
+        version:
+          type: string
+          format: semver
+          description: Version of the package
+        repository:
+          type: string
+          description: Repository that created the artifact
+        commitHash:
+          type: string
+          description: Commit hash of the release
+        actionRunUrl:
+          type: string
+          format: url
+          description: Link to the action run that created the artifact
+        changelog:
+          type: string
+          description: The changelog of this release
+        changelogUrl:
+          type: string
+          description: Link to the changelog for the artifact
+        auditmation:
+          type: object
+          required:
+            - package
+            - dataloader-version
+            - import-artifact
+          properties:
+            package:
+              type: string
+              description: Dataloader package name
+            dataloader-version:
+              type: string
+              format: semver
+              description: Required dataloader version
+            import-artifact:
+              type: string
+              description: Type of artifact
+          additionalProperties: {}
+        distTags:
+          type: object
+          additionalProperties: {}
+    resourceTypeEnum:
+      description: The type of resource.
+      type: string
+      enum:
+        - action
+        - activity
+        - alert
+        - alert_bot
+        - alert_bot_version
+        - api_operation
+        - app
+        - approval
+        - artifact
+        - artifact_version
+        - attack_pattern
+        - audit
+        - baseline
+        - benchmark
+        - benchmark_element
+        - boundary
+        - boundary_alert_bot
+        - boundary_class
+        - boundary_control
+        - boundary_crosswalk_version
+        - boundary_element
+        - boundary_graphql_query
+        - boundary_product
+        - boundary_requirement
+        - boundary_role
+        - catalog_operation
+        - catalog_request
+        - class
+        - class_property
+        - collector_bot
+        - compliance_feature
+        - compliance_feature_version
+        - compliance_service
+        - component
+        - connection_profile
+        - control
+        - countermeasure
+        - crosswalk
+        - crosswalk_version
+        - cyber_artifact
+        - data_collection_request
+        - data_type
+        - document_property
+        - element
+        - env_var
+        - event
+        - evidence_bot
+        - evidence_definition
+        - evidence_request
+        - evidence_request_list
+        - evidence_request_list_request
+        - external_control
+        - field
+        - finding
+        - folder
+        - framework
+        - framework_element
+        - framework_version
+        - gql_query
+        - graphql_query_version
+        - implementation_statement
+        - internal_assertion
+        - internal_control
+        - internal_domain
+        - kb
+        - mitigation
+        - module
+        - module_version
+        - notification
+        - npm
+        - oauth_provider
+        - order
+        - org_group
+        - package
+        - page
+        - party
+        - pipeline
+        - product
+        - product_component
+        - product_component_version
+        - product_edition
+        - product_edition_version
+        - product_version
+        - query
+        - role
+        - schema
+        - section
+        - segment
+        - segment_version
+        - standard
+        - store_product_version
+        - studio_project
+        - subscription
+        - suite
+        - tactic
+        - task
+        - team
+        - technique
+        - test_case
+        - test_suite
+        - vendor
+        - vulnerability
+        - weakness
+    ConnectionProfile:
+      $ref: '#/components/schemas/connectionProfile'
+    connectionProfile:
+      type: object
+      description: Connection profile for Dataloader API client
+      properties:
+        server:
+          type: string
+          format: uri
+          description: Dataloader API server URL
+          example: https://api.zerobias.com
+        apiKey:
+          type: string
+          format: password
+          description: API key for authentication
+        orgId:
+          type: string
+          format: uuid
+          description: Organization ID for multi-tenant access
+        timeout:
+          type: integer
+          description: Request timeout in milliseconds
+          default: 30000
+          minimum: 1000
+          maximum: 300000
+      required:
+        - server

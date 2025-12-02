@@ -1,0 +1,65 @@
+import jsonata from 'jsonata';
+import { RequestPrototype, ResponsePrototype } from '@auditmation/util-api-invoker-api';
+{{#jsonataFunctions}}{{#imported}}import { {{#implementation}}{{{methodName}}} as {{{methodAlias}}} } from '{{{module}}}';{{/implementation}}
+{{/imported}}{{/jsonataFunctions}}
+{{#jsonataExpressions}}{{#imported}}import { {{{expressionName}}} as {{{expressionAlias}}} } from '{{{module}}}';{{/imported}}
+{{/jsonataExpressions}}
+
+{{#apiInfo}}
+declare type JsonataFunctionDeclaration = {
+  name: string,
+  implementation: (...args: any[]) => any,
+  signature?: string
+};
+const JSONATA_FUNCTIONS : JsonataFunctionDeclaration[] = [{{#jsonataFunctions}}{{#inlined}}
+  { name: '{{name}}', implementation: {{{implementation}}}, signature: '{{{signature}}}' },{{/inlined}}{{#imported}}
+  { name: '{{name}}', implementation: {{#implementation}}{{methodAlias}}{{/implementation}}, signature: '{{{signature}}}' },{{/imported}}{{/jsonataFunctions}}];
+
+
+{{#inlined}}import { {{{expressionName}}} as {{{expressionAlias}}} } from '{{{module}}}';
+{{/inlined}}
+
+export const JSONATA_EXPRESSIONS = { {{#jsonataExpressions}}{{#imported}}{{{expressionAlias}}},
+{{/imported}}  {{#inlined}}{{{refName}}}: '{{{expression}}}',
+{{/inlined}}{{/jsonataExpressions}} };
+{{/apiInfo}}
+
+async function executeJsonataExpression <T>(
+  input: T,
+  transform: string,
+  jsonataVariables: any
+) : Promise<T> {
+  const jsonataVariablesString = Object.keys(jsonataVariables).reduce(
+    (previousValue, currentValue) => (jsonataVariables[currentValue]
+      ? `${previousValue} $${currentValue} := ${JSON.stringify(jsonataVariables[currentValue])};`
+      : previousValue), ''
+
+  );
+  const expression = jsonata(`(${jsonataVariablesString} $ ~> ${transform})`);
+  JSONATA_FUNCTIONS.forEach((functionMeta) => {
+    expression.registerFunction(
+      functionMeta.name,
+      functionMeta.implementation,
+      functionMeta.signature
+    );
+  });
+
+  return expression.evaluate(input);
+}
+
+export async function executePipelineJsonataExpression <T>(
+  input: T, transform: string,
+  originalRequestPrototype: RequestPrototype,
+  originalResponsePrototype?: ResponsePrototype,
+  extraParameters: { [key: string]: any;} = {}
+) : Promise<T> {
+  return executeJsonataExpression(
+    input,
+    transform,
+    {
+      ...extraParameters,
+      requestPrototype: originalRequestPrototype,
+      responsePrototype: originalResponsePrototype,
+    }
+  );
+}

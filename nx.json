@@ -1,0 +1,99 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "defaultBase": "master",
+  "parallel": 4,
+  "cacheDirectory": ".nx/cache",
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
+      "!{projectRoot}/tsconfig.spec.json",
+      "!{projectRoot}/.eslintrc.json",
+      "!{projectRoot}/eslint.config.js"
+    ],
+    "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
+  },
+  "targetDefaults": {
+    "clean": {
+      "cache": false
+    },
+    "transpile": {
+      "dependsOn": ["^transpile", "generate"],
+      "inputs": ["production", "^production"],
+      "outputs": ["{projectRoot}/dist", "{projectRoot}/build"],
+      "cache": true
+    },
+    "sql:copy": {
+      "dependsOn": ["transpile"],
+      "cache": true
+    },
+    "templates:copy": {
+      "dependsOn": ["transpile"],
+      "cache": true
+    },
+    "lint": {
+      "dependsOn": ["^transpile"],
+      "inputs": ["default", "{workspaceRoot}/.eslintrc.json"],
+      "cache": true
+    },
+    "lint:fix": {
+      "dependsOn": ["^transpile"],
+      "cache": false
+    },
+    "generate": {
+      "dependsOn": ["^transpile"],
+      "cache": true
+    },
+    "generate:full": {
+      "dependsOn": ["^transpile"],
+      "cache": true
+    },
+    "generate:post": {
+      "dependsOn": ["^transpile"],
+      "cache": true
+    },
+    "generate:models": {
+      "dependsOn": ["^transpile"],
+      "cache": true
+    },
+    "generate:bom": {
+      "cache": false
+    },
+    "docs": {
+      "dependsOn": ["transpile"],
+      "cache": true
+    },
+    "dumpSchema": {
+      "dependsOn": ["transpile"],
+      "cache": true
+    },
+    "test": {
+      "dependsOn": ["transpile"],
+      "inputs": ["default", "^production"],
+      "cache": true
+    },
+    "test:unit": {
+      "dependsOn": ["transpile"],
+      "inputs": ["default", "^production"],
+      "cache": true
+    },
+    "test:integration": {
+      "dependsOn": ["transpile"],
+      "inputs": ["default", "^production"],
+      "cache": true
+    },
+    "shrinkwrap": {
+      "dependsOn": ["transpile"],
+      "cache": false
+    },
+    "nx:prepublish": {
+      "dependsOn": ["nx:prepublish"],
+      "cache": false
+    },
+    "nx:publish": {
+      "dependsOn": ["^nx:publish"],
+      "cache": false
+    }
+  }
+}

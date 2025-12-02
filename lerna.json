@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/lerna/schemas/lerna-schema.json",
+  "version": "independent",
+  "npmClient": "npm",
+  "changelogPreset": {
+    "name": "conventionalcommits",
+    "issuePrefixes": ["PM-"],
+    "issueUrlFormat": "https://0bias.atlassian.net/browse/{prefix}{id}",
+    "types": [
+      { "type": "feat", "section": "Features" },
+      { "type": "fix", "section": "Bug Fixes" },
+      { "type": "chore", "section": "Chores" },
+      { "type": "perf", "section": "Performance Improvements" },
+      { "type": "revert", "section": "Reverts" }
+    ]
+  },
+  "command": {
+    "publish": {
+      "ignoreChanges": ["*.md"],
+      "message": "chore(release): publish"
+    },
+    "version": {
+      "allowBranch": ["master", "main"],
+      "message": "chore(release): bump version"
+    }
+  },
+  "useNx": true
+}

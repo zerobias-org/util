@@ -1,0 +1,79 @@
+buildscript {
+  repositories {
+    jcenter()
+    mavenLocal()
+  }
+}
+
+apply plugin: 'java'
+apply plugin: 'maven-publish'
+group = 'com.zerobias.hub'
+version = '1.0.0'
+description = 'OpenAPI Generator for creating Hub Modules'
+
+sourceCompatibility = 8
+targetCompatibility = 8
+
+tasks.withType(JavaCompile) {
+  options.fork = true
+  options.encoding = 'UTF-8'
+  options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+  options.compilerArgs << "-Xlint:fallthrough" << "-Xlint:finally"
+  options.compilerArgs << "-parameters"
+}
+
+processResources {
+  from ('package.json')
+}
+
+dependencies {
+  implementation 'org.openapitools:openapi-generator-cli:5.4.0'
+}
+
+task copyDependencies(type: Copy) {
+   from configurations.compileClasspath
+   into "${project.buildDir}/dependencies"
+}
+build.dependsOn += copyDependencies
+
+repositories {
+  mavenLocal()
+  maven {
+    name = 'GitHubPackages ds-commons'
+    url = uri('https://maven.pkg.github.com/devsupply/ds-commons')
+    credentials {
+      username = System.getenv('GITHUB_ACTOR')
+      password = System.getenv('GITHUB_TOKEN')
+    }
+  }
+  maven {
+    name = 'GitHubPackages'
+    url = uri('https://maven.pkg.github.com/zerobias-org/util')
+    credentials {
+      username = System.getenv('GITHUB_ACTOR')
+      password = System.getenv('GITHUB_TOKEN')
+    }
+  }
+  mavenCentral()
+}
+
+test.useTestNG()
+
+
+publishing {
+  repositories {
+    maven {
+      name = 'GitHubPackages'
+      url = uri('https://maven.pkg.github.com/zerobias-org/util')
+      credentials {
+        username = System.getenv('GITHUB_ACTOR')
+        password = System.getenv('GITHUB_TOKEN')
+      }
+    }
+  }
+  publications {
+    gpr(MavenPublication) {
+      from(components.java)
+    }
+  }
+}

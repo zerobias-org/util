@@ -1,0 +1,5059 @@
+openapi: 3.0.2
+info:
+  version: 0.8.0
+  description: Compliance Server OpenAPI Spec
+  title: '@auditmation/store-api'
+servers:
+  - url: /
+paths:
+  /connectionProfiles/{id}:
+    parameters:
+      - name: id
+        description: The id of the connection profile
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - connectionProfile
+      summary: Retrieves a Connection profile
+      operationId: getConnectionProfile
+      x-method-name: get
+      responses:
+        '200':
+          description: The requested connection profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/moduleConnectionProfile'
+  /connectionProfiles/{id}/modules:
+    parameters:
+      - name: id
+        description: The id of the connection profile
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - connectionProfile
+      summary: List modules that use the connection profile
+      operationId: listConnectionProfileModules
+      x-method-name: listModules
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - name: status
+          in: query
+          description: Filter by module status
+          schema:
+            $ref: '#/components/schemas/ModuleStatus'
+        - name: fileSupport
+          in: query
+          description: List only modules file support active or inactive.
+          schema:
+            type: boolean
+        - name: dataSupport
+          in: query
+          description: List only modules data support active or inactive.
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/OrderByParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+      responses:
+        '200':
+          description: The modules that use the connection profile
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/module'
+  /events:
+    parameters:
+      - $ref: '#/components/parameters/pageNumberParam'
+      - $ref: '#/components/parameters/pageSizeParam'
+      - $ref: '#/components/parameters/KeywordsFilterParam'
+      - name: resourceId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: resourceType
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/resourceTypeEnum'
+      - name: status
+        in: query
+        required: false
+        description: This filter may be set if a filter has already been set for resourcetype. If set but without the aforementioned filter, an HTTP-400 will be returned.  Values used to filter the result set depend on the selected resource type.  * ModerationStatus applied to `vendor`, `suite` and `product  * OrderStatus, OperationOrderStatus and CatalogingOrderStatus apply to order `only` each of which belonging to a type of order. OrderStatus applies to all types of order while OperationOrderStatus also applies to `operation` orders and CatalogingOrderStatus applied to `catalog` orders.
+        schema:
+          $ref: '#/components/schemas/OrderStatusParam'
+      - name: orderType
+        in: query
+        description: 'This filter may be set if a filter has already been set for resourcetype on orders. If set but without the aforementioned filter, an HTTP-400 will be returned. '
+        required: false
+        schema:
+          $ref: '#/components/schemas/OrderType'
+      - name: packageNames
+        in: query
+        description: 'Filter by product package name. This filter applies to the following event types: * order * module * product'
+        schema:
+          type: array
+          items:
+            type: string
+      - name: orderBy
+        in: query
+        description: Order by the given property
+        schema:
+          $ref: '#/components/schemas/OrderByEventParam'
+      - name: sort
+        in: query
+        description: The order in which to sort the results, defaults to `desc`
+        schema:
+          $ref: '#/components/schemas/SortParamDesc'
+    get:
+      tags:
+        - event
+      summary: 'Retrieves a list of events. Every event represents a business event that may have been sent via notifications/subscriptions. All events will have additional properties that may used to filter the results: * resourceId : The id of the resource affected by this event * resourceType: The type of resource affected by this event * keywords/packageNames: set for resources that include those properties. i.e. (vendor/suite/product for keywords, operations/module/product/order for packageNames) * The event payload may be retried via the `payload` property.'
+      operationId: listEvents
+      x-method-name: list
+      responses:
+        '200':
+          description: A paginated list of events
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/event'
+  /events/{eventId}:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        description: The id of the event
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - event
+      summary: 'Retrieves an event by id. Every event represents a business event that may have been sent via notifications/subscriptions. All events will have additional properties that may used to filter the results: * resourceId : The id of the resource affected by this event * resourceType: The type of resource affected by this event * keywords/packageNames: set for resources that include those properties. i.e. (vendor/suite/product for keywords, operations/module/product/order for packageNames) * The event payload may be retried via the `payload` property.'
+      operationId: getEvent
+      x-method-name: get
+      responses:
+        '200':
+          description: The requested event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/event'
+  /health:
+    get:
+      tags:
+        - healthcheck
+      description: Perform a health check on the events service
+      operationId: health
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/HealthCheckBody'
+        '403':
+          description: You are not authorized to use this service
+        '503':
+          description: Service unavailable
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableError'
+        5XX:
+          description: Unexpected error
+  /moduleVersions/{moduleVersionId}:
+    get:
+      tags:
+        - module_version
+      parameters:
+        - name: moduleVersionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      summary: Retrieves a module version by id
+      operationId: getModuleVersion
+      x-method-name: get
+      responses:
+        '200':
+          description: A module version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/moduleVersionInfo'
+  /moduleVersions/{moduleVersionId}/scopes:
+    get:
+      tags:
+        - module_version
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - name: moduleVersionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      summary: Retrieves a list of scopes for a module version by id
+      operationId: listModuleVersionScopes
+      x-method-name: listModuleVersionScopes
+      responses:
+        '200':
+          description: A list of scopes for a module version
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/moduleVersionScope'
+  /moduleSearch:
+    post:
+      tags:
+        - module
+      summary: search modules
+      description: search modules
+      operationId: searchModules
+      x-method-name: search
+      security:
+        - store-api:
+            - read:module
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - name: sort
+          schema:
+            $ref: '#/components/schemas/SortObject'
+          in: query
+          description: Sort object
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/searchModuleBody'
+      responses:
+        '200':
+          description: OK
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/moduleSearch'
+        '403':
+          description: You are not authorized to use this service
+        '404':
+          description: Graphql Query does not exist
+        5XX:
+          description: Unexpected error
+  /moduleSearch/options:
+    get:
+      tags:
+        - module
+      summary: Returns options/filters for modules
+      description: Returns options/filters for modules
+      operationId: searchModuleOptions
+      x-method-name: searchOptions
+      security:
+        - store-api:
+            - read:products
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultsColumnOptionsWrapper'
+        '403':
+          description: You are not authorized to use this service
+        5XX:
+          description: Unexpected error.
+  /modules:
+    get:
+      tags:
+        - module
+      summary: Retrieves a list of modules
+      operationId: listModules
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - name: status
+          in: query
+          description: Filter by module status
+          schema:
+            $ref: '#/components/schemas/ModuleStatus'
+        - name: packageNames
+          in: query
+          description: List only modules compatible with the given product package names.
+          schema:
+            type: array
+            items:
+              type: string
+        - name: fileSupport
+          in: query
+          description: List only modules file support active or inactive.
+          schema:
+            type: boolean
+        - name: dataSupport
+          in: query
+          description: List only modules data support active or inactive.
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/OrderByParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+      responses:
+        '200':
+          description: A list of modules
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/module'
+  /modules/{moduleId}:
+    parameters:
+      - name: moduleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - module
+      summary: Retrieves a module
+      operationId: getModule
+      x-method-name: get
+      responses:
+        '200':
+          description: A module
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/module'
+  /modules/{moduleKeyOrId}/dependencies:
+    get:
+      tags:
+        - module
+      parameters:
+        - name: moduleKeyOrId
+          in: path
+          required: true
+          description: The module to look for.  Either the module id or its key (@devsupply/github)
+          schema:
+            type: string
+        - name: moduleVersionId
+          in: query
+          required: false
+          description: A specific version of a module.  The provided moduleVersionId must belong to the given module
+          schema:
+            type: string
+            format: uuid
+        - name: version
+          in: query
+          required: false
+          description: Version specification for the module
+          schema:
+            type: string
+            format: versionRange
+      summary: Generates a report that describes the given Module and Version Range.
+      description: |-
+        This endpoint generates a report describing the given Module and Version Range.
+        The moduleKeyOrId can either be:
+          - a uuid of an existing module: i.e. 8086f5a7-e0bf-4478-b806-685c6095d1f2
+          - a string that identifies the module by its key: i.e. the language specific package for this module. (@devsupply/github)
+        The output of this endpoint can then be used to feed into hub-server in order to create Modules and Module Versions.
+      operationId: getDependencyReport
+      responses:
+        '200':
+          description: A successfully generated report
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/moduleDependencyReport'
+  /modules/{moduleId}/operations:
+    parameters:
+      - name: moduleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - module
+      summary: 'Retrieves a list of operations for the given module. The list of operations will contain: * Orderable and Ordered catalog operations. * Active Api operations. * Ordered Operations that have been activated are taken away from this view. * Additionally, Active operations will contain information about operations the ordered operations they are linked to. In most cases, this will be an array of size 1, however this will not always be the case. Operations may be searched by name, using keywords search. The search will match against any operation name or their simbling''s (ordered operations linked to api operations) If `latest` is set to true, only Active operations associated with the latest module version will be returned.'
+      operationId: listModuleOperations
+      x-method-name: listOperations
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/OperationTypeParam'
+        - $ref: '#/components/parameters/OperationNameFilterParam'
+        - name: status
+          in: query
+          description: Filter by operation status
+          schema:
+            $ref: '#/components/schemas/OperationStatus'
+        - $ref: '#/components/parameters/HttpMethodFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - name: latest
+          in: query
+          description: Only return `active` operations that are present in the latest version of this module. Orderable operations will be filtered out from the result.
+          schema:
+            type: boolean
+            default: false
+        - $ref: '#/components/parameters/OrderByParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+      responses:
+        '200':
+          description: A list of module operations
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/operation'
+  /modules/{moduleId}/versions:
+    parameters:
+      - name: moduleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - module
+      summary: Retrieves a list of module versions for a given module
+      operationId: listModuleVersions
+      x-method-name: listVersions
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - name: fileSupport
+          in: query
+          description: List only modules file support active or inactive.
+          schema:
+            type: boolean
+        - name: dataSupport
+          in: query
+          description: List only modules data support active or inactive.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: A list of modules versions
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/moduleVersion'
+  /modules/{moduleId}/versions/{version}:
+    parameters:
+      - name: moduleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: version
+        in: path
+        required: true
+        description: Version id or Semantic version
+        schema:
+          type: string
+    get:
+      tags:
+        - module
+      summary: Retrieves a module version for a given module
+      operationId: getModuleVersionByModuleAndVersion
+      x-method-name: getVersion
+      responses:
+        '200':
+          description: A module version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/moduleVersionInfo'
+  /modules/{moduleId}/versions/{version}/operations:
+    parameters:
+      - name: moduleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: version
+        in: path
+        required: true
+        description: Version id or Semantic version
+        schema:
+          type: string
+    get:
+      tags:
+        - module
+      summary: Retrieves a list of operations that were published by the given module version * All operations returned by this endpoint are `active` api operations. Operations may be searched by name, using keywords search. The search will match against any operation name or their simbling's (catalog operations linked to api operations)
+      operationId: listModuleVersionOperations
+      x-method-name: listModuleVersionOperations
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/OperationNameFilterParam'
+        - $ref: '#/components/parameters/HttpMethodFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - name: productVersionId
+          in: query
+          description: Filter by product version. This filter will list operations that are compatible with both the given module and product versions
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/OrderByParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+      responses:
+        '200':
+          description: A list of operations
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/operation'
+  /operations:
+    get:
+      tags:
+        - operation
+      summary: |-
+        Retrieves a list of operations The list of operations will contain:
+
+          * Orderable and Ordered catalog operations.
+          * Active Api operations.
+          * Ordered Operations that have been activated are taken away from this view.
+          * Additionally, Active operations will contain information about operations the ordered operations they are linked to.
+            In most cases, this will be an array of size 1, however this will not always be the case.
+        Operations may be searched by name, using keywords search. The search will match against any operation name or their simbling's (ordered operations linked to api operations). If `latest` is set to true, only Active operations associated with the latest module version(s) will be returned.
+      operationId: listOperations
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/OperationTypeParam'
+        - name: packageNames
+          in: query
+          description: Filter by product package name. This filter cannot be combined with the productVersionId filter
+          schema:
+            type: array
+            items:
+              type: string
+        - name: status
+          in: query
+          description: Filter by operation status
+          schema:
+            $ref: '#/components/schemas/OperationStatus'
+        - name: productVersionId
+          in: query
+          description: Filter by product version. This filter cannot be combined with the packageNames filter
+          schema:
+            type: string
+            format: uuid
+        - name: moduleVersionId
+          in: query
+          description: Filter by module version. This filter cannot be combined with the packageNames filter
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/OperationNameFilterParam'
+        - $ref: '#/components/parameters/HttpMethodFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - name: latest
+          in: query
+          description: Only return `active` operations that are present in the latest version of each module. Orderable operations will be filtered out from the result.  This parameter has no effect when a `moduleVersionId` is provided
+          schema:
+            type: boolean
+            default: false
+        - $ref: '#/components/parameters/OrderByParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+      responses:
+        '200':
+          description: A list of operations
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/operation'
+  /operations/{operationId}:
+    parameters:
+      - name: operationId
+        description: The id of an operation
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - operation
+      summary: Retrieves a detailed operation with examples and content type
+      operationId: getOperation
+      x-method-name: get
+      responses:
+        '200':
+          description: A detailed operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/operationInfo'
+  /orders:
+    get:
+      tags:
+        - order
+      summary: Retrieves a list of orders
+      operationId: listOrders
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/OrderStatusFilterParam'
+        - $ref: '#/components/parameters/OrderTypeFilterParam'
+        - name: priority
+          in: query
+          description: Filter by order priority
+          schema:
+            $ref: '#/components/schemas/Priority'
+        - $ref: '#/components/parameters/SortObjectParam'
+        - name: orderBy
+          in: query
+          description: Order by the given property
+          schema:
+            type: string
+            default: created
+            enum:
+              - description
+              - created
+              - expected
+              - status
+      responses:
+        '200':
+          description: A list of orders
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/order'
+    post:
+      tags:
+        - order
+      summary: |-
+        Create an order. One of 3 order types may be requested:
+          * product: A low fidelity product order
+          * catalog: Cataloging request for an existing verified product
+          * operation: Operations from an active cataloged product
+
+        An Operation order is a high fidelity order that may contain up to 10 operations that belong to the same module.
+          * Operation orders may only contain `orderable` operations. 
+          * Any order containing operations that aren't `orderable` will be vetoed.
+        A Product order is a low fidelity order that may contain information on a new product and its vendor and suite parent(s)
+          * The output of such an order is one or more products in the `verified` status
+        A catalog order is a request to catalog a newly verified product.
+          * The output of such an order is a fully cataloged product with a new module that can connect to the given product
+          * Catalog orders have to go through business and lab analysis in order to lay out cost.
+
+        All order types may be provided a custom json context that is set by the customer.
+      operationId: createOrder
+      x-method-name: create
+      requestBody:
+        description: An order that may contain up 10 operations on the same module or a product.
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/createOperationOrder'
+                - $ref: '#/components/schemas/createProductOrder'
+                - $ref: '#/components/schemas/createCatalogingOrder'
+      responses:
+        '201':
+          description: The order that was created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/order'
+  /orders/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - order
+      summary: Retrieves details about the given order
+      operationId: getOrder
+      x-method-name: get
+      responses:
+        '200':
+          description: Details about an order
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/productOrder'
+                  - $ref: '#/components/schemas/catalogingOrder'
+                  - $ref: '#/components/schemas/operationOrder'
+    patch:
+      tags:
+        - order
+      summary: Updates an order
+      operationId: updateOrder
+      x-method-name: patch
+      requestBody:
+        description: Properties that may be updated on an order
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/patchOrder'
+      responses:
+        '200':
+          description: The updated order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/order'
+  /orders/{orderId}/items:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - order
+      summary: Adds an item to an order. This is currently only supported for product orders which may contain a single product id.
+      operationId: addOrderItems
+      x-method-name: addItems
+      requestBody:
+        description: Adds a set of items to an order
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderItem'
+      responses:
+        '201':
+          description: The updated order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/order'
+    delete:
+      tags:
+        - order
+      summary: Removes items from an order.
+      operationId: removeOrderItems
+      x-method-name: removeItems
+      parameters:
+        - name: itemIds
+          description: An array of items to remove from this order
+          in: query
+          required: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 10
+            items:
+              type: string
+              format: uuid
+      responses:
+        '204':
+          description: Susccesful response
+  /products:
+    get:
+      tags:
+        - product
+      summary: Retrieves a list of products
+      operationId: listProducts
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/VspStatusFilterParam'
+        - $ref: '#/components/parameters/NameFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - $ref: '#/components/parameters/OrderByProductCatalogParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+        - $ref: '#/components/parameters/ProductTagFilterParam'
+      responses:
+        '200':
+          description: A list of products
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/storeProduct'
+  /products/{packageName}:
+    parameters:
+      - name: packageName
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - product
+      summary: Retrieves detailed information about a product
+      operationId: getProduct
+      x-method-name: get
+      responses:
+        '200':
+          description: A product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/productHierarchy'
+  /products/{packageName}/moduleCompatibility:
+    parameters:
+      - name: packageName
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - product
+      parameters:
+        - name: moduleIds
+          in: query
+          required: false
+          description: Filter to a specific set of modules
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+      summary: Retrieves a products compatibility matrix.
+      operationId: getModuleCompatibilityMatrix
+      x-method-name: getModuleCompatibilityMatrix
+      responses:
+        '200':
+          description: A product's compatibility matrix
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/productModuleCompatibility'
+  /products/{packageName}/compatibility:
+    parameters:
+      - name: packageName
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - product
+      summary: Retrieves a products compatibility matrix. This operation has been deprecated and will be replaced by getModuleCompatibilityMatrix `/products/{packageName}/moduleCompatibility`
+      operationId: getProductCompatibilityMatrix
+      deprecated: true
+      x-method-name: getProductCompatibilityMatrix
+      responses:
+        '200':
+          description: A product's compatibility matrix
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/moduleCompatibility'
+  /products/{packageName}/versions:
+    parameters:
+      - name: packageName
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - product
+      summary: Retrieves a product
+      operationId: listProductVersions
+      x-method-name: listVersions
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: A product version
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/storeProductVersion'
+  /report/catalogSummary:
+    get:
+      tags:
+        - report
+      summary: Generates a catalog summary report.
+      operationId: getCatalogSummaryReport
+      x-method-name: getCatalogSummary
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: the from date of the interval.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: the to date of the interval.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: The requested report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/catalogSummaryReport'
+  /resources:
+    get:
+      operationId: searchResources
+      summary: Searches resources by keywords type and tags
+      deprecated: true
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/keywordsParam'
+        - $ref: '#/components/parameters/tagsParam'
+        - $ref: '#/components/parameters/typesParam'
+        - $ref: '#/components/parameters/inflate'
+      tags:
+        - resource
+      responses:
+        '200':
+          description: All matching resources. Parameters of the same filter will be combined via `or` while the different parameter types will be combined via `and` (i.e. - `keywords AND tags AND types`) This operation has been deprecated. The http-post for `resourceSearch` should now be used to search resources.
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourceView'
+    post:
+      operationId: resourceSearch
+      summary: Searches resources by keywords, type, tags, and payload conditions
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      tags:
+        - resource
+      requestBody:
+        required: false
+        description: Filters to apply to the search.
+        content:
+          '*/*':
+            schema:
+              $ref: '#/components/schemas/ResourceSearchFilter'
+      responses:
+        '200':
+          description: All matching resources. Parameters of the same filter will be combined via `or` while the different parameter types will be combined via `and` (i.e. - `keywords AND tags AND types`)
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourceView'
+  /resources/{id}:
+    parameters:
+      - name: id
+        in: path
+        description: ID of the resource
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getResource
+      summary: Returns a resource by ID
+      parameters:
+        - $ref: '#/components/parameters/inflate'
+        - $ref: '#/components/parameters/alerts'
+      tags:
+        - resource
+      responses:
+        '200':
+          description: The matching resource.
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResourceView'
+        '404':
+          description: Returned if the resource is not found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/notFoundError'
+  /resources/{id}/tags:
+    parameters:
+      - name: id
+        in: path
+        description: ID of the resource
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getTagsForResource
+      summary: Retrieves all Tags assigned to the given resource
+      tags:
+        - resource
+      responses:
+        '200':
+          description: All matching tags assigned to the given Resource, filtered by access.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TagView'
+    post:
+      tags:
+        - resource
+      summary: Adds the provided tags to the specified resource
+      operationId: tagResource
+      requestBody:
+        required: true
+        content:
+          '*/*':
+            schema:
+              description: Tag IDs to add to the resource
+              type: array
+              items:
+                type: string
+                format: uuid
+      responses:
+        '204':
+          description: Resource was successfully tagged
+  /resources/{resourceId}/tags/{tagId}:
+    parameters:
+      - name: resourceId
+        in: path
+        description: ID of the resource
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tagId
+        in: path
+        description: ID of the resource
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      operationId: untagResource
+      summary: Removes a tag from a resource
+      tags:
+        - resource
+      responses:
+        '204':
+          description: Tag was successfully removed from the resource
+  /resourceTypes:
+    get:
+      operationId: getResourceTypes
+      summary: Retrieves all types available in this application
+      tags:
+        - resource
+      responses:
+        '200':
+          description: All Resource Types defined and known to the requestor
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourceType'
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+  /tags:
+    get:
+      operationId: listTags
+      summary: Retrieves a list of tags available in this application
+      description: |-
+        There are two optional query parameters: `tagTypes` and `nameFilter`. These, if provided,
+        will be applied to filter the tag list. If both parameters are provided, they will be 
+        combined via an `AND`. All values provided via `tagTypes` will be combined via an `OR`.
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/tagTypes'
+        - $ref: '#/components/parameters/nameFilter'
+      tags:
+        - tag
+      responses:
+        '200':
+          description: All tags known to the requestor
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TagView'
+  /tagTypes:
+    get:
+      operationId: getTagTypes
+      summary: Retrieves all tag types available in this application
+      tags:
+        - tag
+      responses:
+        '200':
+          description: All Tag Types defined and known to the requestor
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TagType'
+  /tagTypes/{type}/resourceTypes:
+    parameters:
+      - name: type
+        in: path
+        description: Tag type
+        required: true
+        schema:
+          type: string
+          format: nmtoken
+    get:
+      operationId: getResourceTypesForTagType
+      summary: Retrieves a list of all resource types which are associated with the given tag type.
+      tags:
+        - tag
+      responses:
+        '200':
+          description: All Resource Types which can be tagged with the given Tag Type
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResourceType'
+    post:
+      tags:
+        - tag
+      summary: Associates the given ResourceTypes with the given Tag Type
+      operationId: addResourceTypesToTagType
+      requestBody:
+        required: true
+        content:
+          '*/*':
+            schema:
+              type: array
+              items:
+                type: string
+                format: nmtoken
+      responses:
+        '204':
+          description: Resource types were successfully associated with this tag type
+  /suites:
+    get:
+      tags:
+        - suite
+      summary: Retrieves a list of suites
+      operationId: listSuites
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/NameFilterParam'
+        - $ref: '#/components/parameters/VspStatusFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - $ref: '#/components/parameters/OrderByProductCatalogParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+      responses:
+        '200':
+          description: A list of suites
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/storeSuite'
+  /vendors:
+    get:
+      tags:
+        - vendor
+      summary: Retrieves a list of vendors
+      description: Retrieves a list of vendors
+      operationId: listVendors
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/NameFilterParam'
+        - $ref: '#/components/parameters/VspStatusFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - $ref: '#/components/parameters/OrderByProductCatalogParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+      responses:
+        '200':
+          description: A list of vendors
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/storeVendor'
+  /vendors/{vendorCode}:
+    parameters:
+      - name: vendorCode
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9]+$
+    get:
+      tags:
+        - vendor
+      summary: Retrieves a vendor
+      description: Retrieves a vendor
+      operationId: getVendor
+      x-method-name: get
+      responses:
+        '200':
+          description: A vendor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/storeVendor'
+  /vendors/{vendorCode}/suites:
+    parameters:
+      - name: vendorCode
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9]+$
+    get:
+      tags:
+        - vendor
+      summary: Retrieves product suites associated with a vendor
+      description: Retrieves product suites associated with a vendor
+      operationId: listVendorSuites
+      x-method-name: listSuites
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/NameFilterParam'
+        - $ref: '#/components/parameters/VspStatusFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - $ref: '#/components/parameters/OrderByProductCatalogParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+      responses:
+        '200':
+          description: A list of suites
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/storeSuite'
+  /vendors/{vendorCode}/suites/{suiteCode}:
+    parameters:
+      - name: vendorCode
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9]+$
+      - name: suiteCode
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9]+$
+    get:
+      tags:
+        - suite
+      summary: Retrieves a suites details by vendor and suite
+      description: Retrieves a suites details by vendor and suite
+      operationId: getVendorSuite
+      x-method-name: get
+      responses:
+        '200':
+          description: Detailed information about a suite
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/storeSuite'
+  /vendors/{vendorCode}/suites/{suiteCode}/products:
+    parameters:
+      - name: vendorCode
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9]+$
+      - name: suiteCode
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9]+$
+    get:
+      tags:
+        - suite
+      summary: Retrieves products associated with a vendor and suite
+      description: Retrieves products associated with a vendor and suite
+      operationId: listSuiteProducts
+      x-method-name: listProducts
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/NameFilterParam'
+        - $ref: '#/components/parameters/VspStatusFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - $ref: '#/components/parameters/OrderByProductCatalogParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+        - $ref: '#/components/parameters/ProductTagFilterParam'
+      responses:
+        '200':
+          description: A list of products
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/storeProduct'
+  /vendors/{vendorCode}/products:
+    get:
+      tags:
+        - vendor
+      summary: Retrieves products associated with a vendor
+      description: Retrieves products associated with a vendor
+      operationId: listVendorProducts
+      x-method-name: listProducts
+      parameters:
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/NameFilterParam'
+        - name: vendorCode
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z0-9]+$
+        - $ref: '#/components/parameters/VspStatusFilterParam'
+        - $ref: '#/components/parameters/KeywordsFilterParam'
+        - $ref: '#/components/parameters/OrderByProductCatalogParam'
+        - $ref: '#/components/parameters/SortObjectParam'
+        - $ref: '#/components/parameters/ProductTagFilterParam'
+      responses:
+        '200':
+          description: A list of products
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+            count:
+              $ref: '#/components/headers/pageCountHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/storeProduct'
+components:
+  headers:
+    pagedLinkHeader:
+      description: |-
+        Links for paging results. The following types of links may be provided:
+          - `first`: a link to the first page of results
+          - `prev`: a link to retrieve the previous page of results
+          - `next`: a link to retrieve the next page of results
+          - `last`: a link to retrieve the last page of results
+        Not all of these links will be provided by every API response, so consumers should not assume they will be present.
+      schema:
+        type: array
+        items:
+          type: string
+    pageCountHeader:
+      description: The total count of elements in a Paginated Result set.  This header is optional and may not be set if the total number of items is unknown.
+      required: false
+      schema:
+        type: integer
+        format: int64
+  parameters:
+    pageNumberParam:
+      name: pageNumber
+      in: query
+      description: The requested page. This value is 1-indexed.
+      schema:
+        type: integer
+        format: int32
+        default: 1
+    pageSizeParam:
+      name: pageSize
+      in: query
+      description: The number of items in each page of data.
+      schema:
+        type: integer
+        format: int32
+        default: 50
+    inflate:
+      name: inflate
+      in: query
+      deprecated: true
+      description: Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release.
+      schema:
+        type: boolean
+        default: false
+    KeywordsFilterParam:
+      name: keywords
+      in: query
+      description: Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc
+      schema:
+        type: array
+        items:
+          type: string
+    NameFilterParam:
+      name: name
+      in: query
+      description: Filter by resource name. This filter is deprecated. Please use the `keywords` filter instead.
+      deprecated: true
+      schema:
+        type: string
+    HttpMethodFilterParam:
+      name: method
+      in: query
+      description: Filter by HTTP Method. Note that this only applies to active operations.  Orderable and Ordered operations do not yet have a method.
+      schema:
+        $ref: '#/components/schemas/openApiMethod'
+    OperationNameFilterParam:
+      name: name
+      in: query
+      deprecated: true
+      description: |-
+        This filter is now deprecated. Please use the `keywords` filter instead. Filters operation name(s). This filter is a text search filter which is based on: * The operation name, and all of it's linked operation names. * Split up sections of operation names, when those are easily identifiable:
+
+          * i.e. resources.projects.list may be filterd on resource, projects and list
+          * resourcesProjectsList may also match the same filters
+        Search terms may be separated by a space, in which case the search currently assumes a logical AND. * name="resource projects search" => the name(s) must match resource project and search terms
+      schema:
+        type: string
+    VspStatusFilterParam:
+      name: status
+      in: query
+      description: Filter by resource status
+      schema:
+        $ref: '#/components/schemas/VspStatusEnum'
+    ProductTagFilterParam:
+      name: tag
+      in: query
+      description: Filter by product resource tag
+      schema:
+        type: string
+    OperationTypeParam:
+      name: type
+      in: query
+      description: 'Filter by operation type. Note: this is deprecated and will be removed in a future release.  Please use the status filter to filter operation by status.'
+      deprecated: true
+      schema:
+        $ref: '#/components/schemas/OperationTypeParam'
+    OrderStatusFilterParam:
+      name: orderStatus
+      in: query
+      description: Filter by order status
+      schema:
+        $ref: '#/components/schemas/OrderStatusParam'
+    OrderTypeFilterParam:
+      name: orderType
+      in: query
+      description: Filter by order type
+      schema:
+        $ref: '#/components/schemas/OrderType'
+    OrderByProductCatalogParam:
+      name: orderBy
+      in: query
+      description: Order by the given property
+      schema:
+        $ref: '#/components/schemas/OrderByProductCatalogParam'
+    OrderByParam:
+      name: orderBy
+      in: query
+      description: Order by the given property
+      schema:
+        $ref: '#/components/schemas/OrderByParam'
+    SortObjectParam:
+      name: sort
+      in: query
+      description: The order in which to sort the results, defaults to `asc`
+      schema:
+        $ref: '#/components/schemas/SortParam'
+    keywordsParam:
+      name: keywords
+      in: query
+      deprecated: true
+      description: Keywords to search by. These will be combined as an `or`. This parameter has been deprecated and will be removed in a future release.
+      schema:
+        type: array
+        items:
+          type: string
+    tagsParam:
+      name: tags
+      in: query
+      deprecated: true
+      description: Names of tags to search for. These will be combined as an `or`. This parameter has been deprecated and will be removed in a future release.
+      schema:
+        type: array
+        items:
+          type: string
+          format: nmtoken
+    typesParam:
+      name: types
+      in: query
+      deprecated: true
+      description: Resource Type to search for. These will be combined as an `or`. This parameter has been deprecated and will be removed in a future release.
+      schema:
+        type: array
+        items:
+          type: string
+          format: nmtoken
+    alerts:
+      name: alerts
+      in: query
+      description: Flag indicating whether or not the result set should include alert aggregates, and whether they should be aggregated over recursively.
+      schema:
+        $ref: '#/components/schemas/AlertFilter'
+    tagTypes:
+      name: tagTypes
+      in: query
+      description: Tag type(s) to filter by. These will be combined as an `or`
+      schema:
+        type: array
+        items:
+          type: string
+          format: nmtoken
+    nameFilter:
+      name: nameFilter
+      in: query
+      description: Filter to apply to the `name` field. This will be `ORed` with other filters  and is case-insensitive.
+      schema:
+        type: string
+  securitySchemes:
+    store-api:
+      type: oauth2
+      flows:
+        password:
+          tokenUrl: https://nf.auditmation.io/
+          scopes:
+            read:product: Ability to read a product
+            read:suite: Ability to read a suite
+            read:vendor: Ability to read a vendor
+  schemas:
+    IdNameDescriptionImageUrlObject:
+      type: object
+      description: Simple object with id and name and description and image url
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          format: url
+          nullable: true
+    ResultsColumnOptionsWrapper:
+      type: object
+      required:
+        - options
+      properties:
+        options:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ResultsColumnOptions'
+    ResultsColumnOptions:
+      type: object
+      required:
+        - sortable
+        - searchable
+        - filterable
+      properties:
+        sortable:
+          type: boolean
+        searchable:
+          type: boolean
+        filterable:
+          type: boolean
+        optionSearchable:
+          type: boolean
+        filter:
+          $ref: '#/components/schemas/ResultsColumnOptionsFilter'
+        filteredBy:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResultsSearchOptions'
+    ResultsColumnOptionsFilter:
+      type: object
+      required:
+        - type
+        - multi
+        - options
+      properties:
+        type:
+          type: string
+          enum:
+            - string
+            - resource
+            - tag
+            - custom
+        multi:
+          type: boolean
+        options:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - $ref: '#/components/schemas/ResultsColumnOptionsFilterResourceStub'
+              - $ref: '#/components/schemas/ResultsColumnOptionsFilterTagStub'
+              - $ref: '#/components/schemas/ResultsColumnOptionsFilterCustomStub'
+    ResultsColumnOptionsFilterResourceStub:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        imageUrl:
+          type: string
+          format: url
+    ResultsColumnOptionsFilterTagStub:
+      type: object
+      required:
+        - id
+        - name
+        - ownerId
+        - type
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        ownerId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          format: nmtoken
+        typeDescription:
+          type: string
+        color:
+          type: string
+    ResultsColumnOptionsFilterCustomStub:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        customFields:
+          type: object
+          additionalProperties: {}
+    SortObject:
+      type: object
+      description: Sort object containing direction and column
+      properties:
+        active:
+          type: string
+        direction:
+          type: string
+    SortParam:
+      type: string
+      enum:
+        - asc
+        - desc
+      default: asc
+    ResourceSearchFilter:
+      type: object
+      title: ResourceSearchFilter
+      description: Filters to apply when searching for resources
+      properties:
+        types:
+          description: Resource Type to search for. These will be combined as an `or`
+          type: array
+          items:
+            type: string
+            format: nmtoken
+        keywords:
+          description: Keywords to search by. These will be combined as an `or`
+          type: array
+          items:
+            type: string
+        tags:
+          description: Names of tags to search for. These will be combined as an `or`
+          type: array
+          items:
+            type: string
+            format: nmtoken
+        inflate:
+          description: Flag indicating whether or not the result set should be fully-inflated. This may be used in conjunction with the `conditions` filter
+          type: boolean
+          default: false
+        conditions:
+          type: array
+          description: A set of conditions to match resources against. These will be combined as an `or` Conditions are evaluated against the inflated resource payload.  This parameter must be used with `inflate=true`.
+          items:
+            $ref: '#/components/schemas/Condition'
+        alerts:
+          $ref: '#/components/schemas/AlertFilter'
+        boundaryId:
+          description: A boundary that contains all resources which this search applies to. (not implemented)
+          type: array
+          items:
+            type: string
+            format: uuid
+    ResourceView:
+      type: object
+      title: ResourceView
+      description: View of a resource
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          required:
+            - tags
+            - alerts
+            - causing
+            - impactedBy
+          properties:
+            tags:
+              description: All tags assigned to this resource (names only)
+              type: array
+              items:
+                $ref: '#/components/schemas/TagView'
+            object:
+              description: The latest version of the full Resource. Provided if `inflate=true`
+              type: object
+              additionalProperties: true
+            alertSummary:
+              $ref: '#/components/schemas/AlertSummary'
+            causing:
+              type: array
+              description: Alerts for which this resource is a direct cause.
+              items:
+                $ref: '#/components/schemas/Alert'
+            impactedBy:
+              type: array
+              description: Alerts that impact this resource. Only returns direct relationships unless queried via getResouce or search(alerts='all')
+              items:
+                $ref: '#/components/schemas/Alert'
+    Condition:
+      type: object
+      title: Condition
+      required:
+        - property
+        - operation
+      properties:
+        property:
+          type: string
+          description: |-
+            The name of the property in a jsonpath simplified format. example:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+              ```
+              {
+                "name": "foo",
+                "children": [
+                  {
+                    "name": bar
+                  },
+                  {
+                    "name": baz
+                  }
+                ]
+              }
+              ```
+            - "name": will match against the top level `name` property only. i.e. `foo` - "children.name": will match against `name` items inside of the `children` array: i.e. ["bar", "baz"]
+        operation:
+          $ref: '#/components/schemas/ConditionOperation'
+        value:
+          description: |-
+            the value or set of values to match the condition against. An array may be specified for the following operations:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+              * any_of
+              * one_of
+              * none_of
+              * all_of
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+            - type: array
+              items:
+                oneOf:
+                  - type: string
+                  - type: number
+                  - type: boolean
+    ConditionOperation:
+      type: string
+      title: ConditionOperation
+      description: The set of operations that may be provided when evaluating conditions.
+      enum:
+        - exists
+        - does_not_exist
+        - is_defined
+        - is_undefined
+        - equals
+        - not_equals
+        - equals_ic
+        - not_equals_ic
+        - like
+        - not_like
+        - like_ic
+        - not_like_ic
+        - at_least
+        - at_most
+        - length_equals
+        - length_at_most
+        - length_at_least
+        - any_of
+        - none_of
+        - all_of
+      x-enum-descriptions:
+        - the given property `exists` and its value may be null or an empty array.
+        - the given property does not exist.
+        - the given property `exists` and is not null or a non-zero length array.
+        - the given property exists and is null.
+        - the given property is an exact match.
+        - the given property is not an exact match.
+        - the given property is an exact match ignoring case.
+        - the given property is not an exact match ignoring case.
+        - the given value matches a regular expression using * on either side.
+        - the given value does not match a regular expression using * on either side.
+        - the given value matches a regular expression using *, ignoring case.
+        - the given value does not match a regular expression using *, ignoring case.
+        - the given property is a number greater than or equals to value.
+        - the given property is a number less than or equals to value.
+        - the given property is an array and its size matches the given value.
+        - the given property is an array of size less than or equals to value.
+        - the given property is an array of size greater than or equals to value.
+        - the given property is an array and contains any of the given values.
+        - the given property is an array and contains none of the given values.
+        - the given property is an array and contains all of the given values.
+    TagView:
+      type: object
+      title: TagView
+      description: View of a Tag
+      allOf:
+        - $ref: '#/components/schemas/Tag'
+        - type: object
+          properties:
+            color:
+              description: Color as defined on the tag type.
+              type: string
+    Tag:
+      type: object
+      title: Tag
+      description: A generic tag for an object
+      required:
+        - id
+        - name
+        - ownerId
+        - type
+      properties:
+        id:
+          description: ID for this tag
+          type: string
+          format: uuid
+        name:
+          description: Name of this tag
+          type: string
+        description:
+          description: A longer description of the tag
+          type: string
+        ownerId:
+          type: string
+          format: uuid
+          description: The ID of the owner of this Tag
+        type:
+          description: Type of this tag
+          type: string
+          format: nmtoken
+          default: other
+        created:
+          type: string
+          nullable: true
+          format: date-time
+        deleted:
+          type: string
+          nullable: true
+          format: date-time
+        updated:
+          type: string
+          nullable: true
+          format: date-time
+      example:
+        id: d1263405-369f-4aeb-b199-02ae64cb3eb3
+        name: servers
+        description: All my servers
+        ownerId: 6e61234b-2d1f-4248-8207-7469539fe57d
+        type: it
+    Resource:
+      type: object
+      title: Resource
+      description: Base class representing a resource. This will not be used on its own.
+      required:
+        - id
+        - name
+        - type
+        - ownerId
+        - created
+        - updated
+      properties:
+        id:
+          description: Unique identifier
+          format: uuid
+          type: string
+        name:
+          description: Short name
+          type: string
+        type:
+          description: The type of resource this is
+          type: string
+          format: nmtoken
+        description:
+          description: A long description
+          type: string
+        ownerId:
+          description: The owner of this resource. This is a reference to a principal.
+          type: string
+          format: uuid
+        parentId:
+          description: The parent of this resource. This is a reference to another Resource.
+          type: string
+          format: uuid
+          deprecated: true
+        created:
+          description: The timestamp when this resource was created
+          type: string
+          format: date-time
+          example: '2021-02-03T07:22:19-07:00'
+        updated:
+          description: The timestamp when this resource was last updated
+          type: string
+          format: date-time
+          example: '2021-02-03T07:22:19-07:00'
+        deleted:
+          description: Timestamp when the link was deleted, if it has been soft-deleted
+          type: string
+          format: date-time
+        imageUrl:
+          description: A URL to an image representing this resource
+          type: string
+          format: url
+        url:
+          description: An external URL to this resource in the outside world
+          type: string
+          format: url
+        aliases:
+          description: Alternate names by which this resource may be known
+          type: array
+          items:
+            type: string
+        boundaryId:
+          description: A resource id which acts as a boundary/container for this resource.
+          type: string
+          format: uuid
+      example:
+        id: 2d67d1ea-8f04-401f-8bcd-924fea00d6c7
+        name: My Resource
+        type: cool_resources
+        description: This is my resource. There are many like it, but this one is mine.
+        ownerId: b9d69415-2b77-4382-ac7b-50a0ab63156d
+        parentId: a4b2da09-099e-4c53-aae7-ad02b327c921
+        created: '2021-05-05T07:23:24-07:00'
+        updated: '2021-05-06T06:00:47-07:00'
+    AlertFilter:
+      type: string
+      enum:
+        - direct
+        - impactedBy
+        - subAlerts
+        - all
+    AlertSummary:
+      type: object
+      properties:
+        total:
+          type: number
+        bySeverity:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                $ref: '#/components/schemas/severity'
+              total:
+                description: count of distinct alerts raised against parents of this resource
+                type: number
+    Severity:
+      $ref: '#/components/schemas/severity'
+    Alert:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Schema for an alert
+          required:
+            - triggerId
+            - severity
+            - service
+            - body
+            - impacts
+            - causedBy
+            - alertType
+            - groupId
+            - elementId
+          properties:
+            triggerId:
+              description: A reference to the trigger this alert was generated from
+              type: string
+              format: uuid
+            impacts:
+              type: array
+              description: Resource ids that are impacted by this alert. Only returns top level when used outside of /impacts
+              items:
+                type: string
+                format: uuid
+            causedBy:
+              type: array
+              description: A flat list of Resource ids that are causing this alert.
+              items:
+                type: string
+                format: uuid
+            severity:
+              $ref: '#/components/schemas/severity'
+            title:
+              description: The alert title
+              type: string
+              deprecated: true
+            alertType:
+              description: The alert type
+              type: string
+              format: nmtoken
+            body:
+              description: The alert body
+              type: object
+              additionalProperties: {}
+            service:
+              description: The service this alert originiated from.
+              type: string
+            groupId:
+              type: string
+            elementId:
+              type: string
+            remediation:
+              description: Instructions on how to remediate this alert
+              type: string
+              nullable: true
+    Vendor:
+      $ref: '#/components/schemas/vendor'
+    Suite:
+      $ref: '#/components/schemas/suite'
+    Product:
+      $ref: '#/components/schemas/product'
+    StoreVendor:
+      $ref: '#/components/schemas/storeVendor'
+    StoreSuite:
+      $ref: '#/components/schemas/storeSuite'
+    StoreProduct:
+      $ref: '#/components/schemas/storeProduct'
+    ProductHierarchy:
+      $ref: '#/components/schemas/productHierarchy'
+    StoreProductVersion:
+      $ref: '#/components/schemas/storeProductVersion'
+    ProductVersion:
+      $ref: '#/components/schemas/productVersion'
+    CatalogPublishStatusEnum:
+      description: Status of the catalog publishable component
+      enum:
+        - draft
+        - publishing
+        - published
+        - released
+        - verified
+        - active
+    CpeProduct:
+      $ref: '#/components/schemas/cpeProduct'
+    Module:
+      $ref: '#/components/schemas/module'
+    ModuleSearch:
+      $ref: '#/components/schemas/moduleSearch'
+    ModuleSortColumns:
+      $ref: '#/components/schemas/moduleSortColumns'
+    ModuleRepository:
+      $ref: '#/components/schemas/moduleRepository'
+    OAuthProvider:
+      $ref: '#/components/schemas/oAuthProvider'
+    ModuleConnectionProfile:
+      $ref: '#/components/schemas/moduleConnectionProfile'
+    ModuleVersion:
+      $ref: '#/components/schemas/moduleVersion'
+    ModuleVersionInfo:
+      $ref: '#/components/schemas/moduleVersionInfo'
+    ModuleVersionScope:
+      $ref: '#/components/schemas/moduleVersionScope'
+    ModuleDependencyReport:
+      $ref: '#/components/schemas/moduleDependencyReport'
+    ProductModuleCompatibility:
+      $ref: '#/components/schemas/productModuleCompatibility'
+    ModuleCompatibility:
+      $ref: '#/components/schemas/moduleCompatibility'
+    Operation:
+      $ref: '#/components/schemas/operation'
+    OperationInfo:
+      $ref: '#/components/schemas/operationInfo'
+    OperationContentType:
+      description: Content type information for this set of operation's examples.
+      type: string
+      enum:
+        - json
+        - text
+        - markdown
+        - html
+    CatalogSummaryReport:
+      $ref: '#/components/schemas/catalogSummaryReport'
+    OrderSummaryReport:
+      $ref: '#/components/schemas/orderSummaryReport'
+    VspStatusEnum:
+      type: string
+      description: Statuses for store vsps
+      enum:
+        - draft
+        - active
+        - rejected
+        - deleted
+        - verified
+        - suggested
+        - publishing
+    ProductVersionStatus:
+      description: The status of a product version.
+      type: string
+      enum:
+        - active
+        - inactive
+        - beta
+        - production
+        - deprecated
+        - eol
+    ModuleStatus:
+      description: The status of a module.
+      type: string
+      enum:
+        - backlog
+        - lab
+        - lab_complete
+        - dev_in_progress
+        - published
+    OperationStatus:
+      description: The publications status of an operation.
+      type: string
+      enum:
+        - orderable
+        - ordered
+        - in_progress
+        - active
+        - retired
+    OpenApiMethod:
+      $ref: '#/components/schemas/openApiMethod'
+    Event:
+      $ref: '#/components/schemas/event'
+    ChangeEventPayload:
+      $ref: '#/components/schemas/changeEventPayload'
+    OrdersChangeEventPayload:
+      $ref: '#/components/schemas/ordersChangeEventPayload'
+    VendorChangeEvent:
+      $ref: '#/components/schemas/vendorChangeEvent'
+    SuiteChangeEvent:
+      $ref: '#/components/schemas/suiteChangeEvent'
+    ProductChangeEvent:
+      $ref: '#/components/schemas/productChangeEvent'
+    OrderChangeEvent:
+      $ref: '#/components/schemas/orderChangeEvent'
+    OperationOrderChangeEvent:
+      $ref: '#/components/schemas/operationOrderChangeEvent'
+    ProductOrderChangeEvent:
+      $ref: '#/components/schemas/productOrderChangeEvent'
+    CatalogingOrderChangeEvent:
+      $ref: '#/components/schemas/catalogingOrderChangeEvent'
+    ModuleVersionChangeEvent:
+      $ref: '#/components/schemas/moduleVersionChangeEvent'
+    ResourceTypeEnum:
+      $ref: '#/components/schemas/resourceTypeEnum'
+    OrderStatusParam:
+      anyOf:
+        - $ref: '#/components/schemas/ModerationStatus'
+        - $ref: '#/components/schemas/OrderStatus'
+        - $ref: '#/components/schemas/OperationOrderStatus'
+        - $ref: '#/components/schemas/CatalogingOrderStatus'
+    OrderType:
+      description: The type of the order, this may be product, catalog or operation.
+      type: string
+      enum:
+        - product
+        - catalog
+        - operation
+      x-enum-descriptions:
+        - A low fidelity product order
+        - A cataloging order for a selected product
+        - An order for a set of operations in a given module
+    OrderByEventParam:
+      type: string
+      default: created
+      enum:
+        - created
+        - resourceId
+        - resourceType
+    SortParamDesc:
+      type: string
+      enum:
+        - asc
+        - desc
+      default: desc
+    OrderStatus:
+      type: string
+      description: Statuses common to all types of orders. This is the complete list of statuses for low-fidelity product ordering.
+      enum:
+        - backlog
+        - blocked
+        - complete
+        - rejected
+        - cancelled
+      x-enum-descriptions:
+        - The order has been received and is in the backlog
+        - The order is blocked
+        - The order is complete
+        - The order has been rejected
+        - The order has been cancelled
+    CatalogingOrderStatus:
+      description: |-
+        Additional status for a product cataloging product order. Product orders transition to different issue types:
+
+
+
+
+
+
+
+
+
+
+          - analysis : business analysis. Can it be done and at what cost ?
+          - lab : Lab analysis and development.
+          - dev : Cataloging and prototyping.
+        * A product's catalog order status consists of this enum alongside all values of #OrderStatus * The output of a Product Order is an `active` product alongside a `module` that can connect() to the given product. * The product itself is also cataloged, its operations may then be ordered.
+      type: string
+      enum:
+        - backlog
+        - blocked
+        - complete
+        - rejected
+        - cancelled
+        - analysis_backlog
+        - analysis
+        - analysis_complete
+        - lab_backlog
+        - lab_analysis
+        - lab_implementation
+        - dev_backlog
+        - cataloging
+      x-enum-descriptions:
+        - The order has been received and is in the backlog
+        - The order is blocked
+        - The order is complete
+        - The order has been rejected
+        - The order has been cancelled
+        - The order is pending full Business Analysis
+        - The order has entered analysis
+        - The order has been analyzed and business requirements are known
+        - The order is pending Lab Requirements Analysis
+        - The order has entered lab analysis
+        - A lab for this order is being provisioned
+        - The order is pending development
+        - Cataloging and Prototyping work has started for this order
+    OperationOrderStatus:
+      description: 'Additional statuses for operation orders * An operation order''s status consists of this enum alongside all values of #OrderStatus * This adds `in_progress` to the common list of statuses. (#OrderStatus)'
+      type: string
+      enum:
+        - backlog
+        - blocked
+        - complete
+        - rejected
+        - cancelled
+        - in_progress
+      x-enum-descriptions:
+        - The order has been received and is in the backlog
+        - The order is blocked
+        - The order is complete
+        - The order has been rejected
+        - The order has been cancelled
+        - The order is in progress
+    ModerationStatus:
+      description: The status of a resource.
+      type: string
+      enum:
+        - draft
+        - verified
+        - active
+        - rejected
+        - deleted
+    Priority:
+      description: priority eunmeration. This is used for order prioritization.
+      type: string
+      enum:
+        - minor
+        - normal
+        - major
+        - critical
+    Order:
+      $ref: '#/components/schemas/order'
+    OperationOrder:
+      $ref: '#/components/schemas/operationOrder'
+    ProductOrder:
+      $ref: '#/components/schemas/productOrder'
+    CatalogingOrder:
+      $ref: '#/components/schemas/catalogingOrder'
+    CreateOrder:
+      $ref: '#/components/schemas/createOrder'
+    CreateOperationOrder:
+      $ref: '#/components/schemas/createOperationOrder'
+    CreateProductOrder:
+      $ref: '#/components/schemas/createProductOrder'
+    CreateCatalogingOrder:
+      $ref: '#/components/schemas/createCatalogingOrder'
+    PatchOrder:
+      $ref: '#/components/schemas/patchOrder'
+    OrderItem:
+      description: A product or operation id.
+      type: string
+      format: uuid
+    CreateResource:
+      $ref: '#/components/schemas/createResource'
+    CreateSuite:
+      $ref: '#/components/schemas/createSuite'
+    CreateVendor:
+      $ref: '#/components/schemas/createVendor'
+    UpdatableModerationStatus:
+      description: Valid statuses used in updates for for vendor/suite/products.
+      type: string
+      enum:
+        - draft
+        - verified
+        - active
+        - rejected
+    CreateProductHierarchy:
+      $ref: '#/components/schemas/createProductHierarchy'
+    Alias:
+      description: An aliases
+      type: string
+      nullable: true
+    ProductOrderDetails:
+      $ref: '#/components/schemas/productOrderDetails'
+    FactoryTypeEnum:
+      $ref: '#/components/schemas/factoryTypeEnum'
+    HostingTypeEnum:
+      $ref: '#/components/schemas/hostingTypeEnum'
+    CatalogItem:
+      $ref: '#/components/schemas/catalogItem'
+    SearchModuleBody:
+      $ref: '#/components/schemas/searchModuleBody'
+    catalogItem:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Catalog item base class
+          required:
+            - code
+            - status
+          properties:
+            status:
+              $ref: '#/components/schemas/VspStatusEnum'
+            code:
+              type: string
+            packageCode:
+              type: string
+              nullable: true
+            logo:
+              type: string
+              format: url
+              nullable: true
+            url:
+              type: string
+              format: url
+              nullable: true
+            logoFileVersionId:
+              type: string
+              format: uuid
+              nullable: true
+    vendor:
+      type: object
+      description: Describes a product vendor
+      allOf:
+        - $ref: '#/components/schemas/catalogItem'
+        - type: object
+          required:
+            - cpeVendors
+          properties:
+            orgId:
+              type: string
+              format: uuid
+            artifactVersionId:
+              type: string
+              format: uuid
+              nullable: true
+            cpeVendors:
+              type: array
+              description: a list of cpe vendor codes
+              items:
+                type: string
+    suite:
+      allOf:
+        - $ref: '#/components/schemas/catalogItem'
+        - type: object
+          description: Describes a series of suites for a vendor
+          properties:
+            artifactVersionId:
+              type: string
+              format: uuid
+              nullable: true
+    factoryTypeEnum:
+      type: string
+      description: Boundary Factory (Product) Types
+      enum:
+        - software
+        - firmware
+        - hardware
+    hostingTypeEnum:
+      type: string
+      description: Boundary Hosting (Service) Types
+      enum:
+        - iaas
+        - paas
+        - saas
+    cpeProduct:
+      type: object
+      description: A cpe product components and versions
+      required:
+        - cpeProductCode
+        - cpeVendorCode
+      properties:
+        cpeProductCode:
+          type: string
+        cpeVendorCode:
+          type: string
+        versions:
+          type: string
+    productVersion:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: A version of a product with specific configuration and metadata
+          required:
+            - productId
+            - createdBy
+            - status
+            - code
+            - versionId
+            - versionSemver
+            - versionValue
+            - versionFloatValue
+          properties:
+            packageCode:
+              type: string
+            productId:
+              type: string
+              format: uuid
+            createdBy:
+              type: string
+              format: uuid
+            updatedBy:
+              type: string
+              format: uuid
+            status:
+              $ref: '#/components/schemas/CatalogPublishStatusEnum'
+            code:
+              type: string
+            versionId:
+              type: string
+              format: uuid
+            versionSemver:
+              type: string
+              format: semver
+            versionValue:
+              type: number
+              format: int64
+            versionFloatValue:
+              type: number
+              format: float
+            logoFileVersionId:
+              type: string
+              format: uuid
+            taskId:
+              type: string
+              format: uuid
+            apiDocsUrl:
+              type: string
+              format: url
+            segmentIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            complianceFeatureIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            productComponentIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            productEditionIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            factoryTypes:
+              type: array
+              items:
+                $ref: '#/components/schemas/factoryTypeEnum'
+            hostingTypes:
+              type: array
+              items:
+                $ref: '#/components/schemas/hostingTypeEnum'
+            artifactVersionId:
+              type: string
+              format: uuid
+            suggestedProductId:
+              type: string
+              format: uuid
+            cpeProducts:
+              type: array
+              items:
+                $ref: '#/components/schemas/cpeProduct'
+    product:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Product schema
+          required:
+            - status
+            - latestVersionId
+            - latestVersion
+          properties:
+            status:
+              $ref: '#/components/schemas/CatalogPublishStatusEnum'
+            packageCode:
+              type: string
+            latestVersionId:
+              type: string
+              format: uuid
+            artifactId:
+              type: string
+              format: uuid
+            latestVersion:
+              $ref: '#/components/schemas/productVersion'
+    oAuthProvider:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          required:
+            - url
+            - packageCode
+            - vspId
+          properties:
+            url:
+              type: string
+              format: url
+            packageCode:
+              type: string
+            vspId:
+              type: string
+              format: uuid
+            vendor:
+              $ref: '#/components/schemas/vendor'
+            suite:
+              $ref: '#/components/schemas/suite'
+            product:
+              $ref: '#/components/schemas/product'
+    moduleConnectionProfile:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          required:
+            - key
+            - path
+            - payload
+          properties:
+            key:
+              description: A language-specific key or identifier for this connection profile
+              type: string
+              example: '@devsupply/amazon-connection@1.0.0'
+            path:
+              description: The path to the connectiion profile yml snippet
+              type: string
+            payload:
+              description: The yml snippet for this connection profile
+              type: object
+              additionalProperties: {}
+            oauthProviders:
+              type: array
+              items:
+                $ref: '#/components/schemas/oAuthProvider'
+    OrderByParam:
+      type: string
+      enum:
+        - name
+        - description
+        - created
+        - status
+    moduleLatestVersionObject:
+      type: object
+      required:
+        - id
+        - version
+      properties:
+        id:
+          description: the id of the module version
+          type: string
+          format: uuid
+          example: c63aba6c-9087-11eb-a8b3-0242ac130003
+        version:
+          description: The version number for this version. This must be a [Semver-compliant](https://semver.org) string.
+          type: string
+          format: semver
+        connector:
+          description: Indicates whether this module is a connector and has a Connection/ConnectionProfile
+          type: boolean
+        securitySchemes:
+          description: The security schemes OpenApi object extracted from the module version's openapi document.
+          type: object
+          additionalProperties: {}
+    module:
+      description: A module
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+      required:
+        - packageNames
+        - status
+        - key
+        - publisher
+        - packageCode
+      properties:
+        packageCode:
+          description: A unique product package name of the form vendorCode.suiteCode.productCode.
+          type: string
+          example: amazon.aws.iam.module
+        artifactId:
+          type: string
+          format: uuid
+          nullable: true
+        packageNames:
+          type: array
+          description: An array of product packagenames related to this module
+          items:
+            description: A unique product package name of the form vendorCode.suiteCode.productCode.
+            type: string
+            example: amazon.aws.iam
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/product'
+        status:
+          $ref: '#/components/schemas/ModuleStatus'
+        key:
+          description: A language-specific key or identifier for this module
+          type: string
+          example: '@devsupply/github'
+        publisher:
+          description: The name of the publisher of this module
+          type: string
+          example: Devsupply
+        publisherUrl:
+          description: The name of the publisher of this module
+          type: string
+          format: url
+          example: https://devsupply.com/
+        latestVersion:
+          $ref: '#/components/schemas/moduleLatestVersionObject'
+    resourceTypeEnum:
+      description: The type of resource.
+      type: string
+      enum:
+        - action
+        - activity
+        - alert
+        - alert_bot
+        - alert_bot_version
+        - api_operation
+        - app
+        - approval
+        - artifact
+        - artifact_version
+        - attack_pattern
+        - audit
+        - baseline
+        - benchmark
+        - benchmark_element
+        - boundary
+        - boundary_alert_bot
+        - boundary_class
+        - boundary_control
+        - boundary_crosswalk_version
+        - boundary_element
+        - boundary_graphql_query
+        - boundary_product
+        - boundary_requirement
+        - boundary_role
+        - catalog_operation
+        - catalog_request
+        - class
+        - class_property
+        - collector_bot
+        - compliance_feature
+        - compliance_feature_version
+        - compliance_service
+        - component
+        - connection_profile
+        - control
+        - countermeasure
+        - crosswalk
+        - crosswalk_version
+        - cyber_artifact
+        - data_collection_request
+        - data_type
+        - document_property
+        - element
+        - env_var
+        - event
+        - evidence_bot
+        - evidence_definition
+        - evidence_request
+        - evidence_request_list
+        - evidence_request_list_request
+        - external_control
+        - field
+        - finding
+        - folder
+        - framework
+        - framework_element
+        - framework_version
+        - gql_query
+        - graphql_query_version
+        - implementation_statement
+        - internal_assertion
+        - internal_control
+        - internal_domain
+        - kb
+        - mitigation
+        - module
+        - module_version
+        - notification
+        - npm
+        - oauth_provider
+        - order
+        - org_group
+        - package
+        - page
+        - party
+        - pipeline
+        - product
+        - product_component
+        - product_component_version
+        - product_edition
+        - product_edition_version
+        - product_version
+        - query
+        - role
+        - schema
+        - section
+        - segment
+        - segment_version
+        - standard
+        - store_product_version
+        - studio_project
+        - subscription
+        - suite
+        - tactic
+        - task
+        - team
+        - technique
+        - test_case
+        - test_suite
+        - vendor
+        - vulnerability
+        - weakness
+    EventType:
+      type: string
+      enum:
+        - vendor
+        - suite
+        - product
+        - order
+        - task
+        - module
+        - collectorbot
+        - evidencebot
+        - evidencedefinition
+        - evidencerequestlist
+        - framework
+        - kb
+        - query
+        - schema
+        - sharedobject
+        - role
+        - oauth
+        - benchmark
+        - standard
+        - pipeline
+        - tag
+        - alertbot
+        - alert_trigger
+        - crosswalk
+        - segment
+        - segment_type
+        - compliance_service
+        - compliance_feature_type
+        - compliance_feature
+      x-enum-description:
+        - Vendor artifact
+        - Suite artifact
+        - Product artifact
+        - Order artifact
+        - Task artifact
+        - Module artifact
+        - Collector Bot artifact
+        - Evidence bot artifact
+        - Evidence definition artifact
+        - Evidence Request List package
+        - Framework artifact
+        - KB Article artifact
+        - Query artifact
+        - Schema artifact
+        - SharedObject artifact
+        - Role artifact
+        - Oauth artifact
+        - Benchmark artifact
+        - Standard artifact
+        - Pipeline artifact
+        - Tag artifact
+        - Alert Bot Artifact
+        - Alert Trigger
+        - Crosswalk artifact
+        - Segment artifact
+        - Segment type artifact
+        - Compliance service artifact
+        - Compliance Feature type artifact
+        - Compliance Feature artifact
+    eventBase:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Shared properties for Events and Notifications
+          required:
+            - action
+            - eventType
+            - changedFields
+          properties:
+            eventType:
+              $ref: '#/components/schemas/EventType'
+            action:
+              description: whether the resource described in the payload was created or updated
+              type: string
+              enum:
+                - create
+                - update
+            changedFields:
+              description: A list of fields that have been modified by this update
+              type: array
+              items:
+                type: string
+    vendorChangeEvent:
+      type: object
+      description: Payload details for a vendor event
+      properties:
+        id:
+          description: The id of the vendor
+          type: string
+          format: uuid
+        name:
+          description: The name of the vendor
+          type: string
+        code:
+          description: The vendor code
+          type: string
+        status:
+          $ref: '#/components/schemas/ModerationStatus'
+        logo:
+          description: A logo for this vendor
+          type: string
+          format: url
+        url:
+          description: A url for this vendor
+          type: string
+          format: url
+    suiteChangeEvent:
+      type: object
+      description: Payload details for a suite event
+      properties:
+        id:
+          description: the id of the suite
+          type: string
+          format: uuid
+        name:
+          description: the name of the suite
+          type: string
+        code:
+          description: the suites code
+          type: string
+        status:
+          $ref: '#/components/schemas/ModerationStatus'
+        logo:
+          description: the logo for this suite
+          type: string
+          format: url
+        url:
+          description: A url for this suite
+          type: string
+          format: url
+        vendor:
+          description: the vendor this suite belongs to
+          type: object
+          properties:
+            id:
+              description: The id of the vendor
+              type: string
+              format: uuid
+            name:
+              description: The name of the vendor
+              type: string
+              format: uuid
+            code:
+              description: The vendor code
+              type: string
+    productChangeEvent:
+      type: object
+      description: Payload details for a product event
+      properties:
+        id:
+          description: The id of the product
+          type: string
+          format: uuid
+        name:
+          description: The name of the product
+          type: string
+        status:
+          $ref: '#/components/schemas/ModerationStatus'
+        packageName:
+          description: A unique product package name of the form vendorCode.suiteCode.productCode.
+          type: string
+        logo:
+          description: A url pointing to the product's logo.
+          type: string
+          format: url
+        url:
+          description: The product url.
+          type: string
+          format: url
+        vendor:
+          type: object
+          description: The vendor this product belongs to
+          properties:
+            id:
+              description: The id of the vendor
+              type: string
+              format: uuid
+            name:
+              description: The name of the vendor
+              type: string
+            code:
+              description: A unique vendor code
+              type: string
+        suite:
+          type: object
+          description: The suite this product belongs to
+          properties:
+            id:
+              description: The id of the suite
+              type: string
+              format: uuid
+            name:
+              description: The name of the suite
+              type: string
+            code:
+              description: a suite code. Unique wrt its vendor
+              type: string
+    orderChangeEvent:
+      type: object
+      description: Properties common to all Order Change events
+      required:
+        - id
+        - ownerId
+        - orderType
+        - priority
+      properties:
+        id:
+          description: the id of the order
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          description: The id of the principal that created this order
+          format: uuid
+        orderType:
+          $ref: '#/components/schemas/OrderType'
+        created:
+          description: The timestamp when this order was created
+          type: string
+          format: date-time
+        updated:
+          description: The timestamp when this order was last updated
+          type: string
+          format: date-time
+        expected:
+          description: The timestamp when this order is expected to be completed
+          type: string
+          format: date-time
+        description:
+          description: A description for this order
+          type: string
+        completed:
+          description: When the order was completed
+          type: string
+          format: date-time
+        priority:
+          $ref: '#/components/schemas/Priority'
+        context:
+          description: Customer created Custom properties.
+          type: object
+          additionalProperties: {}
+        additionalInformation:
+          description: Additional details available for this orders
+          type: object
+          additionalProperties: {}
+    operationOrderChangeEvent:
+      type: object
+      description: An operation ordering change event payload
+      allOf:
+        - $ref: '#/components/schemas/orderChangeEvent'
+        - type: object
+          properties:
+            status:
+              $ref: '#/components/schemas/OperationOrderStatus'
+            moduleId:
+              description: the id of the module related to this order
+              type: string
+              format: uuid
+            operations:
+              description: Details about the operations that have been ordered
+              type: array
+              items:
+                type: object
+                required:
+                  - id
+                  - name
+                properties:
+                  id:
+                    description: the id of the order
+                    type: string
+                    format: uuid
+                  name:
+                    description: the name of the operation
+                    type: string
+                  url:
+                    description: A link to the cataloged operation
+                    type: string
+                    format: url
+                  packageName:
+                    description: the product package this operation belongs to
+                    type: string
+    catalogingOrderChangeEvent:
+      description: A catalog ordering change event payload
+      allOf:
+        - $ref: '#/components/schemas/orderChangeEvent'
+        - type: object
+          required:
+            - product
+          properties:
+            status:
+              $ref: '#/components/schemas/CatalogingOrderStatus'
+            businessAnalysis:
+              type: object
+              description: Business analysis results. This may only be set for `catalog` orders.
+              additionalProperties: {}
+            product:
+              type: object
+              description: The product that is being cataloged
+              properties:
+                id:
+                  description: The ordered product id.
+                  type: string
+                  format: uuid
+                name:
+                  description: The ordered product name.
+                  type: string
+                packageName:
+                  description: The ordered product package name.
+                  type: string
+                status:
+                  $ref: '#/components/schemas/ModerationStatus'
+    createResource:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          description: The name of the resource.
+          type: string
+        description:
+          description: A description for this resource.
+          type: string
+          nullable: true
+        aliases:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alias'
+    createVendor:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/createResource'
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: The vendor code.
+          example: amazon
+        status:
+          $ref: '#/components/schemas/UpdatableModerationStatus'
+        url:
+          type: string
+          description: The vendor url.
+          format: url
+          nullable: true
+          example: https://www.amazon.com/
+        logo:
+          type: string
+          format: url
+          nullable: true
+          description: A url that points to a logo
+    createSuite:
+      type: object
+      description: Properties that may be provided when creating a suite
+      allOf:
+        - $ref: '#/components/schemas/createResource'
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: The suite code.
+          example: amazon
+        status:
+          $ref: '#/components/schemas/UpdatableModerationStatus'
+        url:
+          type: string
+          description: The suite url.
+          format: url
+          nullable: true
+          example: https://aws.amazon.com/
+        logo:
+          type: string
+          format: url
+          nullable: true
+          description: A url that points to a logo
+    createProductHierarchy:
+      type: object
+      description: Properties that may be provided when creating or updating a product and its vendor suite hierarchy
+      allOf:
+        - $ref: '#/components/schemas/createResource'
+      required:
+        - vendor
+        - code
+      properties:
+        vendor:
+          $ref: '#/components/schemas/createVendor'
+        suite:
+          $ref: '#/components/schemas/createSuite'
+        code:
+          type: string
+          description: The product code.
+          example: s3
+        status:
+          $ref: '#/components/schemas/UpdatableModerationStatus'
+        url:
+          type: string
+          description: The product url.
+          format: url
+          nullable: true
+          example: https://aws.amazon.com/s3/
+        apiDocsUrl:
+          type: string
+          description: A url to this product's api documentation
+          format: url
+          nullable: true
+          example: https://aws.amazon.com/
+        logo:
+          type: string
+          format: url
+          nullable: true
+          description: A url that points to a logo
+    productOrderChangeEvent:
+      description: A low fidelity product ordering event payload
+      allOf:
+        - $ref: '#/components/schemas/orderChangeEvent'
+        - type: object
+          required:
+            - requestedProduct
+          properties:
+            status:
+              $ref: '#/components/schemas/OrderStatus'
+            products:
+              type: array
+              description: The list of delivered products in this low-fidelity product order
+              items:
+                type: object
+                properties:
+                  id:
+                    description: The ordered product id.
+                    type: string
+                    format: uuid
+                  name:
+                    description: The ordered product name.
+                    type: string
+                  packageName:
+                    description: The ordered product package name.
+                    type: string
+                  status:
+                    $ref: '#/components/schemas/ModerationStatus'
+            requestedProduct:
+              $ref: '#/components/schemas/createProductHierarchy'
+    moduleVersionChangeEvent:
+      type: object
+      description: Details about the module that was just published
+      properties:
+        id:
+          description: The id of the module version that triggered this notification
+          type: string
+          format: uuid
+        moduleId:
+          description: The id of the module that triggered this notification
+          type: string
+          format: uuid
+        name:
+          description: The name of the module that triggered this notification
+          type: string
+        description:
+          description: A description of the module that triggered this notification
+          type: string
+        version:
+          description: The semantic version of the module that triggered this notification
+          type: string
+          format: semver
+        packages:
+          description: An array of product packages this module version is compatible with
+          type: array
+          items:
+            type: string
+        operations:
+          description: The total number of operations on the module version that triggered this notification
+          type: number
+          format: int32
+        repository:
+          type: object
+          description: Details about the repository the module may be found in
+          properties:
+            type:
+              description: The type of repository
+              type: string
+              enum:
+                - npm
+            location:
+              type: string
+              description: 'Location string for the repository. Content is dependent on `type` - `npm`: the `location` string should be an NPM package name that the Hub server can resolve'
+    event:
+      type: object
+      description: A business event that maybe inspected by listEvents. Such events may also lead to notifications being pushed to subscribers.
+      required:
+        - ownerId
+        - resourceId
+        - resourceType
+        - payload
+      allOf:
+        - $ref: '#/components/schemas/eventBase'
+        - type: object
+          properties:
+            resourceId:
+              type: string
+              description: The id of the resource associated with this event
+              format: uuid
+            resourceType:
+              $ref: '#/components/schemas/resourceTypeEnum'
+            resourceOwnerId:
+              type: string
+              description: The id of the owner of the resource. Generally same as the owner of the event.
+              format: uuid
+            packageNames:
+              description: An array reprensenting the set of product packages this resource is linked to.  This will generally be of size 1, but some more complicated resources may reference multiple packages
+              type: array
+              items:
+                type: string
+                example: amazon.aws.iam
+            payload:
+              oneOf:
+                - $ref: '#/components/schemas/vendorChangeEvent'
+                - $ref: '#/components/schemas/suiteChangeEvent'
+                - $ref: '#/components/schemas/productChangeEvent'
+                - $ref: '#/components/schemas/operationOrderChangeEvent'
+                - $ref: '#/components/schemas/catalogingOrderChangeEvent'
+                - $ref: '#/components/schemas/productOrderChangeEvent'
+                - $ref: '#/components/schemas/moduleVersionChangeEvent'
+    DatabaseHealth:
+      type: object
+      description: Database connectivity health
+      properties:
+        connected:
+          type: boolean
+          description: True if the service can successfully connect to the database
+        poolCount:
+          type: number
+          format: int32
+          description: The total number of connections in the DB pool
+        poolIdleCount:
+          type: number
+          format: int32
+          description: The number of idle connections in the DB pool
+        poolWaitingCount:
+          type: number
+          format: int32
+          description: The number of queued requests waiting on a client from the connection pool
+    Version:
+      type: string
+      format: semver
+      description: Version of the service
+    HealthCheckBody:
+      description: Response body of the health check
+      type: object
+      properties:
+        database:
+          $ref: '#/components/schemas/DatabaseHealth'
+        version:
+          $ref: '#/components/schemas/Version'
+        other:
+          type: object
+          description: Additional per service health data
+    ServiceUnavailableError:
+      description: Service unavailable
+      type: object
+      allOf:
+        - type: object
+          description: Base class for error models
+          required:
+            - key
+            - template
+            - timestamp
+            - statusCode
+          properties:
+            key:
+              type: string
+              description: A unique message key for this error. This is used both for discrimination and i18n
+            template:
+              description: The error message. This may contain substitutions of the form `{key}` where `key` maps to a key in the `args` list.
+              type: string
+              example: The {thing} is down
+            timestamp:
+              type: string
+              format: date-time
+              description: Timestamp when this error was generated
+            statusCode:
+              description: An HTTP status code to use for this error when transmitting it over HTTP
+              type: integer
+              format: int32
+              default: 500
+              minimum: 100
+              maximum: 599
+            stack:
+              description: The stack trace, if available, for this error.
+              type: string
+        - type: object
+          description: The health check triggering this error
+          required:
+            - body
+            - msg
+          properties:
+            msg:
+              type: string
+              description: A generic message to pass on
+            body:
+              $ref: '#/components/schemas/HealthCheckBody'
+    moduleRepository:
+      type: object
+      description: Description of where to locate a module version
+      required:
+        - type
+        - location
+      properties:
+        type:
+          description: The type of repository
+          type: string
+          enum:
+            - npm
+        location:
+          type: string
+          description: 'Location string for the repository. Content is dependent on `type` - `npm`: the `location` string should be an NPM package name that the Hub server can resolve'
+    moduleVersion:
+      description: A version of a module
+      required:
+        - moduleId
+        - version
+        - connector
+        - repository
+        - fileSupport
+        - dataSupport
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          properties:
+            moduleId:
+              description: The ID of the module to which this version belongs
+              type: string
+              format: uuid
+            version:
+              description: The version number for this version. This must be a [Semver-compliant](https://semver.org) string.
+              type: string
+              format: semver
+            repository:
+              $ref: '#/components/schemas/moduleRepository'
+            connector:
+              description: Indicates whether this module is a connector and has a Connection/ConnectionProfile
+              type: boolean
+            connectionProfile:
+              $ref: '#/components/schemas/moduleConnectionProfile'
+            operations:
+              type: number
+              format: int32
+            packageNames:
+              type: array
+              description: An array of product packagenames related to this module
+              items:
+                description: A unique product package name of the form vendorCode.suiteCode.productCode.
+                type: string
+                example: amazon.aws.iam
+            productIds:
+              type: array
+              description: An array of product ids related to this module
+              items:
+                type: string
+                format: uuid
+            artifactVersionId:
+              type: string
+              format: uuid
+              nullable: true
+            fileSupport:
+              description: Whether the module support files service
+              type: boolean
+            dataSupport:
+              description: Whether the module support data producing
+              type: boolean
+            implementsInterfaceIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+    moduleVersionInfo:
+      description: Expanded details of version of a module
+      required:
+        - api
+      allOf:
+        - $ref: '#/components/schemas/moduleVersion'
+        - type: object
+          properties:
+            api:
+              description: The OpenAPI exposed by this module version
+              type: object
+              additionalProperties: {}
+            doc:
+              description: The OpenAPI documentation exposed by this module version
+              type: string
+            changeLog:
+              description: The Changelog exposed by this module version
+              type: string
+            vendorId:
+              type: string
+              format: uuid
+            vendorName:
+              type: string
+            vendorCode:
+              type: string
+    moduleVersionScope:
+      type: object
+      description: Schema for a scope
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+    searchModuleBody:
+      type: object
+      description: Request body for search modules
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        key:
+          type: string
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModuleStatus'
+        fileSupport:
+          type: boolean
+        dataSupport:
+          type: boolean
+        products:
+          type: array
+          items:
+            type: string
+            format: uuid
+    moduleSearch:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Schema for a module for search apis
+          required:
+            - key
+            - status
+            - latestVersion
+            - latestVersionId
+            - fileSupport
+            - dataSupport
+          properties:
+            key:
+              description: A language-specific key or identifier for this module
+              type: string
+            status:
+              $ref: '#/components/schemas/ModuleStatus'
+            packageCode:
+              description: A unique product package name of the form vendorCode.suiteCode.productCode.
+              type: string
+              example: amazon.aws.iam.module
+            artifactId:
+              type: string
+              format: uuid
+              nullable: true
+            publisher:
+              type: string
+            publisherUrl:
+              type: string
+            latestVersion:
+              type: string
+              format: semver
+            latestVersionId:
+              type: string
+              format: uuid
+            fileSupport:
+              description: Whether the module support files service
+              type: boolean
+            dataSupport:
+              description: Whether the module support data producing
+              type: boolean
+            products:
+              type: array
+              items:
+                $ref: '#/components/schemas/IdNameDescriptionImageUrlObject'
+            implementsInterfaceIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+    ResultsSearchOptions:
+      oneOf:
+        - $ref: '#/components/schemas/ResultsColumnOptionsFilterResourceStub'
+        - $ref: '#/components/schemas/ResultsColumnOptionsFilterTagStub'
+        - $ref: '#/components/schemas/ResultsColumnOptionsFilterCustomStub'
+    moduleDependencyReport:
+      title: ModuleDependencyReport
+      type: object
+      description: A report containing information about a given module and module version.
+      required:
+        - moduleId
+        - name
+        - key
+        - publisher
+        - moduleVersionId
+        - version
+        - repository
+        - fileSupport
+        - dataSupport
+      properties:
+        moduleId:
+          type: string
+          format: uuid
+          description: The ID to use for the module
+        name:
+          type: string
+          description: The name of the module
+          example: Github
+        description:
+          type: string
+          description: A long description of the module
+        publisher:
+          description: The name of the publisher of this module
+          type: string
+          example: Devsupply
+        imageUrl:
+          description: A URI for a logo for this module
+          type: string
+          format: url
+        key:
+          description: A unique, human-friendly identifier for this module
+          type: string
+          example: '@devsupply/github'
+        moduleVersionId:
+          type: string
+          format: uuid
+          description: The ID to use for the module version
+        version:
+          type: string
+          format: semver
+          description: The module version
+          example: 1.8.2-b1
+        repository:
+          $ref: '#/components/schemas/moduleRepository'
+        connectionProfile:
+          $ref: '#/components/schemas/moduleConnectionProfile'
+        releaseNotes:
+          description: URL to release notes for this version
+          type: string
+          format: url
+        knowledgeBase:
+          description: URL to a knowledge base for this version
+          type: string
+          format: url
+        fileSupport:
+          description: Whether the module support files service
+          type: boolean
+        dataSupport:
+          description: Whether the module support data producing
+          type: boolean
+    OperationTypeParam:
+      type: string
+      deprecated: true
+      enum:
+        - catalog_operation
+        - api_operation
+    openApiMethod:
+      type: string
+      description: The set of http operations supported by OpenAPI. ( https://spec.openapis.org/oas/v3.1.0#fixed-fields-6 ).
+      enum:
+        - get
+        - head
+        - post
+        - put
+        - delete
+        - options
+        - trace
+        - patch
+      x-enum-descriptions:
+        - A definition of a GET operation on a given path.
+        - A definition of a HEAD operation on a given path.
+        - A definition of a POST operation on a given path.
+        - A definition of a PUT operation on a given path.
+        - A definition of a DELETE operation on a given path.
+        - A definition of a OPTIONS operation on a given path.
+        - A definition of a TRACE operation on a given path.
+        - A definition of a PATCH operation on a given path.
+    operation:
+      description: An operation
+      type: object
+      required:
+        - status
+        - productId
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          properties:
+            status:
+              $ref: '#/components/schemas/OperationStatus'
+            method:
+              $ref: '#/components/schemas/openApiMethod'
+            apiMethod:
+              type: string
+            productId:
+              description: The product id this operation belongs to.
+              type: string
+              format: uuid
+            moduleId:
+              description: The module id this operation belongs to.
+              type: string
+              format: uuid
+            moduleKey:
+              description: The module key this operation belongs to. i.e. @devsupply/github
+              type: string
+            packageNames:
+              description: An array reprensenting the set of product packages this operation belongs to. This will generally be of size 1, but some more complicated api operations may reference multiple packages
+              type: array
+              items:
+                type: string
+                example: amazon.aws.iam
+            relatedOperations:
+              type: array
+              description: |-
+                An array representing operations that are related to this operation.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  * An active operation may relate to multiple orderable/ordered operations.
+                  * An orderable/ordered operation may relate to multiple active operations.
+              items:
+                $ref: '#/components/schemas/operation'
+            catalogOperationIds:
+              type: array
+              deprecated: true
+              items:
+                description: The Catalog Operation ids the operation belongs to.  * This will be null for catalog operations * API operations, on the other hand, may have multiple catalog operations referenced in this list * Some api operations may not hava a catalog operation to reference to. Deprecated, Please use relatedOperations.
+                type: string
+                format: uuid
+            catalogOperations:
+              type: array
+              deprecated: true
+              description: Deprecated, Please use relatedOperations.
+              items:
+                $ref: '#/components/schemas/operation'
+            apiOperations:
+              type: array
+              deprecated: true
+              description: Deprecated, Please use relatedOperations.
+              items:
+                $ref: '#/components/schemas/operation'
+    productHierarchy:
+      description: A product and its underlying vendor and suite
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/product'
+        - type: object
+          properties:
+            modules:
+              type: array
+              items:
+                $ref: '#/components/schemas/module'
+            vendor:
+              $ref: '#/components/schemas/vendor'
+            suite:
+              $ref: '#/components/schemas/suite'
+            tags:
+              type: array
+              items:
+                $ref: '#/components/schemas/Tag'
+    example:
+      description: Example input/output for an operation
+      type: object
+      properties:
+        inputs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        outputs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    operationInfo:
+      description: Detailed information about an Operation
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/operation'
+        - type: object
+          properties:
+            path:
+              description: The OpenAPI path to this operation. This is only available on active module operations.
+              type: string
+            api:
+              description: The OpenAPI definition for this operation. This is only available on active module operations.
+              type: object
+              additionalProperties: {}
+            moduleVersions:
+              description: The version this operation was available from. This is only available on active module operations.
+              type: array
+              items:
+                type: string
+                format: semver
+            url:
+              description: A url to the vendor operation documentation, this may not be present for active module operations.
+              type: string
+              format: url
+            product:
+              description: Details about the product an orderable operation belongs to.
+              allOf:
+                - $ref: '#/components/schemas/productHierarchy'
+            contentType:
+              description: Content type for the vendor operation examples, this may not be present for active module operations.
+              allOf:
+                - $ref: '#/components/schemas/OperationContentType'
+            example:
+              description: Examples from the vendor operation, this may not be present for active module operations.
+              allOf:
+                - $ref: '#/components/schemas/example'
+            packageName:
+              description: A unique product package name of the form vendorCode.suiteCode.productCode. Deprecated, please use the `packageNames` array
+              deprecated: true
+              type: string
+              example: amazon.aws.iam
+            apiOperationIds:
+              type: array
+              deprecated: true
+              items:
+                type: string
+                format: uuid
+    order:
+      discriminator:
+        propertyName: orderType
+        mapping:
+          product: '#/components/schemas/productOrder'
+          operation: '#/components/schemas/operationOrder'
+          catalog: '#/components/schemas/catalogingOrder'
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          required:
+            - id
+            - orderType
+            - name
+            - status
+            - priority
+            - created
+            - context
+          properties:
+            ownerId:
+              type: string
+              description: The id of the principal that created this order
+              format: uuid
+            orderType:
+              $ref: '#/components/schemas/OrderType'
+            completed:
+              type: string
+              format: date-time
+            priority:
+              $ref: '#/components/schemas/Priority'
+            expected:
+              description: The timestamp when the order is expected to be completed
+              type: string
+              format: date-time
+              example: '2021-03-29T13:13:19-07:00'
+            status:
+              oneOf:
+                - $ref: '#/components/schemas/CatalogingOrderStatus'
+                - $ref: '#/components/schemas/OperationOrderStatus'
+                - $ref: '#/components/schemas/OrderStatus'
+            context:
+              description: Customer created context properties.
+              type: object
+              additionalProperties: {}
+            additionalInformation:
+              description: Additional details available for this orders
+              type: object
+              additionalProperties: {}
+            statusReason:
+              type: string
+              description: A reason for the current status of this order
+    productOrderDetails:
+      type: object
+      description: Details about the requested product
+      required:
+        - name
+      properties:
+        name:
+          description: The name of the resource.
+          type: string
+        description:
+          description: A description for this resource.
+          type: string
+          nullable: true
+        vendor:
+          type: object
+          required:
+            - name
+          properties:
+            name:
+              description: The name of the resource.
+              type: string
+            description:
+              description: A description for this resource.
+              type: string
+              nullable: true
+            code:
+              type: string
+              description: The vendor code.
+              nullable: true
+              example: amazon
+            url:
+              type: string
+              description: The vendor url.
+              nullable: true
+              example: https://www.amazon.com/
+            logo:
+              type: string
+              description: A url that points to a logo
+              nullable: true
+            aliases:
+              type: array
+              items:
+                $ref: '#/components/schemas/Alias'
+        suite:
+          type: object
+          description: Properties that may be provided when creating a suite
+          required:
+            - name
+          properties:
+            name:
+              description: The name of the resource.
+              type: string
+            description:
+              description: A description for this resource.
+              type: string
+              nullable: true
+            code:
+              type: string
+              description: The suite code.
+              example: amazon
+              nullable: true
+            url:
+              type: string
+              description: The suite url.
+              nullable: true
+              example: https://aws.amazon.com/
+            logo:
+              type: string
+              nullable: true
+              description: A url that points to a logo
+            aliases:
+              type: array
+              items:
+                $ref: '#/components/schemas/Alias'
+        code:
+          type: string
+          description: The product code.
+          example: s3
+        url:
+          type: string
+          nullable: true
+          description: a url for the product
+        logo:
+          type: string
+          nullable: true
+          description: A url that points to a logo
+        aliases:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alias'
+    productOrder:
+      type: object
+      description: A low fidelity Product order
+      allOf:
+        - $ref: '#/components/schemas/order'
+        - type: object
+          required:
+            - requestedProduct
+            - status
+          description: Additional properties for a Product order. * The status will be specific to the product ordering phase. * The requested product is a low fidelity description of a product as requested by end user. * Product properties will be set once a product has been provisioned and moderated
+          properties:
+            requestedProduct:
+              $ref: '#/components/schemas/productOrderDetails'
+            products:
+              type: array
+              description: A list of products delivered by this order
+              items:
+                type: object
+                required:
+                  - id
+                  - packageName
+                  - name
+                  - status
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  packageName:
+                    type: string
+                  status:
+                    $ref: '#/components/schemas/ModerationStatus'
+    operationOrder:
+      type: object
+      description: An order for a set of operations
+      allOf:
+        - $ref: '#/components/schemas/order'
+        - type: object
+          required:
+            - moduleId
+            - operationIds
+            - operations
+          properties:
+            moduleId:
+              description: the id of the module this order belongs to
+              type: string
+              format: uuid
+              example: c63aba6c-9087-11eb-a8b3-0242ac130003
+            operationIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+            operations:
+              description: An expanded view of the ordered operations
+              type: array
+              items:
+                type: object
+                required:
+                  - id
+                  - name
+                  - packageName
+                  - url
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  url:
+                    type: string
+                    format: url
+                  packageName:
+                    type: string
+    catalogingOrder:
+      type: object
+      description: Cataloging order for an existing product that has been `verified`
+      allOf:
+        - $ref: '#/components/schemas/order'
+        - type: object
+          description: Additional properties for a Product order. * The status will be specific to the product ordering phase. * The requested product is the product as requested by end user. * Product properties will be set once a product has been provisioned and moderated
+          required:
+            - product
+          properties:
+            businessAnalysis:
+              type: object
+              description: 'Business analyses results. These will be set when business analysis is complete and will contain information such as: * development nrc and mrc. * lab procurement nrc and mrc.'
+              additionalProperties: {}
+            product:
+              type: object
+              description: the product ordered for cataloging
+              required:
+                - id
+                - packageName
+                - name
+                - status
+              properties:
+                id:
+                  description: the id of the product
+                  type: string
+                  format: uuid
+                name:
+                  description: the name of the product
+                  type: string
+                packageName:
+                  description: product package name
+                  type: string
+                status:
+                  $ref: '#/components/schemas/ModerationStatus'
+    createOperationOrder:
+      description: A request to implemenent orderable catalog operations in the underlying module. Up to 10 operations from the same module may be ordered.
+      required:
+        - operationIds
+      allOf:
+        - $ref: '#/components/schemas/createOrder'
+        - type: object
+          properties:
+            operationIds:
+              type: array
+              description: A list of ordered operation ids. All Operations must belong to the same module.
+              items:
+                type: string
+                format: uuid
+                example: c63aba6c-9087-11eb-a8b3-0242ac130003
+              minItems: 1
+              maxItems: 10
+    createOrder:
+      type: object
+      required:
+        - name
+        - type
+      discriminator:
+        propertyName: type
+        mapping:
+          operation: '#/components/schemas/createOperationOrder'
+          product: '#/components/schemas/createProductOrder'
+          catalog: '#/components/schemas/createCatalogingOrder'
+      properties:
+        type:
+          $ref: '#/components/schemas/OrderType'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        name:
+          description: A name for this order
+          type: string
+        description:
+          description: Custom notes on an order
+          type: string
+        context:
+          description: Customer created Custom properties.
+          type: object
+          additionalProperties: {}
+    createProductOrder:
+      description: A request to add a new product. The request is low-fidelity and open ended. One or more products will be assigned to this order once complete.
+      required:
+        - product
+      allOf:
+        - $ref: '#/components/schemas/createOrder'
+        - type: object
+          properties:
+            product:
+              $ref: '#/components/schemas/productOrderDetails'
+    createCatalogingOrder:
+      description: A request to catalog an existing product. The product must be in the `verified` status in order to be elligible for ordering.
+      required:
+        - productId
+      allOf:
+        - $ref: '#/components/schemas/createOrder'
+        - type: object
+          properties:
+            productId:
+              description: The id of a the product we want to be cataloged.
+              type: string
+              format: uuid
+    AllOrderStatus:
+      description: All possible statuses for orders (regardless of type).
+      type: string
+      enum:
+        - backlog
+        - blocked
+        - complete
+        - rejected
+        - cancelled
+        - analysis_backlog
+        - analysis
+        - analysis_complete
+        - lab_backlog
+        - lab_analysis
+        - lab_implementation
+        - dev_backlog
+        - cataloging
+        - in_progress
+      x-enum-descriptions:
+        - The order has been received and is in the backlog
+        - The order is blocked
+        - The order is complete
+        - The order has been rejected
+        - The order has been cancelled
+        - The order is pending full Business Analysis
+        - The order has entered analysis
+        - The order has been analyzed and business requirements are known
+        - The order is pending Lab Requirements Analysis
+        - The order has entered lab analysis
+        - A lab for this order is being provisioned
+        - The order is pending development
+        - Cataloging and Prototyping work has started for this order
+        - The order is in progress
+    patchOrder:
+      type: object
+      description: Properties that may be updated on any order
+      properties:
+        name:
+          description: A name for this order
+          type: string
+        description:
+          description: Custom notes on an order
+          type: string
+        priority:
+          $ref: '#/components/schemas/Priority'
+        status:
+          $ref: '#/components/schemas/AllOrderStatus'
+        statusReason:
+          type: string
+          description: A reason for the current status of this order. This will always overwrite the current reason whenever the status is modified.
+        additionalInformation:
+          description: Additional details available for this orders
+          type: object
+          additionalProperties: {}
+        expected:
+          description: The timestamp when the order is expected to be completed
+          type: string
+          format: date-time
+          example: '2021-03-29T13:13:19-07:00'
+        businessAnalysis:
+          type: object
+          description: Business analysis results. This may only be set for `catalog` orders.
+          additionalProperties: {}
+    OrderByProductCatalogParam:
+      type: string
+      enum:
+        - code
+        - name
+        - description
+        - created
+        - status
+    storeProduct:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/product'
+        - type: object
+          properties:
+            parentType:
+              $ref: '#/components/schemas/resourceTypeEnum'
+            vendorCode:
+              description: the vendor code
+              type: string
+              example: amazon
+            suiteCode:
+              description: the suite code
+              type: string
+              example: aws
+            packageName:
+              description: A unique product package name of the form vendorCode.suiteCode.productCode.
+              type: string
+              example: amazon.aws.iam
+            tags:
+              type: array
+              items:
+                $ref: '#/components/schemas/Tag'
+    productModuleCompatibility:
+      type: object
+      description: Summarizes compatibility status between a product and a modules accross versions.  This exposes the number of operations that are supported within a product-version/module-version pair. This is centered on 1 product, though multiple modules with their own version management may be compatible with the given product.
+      properties:
+        productId:
+          type: string
+          description: The id of the product
+          format: uuid
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                description: The id of the module
+                type: string
+                format: uuid
+              name:
+                description: The name of the module
+                type: string
+                format: uuid
+              key:
+                description: The unique key of the module
+                type: string
+              versions:
+                type: array
+                description: A list of semantic versions available for this module
+                items:
+                  type: string
+                  format: semver
+                  example: 1.0.0
+        productVersions:
+          type: array
+          description: A list of semantic versions available for this product
+          items:
+            type: string
+            format: semver
+            example: 1.0.0
+        compatibility:
+          type: array
+          items:
+            type: object
+            properties:
+              operations:
+                description: The number of operations shared between a product version and a module version
+                type: number
+              moduleId:
+                description: The id of the module
+                type: string
+                format: uuid
+              productId:
+                type: string
+                description: The id of the product
+                format: uuid
+              moduleVersionId:
+                description: The id of the module version
+                type: string
+                format: uuid
+              productVersionId:
+                description: The id of the product version
+                type: string
+                format: uuid
+              moduleVersion:
+                description: The semantic version representation of the module version
+                type: string
+                format: semver
+                example: 1.0.0
+              productVersion:
+                description: The semantic version representation of the product version
+                type: string
+                format: semver
+                example: 1.0.0
+    moduleCompatibility:
+      type: object
+      deprecated: true
+      description: Summarizes compatibility status between a product and a module accross versions. This exposes the number of operations that are supported within a product-version/module-version pair.
+      properties:
+        moduleId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        moduleVersions:
+          type: array
+          items:
+            type: string
+        productVersions:
+          type: array
+          items:
+            type: string
+        compatibility:
+          type: array
+          items:
+            type: object
+            properties:
+              operations:
+                type: number
+              productId:
+                type: string
+                description: The id of the product
+                format: uuid
+              moduleId:
+                description: The id of the module
+                type: string
+                format: uuid
+              moduleVersionId:
+                type: string
+                format: uuid
+              productVersionId:
+                type: string
+                format: uuid
+              moduleVersion:
+                type: string
+              productVersion:
+                type: string
+    storeProductVersion:
+      description: A specific version of a product
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+      required:
+        - productId
+        - version
+        - status
+      properties:
+        productId:
+          description: The ID of the product to which this version belongs
+          type: string
+          format: uuid
+          example: a847dcf0-9088-11eb-a8b3-0242ac130003
+        artifactVersionId:
+          type: string
+          format: uuid
+          nullable: true
+        version:
+          description: The version number for this version. This must be a [Semver-compliant](https://semver.org) string.
+          type: string
+          format: semver
+        status:
+          $ref: '#/components/schemas/ProductVersionStatus'
+    orderSummaryReport:
+      type: object
+      properties:
+        completed:
+          description: the number of orders that were completed within the time frame
+          type: number
+        backlog:
+          description: the number of orders that are not complete and where created within the time frame.
+          type: number
+    catalogSummaryReport:
+      type: object
+      properties:
+        products:
+          type: object
+          properties:
+            totalActive:
+              description: the total number of active products. This is not affected by time filters
+              type: number
+            totalVerified:
+              description: the total number of verified products. This is not affected by time filters
+              type: number
+            active:
+              description: the number of products that were activated during the time frame
+              type: number
+            verified:
+              description: the number of products that were created during the time frame
+              type: number
+        modules:
+          type: object
+          properties:
+            total:
+              description: the total number of published modules. This is not affected by time filters
+              type: number
+            created:
+              description: the number of new modules that had their first version published within the time frame
+              type: number
+            updated:
+              description: the number of modules that had a new version published within the time frame
+              type: number
+        operations:
+          type: object
+          properties:
+            latest:
+              description: the total number of currently active operations available in latest versions of modules. This is not affected by time filters
+              type: number
+            orderable:
+              description: the number of orderable operations that were created within the time frame
+              type: number
+            ordered:
+              description: the number of ordered operations that were created within the time frame
+              type: number
+            active:
+              description: the number of active operations that were created within the time frame
+              type: number
+        orders:
+          type: object
+          properties:
+            product:
+              $ref: '#/components/schemas/orderSummaryReport'
+            operation:
+              $ref: '#/components/schemas/orderSummaryReport'
+    severity:
+      type: string
+      description: Severity/magnitude of a risk, incident, bug, or vulnerability
+      enum:
+        - Critical
+        - High
+        - Medium
+        - Low
+        - None
+      x-enum-descriptions:
+        - Critical - emergency, alert, critical conditions (0)
+        - High - error, high risk (1)
+        - Medium - warning, medium, moderate risk (2)
+        - Low - notice, informational, low risk (3)
+        - None - Debug (4)
+    schemas-Alert:
+      allOf:
+        - $ref: '#/components/schemas/Resource'
+        - type: object
+          description: Schema for an alert
+          required:
+            - triggerId
+            - severity
+            - service
+            - body
+            - impacts
+            - causedBy
+            - alertType
+            - groupId
+            - elementId
+          properties:
+            triggerId:
+              description: A reference to the trigger this alert was generated from
+              type: string
+              format: uuid
+            impacts:
+              type: array
+              description: Resource ids that are impacted by this alert. Only returns top level when used outside of /impacts
+              items:
+                type: string
+                format: uuid
+            causedBy:
+              type: array
+              description: A flat list of Resource ids that are causing this alert.
+              items:
+                type: string
+                format: uuid
+            severity:
+              $ref: '#/components/schemas/severity'
+            title:
+              description: The alert title
+              type: string
+              deprecated: true
+            alertType:
+              description: The alert type
+              type: string
+              format: nmtoken
+            body:
+              description: The alert body
+              type: object
+              additionalProperties: {}
+            service:
+              description: The service this alert originiated from.
+              type: string
+            groupId:
+              type: string
+            elementId:
+              type: string
+            remediation:
+              description: Instructions on how to remediate this alert
+              type: string
+              nullable: true
+    errorModelBase:
+      type: object
+      description: Base class for error models
+      required:
+        - key
+        - template
+        - timestamp
+        - statusCode
+      properties:
+        key:
+          type: string
+          description: A unique message key for this error. This is used both for discrimination and i18n
+        template:
+          description: The error message. This may contain substitutions of the form `{key}` where `key` maps to a key in the `args` list.
+          type: string
+          example: The {thing} is down
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when this error was generated
+        statusCode:
+          description: An HTTP status code to use for this error when transmitting it over HTTP
+          type: integer
+          format: int32
+          default: 500
+          minimum: 100
+          maximum: 599
+        stack:
+          description: The stack trace, if available, for this error.
+          type: string
+    notFoundError:
+      description: Error when something cannot be located
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/errorModelBase'
+        - type: object
+          required:
+            - obj
+          properties:
+            obj:
+              type: string
+              description: The object which cannot be found
+    ResourceType:
+      type: object
+      title: ResourceType
+      description: Specification of resource types
+      required:
+        - name
+        - active
+        - searchable
+      properties:
+        name:
+          description: Short name
+          type: string
+          format: nmtoken
+        description:
+          description: A long description
+          type: string
+        active:
+          description: Indicates whether or not this type is currently assignable
+          type: boolean
+          default: true
+        extends:
+          description: Reference to another `ResourceType` this one extends from
+          type: string
+          format: nmtoken
+        imageUrl:
+          description: A URL to an image representing this resource
+          type: string
+          format: url
+        searchable:
+          description: Flag indicating if this resource type is searchable by default via the resource  search endpoint(s). If a resource type is explicitly specified, it will be searched, regardless of the value of this flag.
+          type: boolean
+          default: false
+        options:
+          description: Placeholder for general resource search options call
+          type: object
+          additionalProperties: true
+      example:
+        name: cool_resources
+        description: All the best resources
+        active: true
+        extends: base_resources
+        searchable: true
+    TagType:
+      type: object
+      title: TagType
+      description: Types for tags
+      required:
+        - name
+      properties:
+        name:
+          description: Name of this type
+          type: string
+          format: nmtoken
+        description:
+          description: A longer description of the type
+          type: string
+        color:
+          description: A hint for UIs displaying tags of this type.
+          type: string
+      example:
+        name: environment
+        description: Tags relating to an environment
+        color: '#aef221'
+    storeSuite:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/suite'
+        - type: object
+          properties:
+            vendorId:
+              type: string
+              format: uuid
+              description: The id of the vendor this suite belongs to.
+              example: a847dcf0-9088-11eb-a8b3-0242ac130003
+            vendorCode:
+              description: the vendor code
+              type: string
+              example: amazon
+            vendorName:
+              description: the suite's vendor name
+              type: string
+              example: Amazon
+    storeVendor:
+      description: A vendor as exposed by store APIs
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/vendor'
+    moduleSortColumns:
+      type: string
+      description: Indicates the columns that a graphql query can be sorted by
+      enum:
+        - id
+        - name
+        - description
+        - key
+        - status
+        - created
+        - updated
+        - latest_version
+        - file_support
+        - data_support
+    ordersChangeEventPayload:
+      oneOf:
+        - $ref: '#/components/schemas/operationOrderChangeEvent'
+        - $ref: '#/components/schemas/catalogingOrderChangeEvent'
+        - $ref: '#/components/schemas/productOrderChangeEvent'
+      discriminator:
+        propertyName: orderType
+        mapping:
+          product: '#/components/schemas/productOrderChangeEvent'
+          catalog: '#/components/schemas/catalogingOrderChangeEvent'
+          operation: '#/components/schemas/operationOrderChangeEvent'
+    changeEventPayload:
+      oneOf:
+        - $ref: '#/components/schemas/vendorChangeEvent'
+        - $ref: '#/components/schemas/suiteChangeEvent'
+        - $ref: '#/components/schemas/productChangeEvent'
+        - $ref: '#/components/schemas/operationOrderChangeEvent'
+        - $ref: '#/components/schemas/catalogingOrderChangeEvent'
+        - $ref: '#/components/schemas/productOrderChangeEvent'
+        - $ref: '#/components/schemas/moduleVersionChangeEvent'
+      discriminator:
+        propertyName: type
+        mapping:
+          vendor: '#/components/schemas/vendorChangeEvent'
+          suite: '#/components/schemas/suiteChangeEvent'
+          product: '#/components/schemas/productChangeEvent'
+          order: '#/components/schemas/ordersChangeEventPayload'
+          module: '#/components/schemas/moduleVersionChangeEvent'
+    ConnectionProfile:
+      $ref: '#/components/schemas/connectionProfile'
+    connectionProfile:
+      type: object
+      description: Connection profile for Store API client
+      properties:
+        server:
+          type: string
+          format: uri
+          description: Store API server URL
+          example: https://api.zerobias.com
+        apiKey:
+          type: string
+          format: password
+          description: API key for authentication
+        orgId:
+          type: string
+          format: uuid
+          description: Organization ID for multi-tenant access
+        timeout:
+          type: integer
+          description: Request timeout in milliseconds
+          default: 30000
+          minimum: 1000
+          maximum: 300000
+      required:
+        - server

@@ -1,0 +1,43 @@
+openapi: 3.0.2
+info:
+  version: ''
+  description: Platform GrahpQL Service
+  title: '@auditmation/platform-graphql'
+paths:
+  /foo:
+    get:
+      tags:
+        - foo
+      operationId: getFoo
+      responses:
+        '204':
+          description: Foo
+components:
+  schemas:
+    ConnectionProfile:
+      $ref: '#/components/schemas/connectionProfile'
+    connectionProfile:
+      type: object
+      description: Connection profile for GraphQL API client
+      properties:
+        server:
+          type: string
+          format: uri
+          description: GraphQL API server URL
+          example: https://api.zerobias.com
+        apiKey:
+          type: string
+          format: password
+          description: API key for authentication
+        orgId:
+          type: string
+          format: uuid
+          description: Organization ID for multi-tenant access
+        timeout:
+          type: integer
+          description: Request timeout in milliseconds
+          default: 30000
+          minimum: 1000
+          maximum: 300000
+      required:
+        - server
