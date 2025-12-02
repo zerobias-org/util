@@ -9,15 +9,18 @@ permissions:
   packages: write
 
 env:
-  READ_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  READ_TOKEN: ${{ secrets.READ_TOKEN }}
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     env:
-      NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NPM_TOKEN: ${{ env.NPM_TOKEN }}
+      GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
     steps:
       - name: Acquire cache v4
@@ -52,7 +55,9 @@ jobs:
         run: |
           npm install -g nx@20.5.0
         env:
-          NPM_TOKEN: ${{ env.READ_TOKEN }}
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
       - name: Determine base ref for nx affected
         id: base_ref
@@ -66,14 +71,21 @@ jobs:
             echo "Using last publish tag as base: $LAST_PUBLISH_TAG"
             echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
           fi
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
       - name: Install and build
         run: |
           npm i
           nx affected -t build --base=${{ steps.base_ref.outputs.BASE_REF }}
         env:
-          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
       - name: Run tests
         run: |
           nx affected -t test --base=${{ steps.base_ref.outputs.BASE_REF }}
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
