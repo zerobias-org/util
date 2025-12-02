@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.7 (2025-12-02)</small>
+
+* fix: add stuff ([7c4312c](https://github.com/zerobias-org/util/commit/7c4312c))
+
+
+
+
+
 ## <small>1.0.6 (2025-12-02)</small>
 
 * fix: initial commit with codegen and eslint ([494a2a3](https://github.com/zerobias-org/util/commit/494a2a3))
