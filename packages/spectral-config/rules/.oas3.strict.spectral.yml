@@ -1,6 +1,6 @@
 extends: 
   - "spectral:oas" 
-  - "@auditmation/types-format-spectral-ruleset"
+  - "@zerobias-org/types-format-spectral-ruleset"
 rules:
   info-contact: off
   oas3-api-servers: off

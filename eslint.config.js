@@ -1,9 +1,9 @@
-import auditmationConfig from '@auditmation/eslint-config';
+import zerobiasConfig from '@zerobias-org/eslint-config';
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
 import typescriptParser from '@typescript-eslint/parser';
 
 export default [
-  ...auditmationConfig,
+  ...zerobiasConfig,
   {
     files: ['**/src/**/*.ts', '**/test/**/*.ts'],
     languageOptions: {
