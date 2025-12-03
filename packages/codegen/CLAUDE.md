@@ -17,7 +17,7 @@ packages/codegen/
 │   ├── hub-module-codegen.jar    # Built Java codegen (generated)
 │   └── openapi-generator-cli.jar # OpenAPI Generator dependency (generated)
 ├── src/main/
-│   ├── java/io/auditmation/hub/module/codegen/
+│   ├── java/io/zerobias-org/hub/module/codegen/
 │   │   ├── HubModuleCodegenGenerator.java   # Main hub-module generator
 │   │   └── ApiClientGenerator.java          # API client generator
 │   └── resources/
@@ -75,7 +75,7 @@ The generators produce ESM-compatible TypeScript with:
 
 - **Relative imports**: Include `.js` extension (e.g., `from './Activity.js'`)
 - **Directory imports**: Use explicit `index.js` (e.g., `from './index.js'`)
-- **External packages**: No `.js` extension (e.g., `from '@auditmation/types-core-js'`)
+- **External packages**: No `.js` extension (e.g., `from '@zerobias-org/types-core-js'`)
 
 ### How It Works
 
@@ -130,9 +130,9 @@ The generators map OpenAPI types to TypeScript types via `CORE_TYPES` map:
 
 ```java
 // Example mappings in HubModuleCodegenGenerator.java
-CORE_TYPES.put("UUID", new CoreTypeMetadata("UUID", "@auditmation/types-core-js"));
-CORE_TYPES.put("Duration", new CoreTypeMetadata("Duration", "@auditmation/types-core-js"));
-CORE_TYPES.put("Nmtoken", new CoreTypeMetadata("Nmtoken", "@auditmation/types-core-js"));
+CORE_TYPES.put("UUID", new CoreTypeMetadata("UUID", "@zerobias-org/types-core-js"));
+CORE_TYPES.put("Duration", new CoreTypeMetadata("Duration", "@zerobias-org/types-core-js"));
+CORE_TYPES.put("Nmtoken", new CoreTypeMetadata("Nmtoken", "@zerobias-org/types-core-js"));
 ```
 
 These types are imported from external packages without `.js` extensions.

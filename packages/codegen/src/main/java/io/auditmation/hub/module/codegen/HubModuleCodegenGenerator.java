@@ -1,4 +1,4 @@
-package io.auditmation.hub.module.codegen;
+package io.zerobias.hub.module.codegen;
 
 import static org.openapitools.codegen.utils.StringUtils.camelize;
 
@@ -43,10 +43,10 @@ import io.swagger.v3.oas.models.responses.ApiResponse;
 public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
 
     private enum CoreTypeSource {
-        CORE(System.getProperty("coreTypesSource", "@auditmation/types-core-js")),
-        AMAZON(System.getProperty("amazonTypesSource", "@auditmation/types-amazon-js")),
-        GOOGLE(System.getProperty("googleTypesSource", "@auditmation/types-google-js")),
-        MICROSOFT(System.getProperty("microsoftTypesSource", "@auditmation/types-microsoft-js"));
+        CORE(System.getProperty("coreTypesSource", "@zerobias-org/types-core-js")),
+        AMAZON(System.getProperty("amazonTypesSource", "@zerobias-org/types-amazon-js")),
+        GOOGLE(System.getProperty("googleTypesSource", "@zerobias-org/types-google-js")),
+        MICROSOFT(System.getProperty("microsoftTypesSource", "@zerobias-org/types-microsoft-js"));
 
         private String importSource;
 
@@ -291,7 +291,7 @@ public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
 
     @Override
     public String getHelp() {
-        return "Generates a Auditmation Hub Module";
+        return "Generates a ZeroBias Hub Module";
     }
 
     @Override

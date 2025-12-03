@@ -1,4 +1,4 @@
-io.auditmation.hub.module.codegen.HubModuleCodegenGenerator
-io.auditmation.hub.module.codegen.HubModuleDocumentationGenerator
-io.auditmation.hub.module.codegen.HubModuleServerGenerator
-io.auditmation.hub.module.codegen.ApiClientGenerator
+io.zerobias.hub.module.codegen.HubModuleCodegenGenerator
+io.zerobias.hub.module.codegen.HubModuleDocumentationGenerator
+io.zerobias.hub.module.codegen.HubModuleServerGenerator
+io.zerobias.hub.module.codegen.ApiClientGenerator

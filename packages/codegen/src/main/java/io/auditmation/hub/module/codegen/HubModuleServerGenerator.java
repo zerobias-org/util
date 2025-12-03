@@ -1,4 +1,4 @@
-package io.auditmation.hub.module.codegen;
+package io.zerobias.hub.module.codegen;
 
 import java.io.File;
 import org.openapitools.codegen.CliOption;
@@ -32,7 +32,7 @@ public class HubModuleServerGenerator extends HubModuleCodegenGenerator {
 
     @Override
     public String getHelp() {
-        return "Generates Express server bindings for a Auditmation Module";
+        return "Generates Express server bindings for a ZeroBias Module";
     }
 
     @Override

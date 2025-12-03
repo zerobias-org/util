@@ -97,8 +97,15 @@ jobs:
       - name: Get published versions
         id: get_package_versions
         run: |
-          ./bin/generate_slack_message.sh
-          echo ::set-output name=output::$(./bin/generate_slack_message.sh)
+          output=$(./bin/generate_slack_message.sh)
+          if [ "$output" = "No packages published" ] || [ -z "$output" ]; then
+            echo "has_packages=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_packages=true" >> $GITHUB_OUTPUT
+            echo "output<<EOF" >> $GITHUB_OUTPUT
+            echo "$output" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
 
       - name: Slack Notification on failure
         uses: slackapi/slack-github-action@v2.1.1
@@ -119,19 +126,21 @@ jobs:
 
       - name: Slack Notification
         uses: slackapi/slack-github-action@v2.1.1
+        if: success() && steps.get_package_versions.outputs.has_packages == 'true'
         with:
           webhook: ${{ env.SLACK_RELEASES_WEBHOOK }}
           webhook-type: incoming-webhook
           payload: |
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: ":robot: :gear: New artifacts published :tada:"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "${{ steps.get_package_versions.outputs.output }}"
+            text: "New ${{ github.repository }} Published"
+            attachments:
+              - color: "#36a64f"
+                fallback: "New Utilities Published"
+                title: ":robot: New Utilities Published :tada:"
+                text: "${{ steps.get_package_versions.outputs.output }}"
+                footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+                mrkdwn_in:
+                  - text
+                  - footer
 
   # sbom-recorder:
   #   needs: publish

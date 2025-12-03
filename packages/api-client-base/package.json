@@ -1,0 +1,50 @@
+{
+  "name": "@zerobias-org/util-api-client-base",
+  "version": "1.0.0",
+  "description": "Base classes and utilities for platform API clients",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist/ docs/",
+    "compile": "tsc",
+    "docs:typedoc": "typedoc --out docs/api src/index.ts",
+    "docs": "npm run docs:typedoc",
+    "build": "npm run clean && npm run compile && npm run docs",
+    "test": "echo 'No tests defined'",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist/src",
+    "docs/api",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "hub",
+    "api-client",
+    "base",
+    "connector"
+  ],
+  "author": "ZeroBias <support@zerobias.com>",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zerobiasorg/util",
+    "directory": "packages/api-client-base"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "dependencies": {
+    "@zerobias-org/util-api-invoker-isomorphic": "^1.0.0"
+  },
+  "devDependencies": {
+    "typedoc": "^0.28.15"
+  }
+}

@@ -2,7 +2,7 @@ openapi: 3.0.2
 info:
   version: 0.8.0
   description: Compliance Server OpenAPI Spec
-  title: '@auditmation/portal-api'
+  title: '@zerobias-org/portal-api'
 servers:
   - url: /
     description: Server url
@@ -8570,7 +8570,7 @@ components:
       type: oauth2
       flows:
         password:
-          tokenUrl: https://nf.auditmation.io/
+          tokenUrl: https://app.zerobias.com/
           scopes:
             read:data_collection_request: Ability to read a data collection
             create:data_collection_request: Ability to create a data collection

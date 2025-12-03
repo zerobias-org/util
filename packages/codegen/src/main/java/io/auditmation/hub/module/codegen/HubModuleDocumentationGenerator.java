@@ -1,4 +1,4 @@
-package io.auditmation.hub.module.codegen;
+package io.zerobias.hub.module.codegen;
 
 import org.openapitools.codegen.*;
 import org.openapitools.codegen.meta.GeneratorMetadata;

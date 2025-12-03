@@ -11,18 +11,18 @@ export * from './{{ classFilename }}.js';
 
 {{/operations}}
 {{/apis}}
-import { Semver } from '@auditmation/types-core-js';
+import { Semver } from '@zerobias-org/types-core-js';
 export const VERSION = new Semver('{{version}}');
 {{/apiInfo}}
 
-import { BaseApiClient, ConnectionProfile } from '@auditmation/util-api-client-base';
+import { BaseApiClient, ConnectionProfile } from '@zerobias-org/util-api-client-base';
 import { AxiosInstance } from 'axios';
 
 // Re-export model types for convenience
 export * from '../model/index.js';
 
 // Re-export ConnectionProfile for consumers
-export { ConnectionProfile } from '@auditmation/util-api-client-base';
+export { ConnectionProfile } from '@zerobias-org/util-api-client-base';
 
 {{#apiInfo}}
 /**
@@ -145,7 +145,7 @@ export class {{apiName}}Client implements {{apiName}} {
  *
  * @example
  * ```typescript
- * import { new{{apiName}} } from '@auditmation/{{packageName}}';
+ * import { new{{apiName}} } from '{{packageName}}';
  *
  * const client = new{{apiName}}();
  * await client.connect({

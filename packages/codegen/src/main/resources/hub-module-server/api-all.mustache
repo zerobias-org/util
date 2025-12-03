@@ -15,7 +15,7 @@ import {
   UnauthorizedError,
   InvalidCredentialsError,
   UnexpectedError,
-} from '@auditmation/types-core-js';
+} from '@zerobias-org/types-core-js';
 import { middleware } from 'express-openapi-validator';
 import {
   Format,
@@ -29,7 +29,7 @@ import {
 import { {{apiName}} } from '{{modulePackage}}';
 import * as express from 'express';
 import * as path from 'path';
-import { getLogger } from '@auditmation/util-logger';
+import { getLogger } from '@zerobias-org/util-logger';
 import { Logger } from 'winston';
 
 const logger: Logger = getLogger(

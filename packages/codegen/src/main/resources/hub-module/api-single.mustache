@@ -11,7 +11,7 @@ import { {{classname}} } from '../{{filename}}/index.js';
 {{#tsImports}}
 import { {{classname}} } from '{{filename}}';
 {{/tsImports}}
-import { {{coreTypes}}CoreError, ParameterRequiredError, UnexpectedError, HttpMethod } from '{{#isCore}}../../src{{/isCore}}{{^isCore}}@auditmation/types-core-js{{/isCore}}';
+import { {{coreTypes}}CoreError, ParameterRequiredError, UnexpectedError, HttpMethod } from '{{#isCore}}../../src{{/isCore}}{{^isCore}}@zerobias-org/types-core-js{{/isCore}}';
 import { RequestFile, ObjectSerializer } from '../model/index.js';
 {{#isConnector}}
 import { ConnectionWrapper } from './index.js';
@@ -21,7 +21,7 @@ import {
   ApiInvoker,
   RequestPrototype,
   ResponsePrototype
-} from '@auditmation/util-api-invoker-api';
+} from '@zerobias-org/util-api-invoker-api';
 {{#usesJsonata}}import * as jsonataUtil from './jsonataUtil.js';
 import { JSONATA_EXPRESSIONS } from './jsonataUtil.js';
 {{/usesJsonata}}
@@ -81,7 +81,7 @@ export interface {{classname}} {
    * @param {{=<% %>=}}{<%&dataType%>}<%={{ }}=%> {{^required}}[{{/required}}{{paramName}}{{^required}}]{{/required}} {{description}}
    {{/allParams}}
    * @param {*} [options] Override http request option.
-   * @throws {@link @auditmation/types-core-js#ParameterRequiredError} if any required parameter is not provided
+   * @throws {@link @zerobias-org/types-core-js#ParameterRequiredError} if any required parameter is not provided
    {{#hasParams}}
    * @example
    * ```typescript
@@ -118,7 +118,7 @@ export interface {{producerName}} {
   {{/vendorExtensions.x-producer-omit}}
   {{/allParams}}
   * @param {*} [options] Override http request option.
-  * @throws {@link @auditmation/types-core-js#ParameterRequiredError} if any required parameter is not provided
+  * @throws {@link @zerobias-org/types-core-js#ParameterRequiredError} if any required parameter is not provided
   * @openapi operation={{operationId}} path={{path}} method={{httpMethod}}
   * @memberof {{baseName}}
   */
@@ -134,7 +134,7 @@ export interface {{producerName}} {
   * @param {{=<% %>=}}{<%&dataType%>}<%={{ }}=%> {{^required}}[{{/required}}{{paramName}}{{^required}}]{{/required}} {{description}}
   {{/allParams}}
   * @param {*} [options] Override http request option.
-  * @throws {@link @auditmation/types-core-js#ParameterRequiredError} if any required parameter is not provided
+  * @throws {@link @zerobias-org/types-core-js#ParameterRequiredError} if any required parameter is not provided
   * @openapi operation={{operationId}} path={{path}} method={{httpMethod}}
   * @memberof {{baseName}}
   */
@@ -166,7 +166,7 @@ export interface Custom{{producerName}} {
   {{/vendorExtensions.x-producer-omit}}
   {{/allParams}}
   * @param {*} [options] Override http request option.
-  * @throws {@link @auditmation/types-core-js#ParameterRequiredError} if any required parameter is not provided
+  * @throws {@link @zerobias-org/types-core-js#ParameterRequiredError} if any required parameter is not provided
   * @openapi operation={{operationId}} path={{path}} method={{httpMethod}}
   * @memberof {{baseName}}
   */
@@ -182,7 +182,7 @@ export interface Custom{{producerName}} {
   * @param {{=<% %>=}}{<%&dataType%>}<%={{ }}=%> {{^required}}[{{/required}}{{paramName}}{{^required}}]{{/required}} {{description}}
   {{/allParams}}
   * @param {*} [options] Override http request option.
-  * @throws {@link @auditmation/types-core-js#ParameterRequiredError} if any required parameter is not provided
+  * @throws {@link @zerobias-org/types-core-js#ParameterRequiredError} if any required parameter is not provided
   * @openapi operation={{operationId}} path={{path}} method={{httpMethod}}
   * @memberof {{baseName}}
   */

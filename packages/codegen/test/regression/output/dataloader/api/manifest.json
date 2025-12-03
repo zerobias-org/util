@@ -1,0 +1,178 @@
+{
+  "serviceName": "PlatformDataloaderService",
+  "version": "0.8.0",
+  "codegenVersion": "1.0.12",
+  "generatedAt": "2025-12-03T13:26:51Z",
+  "clientClass": "PlatformDataloaderServiceClient",
+  "factoryFunction": "newPlatformDataloaderService",
+  "operations": [
+    {
+      "operationId": "handleEvent",
+      "nickname": "handleEvent",
+      "apiClass": "EventApi",
+      "method": "POST",
+      "path": "/events",
+      "summary": "Handles events",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "eventUnion",
+          "in": "body",
+          "required": true,
+          "type": "EventUnion",
+          "description": "The event body"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "health",
+      "nickname": "health",
+      "apiClass": "HealthcheckApi",
+      "method": "GET",
+      "path": "/health",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "HealthCheckBody"
+    }
+,
+    {
+      "operationId": "getJob",
+      "nickname": "get",
+      "apiClass": "JobApi",
+      "method": "GET",
+      "path": "/jobs/{jobId}",
+      "summary": "Get job by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "jobId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "DataloaderEventExtended"
+    },
+    {
+      "operationId": "listJobs",
+      "nickname": "list",
+      "apiClass": "JobApi",
+      "method": "GET",
+      "path": "/jobs",
+      "summary": "List jobs with filters",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "artifactName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "DataloaderEventStatus"
+        },
+        {
+          "name": "principalId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "orgId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "source",
+          "in": "query",
+          "required": false,
+          "type": "DataloaderEventSource"
+        },
+        {
+          "name": "overDurationSeconds",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;DataloaderEventExtended&gt;"
+    },
+    {
+      "operationId": "queueJob",
+      "nickname": "queueJob",
+      "apiClass": "JobApi",
+      "method": "POST",
+      "path": "/jobs",
+      "summary": "Queues a job to load an artifact into the environment",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "queueEventRequestBody",
+          "in": "body",
+          "required": true,
+          "type": "QueueEventRequestBody"
+        }
+      ],
+      "returnType": "DataloaderEvent"
+    },
+    {
+      "operationId": "replayJobs",
+      "nickname": "replayJobs",
+      "apiClass": "JobApi",
+      "method": "PUT",
+      "path": "/jobs",
+      "summary": "Replays jobs that have been in a status for too long",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "replayEventsRequestBody",
+          "in": "body",
+          "required": true,
+          "type": "ReplayEventsRequestBody"
+        }
+      ],
+      "returnType": "Array&lt;DataloaderEvent&gt;"
+    }
+
+  ],
+  "operationMap": {
+    "handleEvent": "EventApi.handleEvent"
+,
+    "health": "HealthcheckApi.health"
+,
+    "getJob": "JobApi.get",
+    "listJobs": "JobApi.list",
+    "queueJob": "JobApi.queueJob",
+    "replayJobs": "JobApi.replayJobs"
+
+  }
+}

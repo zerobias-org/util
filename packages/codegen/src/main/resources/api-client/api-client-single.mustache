@@ -9,7 +9,7 @@ import { {{classname}} } from '../{{filename}}/index.js';
 {{#tsImports}}
 import { {{classname}} } from '{{filename}}';
 {{/tsImports}}
-import { {{coreTypes}}CoreError, ParameterRequiredError, UnexpectedError, HttpMethod } from '@auditmation/types-core-js';
+import { {{coreTypes}}CoreError, ParameterRequiredError, UnexpectedError, HttpMethod } from '@zerobias-org/types-core-js';
 import { RequestFile, ObjectSerializer } from '../model/index.js';
 
 {{#operations}}
@@ -63,7 +63,7 @@ export interface {{classname}} {
    * @param {{=<% %>=}}{<%&dataType%>}<%={{ }}=%> {{^required}}[{{/required}}{{paramName}}{{^required}}]{{/required}} {{description}}
    {{/allParams}}
    * @param {*} [options] Override http request option.
-   * @throws {@link @auditmation/types-core-js#ParameterRequiredError} if any required parameter is not provided
+   * @throws {@link @zerobias-org/types-core-js#ParameterRequiredError} if any required parameter is not provided
    {{#hasParams}}
    * @example
    * ```typescript
@@ -100,7 +100,7 @@ export interface {{producerName}} {
   {{/vendorExtensions.x-producer-omit}}
   {{/allParams}}
   * @param {*} [options] Override http request option.
-  * @throws {@link @auditmation/types-core-js#ParameterRequiredError} if any required parameter is not provided
+  * @throws {@link @zerobias-org/types-core-js#ParameterRequiredError} if any required parameter is not provided
   * @openapi operation={{operationId}} path={{path}} method={{httpMethod}}
   * @memberof {{baseName}}
   */
@@ -116,7 +116,7 @@ export interface {{producerName}} {
   * @param {{=<% %>=}}{<%&dataType%>}<%={{ }}=%> {{^required}}[{{/required}}{{paramName}}{{^required}}]{{/required}} {{description}}
   {{/allParams}}
   * @param {*} [options] Override http request option.
-  * @throws {@link @auditmation/types-core-js#ParameterRequiredError} if any required parameter is not provided
+  * @throws {@link @zerobias-org/types-core-js#ParameterRequiredError} if any required parameter is not provided
   * @openapi operation={{operationId}} path={{path}} method={{httpMethod}}
   * @memberof {{baseName}}
   */

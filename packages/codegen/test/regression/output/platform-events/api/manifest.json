@@ -1,0 +1,594 @@
+{
+  "serviceName": "PlatformEvents",
+  "version": "0.8.0",
+  "codegenVersion": "1.0.12",
+  "generatedAt": "2025-12-03T13:27:00Z",
+  "clientClass": "PlatformEventsClient",
+  "factoryFunction": "newPlatformEvents",
+  "operations": [
+    {
+      "operationId": "triggerBatch",
+      "nickname": "triggerBatch",
+      "apiClass": "BatchApi",
+      "method": "POST",
+      "path": "/batches/{batchId}",
+      "summary": "Trigger batch to process",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "batchId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "ownerId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "triggerBatchesForPipelineJob",
+      "nickname": "triggerBatchesForPipelineJob",
+      "apiClass": "BatchApi",
+      "method": "POST",
+      "path": "/batches/pipelineJobs/{pipelineJobId}",
+      "summary": "Trigger pipeline jobs ready batches to process",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pipelineJobId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "ownerId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "triggerDynamoDBIndexBuild",
+      "nickname": "triggerDynamoDBIndexBuild",
+      "apiClass": "BatchApi",
+      "method": "POST",
+      "path": "/dynamoDBIndex",
+      "summary": "Trigger index build from all collected latest versions of objects",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "ownerId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "the id of the org to rebuild index/links for"
+        },
+        {
+          "name": "classId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "The id of the class to rebuild index/links for. &#x60;ownerId&#x60; must also be provided when providing a classId."
+        },
+        {
+          "name": "objectId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "The id of an object to rebuild index/links for. May not be provided alongside &#x60;classId&#x60;"
+        },
+        {
+          "name": "linkerRun",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "A linker Job for all objects will be spawner by default. Set to false to skip linking."
+        },
+        {
+          "name": "linkDeleteMode",
+          "in": "query",
+          "required": false,
+          "type": "LinkDeleteMode"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "cleanupBoundary",
+      "nickname": "cleanupBoundary",
+      "apiClass": "CleanupApi",
+      "method": "DELETE",
+      "path": "/cleanupBoundary/{boundaryId}",
+      "summary": "Runs a full hard delete against a boundary and its resources",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "cleanupOrg",
+      "nickname": "cleanupOrg",
+      "apiClass": "CleanupApi",
+      "method": "DELETE",
+      "path": "/cleanupOrg/{orgId}",
+      "summary": "Runs a full hard delete against an org and its resources",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "orgId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "dynamodbCleanup",
+          "in": "query",
+          "required": false,
+          "type": "boolean"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "deleteSchedule",
+      "nickname": "deleteSchedule",
+      "apiClass": "CronApi",
+      "method": "DELETE",
+      "path": "/crons/{id}",
+      "summary": "Delete a Schedule by its id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getSchedule",
+      "nickname": "getSchedule",
+      "apiClass": "CronApi",
+      "method": "GET",
+      "path": "/crons/{id}",
+      "summary": "Gets a Schedule by its id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "returnType": "Schedule"
+    },
+    {
+      "operationId": "schedule",
+      "nickname": "schedule",
+      "apiClass": "CronApi",
+      "method": "PUT",
+      "path": "/crons",
+      "summary": "Schedules a Cron Job for execution",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "schedule",
+          "in": "body",
+          "required": true,
+          "type": "Schedule",
+          "description": "The cron body"
+        }
+      ],
+      "returnType": "Schedule"
+    }
+,
+    {
+      "operationId": "handleEvent",
+      "nickname": "handleEvent",
+      "apiClass": "EventApi",
+      "method": "POST",
+      "path": "/events",
+      "summary": "Handles events",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "eventUnion",
+          "in": "body",
+          "required": true,
+          "type": "EventUnion",
+          "description": "The event body"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "health",
+      "nickname": "health",
+      "apiClass": "HealthcheckApi",
+      "method": "GET",
+      "path": "/health",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "HealthCheckBody"
+    }
+,
+    {
+      "operationId": "handleError",
+      "nickname": "handleError",
+      "apiClass": "JobApi",
+      "method": "POST",
+      "path": "/job/{id}/error",
+      "summary": "Callback to report cron job errors",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "jobError",
+          "in": "body",
+          "required": false,
+          "type": "JobError"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "linkJobBatches",
+      "nickname": "linkJobBatches",
+      "apiClass": "JobApi",
+      "method": "POST",
+      "path": "/job/{jobId}/link",
+      "summary": "Trigger job to run linker on all batches",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "jobId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "ownerId",
+          "in": "query",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "onComplete",
+      "nickname": "onComplete",
+      "apiClass": "JobApi",
+      "method": "PUT",
+      "path": "/job/{id}/complete",
+      "summary": "Callback to report cron job complete",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "jobCompletionDetails",
+          "in": "body",
+          "required": true,
+          "type": "JobCompletionDetails"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "startPreviewRun",
+      "nickname": "startPreviewRun",
+      "apiClass": "PipelineApi",
+      "method": "POST",
+      "path": "/pipelines/{pipelineId}/previews",
+      "summary": "Starts a preview mode run on a given pipeline",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pipelineId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "previewModeBody",
+          "in": "body",
+          "required": true,
+          "type": "PreviewModeBody"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "ensureRequestPrincipal",
+      "nickname": "ensureRequestPrincipal",
+      "apiClass": "PrincipalApi",
+      "method": "POST",
+      "path": "/requestPrincipals",
+      "summary": "Ensures request user or service account principal on apps pointed database",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "ensureRequestPrincipal",
+          "in": "body",
+          "required": true,
+          "type": "EnsureRequestPrincipal",
+          "description": "Principal information to ensure"
+        }
+      ],
+      "returnType": "User | ServiceAccount"
+    }
+,
+    {
+      "operationId": "sync",
+      "nickname": "sync",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync",
+      "summary": "Start a sync",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "syncJobRequestBody",
+          "in": "body",
+          "required": true,
+          "type": "SyncJobRequestBody",
+          "description": "The sync job to sync from"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncBoundaries",
+      "nickname": "syncBoundaries",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/boundaries",
+      "summary": "Syncs boundary parties/components/links/roles",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncBoundarySecurityGroups",
+      "nickname": "syncBoundarySecurityGroups",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/boundarySecurityGroups",
+      "summary": "Syncs boundary security groups with dana",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "syncBoundarySecurityGroupsBody",
+          "in": "body",
+          "required": true,
+          "type": "SyncBoundarySecurityGroupsBody"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncBoundarySecurityRoles",
+      "nickname": "syncBoundarySecurityRoles",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/boundarySecurityRoles",
+      "summary": "Syncs boundary security roles",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "syncBoundarySecurityRolesBody",
+          "in": "body",
+          "required": true,
+          "type": "SyncBoundarySecurityRolesBody"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncConnections",
+      "nickname": "syncConnections",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/connections",
+      "summary": "Syncs connections from hub",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "syncConnectionsBody",
+          "in": "body",
+          "required": true,
+          "type": "SyncConnectionsBody"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncDynamoGsi",
+      "nickname": "syncDynamoGsi",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/dynamoDbGsi",
+      "summary": "Updates the dynamodb GSI. Warning this does a full Scan and will update all records in the table.",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncObjectVersions",
+      "nickname": "syncObjectVersions",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/objectVersions",
+      "summary": "Syncs object versions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "syncObjectVersionsBody",
+          "in": "body",
+          "required": true,
+          "type": "SyncObjectVersionsBody"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncPipelines",
+      "nickname": "syncPipelines",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/pipelines",
+      "summary": "Syncs platform point in time object table",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "syncPipelinesBody",
+          "in": "body",
+          "required": true,
+          "type": "SyncPipelinesBody"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncPitObjectTable",
+      "nickname": "syncPitObjectTable",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/pitObject",
+      "summary": "Syncs platform point in time object table",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncPortal",
+      "nickname": "syncPortal",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/portal",
+      "summary": "Syncs portal information",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncSharedRoles",
+      "nickname": "syncSharedRoles",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/sharedRoles",
+      "summary": "Syncs boundary security roles",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncTags",
+      "nickname": "syncTags",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/tags",
+      "summary": "Syncs platform tags to dana",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "syncUnionTypes",
+      "nickname": "syncUnionTypes",
+      "apiClass": "SyncApi",
+      "method": "POST",
+      "path": "/sync/unionTypes",
+      "summary": "Syncs union type app object tables for org",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "syncUnionTypeBody",
+          "in": "body",
+          "required": true,
+          "type": "SyncUnionTypeBody"
+        }
+      ],
+      "returnType": "void"
+    }
+
+  ],
+  "operationMap": {
+    "triggerBatch": "BatchApi.triggerBatch",
+    "triggerBatchesForPipelineJob": "BatchApi.triggerBatchesForPipelineJob",
+    "triggerDynamoDBIndexBuild": "BatchApi.triggerDynamoDBIndexBuild"
+,
+    "cleanupBoundary": "CleanupApi.cleanupBoundary",
+    "cleanupOrg": "CleanupApi.cleanupOrg"
+,
+    "deleteSchedule": "CronApi.deleteSchedule",
+    "getSchedule": "CronApi.getSchedule",
+    "schedule": "CronApi.schedule"
+,
+    "handleEvent": "EventApi.handleEvent"
+,
+    "health": "HealthcheckApi.health"
+,
+    "handleError": "JobApi.handleError",
+    "linkJobBatches": "JobApi.linkJobBatches",
+    "onComplete": "JobApi.onComplete"
+,
+    "startPreviewRun": "PipelineApi.startPreviewRun"
+,
+    "ensureRequestPrincipal": "PrincipalApi.ensureRequestPrincipal"
+,
+    "sync": "SyncApi.sync",
+    "syncBoundaries": "SyncApi.syncBoundaries",
+    "syncBoundarySecurityGroups": "SyncApi.syncBoundarySecurityGroups",
+    "syncBoundarySecurityRoles": "SyncApi.syncBoundarySecurityRoles",
+    "syncConnections": "SyncApi.syncConnections",
+    "syncDynamoGsi": "SyncApi.syncDynamoGsi",
+    "syncObjectVersions": "SyncApi.syncObjectVersions",
+    "syncPipelines": "SyncApi.syncPipelines",
+    "syncPitObjectTable": "SyncApi.syncPitObjectTable",
+    "syncPortal": "SyncApi.syncPortal",
+    "syncSharedRoles": "SyncApi.syncSharedRoles",
+    "syncTags": "SyncApi.syncTags",
+    "syncUnionTypes": "SyncApi.syncUnionTypes"
+
+  }
+}

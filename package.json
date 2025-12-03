@@ -5,7 +5,8 @@
   "type": "module",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "packages/invoker/*"
   ],
   "scripts": {
     "build": "nx affected -t build",
@@ -33,7 +34,7 @@
   "author": "team@zerobias.com",
   "license": "ISC",
   "engines": {
-    "node": ">=24.11.0",
+    "node": ">=22.0.0",
     "npm": ">=10.0.0"
   },
   "devDependencies": {
@@ -42,14 +43,17 @@
     "@types/chai": "^4.3.20",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.10.1",
+    "@zerobias-org/eslint-config": "^1.0.6",
     "chai": "^4.5.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",
     "husky": "^9.1.7",
     "lerna": "^9.0.0",
     "mocha": "^11.7.5",
+    "nock": "^14.0.10",
     "nx": "^20.5.0",
     "rimraf": "^6.1.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

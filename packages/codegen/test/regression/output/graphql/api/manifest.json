@@ -1,0 +1,27 @@
+{
+  "serviceName": "PlatformGraphql",
+  "version": "1.0.0",
+  "codegenVersion": "1.0.12",
+  "generatedAt": "2025-12-03T13:26:23Z",
+  "clientClass": "PlatformGraphqlClient",
+  "factoryFunction": "newPlatformGraphql",
+  "operations": [
+    {
+      "operationId": "getFoo",
+      "nickname": "getFoo",
+      "apiClass": "FooApi",
+      "method": "GET",
+      "path": "/foo",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "void"
+    }
+
+  ],
+  "operationMap": {
+    "getFoo": "FooApi.getFoo"
+
+  }
+}

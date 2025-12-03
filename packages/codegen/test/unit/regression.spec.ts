@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 describe('Platform SDK Regression Tests', function() {
-  this.timeout(30000); // 30 seconds timeout for generation
+  this.timeout(120000); // 2 minutes timeout for large specs like platform.yml
 
   const testDir = path.join(__dirname, '../regression');
   const outputDir = path.join(testDir, 'output');
@@ -39,7 +39,7 @@ describe('Platform SDK Regression Tests', function() {
 
       it('should generate successfully with api-client generator', function() {
         try {
-          const cmd = `${path.join(__dirname, '../../bin/hub-generator')} generate -g api-client -i ${specPath} -o ${sdkOutputDir}/ --skip-validate-spec`;
+          const cmd = `${path.join(__dirname, '../../bin/hub-generator.js')} generate -g api-client -i ${specPath} -o ${sdkOutputDir}/ --skip-validate-spec`;
           execSync(cmd, { stdio: 'pipe' });
         } catch (error) {
           throw new Error(`Failed to generate SDK for ${spec}: ${error.message}`);
@@ -111,8 +111,8 @@ describe('Platform SDK Regression Tests', function() {
           name: `test-${specName}-sdk`,
           version: '1.0.0',
           dependencies: {
-            '@auditmation/types-core-js': '^4.9.6',
-            '@auditmation/util-api-client-base': '^1.1.3',
+            '@zerobias-org/types-core-js': '^4.9.6',
+            '@zerobias-org/util-api-client-base': '^1.1.3',
             'jsonata': '1.8.6',
             'axios': '^0.27.2'
           },

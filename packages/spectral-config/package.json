@@ -24,7 +24,7 @@
     "@stoplight/json-ref-resolver": "3.1.6",
     "@stoplight/spectral-cli": "6.15.0",
     "@zerobias-org/eslint-config": "^1.0.6",
-    "@zerobias-org/types-format-spectral-ruleset": "1.0.0"
+    "@zerobias-org/types-format-spectral-ruleset": "^1.0.0"
   },
   "files": [
     "index.js",
@@ -33,7 +33,7 @@
     "bom.json"
   ],
   "engines": {
-    "node": ">=24.11.0",
+    "node": ">=22.0.0",
     "npm": ">=10.0.0"
   }
 }

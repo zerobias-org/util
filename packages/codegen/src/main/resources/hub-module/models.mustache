@@ -9,7 +9,7 @@ export * from '{{{ classFilename }}}.js';
 {{/models}}
 import * as stream from 'stream';
 
-import { NumberFormat, DateTime, DateFormat, CoreType, PagedResults, IllegalArgumentError as RealIllegalArgumentError } from '{{#isCore}}../../src{{/isCore}}{{^isCore}}@auditmation/types-core-js{{/isCore}}';
+import { NumberFormat, DateTime, DateFormat, CoreType, PagedResults, IllegalArgumentError as RealIllegalArgumentError } from '{{#isCore}}../../src{{/isCore}}{{^isCore}}@zerobias-org/types-core-js{{/isCore}}';
 
 {{#models}}
 {{#model}}

@@ -848,7 +848,7 @@ paths:
         - name: moduleKeyOrId
           in: path
           required: true
-          description: The module to look for.  Either the module id or its key (@auditmation/github)
+          description: The module to look for.  Either the module id or its key (@zerobias-org/github)
           schema:
             type: string
         - name: version
@@ -1855,7 +1855,7 @@ paths:
                 publisher:
                   description: The name of the publisher of this module
                   type: string
-                  example: Auditmation
+                  example: ZeroBias
                 imageUrl:
                   description: A URI for a logo for this module
                   type: string
@@ -1863,7 +1863,7 @@ paths:
                 key:
                   description: A unique, human-friendly identifier for this module
                   type: string
-                  example: '@auditmation/github'
+                  example: '@zerobias-org/github'
                 moduleVersionId:
                   type: string
                   format: uuid
@@ -4814,7 +4814,7 @@ components:
       type: oauth2
       flows:
         password:
-          tokenUrl: https://hub.auditmation.io/
+          tokenUrl: https://app.zerobias.com/
           scopes:
             create:node: Ability to create Nodes
             update:node: Ability to update Nodes
@@ -5380,7 +5380,7 @@ components:
             publisher:
               description: The name of the publisher of this module
               type: string
-              example: Auditmation
+              example: ZeroBias
             hidden:
               description: Flag indicating whether or not this is a hidden module
               type: boolean
@@ -5388,7 +5388,7 @@ components:
             key:
               description: A language-specific key or identifier for this module
               type: string
-              example: '@auditmation/github'
+              example: '@zerobias-org/github'
     ModuleRepository:
       type: object
       description: Description of where to locate a module version
@@ -5892,7 +5892,7 @@ components:
         moduleKey:
           description: The key of the module this Connection is using
           type: string
-          example: '@auditmation/github'
+          example: '@zerobias-org/github'
         moduleVersion:
           description: The version of the module this Connection is using
           type: string
@@ -6224,7 +6224,7 @@ components:
             moduleKey:
               description: A language-specific key or identifier for this module
               type: string
-              example: '@auditmation/github'
+              example: '@zerobias-org/github'
             moduleName:
               description: Name for this module
               type: string
@@ -6272,7 +6272,7 @@ components:
             moduleKey:
               description: A language-specific key or identifier for this module
               type: string
-              example: '@auditmation/github'
+              example: '@zerobias-org/github'
             moduleLogo:
               description: A URI for a logo for this module
               type: string
@@ -6452,7 +6452,7 @@ components:
             - BOTH
           description: Policy describing what identifiers must match to create a durable node out of this Registration
         moduleVersions:
-          description: IDs of module versions to be deployed to this node once it becomes fully inflated. These can either be UUIDs for the module version or a ModuleVersion specification a la  `key@version` e.g. `@auditmation/github@1.2.3` where `@auditmation/github` is the module's `key` and `1.2.3` is the module version. The special version `latest` can be used to mean the newest version for the given module.
+          description: IDs of module versions to be deployed to this node once it becomes fully inflated. These can either be UUIDs for the module version or a ModuleVersion specification a la  `key@version` e.g. `@zerobias-org/github@1.2.3` where `@zerobias-org/github` is the module's `key` and `1.2.3` is the module version. The special version `latest` can be used to mean the newest version for the given module.
           type: array
           items:
             type: string

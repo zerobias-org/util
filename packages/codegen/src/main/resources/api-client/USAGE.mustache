@@ -3,13 +3,13 @@
 ## Installation
 
 ```bash
-npm install @auditmation/{{packageName}}
+npm install {{packageName}}
 ```
 
 ## Quick Start
 
 ```typescript
-import { new{{apiName}}, {{apiName}}Client } from '@auditmation/{{packageName}}';
+import { new{{apiName}}, {{apiName}}Client } from '{{packageName}}';
 
 // Create client instance
 const client = new{{apiName}}();
@@ -123,7 +123,7 @@ history.forEach(record => {
 ## Error Handling
 
 ```typescript
-import { CoreError } from '@auditmation/types-core-js';
+import { CoreError } from '@zerobias-org/types-core-js';
 
 try {
   const result = await client.getSomeApi().someMethod();
@@ -176,7 +176,7 @@ import {
   {{apiName}}Client,
   ConnectionProfile,
   // Import models as needed
-} from '@auditmation/{{packageName}}';
+} from '{{packageName}}';
 ```
 
 ## Additional Resources

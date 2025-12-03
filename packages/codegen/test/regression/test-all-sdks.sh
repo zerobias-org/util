@@ -77,8 +77,8 @@ create_package_json() {
   "main": "api/index.js",
   "types": "api/index.d.ts",
   "dependencies": {
-    "@auditmation/types-core-js": "^4.9.6",
-    "@auditmation/util-api-client-base": "^1.1.3",
+    "@zerobias-org/types-core-js": "^4.9.6",
+    "@zerobias-org/util-api-client-base": "^1.1.3",
     "jsonata": "1.8.6",
     "axios": "^0.27.2"
   },

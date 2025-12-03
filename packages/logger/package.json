@@ -1,0 +1,47 @@
+{
+  "name": "@zerobias-org/util-logger",
+  "version": "1.0.0",
+  "description": "Module wrapping winston for handling different endpoints and transports.",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist/",
+    "compile": "tsc",
+    "build": "npm run clean && npm run compile",
+    "test": "mocha",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist/src",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "logger",
+    "winston"
+  ],
+  "author": "ZeroBias <support@zerobias.com>",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zerobiasorg/util",
+    "directory": "packages/logger"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "dependencies": {
+    "winston": "^3.18.3",
+    "winston-transport": "^4.9.0"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  }
+}

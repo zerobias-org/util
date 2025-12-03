@@ -1,0 +1,4930 @@
+{
+  "serviceName": "HubServer",
+  "version": "3.15.0",
+  "codegenVersion": "1.0.12",
+  "generatedAt": "2025-12-03T13:27:14Z",
+  "clientClass": "HubServerClient",
+  "factoryFunction": "newHubServer",
+  "operations": [
+    {
+      "operationId": "createAccessRule",
+      "nickname": "create",
+      "apiClass": "AccessRuleApi",
+      "method": "POST",
+      "path": "/accessRules",
+      "summary": "Creates a new access rule",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createAccessRule",
+          "in": "body",
+          "required": true,
+          "type": "CreateAccessRule"
+        }
+      ],
+      "returnType": "AccessRuleView"
+    },
+    {
+      "operationId": "deleteAccessRule",
+      "nickname": "delete",
+      "apiClass": "AccessRuleApi",
+      "method": "DELETE",
+      "path": "/accessRules/{id}",
+      "summary": "Deletes an existing access rule",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the access rule"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getAccessRule",
+      "nickname": "get",
+      "apiClass": "AccessRuleApi",
+      "method": "GET",
+      "path": "/accessRules/{id}",
+      "summary": "Retrieves a detailed view of the given access rule",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the access rule"
+        }
+      ],
+      "returnType": "AccessRuleView"
+    },
+    {
+      "operationId": "listAccessRules",
+      "nickname": "list",
+      "apiClass": "AccessRuleApi",
+      "method": "GET",
+      "path": "/accessRules",
+      "summary": "Retrieves a list of access rules",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "principalId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "ID of a principal to filter access rules with"
+        },
+        {
+          "name": "roleId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "ID of a role to filter access rules with"
+        }
+      ],
+      "returnType": "PagedResults&lt;AccessRule&gt;"
+    },
+    {
+      "operationId": "updateAccessRule",
+      "nickname": "update",
+      "apiClass": "AccessRuleApi",
+      "method": "PUT",
+      "path": "/accessRules/{id}",
+      "summary": "Updates an existing access rule",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the access rule"
+        },
+        {
+          "name": "updateAccessRule",
+          "in": "body",
+          "required": true,
+          "type": "UpdateAccessRule"
+        }
+      ],
+      "returnType": "AccessRuleView"
+    }
+,
+    {
+      "operationId": "createTrigger",
+      "nickname": "createTrigger",
+      "apiClass": "AlertApi",
+      "method": "POST",
+      "path": "/alertTriggers",
+      "summary": "Create an Alert Trigger",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createAlertTrigger",
+          "in": "body",
+          "required": true,
+          "type": "CreateAlertTrigger",
+          "description": "The trigger body"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getAlert",
+      "nickname": "getAlert",
+      "apiClass": "AlertApi",
+      "method": "GET",
+      "path": "/alerts/{id}",
+      "summary": "Retrieves a list of alerts",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The ID of the alert to fetch"
+        }
+      ],
+      "returnType": "AlertView"
+    },
+    {
+      "operationId": "getAlertLinkTypes",
+      "nickname": "getAlertLinkTypes",
+      "apiClass": "AlertApi",
+      "method": "GET",
+      "path": "/alertLinkTypes",
+      "summary": "Retrieves all alert/resource linktypes available in this application",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "Array&lt;AlertLinkType&gt;"
+    },
+    {
+      "operationId": "getTrigger",
+      "nickname": "getTrigger",
+      "apiClass": "AlertApi",
+      "method": "GET",
+      "path": "/alertTriggers/{id}",
+      "summary": "Retrieves a trigger",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The ID of the trigger to fetch"
+        }
+      ],
+      "returnType": "AlertTriggerView"
+    },
+    {
+      "operationId": "listAlerts",
+      "nickname": "listAlerts",
+      "apiClass": "AlertApi",
+      "method": "GET",
+      "path": "/alerts",
+      "summary": "Retrieves a list of alerts",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "triggerId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "a trigger id"
+        }
+      ],
+      "returnType": "PagedResults&lt;AlertView&gt;"
+    },
+    {
+      "operationId": "listLinkedResources",
+      "nickname": "listLinkedResources",
+      "apiClass": "AlertApi",
+      "method": "GET",
+      "path": "/alerts/{id}/resources",
+      "summary": "Retrieves a list of resources that are linked to the given alert alongside linktype information.  This takes away any link that is an &#x60;impactedBy&#x60; link. Those should be queried using listResourcesImpactedByAlert",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The ID of the alert"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "resourceTypes",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "resource types to filter by"
+        },
+        {
+          "name": "alertResourceLinkTypes",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "alert resource link types to filter by"
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "the name of the resource on the other side of the link"
+        },
+        {
+          "name": "description",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "the name of the resource on the other side of the link"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;AlertLinkExtendedResource&gt;"
+    },
+    {
+      "operationId": "listResourcesImpactedByAlert",
+      "nickname": "listResourcesImpactedByAlert",
+      "apiClass": "AlertApi",
+      "method": "GET",
+      "path": "/alerts/{id}/impacts",
+      "summary": "Retrieves a list of resources that are impacted by the given alert. This is a recursive search where all children of a resource which may be impacted by this alert will be returned Results are orderd by hierarchy level.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The ID of the alert to fetch"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "resourceTypes",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "resource types to filter by"
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "the name of the resource on the other side of the link"
+        },
+        {
+          "name": "description",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "the name of the resource on the other side of the link"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ResourceView&gt;"
+    },
+    {
+      "operationId": "listTriggers",
+      "nickname": "listTriggers",
+      "apiClass": "AlertApi",
+      "method": "GET",
+      "path": "/alertTriggers",
+      "summary": "Retrieves a list of triggers",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;AlertTriggerView&gt;"
+    }
+,
+    {
+      "operationId": "connect",
+      "nickname": "connect",
+      "apiClass": "ConnectionApi",
+      "method": "PUT",
+      "path": "/connections/{id}/connect",
+      "summary": "Calls &#39;connect&#39; on this connection. This method is only valid if the connection is manually controlled.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Connection ID"
+        },
+        {
+          "name": "oauthRefresh",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Trigger an oauth refresh on connect"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "deleteConnection",
+      "nickname": "delete",
+      "apiClass": "ConnectionApi",
+      "method": "DELETE",
+      "path": "/connections/{id}",
+      "summary": "Deletes a connection by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Connection ID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "disconnect",
+      "nickname": "disconnect",
+      "apiClass": "ConnectionApi",
+      "method": "PUT",
+      "path": "/connections/{id}/disconnect",
+      "summary": "Calls &#39;disconnect&#39; on this connection. This method is only valid if the connection is manually controlled.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Connection ID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getConnection",
+      "nickname": "get",
+      "apiClass": "ConnectionApi",
+      "method": "GET",
+      "path": "/connections/{id}",
+      "summary": "Retrieves a connection by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Connection ID"
+        }
+      ],
+      "returnType": "ConnectionView"
+    },
+    {
+      "operationId": "listAllConnections",
+      "nickname": "list",
+      "apiClass": "ConnectionApi",
+      "method": "GET",
+      "path": "/connections",
+      "summary": "Lists all connections",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        },
+        {
+          "name": "sortDir",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;SortDirection&gt;",
+          "description": "Array of directions to sort by. Must correspond with &#x60;sortBy&#x60;"
+        },
+        {
+          "name": "sortBy",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Array of columns to sort by, in order"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "ConnectionOperationalStatus",
+          "description": "An optional parameter to filter on connection status"
+        },
+        {
+          "name": "fileSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only connections with modules file support active or inactive."
+        },
+        {
+          "name": "dataSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only connections with modules data producer support active or inactive."
+        },
+        {
+          "name": "tag",
+          "in": "query",
+          "required": false,
+          "type": "Nmtoken",
+          "description": "List only connections with specific tag type."
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters executions by boundary id"
+        }
+      ],
+      "returnType": "PagedResults&lt;ConnectionListView&gt;"
+    },
+    {
+      "operationId": "reverify",
+      "nickname": "reverify",
+      "apiClass": "ConnectionApi",
+      "method": "PUT",
+      "path": "/connections/{id}/reverify",
+      "summary": "Attempts to verify the currently-stored ConnectionProfile",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Connection ID"
+        }
+      ],
+      "returnType": "UpdateConnectionResults"
+    },
+    {
+      "operationId": "searchConnections",
+      "nickname": "search",
+      "apiClass": "ConnectionApi",
+      "method": "POST",
+      "path": "/connectionSearch",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchConnectionBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchConnectionBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters executions by boundary id"
+        }
+      ],
+      "returnType": "PagedResults&lt;ConnectionListView&gt;"
+    },
+    {
+      "operationId": "searchConnectionsOptions",
+      "nickname": "searchOptions",
+      "apiClass": "ConnectionApi",
+      "method": "GET",
+      "path": "/connectionSearch/options",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters executions by boundary id"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "updateConnection",
+      "nickname": "update",
+      "apiClass": "ConnectionApi",
+      "method": "PUT",
+      "path": "/connections/{id}",
+      "summary": "Updates the ConnectionProfile for this Connection",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Connection ID"
+        },
+        {
+          "name": "updateConnection",
+          "in": "body",
+          "required": true,
+          "type": "UpdateConnection"
+        }
+      ],
+      "returnType": "ConnectionListView"
+    },
+    {
+      "operationId": "updateConnectionProfile",
+      "nickname": "updateConnectionProfile",
+      "apiClass": "ConnectionApi",
+      "method": "PUT",
+      "path": "/connections/{id}/connectionProfile",
+      "summary": "Updates the ConnectionProfile for this Connection",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Connection ID"
+        },
+        {
+          "name": "requestBody",
+          "in": "body",
+          "required": true,
+          "type": "{ [key: string]: any; }"
+        }
+      ],
+      "returnType": "UpdateConnectionResults"
+    },
+    {
+      "operationId": "updateConnectionProfileSecrets",
+      "nickname": "updateConnectionProfileSecrets",
+      "apiClass": "ConnectionApi",
+      "method": "PUT",
+      "path": "/connections/{id}/connectionProfile/secrets",
+      "summary": "Updates the ConnectionProfile, writing the secrets to the given Secrets Manager",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Connection ID"
+        },
+        {
+          "name": "requestBody",
+          "in": "body",
+          "required": true,
+          "type": "{ [key: string]: any; }"
+        },
+        {
+          "name": "rootNode",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "The root secret node to create the new secret under. Hub Server will attempt to determine which one to use if this is not provided. If there are multiple writable root nodes and  this parameter is not provided, an error will be thrown."
+        }
+      ],
+      "returnType": "UpdateConnectionResults"
+    }
+,
+    {
+      "operationId": "createConnection",
+      "nickname": "createConnection",
+      "apiClass": "DeploymentApi",
+      "method": "POST",
+      "path": "/deployments/{id}/connections",
+      "summary": "Creates a new connection for this deployment.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Deployment ID"
+        },
+        {
+          "name": "createConnection",
+          "in": "body",
+          "required": true,
+          "type": "CreateConnection"
+        },
+        {
+          "name": "scoped",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Set to false to create an unscoped connection"
+        }
+      ],
+      "returnType": "ConnectionView"
+    },
+    {
+      "operationId": "createDeployment",
+      "nickname": "create",
+      "apiClass": "DeploymentApi",
+      "method": "POST",
+      "path": "/deployments",
+      "summary": "Create a new Deployment",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createDeployment",
+          "in": "body",
+          "required": true,
+          "type": "CreateDeployment"
+        }
+      ],
+      "returnType": "DeploymentView"
+    },
+    {
+      "operationId": "deleteDeployment",
+      "nickname": "delete",
+      "apiClass": "DeploymentApi",
+      "method": "DELETE",
+      "path": "/deployments/{id}",
+      "summary": "Deletes a deployment by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Deployment ID"
+        },
+        {
+          "name": "cascadeConnections",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "If &#x60;true&#x60;, this operation will also delete all &#x60;Connections&#x60; under the &#x60;Deployment&#x60; "
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getConnectionProfile",
+      "nickname": "getConnectionProfile",
+      "apiClass": "DeploymentApi",
+      "method": "GET",
+      "path": "/deployments/{id}/connectionProfile",
+      "summary": "Returns the ConnectionProfile, if any, for this Deployment",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Deployment ID"
+        }
+      ],
+      "returnType": "{ [key: string]: any; }"
+    },
+    {
+      "operationId": "getConnectionProfileParameters",
+      "nickname": "getConnectionProfileParameters",
+      "apiClass": "DeploymentApi",
+      "method": "GET",
+      "path": "/deployments/{id}/connectionProfile/parameters",
+      "summary": "Returns a denormalized view of the ConnectionProfile, if any, for this Deployment",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Deployment ID"
+        }
+      ],
+      "returnType": "Array&lt;ProfileParameter&gt;"
+    },
+    {
+      "operationId": "getDeployment",
+      "nickname": "get",
+      "apiClass": "DeploymentApi",
+      "method": "GET",
+      "path": "/deployments/{id}",
+      "summary": "Retrieves a deployment by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Deployment ID"
+        }
+      ],
+      "returnType": "DeploymentView"
+    },
+    {
+      "operationId": "listConnections",
+      "nickname": "listConnections",
+      "apiClass": "DeploymentApi",
+      "method": "GET",
+      "path": "/deployments/{id}/connections",
+      "summary": "Retrieves all connections configured for this deployment",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Deployment ID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "ConnectionOperationalStatus",
+          "description": "An optional parameter to filter on connection status"
+        },
+        {
+          "name": "fileSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only connections with modules file support active or inactive."
+        },
+        {
+          "name": "dataSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only connections with modules data producer support active or inactive."
+        },
+        {
+          "name": "tag",
+          "in": "query",
+          "required": false,
+          "type": "Nmtoken",
+          "description": "List only connections with specific tag type."
+        }
+      ],
+      "returnType": "PagedResults&lt;ConnectionView&gt;"
+    },
+    {
+      "operationId": "listDeployments",
+      "nickname": "list",
+      "apiClass": "DeploymentApi",
+      "method": "GET",
+      "path": "/deployments",
+      "summary": "Retrieves all deployments",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        }
+      ],
+      "returnType": "PagedResults&lt;DeploymentView&gt;"
+    },
+    {
+      "operationId": "searchDeployments",
+      "nickname": "search",
+      "apiClass": "DeploymentApi",
+      "method": "POST",
+      "path": "/deploymentSearch",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchDeploymentBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchDeploymentBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;DeploymentView&gt;"
+    },
+    {
+      "operationId": "searchDeploymentsOptions",
+      "nickname": "searchOptions",
+      "apiClass": "DeploymentApi",
+      "method": "GET",
+      "path": "/deploymentSearch/options",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "updateDeployment",
+      "nickname": "update",
+      "apiClass": "DeploymentApi",
+      "method": "PUT",
+      "path": "/deployments/{id}",
+      "summary": "Update a deployment",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Deployment ID"
+        },
+        {
+          "name": "updateDeploymentRequest",
+          "in": "body",
+          "required": true,
+          "type": "UpdateDeploymentRequest"
+        }
+      ],
+      "returnType": "DeploymentView"
+    }
+,
+    {
+      "operationId": "getExecutionInfo",
+      "nickname": "get",
+      "apiClass": "ExecutionApi",
+      "method": "GET",
+      "path": "/executions/{id}",
+      "summary": "Get execution detailed information",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The execution request id"
+        }
+      ],
+      "returnType": "ExecutionInfo"
+    },
+    {
+      "operationId": "listExecutions",
+      "nickname": "list",
+      "apiClass": "ExecutionApi",
+      "method": "GET",
+      "path": "/executions",
+      "summary": "List operation execution results",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sortDir",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;SortDirection&gt;",
+          "description": "Array of directions to sort by. Must correspond with &#x60;sortBy&#x60;"
+        },
+        {
+          "name": "sortBy",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Array of columns to sort by, in order"
+        },
+        {
+          "name": "nodeId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters executions by node id"
+        },
+        {
+          "name": "deploymentId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters executions by deployment id"
+        },
+        {
+          "name": "connectionId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters executions by connection id"
+        },
+        {
+          "name": "operationName",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filters executions by operation name"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Filters executions by status of the executions response"
+        },
+        {
+          "name": "startTimestamp",
+          "in": "query",
+          "required": false,
+          "type": "Date",
+          "description": "Filters executions by timestamp, will show only executions after timestamp given"
+        },
+        {
+          "name": "endTimestamp",
+          "in": "query",
+          "required": false,
+          "type": "Date",
+          "description": "Filters executions by timestamp, will show only executions before timestamp given"
+        }
+      ],
+      "returnType": "PagedResults&lt;ExecutionInfo&gt;"
+    }
+,
+    {
+      "operationId": "health",
+      "nickname": "health",
+      "apiClass": "HealthcheckApi",
+      "method": "GET",
+      "path": "/health",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "HealthCheckBody"
+    },
+    {
+      "operationId": "searchWaiterOptions",
+      "nickname": "searchWaiterOptions",
+      "apiClass": "HealthcheckApi",
+      "method": "GET",
+      "path": "/waiterSearch/options",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchWaiters",
+      "nickname": "searchWaiters",
+      "apiClass": "HealthcheckApi",
+      "method": "POST",
+      "path": "/waiterSearch",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchWaiterBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchWaiterBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;Waiter&gt;"
+    }
+,
+    {
+      "operationId": "getDependencyReport",
+      "nickname": "getDependencyReport",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleKeyOrId}/dependencies",
+      "summary": "Determines whether or not the given module specification can be satisfied by any targets in the system",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleKeyOrId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "The module to look for.  Either the module id or its key (@zerobias-org/github)"
+        },
+        {
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "VersionRange",
+          "description": "Version specification for the module. This will use the latest version of the module if not provided."
+        },
+        {
+          "name": "nodeId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "An optional Node id to filter deployments with."
+        }
+      ],
+      "returnType": "ModuleDependencyReport"
+    },
+    {
+      "operationId": "getModule",
+      "nickname": "get",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{id}",
+      "summary": "Retrieves a Module by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Module ID"
+        }
+      ],
+      "returnType": "Module"
+    },
+    {
+      "operationId": "getModuleVersion",
+      "nickname": "getModuleVersion",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleId}/versions/{version}",
+      "summary": "Retrieves a single module version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Module ID"
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Version ID or version string"
+        }
+      ],
+      "returnType": "ModuleVersion"
+    },
+    {
+      "operationId": "getModuleVersionById",
+      "nickname": "getModuleVersionById",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/moduleVersions/{moduleVersionId}",
+      "summary": "Retrieves a single module version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Module Version ID"
+        }
+      ],
+      "returnType": "ModuleVersion"
+    },
+    {
+      "operationId": "listModules",
+      "nickname": "list",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules",
+      "summary": "Lists all modules available",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Module&gt;"
+    },
+    {
+      "operationId": "listOperations",
+      "nickname": "listOperations",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleId}/versions/{version}/operations",
+      "summary": "Retrieves all the operations available on a given ModuleVersion",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Module ID"
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Version ID or version string"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Operation&gt;"
+    },
+    {
+      "operationId": "listVersions",
+      "nickname": "listVersions",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{id}/versions",
+      "summary": "Retrieves all versions of a given module",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Module ID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;ModuleVersion&gt;"
+    },
+    {
+      "operationId": "storeSync",
+      "nickname": "storeSync",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/storeSync",
+      "summary": "Synchronizes the modules in the database with the store",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "allVersions",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Optionally sync all versions, not just the latest"
+        },
+        {
+          "name": "moduleId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Optionally specify a specific module"
+        },
+        {
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Optionally specify a specific version for the module, default to latest"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "addNodeTag",
+      "nickname": "addTag",
+      "apiClass": "NodeApi",
+      "method": "POST",
+      "path": "/nodes/{id}/tags",
+      "summary": "Adds a new tag to the given Node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "addTag",
+          "in": "body",
+          "required": true,
+          "type": "AddTag"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "claimNode",
+      "nickname": "claimNode",
+      "apiClass": "NodeApi",
+      "method": "PUT",
+      "path": "/registrations/{code}/claim",
+      "summary": "Claim a node from lost and found",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Registration code"
+        },
+        {
+          "name": "claimNodeBody",
+          "in": "body",
+          "required": true,
+          "type": "ClaimNodeBody"
+        },
+        {
+          "name": "danaOrgId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Organization ID"
+        }
+      ],
+      "returnType": "Node"
+    },
+    {
+      "operationId": "createNode",
+      "nickname": "create",
+      "apiClass": "NodeApi",
+      "method": "POST",
+      "path": "/nodes",
+      "summary": "Create a new Registration",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createRegistration",
+          "in": "body",
+          "required": true,
+          "type": "CreateRegistration"
+        }
+      ],
+      "returnType": "RegistrationExtended"
+    },
+    {
+      "operationId": "createNodeDeployment",
+      "nickname": "createNodeDeployment",
+      "apiClass": "NodeApi",
+      "method": "POST",
+      "path": "/nodes/{nodeId}/deployments",
+      "summary": "Creates a new Deployment on this Node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "nodeId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "createNodeDeployment",
+          "in": "body",
+          "required": true,
+          "type": "CreateNodeDeployment"
+        }
+      ],
+      "returnType": "DeploymentView"
+    },
+    {
+      "operationId": "deleteNode",
+      "nickname": "delete",
+      "apiClass": "NodeApi",
+      "method": "DELETE",
+      "path": "/nodes/{id}",
+      "summary": "Deletes an node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "cascadeDeployments",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "If &#x60;true&#x60;, this operation will also delete all &#x60;Deployments&#x60; on the &#x60;Node&#x60;"
+        },
+        {
+          "name": "cascadeConnections",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "If &#x60;true&#x60;, this operation will also delete all &#x60;Connections&#x60; under all &#x60;Deployments&#x60;  on the &#x60;Node&#x60;. Note that if &#x60;cascadeDeployments&#x60; is &#x60;false&#x60;, the value of  &#x60;cascadeConnections&#x60; does not matter"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "deleteRegistration",
+      "nickname": "deleteRegistration",
+      "apiClass": "NodeApi",
+      "method": "DELETE",
+      "path": "/registrations/{id}",
+      "summary": "Delete an registration by ID or code",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Registration ID or code"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "downloadComplianceReport",
+      "nickname": "downloadComplianceReport",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/appliance/complianceScan/download",
+      "summary": "Download the latest compliance scan summary",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "ensureDeployments",
+      "nickname": "ensureDeployments",
+      "apiClass": "NodeApi",
+      "method": "POST",
+      "path": "/nodes/{nodeId}/ensureDeployments",
+      "summary": "Forces a node to ensure it and its child nodes deployments",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "nodeId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getInfo",
+      "nickname": "getInfo",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/info",
+      "summary": "Retrieve an node&#39;s info",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "NodeInfo"
+    },
+    {
+      "operationId": "getNode",
+      "nickname": "get",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}",
+      "summary": "Retrieve an node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "Node"
+    },
+    {
+      "operationId": "getNodeAvailableLatestVersion",
+      "nickname": "getNodeAvailableLatestVersion",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/latestAvailableVersion",
+      "summary": "Gets latest node version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "Semver"
+    },
+    {
+      "operationId": "getRegistration",
+      "nickname": "getRegistration",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/registrations/{id}",
+      "summary": "Retrieve an registration by ID or code",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Registration ID or code"
+        }
+      ],
+      "returnType": "RegistrationExtended"
+    },
+    {
+      "operationId": "getWritableSecretPath",
+      "nickname": "getWritableSecretPath",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/writableSecret",
+      "summary": "Requests the writable secret path from the Node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "string"
+    },
+    {
+      "operationId": "identifyNode",
+      "nickname": "identify",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/identify",
+      "summary": "Retrieves node metadata",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "{ [key: string]: any; }"
+    },
+    {
+      "operationId": "listConnectionsBySecretId",
+      "nickname": "listConnectionsBySecretId",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/secrets/{secretId}/connections",
+      "summary": "Returns all the connections on a node using a secret",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "secretId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Return connections that use this secret"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;ConnectionListView&gt;"
+    },
+    {
+      "operationId": "listConnectionsForNode",
+      "nickname": "listConnections",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/connections",
+      "summary": "Retrieves all connections for this Node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;ConnectionListView&gt;"
+    },
+    {
+      "operationId": "listDeploymentsBySecretId",
+      "nickname": "listDeploymentsBySecretId",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/secrets/{secretId}/deployments",
+      "summary": "Returns all the deployments on a node using a secret",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "secretId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Return deployments that use this secret"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;DeploymentView&gt;"
+    },
+    {
+      "operationId": "listDeploymentsForNode",
+      "nickname": "listDeployments",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{nodeId}/deployments",
+      "summary": "Lists deployments for this node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "nodeId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        }
+      ],
+      "returnType": "PagedResults&lt;DeploymentView&gt;"
+    },
+    {
+      "operationId": "listDeploymentsSlimForNode",
+      "nickname": "listDeploymentsSlim",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{nodeId}/slimDeployments",
+      "summary": "Lists deployments for this node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "nodeId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        }
+      ],
+      "returnType": "PagedResults&lt;DeploymentSlimView&gt;"
+    },
+    {
+      "operationId": "listNodeAvailableVersions",
+      "nickname": "listNodeAvailableVersions",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/availableVersions",
+      "summary": "Lists node versions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "Array&lt;Semver&gt;"
+    },
+    {
+      "operationId": "listNodes",
+      "nickname": "list",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes",
+      "summary": "Lists all Nodes",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "OperationalStatus",
+          "description": "Optional status filter"
+        }
+      ],
+      "returnType": "PagedResults&lt;Node&gt;"
+    },
+    {
+      "operationId": "listRegistrations",
+      "nickname": "listRegistrations",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/registrations",
+      "summary": "Lists all unresolved Node registrations",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;RegistrationExtended&gt;"
+    },
+    {
+      "operationId": "listSecretNodes",
+      "nickname": "listSecretNodes",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/secretNodes",
+      "summary": "Returns all Nodes root secret keys if path not given or all Nodes secret keys",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "path",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "The optional secret path"
+        }
+      ],
+      "returnType": "Array&lt;SecretNode&gt;"
+    },
+    {
+      "operationId": "listSharedSecrets",
+      "nickname": "listSharedSecrets",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/secrets",
+      "summary": "Returns all the shared secrets the node is using",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "connectionProfileId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters Secrets to only those matching the given connectionProfileId"
+        }
+      ],
+      "returnType": "PagedResults&lt;Secret&gt;"
+    },
+    {
+      "operationId": "migrateNode",
+      "nickname": "migrate",
+      "apiClass": "NodeApi",
+      "method": "POST",
+      "path": "/nodes/{nodeId}/migrate",
+      "summary": "Migrate deployments from node to node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "nodeId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "migrateNodeBody",
+          "in": "body",
+          "required": true,
+          "type": "MigrateNodeBody"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "migrateNodeCheck",
+      "nickname": "migrateCheck",
+      "apiClass": "NodeApi",
+      "method": "POST",
+      "path": "/nodes/{nodeId}/migrateCheck",
+      "summary": "Check if migrate node will have any complications",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "nodeId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "migrateNodeCheckBody",
+          "in": "body",
+          "required": true,
+          "type": "MigrateNodeCheckBody"
+        }
+      ],
+      "returnType": "MigrateNodeCheckResponse"
+    },
+    {
+      "operationId": "requestComplianceScan",
+      "nickname": "requestComplianceScan",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/appliance/complianceScan/run",
+      "summary": "Request the node run a compliance scan and return the results file",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "requestNodeRestart",
+      "nickname": "requestRestart",
+      "apiClass": "NodeApi",
+      "method": "PUT",
+      "path": "/nodes/{id}/restart",
+      "summary": "Requests that the Node process restart",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "searchNodeConnections",
+      "nickname": "searchConnections",
+      "apiClass": "NodeApi",
+      "method": "POST",
+      "path": "/nodes/{id}/connectionSearch",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchNodeConnectionBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchNodeConnectionBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "The boundaryId to scope this request as"
+        }
+      ],
+      "returnType": "PagedResults&lt;ConnectionListView&gt;"
+    },
+    {
+      "operationId": "searchNodeConnectionsOptions",
+      "nickname": "searchConnectionOptions",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/connectionSearch/options",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "The boundaryId to scope this request as"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchNodes",
+      "nickname": "search",
+      "apiClass": "NodeApi",
+      "method": "POST",
+      "path": "/nodeSearch",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchNodeBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchNodeBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;Node&gt;"
+    },
+    {
+      "operationId": "searchNodesOptions",
+      "nickname": "searchOptions",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodeSearch/options",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "setEnvVar",
+      "nickname": "setEnvVar",
+      "apiClass": "NodeApi",
+      "method": "PUT",
+      "path": "/nodes/{id}/appliance/environment/{key}",
+      "summary": "Set an env var on a hub node appliance",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "key",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "The environment variable key"
+        },
+        {
+          "name": "envVar",
+          "in": "body",
+          "required": true,
+          "type": "EnvVar"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "setNodeVersion",
+      "nickname": "setVersion",
+      "apiClass": "NodeApi",
+      "method": "PUT",
+      "path": "/nodes/{id}/version",
+      "summary": "Sets the software version of a given node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "setVersionBody",
+          "in": "body",
+          "required": true,
+          "type": "SetVersionBody"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "unsetEnvVar",
+      "nickname": "unsetEnvVar",
+      "apiClass": "NodeApi",
+      "method": "DELETE",
+      "path": "/nodes/{id}/appliance/environment/{key}",
+      "summary": "Unset an env var on a hub node appliance",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "key",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "The environment variable key"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "update",
+      "nickname": "update",
+      "apiClass": "NodeApi",
+      "method": "PUT",
+      "path": "/nodes/{id}",
+      "summary": "Update a node",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        },
+        {
+          "name": "updateNode",
+          "in": "body",
+          "required": true,
+          "type": "UpdateNode"
+        }
+      ],
+      "returnType": "Node"
+    },
+    {
+      "operationId": "viewComplianceReport",
+      "nickname": "viewComplianceReport",
+      "apiClass": "NodeApi",
+      "method": "GET",
+      "path": "/nodes/{id}/appliance/complianceScan/view",
+      "summary": "View the latest compliance scan summary",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Node ID"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "listEffectivePermissions",
+      "nickname": "listEffective",
+      "apiClass": "PermissionApi",
+      "method": "GET",
+      "path": "/effectivePermissions",
+      "summary": "Retrieves a list of permissions that are effective against the currently logged on user  and the given resourceId or resourceType.  Note that, if a resourceId is provied, resourceType will not be evaluated.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "resourceId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "ID of the resource to check current user permissions against"
+        },
+        {
+          "name": "resourceType",
+          "in": "query",
+          "required": false,
+          "type": "Nmtoken",
+          "description": "Type of resource to check current user permissions against"
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "An optional resource boundaryId to filter with.  This has no implementation yet."
+        }
+      ],
+      "returnType": "Array&lt;Permission&gt;"
+    },
+    {
+      "operationId": "listPermisions",
+      "nickname": "list",
+      "apiClass": "PermissionApi",
+      "method": "GET",
+      "path": "/permissions",
+      "summary": "Retrieves a list of all available permissions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "resourceType",
+          "in": "query",
+          "required": false,
+          "type": "Nmtoken",
+          "description": "Type of resource to filter permissions with"
+        }
+      ],
+      "returnType": "Array&lt;Permission&gt;"
+    }
+,
+    {
+      "operationId": "principalAccessRuleOptions",
+      "nickname": "principalAccessRuleOptions",
+      "apiClass": "PrincipalApi",
+      "method": "GET",
+      "path": "/principals/{id}/accessRuleSearch/options",
+      "summary": "Retrieves options for access rules search for a principal.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the principal to filter access rules with"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchPrincipalAccessRules",
+      "nickname": "searchPrincipalAccessRules",
+      "apiClass": "PrincipalApi",
+      "method": "POST",
+      "path": "/principals/{id}/accessRuleSearch",
+      "summary": "Searches for access rules that belong to a principal (directly or indirectly through role assignments).",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the principal to filter access rules with"
+        },
+        {
+          "name": "principalAccessRuleSearchBody",
+          "in": "body",
+          "required": true,
+          "type": "PrincipalAccessRuleSearchBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;PrincipalAccessRuleGroupedView&gt;"
+    }
+,
+    {
+      "operationId": "getPath",
+      "nickname": "getPath",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}/path",
+      "summary": "Retrieves resource path the given resource is associated with as a source or target",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "inflated",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Whether to inflate the resource"
+        }
+      ],
+      "returnType": "Array&lt;ResourceWithParents&gt;"
+    },
+    {
+      "operationId": "getResource",
+      "nickname": "getResource",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}",
+      "summary": "Returns a resource by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "inflate",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "alerts",
+          "in": "query",
+          "required": false,
+          "type": "AlertFilter",
+          "description": "Flag indicating whether or not the result set should include alert aggregates, and whether they should be aggregated over recursively."
+        }
+      ],
+      "returnType": "ResourceView"
+    },
+    {
+      "operationId": "getResourceTypes",
+      "nickname": "getResourceTypes",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resourceTypes",
+      "summary": "Retrieves all types available in this application",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "Array&lt;ResourceType&gt;"
+    },
+    {
+      "operationId": "getTagsForResource",
+      "nickname": "getTagsForResource",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}/tags",
+      "summary": "Retrieves all Tags assigned to the given resource",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        }
+      ],
+      "returnType": "Array&lt;TagView&gt;"
+    },
+    {
+      "operationId": "linkTypeSearch",
+      "nickname": "linkTypeSearch",
+      "apiClass": "ResourceApi",
+      "method": "POST",
+      "path": "/linkTypes",
+      "summary": "Searches link types by search filter",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "linkTypeSearchFilter",
+          "in": "body",
+          "required": true,
+          "type": "LinkTypeSearchFilter",
+          "description": "Filters to apply to the search."
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;LinkType&gt;"
+    },
+    {
+      "operationId": "listAlertsImpactingResource",
+      "nickname": "listAlertsImpactingResource",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}/impactedBy",
+      "summary": "Traverses the alert/resource link tree up the way to retrieve a list of alerts that are impacting this resource.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The ID of the alert to fetch"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Alert&gt;"
+    },
+    {
+      "operationId": "listResourceLinkTypes",
+      "nickname": "listResourceLinkTypes",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}/linkTypes",
+      "summary": "Retrieves resource link types the given resource can be used to link with other resources",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "linkSide",
+          "in": "query",
+          "required": false,
+          "type": "ResourceLinkSideEnum"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;LinkType&gt;"
+    },
+    {
+      "operationId": "listResourceLinks",
+      "nickname": "listResourceLinks",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}/links",
+      "summary": "Retrieves resource links the given resource is associated with as a source or target",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "inflate",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "fromType",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "from type side of the link"
+        },
+        {
+          "name": "toType",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "to type side of the link"
+        },
+        {
+          "name": "types",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "types of the link"
+        },
+        {
+          "name": "linkTypes",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "link types of the link"
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "the name of the resource on the other side of the link"
+        },
+        {
+          "name": "description",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "the name of the resource on the other side of the link"
+        },
+        {
+          "name": "linkSide",
+          "in": "query",
+          "required": false,
+          "type": "ResourceLinkSideEnum"
+        },
+        {
+          "name": "hidden",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Whether to include hidden links"
+        },
+        {
+          "name": "extended",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Whether to include extended links. Only works alongside inflate&#x3D;true"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ResourceLink&gt;"
+    },
+    {
+      "operationId": "listSubAlertsForResource",
+      "nickname": "listSubAlertsForResource",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}/subAlerts",
+      "summary": "Traverses the alert/resource link tree down the way to retrieve a list of alerts raised against one or more of its children resources",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The ID of the alert to fetch"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Alert&gt;"
+    },
+    {
+      "operationId": "listTaggedResources",
+      "nickname": "listTaggedResources",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/tags/{id}/resources",
+      "summary": "Retrieves resources the given tag is linked to",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "inflate",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "resourceType",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Resource type to list"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ResourceView&gt;"
+    },
+    {
+      "operationId": "resourceSearch",
+      "nickname": "resourceSearch",
+      "apiClass": "ResourceApi",
+      "method": "POST",
+      "path": "/resources",
+      "summary": "Searches resources by keywords, type, tags, and payload conditions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "resourceSearchFilter",
+          "in": "body",
+          "required": false,
+          "type": "ResourceSearchFilter",
+          "description": "Filters to apply to the search."
+        }
+      ],
+      "returnType": "PagedResults&lt;ResourceView&gt;"
+    },
+    {
+      "operationId": "resourceSearchTags",
+      "nickname": "resourceSearchTags",
+      "apiClass": "ResourceApi",
+      "method": "POST",
+      "path": "/resources/{id}/searchTags",
+      "summary": "Searches tags available in this application against a given resource id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        },
+        {
+          "name": "tagSearchBody",
+          "in": "body",
+          "required": false,
+          "type": "TagSearchBody",
+          "description": "Filters to apply to the search."
+        }
+      ],
+      "returnType": "PagedResults&lt;TagExtended&gt;"
+    },
+    {
+      "operationId": "resourceSearchTagsOptions",
+      "nickname": "resourceSearchTagsOptions",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}/searchTags/options",
+      "summary": "Returns options/filters for tags",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchResources",
+      "nickname": "searchResources",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources",
+      "summary": "Searches resources by keywords type and tags",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will be combined as an &#x60;or&#x60;. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "tags",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "Names of tags to search for. These will be combined as an &#x60;or&#x60;. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "types",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "Resource Type to search for. These will be combined as an &#x60;or&#x60;. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "inflate",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release."
+        }
+      ],
+      "returnType": "PagedResults&lt;ResourceView&gt;"
+    },
+    {
+      "operationId": "tagResource",
+      "nickname": "tagResource",
+      "apiClass": "ResourceApi",
+      "method": "POST",
+      "path": "/resources/{id}/tags",
+      "summary": "Adds the provided tags to the specified resource",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "uUID",
+          "in": "body",
+          "required": true,
+          "type": "Array&lt;UUID&gt;"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "untagResource",
+      "nickname": "untagResource",
+      "apiClass": "ResourceApi",
+      "method": "DELETE",
+      "path": "/resources/{resourceId}/tags/{tagId}",
+      "summary": "Removes a tag from a resource",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "resourceId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "tagId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "addRoleMembers",
+      "nickname": "addRoleMembers",
+      "apiClass": "RoleApi",
+      "method": "POST",
+      "path": "/roles/{id}/principals",
+      "summary": "Adds members to a role",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role"
+        },
+        {
+          "name": "addRoleMember",
+          "in": "body",
+          "required": true,
+          "type": "AddRoleMember"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "createRole",
+      "nickname": "createRole",
+      "apiClass": "RoleApi",
+      "method": "POST",
+      "path": "/roles",
+      "summary": "Creates a new role",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createRole",
+          "in": "body",
+          "required": true,
+          "type": "CreateRole"
+        }
+      ],
+      "returnType": "RoleView"
+    },
+    {
+      "operationId": "deleteRole",
+      "nickname": "deleteRole",
+      "apiClass": "RoleApi",
+      "method": "DELETE",
+      "path": "/roles/{id}",
+      "summary": "Deletes a role by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getRole",
+      "nickname": "getRole",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/roles/{id}",
+      "summary": "Retrieves a role",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role"
+        }
+      ],
+      "returnType": "RoleViewExtended"
+    },
+    {
+      "operationId": "listRolePrincipals",
+      "nickname": "listRolePrincipals",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/roles/{id}/principals",
+      "summary": "Retrieves principals assigned to this role. A boundaryId must be provided for boundary type role.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role"
+        },
+        {
+          "name": "ownerId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "ID of the organization the role belongs to."
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "ID of a boundary to filter roles with"
+        }
+      ],
+      "returnType": "Array&lt;Principal&gt;"
+    },
+    {
+      "operationId": "listRoles",
+      "nickname": "listRoles",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/roles",
+      "summary": "Retrieves a list of roles",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "An optional boundaryId. Only applies to roles assigned to boundaries"
+        },
+        {
+          "name": "principalId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "An optional principalId to filter by"
+        }
+      ],
+      "returnType": "PagedResults&lt;Role&gt;"
+    },
+    {
+      "operationId": "removeRoleMember",
+      "nickname": "removeRoleMember",
+      "apiClass": "RoleApi",
+      "method": "DELETE",
+      "path": "/roles/{id}/principals/{principalId}",
+      "summary": "Removes a principal from a role",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role"
+        },
+        {
+          "name": "ownerId",
+          "in": "query",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the organization. This must be provided."
+        },
+        {
+          "name": "principalId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the principal"
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "ID of a boundary. Must be provided for boundary type roles."
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "roleAccessRuleOptions",
+      "nickname": "roleAccessRuleOptions",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/roles/{id}/accessRuleSearch/options",
+      "summary": "Retrieves options for access rules search.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role to filter access rules with"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "rolePrincipalsOptions",
+      "nickname": "rolePrincipalsOptions",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/roles/{id}/principalSearch/options",
+      "summary": "Returns options/filters for role principals",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "roleSearchByPrincipalOptions",
+      "nickname": "roleSearchByPrincipalOptions",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/principals/{id}/roleSearch/options",
+      "summary": "Returns options/filters for role search by principal",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The principal ID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "roleSearchOptions",
+      "nickname": "roleSearchOptions",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/roleSearch/options",
+      "summary": "Returns options/filters for role",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchRoleAccessRules",
+      "nickname": "searchRoleAccessRules",
+      "apiClass": "RoleApi",
+      "method": "POST",
+      "path": "/roles/{id}/accessRuleSearch",
+      "summary": "Searches for access rules that that belong to a given role.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role to filter access rules with"
+        },
+        {
+          "name": "roleAccessRuleSearchBody",
+          "in": "body",
+          "required": true,
+          "type": "RoleAccessRuleSearchBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;AccessRuleView&gt;"
+    },
+    {
+      "operationId": "searchRolePrincipals",
+      "nickname": "searchRolePrincipals",
+      "apiClass": "RoleApi",
+      "method": "POST",
+      "path": "/roles/{id}/principalSearch",
+      "summary": "Search principals assigned to roles",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role"
+        },
+        {
+          "name": "rolePrincipalSearchBody",
+          "in": "body",
+          "required": true,
+          "type": "RolePrincipalSearchBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;PrincipalWithVia&gt;"
+    },
+    {
+      "operationId": "searchRoles",
+      "nickname": "searchRoles",
+      "apiClass": "RoleApi",
+      "method": "POST",
+      "path": "/roleSearch",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "roleSearchBody",
+          "in": "body",
+          "required": true,
+          "type": "RoleSearchBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;SecurityRoleViewExtended&gt;"
+    },
+    {
+      "operationId": "searchRolesByPrincipal",
+      "nickname": "searchRolesByPrincipal",
+      "apiClass": "RoleApi",
+      "method": "POST",
+      "path": "/principals/{id}/roleSearch",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The principal ID"
+        },
+        {
+          "name": "principalRoleSearchBody",
+          "in": "body",
+          "required": true,
+          "type": "PrincipalRoleSearchBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        }
+      ],
+      "returnType": "PagedResults&lt;SecurityRoleViewExtended&gt;"
+    },
+    {
+      "operationId": "updateRole",
+      "nickname": "updateRole",
+      "apiClass": "RoleApi",
+      "method": "PUT",
+      "path": "/roles/{id}",
+      "summary": "Updates the given role",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the role"
+        },
+        {
+          "name": "updateRole",
+          "in": "body",
+          "required": true,
+          "type": "UpdateRole"
+        }
+      ],
+      "returnType": "RoleView"
+    }
+,
+    {
+      "operationId": "connectScope",
+      "nickname": "connectScope",
+      "apiClass": "ScopeApi",
+      "method": "PUT",
+      "path": "/scopes/{id}/connect",
+      "summary": "Calls &#39;connect&#39; on this scope. This method is only valid if the connection is manually controlled.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Scope ID"
+        },
+        {
+          "name": "oauthRefresh",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Trigger an oauth refresh on connect"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "createScope",
+      "nickname": "create",
+      "apiClass": "ScopeApi",
+      "method": "POST",
+      "path": "/connections/{connectionId}/scopes",
+      "summary": "Create a Scope",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "connectionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "List only scopes using this connection"
+        },
+        {
+          "name": "createScope",
+          "in": "body",
+          "required": true,
+          "type": "CreateScope"
+        }
+      ],
+      "returnType": "ScopeView"
+    },
+    {
+      "operationId": "deleteScope",
+      "nickname": "delete",
+      "apiClass": "ScopeApi",
+      "method": "DELETE",
+      "path": "/scopes/{id}",
+      "summary": "Deletes a scope by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Scope ID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "disconnectScope",
+      "nickname": "disconnectScope",
+      "apiClass": "ScopeApi",
+      "method": "PUT",
+      "path": "/scopes/{id}/disconnect",
+      "summary": "Calls &#39;disconnect&#39; on this scope. This method is only valid if the connection is manually controlled.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Scope ID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getScope",
+      "nickname": "get",
+      "apiClass": "ScopeApi",
+      "method": "GET",
+      "path": "/scopes/{id}",
+      "summary": "Retrieves a scope by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Scope ID"
+        }
+      ],
+      "returnType": "ScopeView"
+    },
+    {
+      "operationId": "getSlimScope",
+      "nickname": "getSlim",
+      "apiClass": "ScopeApi",
+      "method": "GET",
+      "path": "/scopes/{id}/slim",
+      "summary": "Retrieves a scope by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Scope ID"
+        }
+      ],
+      "returnType": "ScopeListView"
+    },
+    {
+      "operationId": "listAllScopes",
+      "nickname": "listAll",
+      "apiClass": "ScopeApi",
+      "method": "GET",
+      "path": "/scopes",
+      "summary": "Lists scopes for a given connection",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        },
+        {
+          "name": "sortDir",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;SortDirection&gt;",
+          "description": "Array of directions to sort by. Must correspond with &#x60;sortBy&#x60;"
+        },
+        {
+          "name": "sortBy",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Array of columns to sort by, in order"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "ConnectionOperationalStatus",
+          "description": "An optional parameter to filter on connection status"
+        },
+        {
+          "name": "fileSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only connections with modules file support active or inactive."
+        },
+        {
+          "name": "dataSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only connections with modules data producer support active or inactive."
+        },
+        {
+          "name": "tag",
+          "in": "query",
+          "required": false,
+          "type": "Nmtoken",
+          "description": "List only connections with specific tag type."
+        },
+        {
+          "name": "connectionId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "List only scopes using this connection"
+        },
+        {
+          "name": "deploymentId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "List only scopes using this deployment"
+        },
+        {
+          "name": "moduleId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "List only scopes using this module"
+        }
+      ],
+      "returnType": "PagedResults&lt;ScopeListView&gt;"
+    },
+    {
+      "operationId": "listScopes",
+      "nickname": "list",
+      "apiClass": "ScopeApi",
+      "method": "GET",
+      "path": "/connections/{connectionId}/scopes",
+      "summary": "Lists scopes for a given connection",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "connectionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "List only scopes using this connection"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        },
+        {
+          "name": "sortDir",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;SortDirection&gt;",
+          "description": "Array of directions to sort by. Must correspond with &#x60;sortBy&#x60;"
+        },
+        {
+          "name": "sortBy",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Array of columns to sort by, in order"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "ConnectionOperationalStatus",
+          "description": "An optional parameter to filter on connection status"
+        },
+        {
+          "name": "fileSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only connections with modules file support active or inactive."
+        },
+        {
+          "name": "dataSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only connections with modules data producer support active or inactive."
+        },
+        {
+          "name": "tag",
+          "in": "query",
+          "required": false,
+          "type": "Nmtoken",
+          "description": "List only connections with specific tag type."
+        },
+        {
+          "name": "deploymentId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "List only scopes using this deployment"
+        },
+        {
+          "name": "moduleId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "List only scopes using this module"
+        }
+      ],
+      "returnType": "PagedResults&lt;ScopeListView&gt;"
+    },
+    {
+      "operationId": "reverifyScope",
+      "nickname": "reverifyScope",
+      "apiClass": "ScopeApi",
+      "method": "PUT",
+      "path": "/scopes/{id}/reverify",
+      "summary": "Attempts to verify the currently-stored ConnectionProfile",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Scope ID"
+        }
+      ],
+      "returnType": "UpdateConnectionResults"
+    },
+    {
+      "operationId": "searchScopeOptions",
+      "nickname": "searchOptions",
+      "apiClass": "ScopeApi",
+      "method": "GET",
+      "path": "/scopeSearch/options",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "The boundaryId to scope this request as"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchScopes",
+      "nickname": "search",
+      "apiClass": "ScopeApi",
+      "method": "POST",
+      "path": "/scopeSearch",
+      "summary": "Search all scopes",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchScopeBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchScopeBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "The boundaryId to scope this request as"
+        }
+      ],
+      "returnType": "PagedResults&lt;ScopeListView&gt;"
+    },
+    {
+      "operationId": "updateScope",
+      "nickname": "update",
+      "apiClass": "ScopeApi",
+      "method": "PUT",
+      "path": "/scopes/{id}",
+      "summary": "Updates this Scope",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Scope ID"
+        },
+        {
+          "name": "updateScope",
+          "in": "body",
+          "required": true,
+          "type": "UpdateScope"
+        }
+      ],
+      "returnType": "ScopeView"
+    }
+,
+    {
+      "operationId": "createOauthSecret",
+      "nickname": "createOauthSecret",
+      "apiClass": "SecretApi",
+      "method": "POST",
+      "path": "/oauthSecrets",
+      "summary": "Creates a new OAuth secret",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createOauthSecret",
+          "in": "body",
+          "required": true,
+          "type": "CreateOauthSecret"
+        }
+      ],
+      "returnType": "OAuthSecret"
+    },
+    {
+      "operationId": "createSecret",
+      "nickname": "create",
+      "apiClass": "SecretApi",
+      "method": "POST",
+      "path": "/secrets",
+      "summary": "Creates a new secret. New secrets will be created as draft and may only be used once taken out of draft. Use &#x60;updateSecret&#x60; to enable a secret.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createSecret",
+          "in": "body",
+          "required": true,
+          "type": "CreateSecret"
+        }
+      ],
+      "returnType": "Secret"
+    },
+    {
+      "operationId": "deleteSecret",
+      "nickname": "delete",
+      "apiClass": "SecretApi",
+      "method": "DELETE",
+      "path": "/secrets/{id}",
+      "summary": "Deletes a secret",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the Secret to access"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getSecret",
+      "nickname": "get",
+      "apiClass": "SecretApi",
+      "method": "GET",
+      "path": "/secrets/{id}",
+      "summary": "Retrieves a secret",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the Secret to access"
+        }
+      ],
+      "returnType": "Secret"
+    },
+    {
+      "operationId": "listSecrets",
+      "nickname": "list",
+      "apiClass": "SecretApi",
+      "method": "GET",
+      "path": "/secrets",
+      "summary": "Lists all defined secrets",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        },
+        {
+          "name": "sortDir",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;SortDirection&gt;",
+          "description": "Array of directions to sort by. Must correspond with &#x60;sortBy&#x60;"
+        },
+        {
+          "name": "sortBy",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Array of columns to sort by, in order"
+        },
+        {
+          "name": "connectionProfileId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters Secrets to only those matching the given connectionProfileId"
+        },
+        {
+          "name": "nodeId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters Secrets to only those used by the given node"
+        }
+      ],
+      "returnType": "PagedResults&lt;Secret&gt;"
+    },
+    {
+      "operationId": "listSecretsManagers",
+      "nickname": "listSecretsManagers",
+      "apiClass": "SecretApi",
+      "method": "GET",
+      "path": "/secretsManagers",
+      "summary": "Lists all secrets managers available for node use",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "Array&lt;SecretsManager&gt;"
+    },
+    {
+      "operationId": "patchSecretValues",
+      "nickname": "patchSecretValues",
+      "apiClass": "SecretApi",
+      "method": "PATCH",
+      "path": "/secrets/{id}/values",
+      "summary": "Updates the values for the given Secret, writing the secrets to the given Secrets Manager. Only updates the values provided, leaving other values in the profile alone.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Secret ID"
+        },
+        {
+          "name": "nodeId",
+          "in": "query",
+          "required": true,
+          "type": "UUID",
+          "description": "The Hub Node to use to store the secret values for this secret."
+        },
+        {
+          "name": "requestBody",
+          "in": "body",
+          "required": true,
+          "type": "{ [key: string]: any; }"
+        },
+        {
+          "name": "rootNode",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "The root secret node to create the new secret under. Hub Server will attempt to determine which one to use if this is not provided. If there are multiple writable root nodes and  this parameter is not provided, an error will be thrown."
+        }
+      ],
+      "returnType": "Secret"
+    },
+    {
+      "operationId": "updateSecret",
+      "nickname": "update",
+      "apiClass": "SecretApi",
+      "method": "PUT",
+      "path": "/secrets/{id}",
+      "summary": "Updates a secret",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the Secret to access"
+        },
+        {
+          "name": "updateSecret",
+          "in": "body",
+          "required": true,
+          "type": "UpdateSecret"
+        }
+      ],
+      "returnType": "Secret"
+    },
+    {
+      "operationId": "updateSecretValues",
+      "nickname": "updateSecretValues",
+      "apiClass": "SecretApi",
+      "method": "PUT",
+      "path": "/secrets/{id}/values",
+      "summary": "Updates the values for the given Secret, writing the secrets to the given Secrets Manager",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "Secret ID"
+        },
+        {
+          "name": "nodeId",
+          "in": "query",
+          "required": true,
+          "type": "UUID",
+          "description": "The Hub Node to use to store the secret values for this secret."
+        },
+        {
+          "name": "requestBody",
+          "in": "body",
+          "required": true,
+          "type": "{ [key: string]: any; }"
+        },
+        {
+          "name": "rootNode",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "The root secret node to create the new secret under. Hub Server will attempt to determine which one to use if this is not provided. If there are multiple writable root nodes and  this parameter is not provided, an error will be thrown."
+        }
+      ],
+      "returnType": "Secret"
+    }
+,
+    {
+      "operationId": "addResourceTypesToTagType",
+      "nickname": "addResourceTypesToTagType",
+      "apiClass": "TagApi",
+      "method": "POST",
+      "path": "/tagTypes/{type}/resourceTypes",
+      "summary": "Associates the given ResourceTypes with the given Tag Type",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "type",
+          "in": "path",
+          "required": true,
+          "type": "Nmtoken",
+          "description": "Tag type"
+        },
+        {
+          "name": "nmtoken",
+          "in": "body",
+          "required": true,
+          "type": "Array&lt;Nmtoken&gt;"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getResourceTypesForTagType",
+      "nickname": "getResourceTypesForTagType",
+      "apiClass": "TagApi",
+      "method": "GET",
+      "path": "/tagTypes/{type}/resourceTypes",
+      "summary": "Retrieves a list of all resource types which are associated with the given tag type.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "type",
+          "in": "path",
+          "required": true,
+          "type": "Nmtoken",
+          "description": "Tag type"
+        }
+      ],
+      "returnType": "Array&lt;ResourceType&gt;"
+    },
+    {
+      "operationId": "getTagTypes",
+      "nickname": "getTagTypes",
+      "apiClass": "TagApi",
+      "method": "GET",
+      "path": "/tagTypes",
+      "summary": "Retrieves all tag types available in this application",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "Array&lt;TagType&gt;"
+    },
+    {
+      "operationId": "listTags",
+      "nickname": "listTags",
+      "apiClass": "TagApi",
+      "method": "GET",
+      "path": "/tags",
+      "summary": "Retrieves a list of tags available in this application",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "tagTypes",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "Tag type(s) to filter by. These will be combined as an &#x60;or&#x60;"
+        },
+        {
+          "name": "nameFilter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter to apply to the &#x60;name&#x60; field. This will be &#x60;ORed&#x60; with other filters  and is case-insensitive."
+        }
+      ],
+      "returnType": "PagedResults&lt;TagView&gt;"
+    },
+    {
+      "operationId": "searchTags",
+      "nickname": "searchTags",
+      "apiClass": "TagApi",
+      "method": "POST",
+      "path": "/searchTags",
+      "summary": "Searches tags available in this application",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "object",
+          "description": "Sortable object"
+        },
+        {
+          "name": "tagSearchBody",
+          "in": "body",
+          "required": false,
+          "type": "TagSearchBody",
+          "description": "Filters to apply to the search."
+        }
+      ],
+      "returnType": "PagedResults&lt;TagExtended&gt;"
+    },
+    {
+      "operationId": "searchTagsOptions",
+      "nickname": "searchTagsOptions",
+      "apiClass": "TagApi",
+      "method": "GET",
+      "path": "/searchTags/options",
+      "summary": "Returns options/filters for tags",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "execute",
+      "nickname": "execute",
+      "apiClass": "TargetApi",
+      "method": "PUT",
+      "path": "/targets/{id}/{operationId}",
+      "summary": "Executes a request against a target",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "A Target ID is either a Deployment or Connection ID, depending on the implementation of the ModuleVersion. If a ConnectionProfile is required, then targets must be Connections. Else, they can be Deployments."
+        },
+        {
+          "name": "operationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "The name of the operation to execute"
+        },
+        {
+          "name": "requestBody",
+          "in": "body",
+          "required": true,
+          "type": "{ [key: string]: any; }"
+        }
+      ],
+      "returnType": "any"
+    },
+    {
+      "operationId": "get",
+      "nickname": "get",
+      "apiClass": "TargetApi",
+      "method": "GET",
+      "path": "/targets/{id}",
+      "summary": "Get a Target",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "A Target ID is either a Deployment or Connection ID, depending on the implementation of the ModuleVersion. If a ConnectionProfile is required, then targets must be Connections. Else, they can be Deployments."
+        }
+      ],
+      "returnType": "Target"
+    },
+    {
+      "operationId": "getTargetExecutions",
+      "nickname": "getTargetExecutions",
+      "apiClass": "TargetApi",
+      "method": "GET",
+      "path": "/targets{id}/logs",
+      "summary": "Lists all execution info for a target",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "A Target ID is either a Deployment or Connection ID, depending on the implementation of the ModuleVersion. If a ConnectionProfile is required, then targets must be Connections. Else, they can be Deployments."
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sortDir",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;SortDirection&gt;",
+          "description": "Array of directions to sort by. Must correspond with &#x60;sortBy&#x60;"
+        },
+        {
+          "name": "sortBy",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Array of columns to sort by, in order"
+        },
+        {
+          "name": "nodeId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters executions by node id"
+        },
+        {
+          "name": "operationName",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filters executions by operation name"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Filters executions by status of the executions response"
+        },
+        {
+          "name": "startTimestamp",
+          "in": "query",
+          "required": false,
+          "type": "Date",
+          "description": "Filters executions by timestamp, will show only executions after timestamp given"
+        },
+        {
+          "name": "endTimestamp",
+          "in": "query",
+          "required": false,
+          "type": "Date",
+          "description": "Filters executions by timestamp, will show only executions before timestamp given"
+        }
+      ],
+      "returnType": "PagedResults&lt;ExecutionInfo&gt;"
+    },
+    {
+      "operationId": "getTargetMetadata",
+      "nickname": "getTargetMetadata",
+      "apiClass": "TargetApi",
+      "method": "GET",
+      "path": "/targets/{id}/metadata",
+      "summary": "Returns the metadata from the Target. If this Target is not a &#x60;Connection&#x60;, then nothing is returned",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "A Target ID is either a Deployment or Connection ID, depending on the implementation  of the ModuleVersion. If a ConnectionProfile is required, then targets must be  Connections. Else, they can be Deployments."
+        }
+      ],
+      "returnType": "ConnectionMetadata"
+    },
+    {
+      "operationId": "getTargetTags",
+      "nickname": "getTargetTags",
+      "apiClass": "TargetApi",
+      "method": "GET",
+      "path": "/targets/{id}/tags",
+      "summary": "Returns all Tags associated with the Target. This cascades up to include tags on the  Connection, Deployment, and Node.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "A Target ID is either a Deployment or Connection ID, depending on the implementation of the ModuleVersion. If a ConnectionProfile is required, then targets must be Connections. Else, they can be Deployments."
+        }
+      ],
+      "returnType": "Array&lt;Tag&gt;"
+    },
+    {
+      "operationId": "isSupported",
+      "nickname": "isSupported",
+      "apiClass": "TargetApi",
+      "method": "GET",
+      "path": "/targets/{id}/{operationId}/supported",
+      "summary": "Checks if a given operation is supported",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "A Target ID is either a Deployment or Connection ID, depending on the implementation of the ModuleVersion. If a ConnectionProfile is required, then targets must be Connections. Else, they can be Deployments."
+        },
+        {
+          "name": "operationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "The name of the operation to execute"
+        }
+      ],
+      "returnType": "OperationSupportStatusDef"
+    },
+    {
+      "operationId": "list",
+      "nickname": "list",
+      "apiClass": "TargetApi",
+      "method": "GET",
+      "path": "/targets",
+      "summary": "Lists all targets",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "An optional filter to search tags by name. This is a case-insensitive filter"
+        },
+        {
+          "name": "nodeId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters targets to only those matching the given nodeId"
+        },
+        {
+          "name": "moduleId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filters targets to only those matching the given moduleId"
+        }
+      ],
+      "returnType": "PagedResults&lt;Target&gt;"
+    },
+    {
+      "operationId": "searchTargets",
+      "nickname": "search",
+      "apiClass": "TargetApi",
+      "method": "POST",
+      "path": "/targetSearch",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchTargetBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchTargetBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        },
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "The boundaryId to scope this request as"
+        }
+      ],
+      "returnType": "PagedResults&lt;TargetSearchView&gt;"
+    },
+    {
+      "operationId": "searchTargetsOptions",
+      "nickname": "searchOptions",
+      "apiClass": "TargetApi",
+      "method": "GET",
+      "path": "/targetSearch/options",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "The boundaryId to scope this request as"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+
+  ],
+  "operationMap": {
+    "createAccessRule": "AccessRuleApi.create",
+    "deleteAccessRule": "AccessRuleApi.delete",
+    "getAccessRule": "AccessRuleApi.get",
+    "listAccessRules": "AccessRuleApi.list",
+    "updateAccessRule": "AccessRuleApi.update"
+,
+    "createTrigger": "AlertApi.createTrigger",
+    "getAlert": "AlertApi.getAlert",
+    "getAlertLinkTypes": "AlertApi.getAlertLinkTypes",
+    "getTrigger": "AlertApi.getTrigger",
+    "listAlerts": "AlertApi.listAlerts",
+    "listLinkedResources": "AlertApi.listLinkedResources",
+    "listResourcesImpactedByAlert": "AlertApi.listResourcesImpactedByAlert",
+    "listTriggers": "AlertApi.listTriggers"
+,
+    "connect": "ConnectionApi.connect",
+    "deleteConnection": "ConnectionApi.delete",
+    "disconnect": "ConnectionApi.disconnect",
+    "getConnection": "ConnectionApi.get",
+    "listAllConnections": "ConnectionApi.list",
+    "reverify": "ConnectionApi.reverify",
+    "searchConnections": "ConnectionApi.search",
+    "searchConnectionsOptions": "ConnectionApi.searchOptions",
+    "updateConnection": "ConnectionApi.update",
+    "updateConnectionProfile": "ConnectionApi.updateConnectionProfile",
+    "updateConnectionProfileSecrets": "ConnectionApi.updateConnectionProfileSecrets"
+,
+    "createConnection": "DeploymentApi.createConnection",
+    "createDeployment": "DeploymentApi.create",
+    "deleteDeployment": "DeploymentApi.delete",
+    "getConnectionProfile": "DeploymentApi.getConnectionProfile",
+    "getConnectionProfileParameters": "DeploymentApi.getConnectionProfileParameters",
+    "getDeployment": "DeploymentApi.get",
+    "listConnections": "DeploymentApi.listConnections",
+    "listDeployments": "DeploymentApi.list",
+    "searchDeployments": "DeploymentApi.search",
+    "searchDeploymentsOptions": "DeploymentApi.searchOptions",
+    "updateDeployment": "DeploymentApi.update"
+,
+    "getExecutionInfo": "ExecutionApi.get",
+    "listExecutions": "ExecutionApi.list"
+,
+    "health": "HealthcheckApi.health",
+    "searchWaiterOptions": "HealthcheckApi.searchWaiterOptions",
+    "searchWaiters": "HealthcheckApi.searchWaiters"
+,
+    "getDependencyReport": "ModuleApi.getDependencyReport",
+    "getModule": "ModuleApi.get",
+    "getModuleVersion": "ModuleApi.getModuleVersion",
+    "getModuleVersionById": "ModuleApi.getModuleVersionById",
+    "listModules": "ModuleApi.list",
+    "listOperations": "ModuleApi.listOperations",
+    "listVersions": "ModuleApi.listVersions",
+    "storeSync": "ModuleApi.storeSync"
+,
+    "addNodeTag": "NodeApi.addTag",
+    "claimNode": "NodeApi.claimNode",
+    "createNode": "NodeApi.create",
+    "createNodeDeployment": "NodeApi.createNodeDeployment",
+    "deleteNode": "NodeApi.delete",
+    "deleteRegistration": "NodeApi.deleteRegistration",
+    "downloadComplianceReport": "NodeApi.downloadComplianceReport",
+    "ensureDeployments": "NodeApi.ensureDeployments",
+    "getInfo": "NodeApi.getInfo",
+    "getNode": "NodeApi.get",
+    "getNodeAvailableLatestVersion": "NodeApi.getNodeAvailableLatestVersion",
+    "getRegistration": "NodeApi.getRegistration",
+    "getWritableSecretPath": "NodeApi.getWritableSecretPath",
+    "identifyNode": "NodeApi.identify",
+    "listConnectionsBySecretId": "NodeApi.listConnectionsBySecretId",
+    "listConnectionsForNode": "NodeApi.listConnections",
+    "listDeploymentsBySecretId": "NodeApi.listDeploymentsBySecretId",
+    "listDeploymentsForNode": "NodeApi.listDeployments",
+    "listDeploymentsSlimForNode": "NodeApi.listDeploymentsSlim",
+    "listNodeAvailableVersions": "NodeApi.listNodeAvailableVersions",
+    "listNodes": "NodeApi.list",
+    "listRegistrations": "NodeApi.listRegistrations",
+    "listSecretNodes": "NodeApi.listSecretNodes",
+    "listSharedSecrets": "NodeApi.listSharedSecrets",
+    "migrateNode": "NodeApi.migrate",
+    "migrateNodeCheck": "NodeApi.migrateCheck",
+    "requestComplianceScan": "NodeApi.requestComplianceScan",
+    "requestNodeRestart": "NodeApi.requestRestart",
+    "searchNodeConnections": "NodeApi.searchConnections",
+    "searchNodeConnectionsOptions": "NodeApi.searchConnectionOptions",
+    "searchNodes": "NodeApi.search",
+    "searchNodesOptions": "NodeApi.searchOptions",
+    "setEnvVar": "NodeApi.setEnvVar",
+    "setNodeVersion": "NodeApi.setVersion",
+    "unsetEnvVar": "NodeApi.unsetEnvVar",
+    "update": "NodeApi.update",
+    "viewComplianceReport": "NodeApi.viewComplianceReport"
+,
+    "listEffectivePermissions": "PermissionApi.listEffective",
+    "listPermisions": "PermissionApi.list"
+,
+    "principalAccessRuleOptions": "PrincipalApi.principalAccessRuleOptions",
+    "searchPrincipalAccessRules": "PrincipalApi.searchPrincipalAccessRules"
+,
+    "getPath": "ResourceApi.getPath",
+    "getResource": "ResourceApi.getResource",
+    "getResourceTypes": "ResourceApi.getResourceTypes",
+    "getTagsForResource": "ResourceApi.getTagsForResource",
+    "linkTypeSearch": "ResourceApi.linkTypeSearch",
+    "listAlertsImpactingResource": "ResourceApi.listAlertsImpactingResource",
+    "listResourceLinkTypes": "ResourceApi.listResourceLinkTypes",
+    "listResourceLinks": "ResourceApi.listResourceLinks",
+    "listSubAlertsForResource": "ResourceApi.listSubAlertsForResource",
+    "listTaggedResources": "ResourceApi.listTaggedResources",
+    "resourceSearch": "ResourceApi.resourceSearch",
+    "resourceSearchTags": "ResourceApi.resourceSearchTags",
+    "resourceSearchTagsOptions": "ResourceApi.resourceSearchTagsOptions",
+    "searchResources": "ResourceApi.searchResources",
+    "tagResource": "ResourceApi.tagResource",
+    "untagResource": "ResourceApi.untagResource"
+,
+    "addRoleMembers": "RoleApi.addRoleMembers",
+    "createRole": "RoleApi.createRole",
+    "deleteRole": "RoleApi.deleteRole",
+    "getRole": "RoleApi.getRole",
+    "listRolePrincipals": "RoleApi.listRolePrincipals",
+    "listRoles": "RoleApi.listRoles",
+    "removeRoleMember": "RoleApi.removeRoleMember",
+    "roleAccessRuleOptions": "RoleApi.roleAccessRuleOptions",
+    "rolePrincipalsOptions": "RoleApi.rolePrincipalsOptions",
+    "roleSearchByPrincipalOptions": "RoleApi.roleSearchByPrincipalOptions",
+    "roleSearchOptions": "RoleApi.roleSearchOptions",
+    "searchRoleAccessRules": "RoleApi.searchRoleAccessRules",
+    "searchRolePrincipals": "RoleApi.searchRolePrincipals",
+    "searchRoles": "RoleApi.searchRoles",
+    "searchRolesByPrincipal": "RoleApi.searchRolesByPrincipal",
+    "updateRole": "RoleApi.updateRole"
+,
+    "connectScope": "ScopeApi.connectScope",
+    "createScope": "ScopeApi.create",
+    "deleteScope": "ScopeApi.delete",
+    "disconnectScope": "ScopeApi.disconnectScope",
+    "getScope": "ScopeApi.get",
+    "getSlimScope": "ScopeApi.getSlim",
+    "listAllScopes": "ScopeApi.listAll",
+    "listScopes": "ScopeApi.list",
+    "reverifyScope": "ScopeApi.reverifyScope",
+    "searchScopeOptions": "ScopeApi.searchOptions",
+    "searchScopes": "ScopeApi.search",
+    "updateScope": "ScopeApi.update"
+,
+    "createOauthSecret": "SecretApi.createOauthSecret",
+    "createSecret": "SecretApi.create",
+    "deleteSecret": "SecretApi.delete",
+    "getSecret": "SecretApi.get",
+    "listSecrets": "SecretApi.list",
+    "listSecretsManagers": "SecretApi.listSecretsManagers",
+    "patchSecretValues": "SecretApi.patchSecretValues",
+    "updateSecret": "SecretApi.update",
+    "updateSecretValues": "SecretApi.updateSecretValues"
+,
+    "addResourceTypesToTagType": "TagApi.addResourceTypesToTagType",
+    "getResourceTypesForTagType": "TagApi.getResourceTypesForTagType",
+    "getTagTypes": "TagApi.getTagTypes",
+    "listTags": "TagApi.listTags",
+    "searchTags": "TagApi.searchTags",
+    "searchTagsOptions": "TagApi.searchTagsOptions"
+,
+    "execute": "TargetApi.execute",
+    "get": "TargetApi.get",
+    "getTargetExecutions": "TargetApi.getTargetExecutions",
+    "getTargetMetadata": "TargetApi.getTargetMetadata",
+    "getTargetTags": "TargetApi.getTargetTags",
+    "isSupported": "TargetApi.isSupported",
+    "list": "TargetApi.list",
+    "searchTargets": "TargetApi.search",
+    "searchTargetsOptions": "TargetApi.searchOptions"
+
+  }
+}

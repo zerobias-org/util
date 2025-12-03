@@ -151,26 +151,26 @@ paths:
 components:
   headers:
     pageCountHeader:
-      $ref: ./node_modules/@auditmation/types-core/schema/pageCountHeader.yml
+      $ref: ../../node_modules/@zerobias-org/types-core/schema/pageCountHeader.yml
     pagedLinkHeader:
-      $ref: ./node_modules/@auditmation/types-core/schema/pagedLinkHeader.yml
+      $ref: ../../node_modules/@zerobias-org/types-core/schema/pagedLinkHeader.yml
   parameters:
     pageNumberParam:
-      $ref: ./node_modules/@auditmation/types-core/schema/pageNumberParam.yml
+      $ref: ../../node_modules/@zerobias-org/types-core/schema/pageNumberParam.yml
     pageSizeParam:
-      $ref: ./node_modules/@auditmation/types-core/schema/pageSizeParam.yml
+      $ref: ../../node_modules/@zerobias-org/types-core/schema/pageSizeParam.yml
     pageTokenParam:
-      $ref: ./node_modules/@auditmation/types-core/schema/pageTokenParam.yml
+      $ref: ../../node_modules/@zerobias-org/types-core/schema/pageTokenParam.yml
     sortByParam:
-      $ref: ./node_modules/@auditmation/types-core/schema/sortByParam.yml
+      $ref: ../../node_modules/@zerobias-org/types-core/schema/sortByParam.yml
     sortDirParam:
-      $ref: ./node_modules/@auditmation/types-core/schema/sortDirParam.yml
+      $ref: ../../node_modules/@zerobias-org/types-core/schema/sortDirParam.yml
   securitySchemes:
     hub:
       type: oauth2
       flows:
         password:
-          tokenUrl: https://hub.auditmation.io/
+          tokenUrl: https://app.zerobias.com/
           scopes:
             read:foo: Ability to see Foos
             read:bar: Ability to see Bars

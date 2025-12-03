@@ -2,7 +2,7 @@ openapi: 3.0.2
 info:
   version: 0.8.0
   description: Compliance Server OpenAPI Spec
-  title: '@auditmation/platform-dataloader-service'
+  title: '@zerobias-org/platform-dataloader-service'
 servers:
   - url: /
 paths:
@@ -596,7 +596,7 @@ components:
         changelogUrl:
           type: string
           description: Link to the changelog for the artifact
-        auditmation:
+        zerobias:
           type: object
           required:
             - package

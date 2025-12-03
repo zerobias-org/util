@@ -2,7 +2,7 @@ openapi: 3.0.2
 info:
   version: 0.8.0
   description: Compliance Server OpenAPI Spec
-  title: '@auditmation/platform-api'
+  title: '@zerobias-org/platform-api'
 servers:
   - url: /
 paths:
@@ -21287,7 +21287,7 @@ components:
       type: oauth2
       flows:
         password:
-          tokenUrl: https://nf.auditmation.io/
+          tokenUrl: https://app.zerobias.com/
           scopes:
             read:data_collection_request: Ability to read a data collection
             create:data_collection_request: Ability to create a data collection
@@ -21697,6 +21697,7 @@ components:
         - consumer
         - auditlogic
         - auditmation
+        - zerobias
         - partner
         - grc
         - regulator
@@ -21708,6 +21709,7 @@ components:
         - Consumer
         - Auditmation Content
         - Auditmation SAAS Platform
+        - ZeroBias
         - Partner
         - Governance, Risk, and Compliance Platform (GRC)
         - Regulator
@@ -24806,7 +24808,7 @@ components:
             publisher:
               description: The name of the publisher of this module
               type: string
-              example: Auditmation
+              example: ZeroBias
             hidden:
               description: Flag indicating whether or not this is a hidden module
               type: boolean
@@ -24814,7 +24816,7 @@ components:
             key:
               description: A language-specific key or identifier for this module
               type: string
-              example: '@auditmation/github'
+              example: '@zerobias-org/github'
     ModuleVersion:
       type: object
       title: A specific version of a Hub Module
@@ -25051,7 +25053,7 @@ components:
             moduleKey:
               description: A language-specific key or identifier for this module
               type: string
-              example: '@auditmation/github'
+              example: '@zerobias-org/github'
             moduleName:
               description: Name for this module
               type: string
@@ -45000,7 +45002,7 @@ components:
         corporateEmail: neverfail@neverfail.com
         phoneNumber: 1234567890
         companyName: Company
-        companyWebsite: www.auditmation.io
+        companyWebsite: www.zerobias.com
         organizationType: auditee
     components-schemas-Condition:
       type: object

@@ -17,7 +17,7 @@ export * from './{{ classFilename }}.js';
 
 {{/operations}}
 {{/apis}}
-import { Semver } from '@auditmation/types-core-js';
+import { Semver } from '@zerobias-org/types-core-js';
 export const VERSION = new Semver('{{version}}');
 {{/apiInfo}}
 
@@ -62,8 +62,8 @@ export class ConnectionWrapper {
 {{#isConnector}}export type {{apiName}}Connector = {{apiName}} & Connector<ConnectionProfile, {{#hasState}}ConnectionState{{/hasState}}{{^hasState}}void{{/hasState}}>;{{/isConnector}}
 
 {{#hasInvoker}}
-import { ApiInvoker } from '@auditmation/util-api-invoker-api';{{^isConnector}}
-import { ConnectionProfile } from '@auditmation/hub-api-client-base';{{/isConnector}}
+import { ApiInvoker } from '@zerobias-org/util-api-invoker-api';{{^isConnector}}
+import { ConnectionProfile } from '@zerobias-org/hub-api-client-base';{{/isConnector}}
 
 export abstract class {{apiName}}InvokerBase implements {{apiName}}{{#isConnector}}Connector{{/isConnector}} { {{#isConnector}}
   abstract get connectionWrapper(): ConnectionWrapper;

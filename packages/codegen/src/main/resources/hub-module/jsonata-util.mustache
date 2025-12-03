@@ -1,5 +1,5 @@
 import jsonata from 'jsonata';
-import { RequestPrototype, ResponsePrototype } from '@auditmation/util-api-invoker-api';
+import { RequestPrototype, ResponsePrototype } from '@zerobias-org/util-api-invoker-api';
 {{#jsonataFunctions}}{{#imported}}import { {{#implementation}}{{{methodName}}} as {{{methodAlias}}} } from '{{{module}}}';{{/implementation}}
 {{/imported}}{{/jsonataFunctions}}
 {{#jsonataExpressions}}{{#imported}}import { {{{expressionName}}} as {{{expressionAlias}}} } from '{{{module}}}';{{/imported}}

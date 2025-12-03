@@ -2,7 +2,7 @@ openapi: 3.0.2
 info:
   version: ''
   description: Platform GrahpQL Service
-  title: '@auditmation/platform-graphql'
+  title: '@zerobias-org/platform-graphql'
 paths:
   /foo:
     get:

@@ -1,0 +1,7 @@
+.openapi-generator-ignore
+USAGE.md
+api/FooApi.ts
+api/index.ts
+api/manifest.json
+model/ConnectionProfile.ts
+model/index.ts

@@ -2,7 +2,7 @@ openapi: 3.0.2
 info:
   version: 0.8.0
   description: Compliance Server OpenAPI Spec
-  title: '@auditmation/platform-events'
+  title: '@zerobias-org/platform-events'
 servers:
   - url: /
 paths:
@@ -678,7 +678,7 @@ components:
       type: oauth2
       flows:
         password:
-          tokenUrl: https://nf.auditmation.io/
+          tokenUrl: https://app.zerobias.com/
           scopes: {}
   schemas:
     AutoUpdateBody:
@@ -1533,7 +1533,7 @@ components:
         changelogUrl:
           type: string
           description: Link to the changelog for the artifact
-        auditmation:
+        zerobias:
           type: object
           required:
             - package

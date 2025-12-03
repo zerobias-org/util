@@ -1,0 +1,6565 @@
+{
+  "serviceName": "PortalApi",
+  "version": "0.8.0",
+  "codegenVersion": "1.0.12",
+  "generatedAt": "2025-12-03T13:26:40Z",
+  "clientClass": "PortalApiClient",
+  "factoryFunction": "newPortalApi",
+  "operations": [
+    {
+      "operationId": "getAlertBot",
+      "nickname": "get",
+      "apiClass": "AlertBotApi",
+      "method": "GET",
+      "path": "/alertBots/{alertBotId}",
+      "summary": "Get alert bot",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "alertBotId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "AlertBotExtended"
+    },
+    {
+      "operationId": "listAlertBots",
+      "nickname": "list",
+      "apiClass": "AlertBotApi",
+      "method": "GET",
+      "path": "/alertBots",
+      "summary": "list all alertBots",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;AlertBotExtended&gt;"
+    },
+    {
+      "operationId": "searchAlertBotOptions",
+      "nickname": "options",
+      "apiClass": "AlertBotApi",
+      "method": "GET",
+      "path": "/alertBotSearch/options",
+      "summary": "Returns options/filters for alert bots",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchAlertBotUsage",
+      "nickname": "usageSearch",
+      "apiClass": "AlertBotApi",
+      "method": "POST",
+      "path": "/alertBotUsageSearch",
+      "summary": "Search alertBot usage",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchAlertBotUsageBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchAlertBotUsageBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryAlertBotUsageItem&gt;"
+    },
+    {
+      "operationId": "searchAlertBotUsageOptions",
+      "nickname": "usageOptions",
+      "apiClass": "AlertBotApi",
+      "method": "GET",
+      "path": "/alertBots/{alertBotId}/usage/options",
+      "summary": "Returns options/filters for alert bots",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "alertBotId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchAlertBots",
+      "nickname": "search",
+      "apiClass": "AlertBotApi",
+      "method": "POST",
+      "path": "/alertBotSearch",
+      "summary": "Search alertBots",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchAlertBotsBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchAlertBotsBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;AlertBotExtended&gt;"
+    }
+,
+    {
+      "operationId": "getAlertBotVersion",
+      "nickname": "get",
+      "apiClass": "AlertBotVersionApi",
+      "method": "GET",
+      "path": "/alertBotVersions/{alertBotVersionId}",
+      "summary": "Get alert bot Version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "alertBotVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "AlertBotVersionExtended"
+    },
+    {
+      "operationId": "searchAlertBotVersions",
+      "nickname": "search",
+      "apiClass": "AlertBotVersionApi",
+      "method": "POST",
+      "path": "/alertBotVersionSearch",
+      "summary": "Search alertBotVersions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchAlertBotVersionsBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchAlertBotVersionsBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;AlertBotVersionExtended&gt;"
+    },
+    {
+      "operationId": "searchAlertBotVersionsOptions",
+      "nickname": "options",
+      "apiClass": "AlertBotVersionApi",
+      "method": "GET",
+      "path": "/alertBotVersionSearch/options",
+      "summary": "Returns options/filters for alert bot versions",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getAttackPattern",
+      "nickname": "get",
+      "apiClass": "AttackPatternApi",
+      "method": "GET",
+      "path": "/attackPatterns/{attackPatternId}",
+      "summary": "Returns given attack pattern by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "attackPatternId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "AttackPatternExtended"
+    },
+    {
+      "operationId": "searchAttackPatternOptions",
+      "nickname": "searchOptions",
+      "apiClass": "AttackPatternApi",
+      "method": "GET",
+      "path": "/attackPatternSearch/options",
+      "summary": "Returns options/filters for attack patterns",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchAttackPatterns",
+      "nickname": "search",
+      "apiClass": "AttackPatternApi",
+      "method": "POST",
+      "path": "/attackPatternSearch",
+      "summary": "Search all catalog attack patterns",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchAttackPatternBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchAttackPatternBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;AttackPatternExtended&gt;"
+    }
+,
+    {
+      "operationId": "boundaryObjectSearchByClassColumns",
+      "nickname": "boundaryObjectSearchByClassColumns",
+      "apiClass": "AuditgraphApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/objectSearch/{classId}/columns",
+      "summary": "Get column information for boundary object search for a class",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "classId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "BoundaryObjectSearchColumns"
+    },
+    {
+      "operationId": "boundaryObjectSearchClass",
+      "nickname": "boundaryObjectSearchByClass",
+      "apiClass": "AuditgraphApi",
+      "method": "POST",
+      "path": "/boundaries/{boundaryId}/objectSearch/{classId}",
+      "summary": "Search through objects within a boundary for a specific class",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "classId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "boundaryObjectSearchFilterForClass",
+          "in": "body",
+          "required": true,
+          "type": "BoundaryObjectSearchFilterForClass",
+          "description": "Filters to apply to the search."
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryObjectSearchResultForClass&gt;"
+    },
+    {
+      "operationId": "getAuditGraphHomePage",
+      "nickname": "getAuditGraphHomePage",
+      "apiClass": "AuditgraphApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/auditgraph",
+      "summary": "Lists auditgraph home page folders with queries/classes and object counts",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "Array&lt;AuditGraphHomePageFolder&gt;"
+    }
+,
+    {
+      "operationId": "getBenchmarkElementCrosswalkChain",
+      "nickname": "getBenchmarkElementCrosswalkChain",
+      "apiClass": "BenchmarkApi",
+      "method": "GET",
+      "path": "/benchmarks/{benchmarkId}/benchmarkElements/{benchmarkElementId}/crosswalkChain",
+      "summary": "Get benchmark element crosswalk chain",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "benchmarkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "benchmarkElementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "mappedElementId",
+          "in": "query",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "mappedElementRank",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "returnType": "Array&lt;ElementCrosswalkElement&gt;"
+    },
+    {
+      "operationId": "getBenchmarkElementOverview",
+      "nickname": "getBenchmarkElementOverview",
+      "apiClass": "BenchmarkApi",
+      "method": "GET",
+      "path": "/benchmarks/{benchmarkId}/benchmarkElements/{benchmarkElementId}",
+      "summary": "Get benchmark element overview",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "benchmarkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "benchmarkElementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "BenchmarkElementOverview"
+    },
+    {
+      "operationId": "getBenchmarkOverview",
+      "nickname": "getOverview",
+      "apiClass": "BenchmarkApi",
+      "method": "GET",
+      "path": "/benchmarks/{benchmarkId}",
+      "summary": "Get benchmark overview",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "benchmarkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "BenchmarkOverview"
+    },
+    {
+      "operationId": "listBenchmarks",
+      "nickname": "list",
+      "apiClass": "BenchmarkApi",
+      "method": "GET",
+      "path": "/benchmarks",
+      "summary": "list all benchmarks",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "StandardStatus"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "packageCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "vspId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;BenchmarkExtended&gt;"
+    },
+    {
+      "operationId": "searchBenchmarkElementCrosswalkElementOptions",
+      "nickname": "searchBenchmarkElementCrosswalkElementOptions",
+      "apiClass": "BenchmarkApi",
+      "method": "GET",
+      "path": "/benchmarks/{benchmarkId}/benchmarkElements/{benchmarkElementId}/crosswalkSearch/options",
+      "summary": "Returns options/filters for benchmark elements crosswalk elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "benchmarkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "benchmarkElementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchBenchmarkElementCrosswalkElements",
+      "nickname": "searchBenchmarkElementCrosswalkElements",
+      "apiClass": "BenchmarkApi",
+      "method": "POST",
+      "path": "/benchmarks/{benchmarkId}/benchmarkElements/{benchmarkElementId}/crosswalkSearch",
+      "summary": "Search benchmark element crosswalk elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "benchmarkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "benchmarkElementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchElementCrosswalkElementBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchElementCrosswalkElementBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ElementCrosswalkElement&gt;"
+    },
+    {
+      "operationId": "searchBenchmarkElementOptions",
+      "nickname": "searchElementOptions",
+      "apiClass": "BenchmarkApi",
+      "method": "GET",
+      "path": "/benchmarks/{benchmarkId}/benchmarkElementSearch/options",
+      "summary": "Returns options/filters for benchmark elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "benchmarkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchBenchmarkElements",
+      "nickname": "searchBenchmarkElements",
+      "apiClass": "BenchmarkApi",
+      "method": "POST",
+      "path": "/benchmarks/{benchmarkId}/benchmarkElementSearch",
+      "summary": "search benchmark elements within a benchmark",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "benchmarkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchBenchmarkElementBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchBenchmarkElementBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;BenchmarkElementExtended&gt;"
+    },
+    {
+      "operationId": "searchBenchmarkOptions",
+      "nickname": "searchOptions",
+      "apiClass": "BenchmarkApi",
+      "method": "GET",
+      "path": "/benchmarkSearch/options",
+      "summary": "Returns options/filters for benchmarks",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchBenchmarks",
+      "nickname": "search",
+      "apiClass": "BenchmarkApi",
+      "method": "POST",
+      "path": "/benchmarkSearch",
+      "summary": "search benchmarks",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchBenchmarkBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchBenchmarkBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;BenchmarkExtended&gt;"
+    }
+,
+    {
+      "operationId": "listBoundaryProducts",
+      "nickname": "listProducts",
+      "apiClass": "BoundaryApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/products",
+      "summary": "Retrieves a list of products in a boundary with pipeline info",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "BoundaryProductForListStatus"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryProductSlim&gt;"
+    }
+,
+    {
+      "operationId": "getBoundaryAlert",
+      "nickname": "get",
+      "apiClass": "BoundaryAlertApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/alerts/{alertId}",
+      "summary": "Get boundary alert",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "alertId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "BoundaryAlertExtended"
+    },
+    {
+      "operationId": "searchBoundaryAlertOptions",
+      "nickname": "options",
+      "apiClass": "BoundaryAlertApi",
+      "method": "GET",
+      "path": "/boundaryAlertSearch/options",
+      "summary": "Returns options/filters for boundary alerts",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchBoundaryAlertSubjectOptions",
+      "nickname": "boundaryAlertSubjectOptions",
+      "apiClass": "BoundaryAlertApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/alerts/{alertId}/boundaryAlertSubjectSearch/options",
+      "summary": "Returns options/filters for boundary alert subjects",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "alertId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchBoundaryAlertSubjects",
+      "nickname": "searchSubjects",
+      "apiClass": "BoundaryAlertApi",
+      "method": "POST",
+      "path": "/boundaryAlertSubjectSearch",
+      "summary": "Search a boundaryAlert&#39;s subjects",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchBoundaryAlertSubjectsBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchBoundaryAlertSubjectsBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryAlertSubjectExtended&gt;"
+    },
+    {
+      "operationId": "searchBoundaryAlerts",
+      "nickname": "search",
+      "apiClass": "BoundaryAlertApi",
+      "method": "POST",
+      "path": "/boundaryAlertSearch",
+      "summary": "Search boundaryAlerts",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchBoundaryAlertsBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchBoundaryAlertsBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryAlertView&gt;"
+    }
+,
+    {
+      "operationId": "getBoundaryAlertBot",
+      "nickname": "get",
+      "apiClass": "BoundaryAlertBotApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/alertBots/{alertBotId}",
+      "summary": "Get boundary alert bot",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "alertBotId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "BoundaryAlertBotExtended"
+    },
+    {
+      "operationId": "searchBoundaryAlertBotOptions",
+      "nickname": "options",
+      "apiClass": "BoundaryAlertBotApi",
+      "method": "GET",
+      "path": "/boundaryAlertBotSearch/options",
+      "summary": "Returns options/filters for alert bots",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchBoundaryAlertBots",
+      "nickname": "search",
+      "apiClass": "BoundaryAlertBotApi",
+      "method": "POST",
+      "path": "/boundaryAlertBotSearch",
+      "summary": "Search boundaryAlertBots",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchBoundaryAlertBotsBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchBoundaryAlertBotsBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryAlertBotExtended&gt;"
+    }
+,
+    {
+      "operationId": "getBoundaryClass",
+      "nickname": "get",
+      "apiClass": "BoundaryClassApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/boundaryClasses/{classId}",
+      "summary": "Get boundary classes",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "classId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "BoundaryClassExtended"
+    },
+    {
+      "operationId": "searchBoundaryClassOptions",
+      "nickname": "options",
+      "apiClass": "BoundaryClassApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/boundaryClassSearch/options",
+      "summary": "Returns options/filters for boundary classes",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchBoundaryClasses",
+      "nickname": "search",
+      "apiClass": "BoundaryClassApi",
+      "method": "POST",
+      "path": "/boundaries/{boundaryId}/boundaryClassSearch",
+      "summary": "Search boundary classes",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchBoundaryClassBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchBoundaryClassBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryClassExtended&gt;"
+    }
+,
+    {
+      "operationId": "getBoundaryGraphqlQuery",
+      "nickname": "get",
+      "apiClass": "BoundaryGraphqlQueryApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/boundaryGraphqlQueries/{graphqlQueryId}",
+      "summary": "Get boundary graphql queries",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "graphqlQueryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "BoundaryGraphqlQueryExtended"
+    },
+    {
+      "operationId": "searchBoundaryGraphqlQueries",
+      "nickname": "search",
+      "apiClass": "BoundaryGraphqlQueryApi",
+      "method": "POST",
+      "path": "/boundaries/{boundaryId}/boundaryGraphqlQuerySearch",
+      "summary": "Search boundary graphql queries",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchBoundaryGraphqlQueryBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchBoundaryGraphqlQueryBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryGraphqlQueryExtended&gt;"
+    },
+    {
+      "operationId": "searchBoundaryGraphqlQueryOptions",
+      "nickname": "options",
+      "apiClass": "BoundaryGraphqlQueryApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/boundaryGraphqlQuerySearch/options",
+      "summary": "Returns options/filters for boundary graphql queries",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "catalogSearchClasses",
+      "nickname": "searchClasses",
+      "apiClass": "CatalogApi",
+      "method": "POST",
+      "path": "/catalog/classes",
+      "summary": "Search all catalog classes",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchClassBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchClassBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CatalogClass&gt;"
+    },
+    {
+      "operationId": "catalogSearchSchemas",
+      "nickname": "searchSchemas",
+      "apiClass": "CatalogApi",
+      "method": "POST",
+      "path": "/catalog/schemas",
+      "summary": "Search all catalog schemas",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchCatalogSchemaBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchCatalogSchemaBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CatalogSchema&gt;"
+    },
+    {
+      "operationId": "createCatalogRequest",
+      "nickname": "createRequest",
+      "apiClass": "CatalogApi",
+      "method": "POST",
+      "path": "/catalog/requests",
+      "summary": "Create a new catalog request",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createCatalogRequest",
+          "in": "body",
+          "required": true,
+          "type": "CreateCatalogRequest"
+        }
+      ],
+      "returnType": "CatalogRequestExtended"
+    },
+    {
+      "operationId": "createCatalogRequestComment",
+      "nickname": "createRequestComment",
+      "apiClass": "CatalogApi",
+      "method": "POST",
+      "path": "/catalog/requests/{catalogRequestId}/comments",
+      "summary": "Create a comment on a catalog request",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "catalogRequestId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "createCatalogRequestComment",
+          "in": "body",
+          "required": true,
+          "type": "CreateCatalogRequestComment"
+        }
+      ],
+      "returnType": "CatalogRequestCommentExtended"
+    },
+    {
+      "operationId": "deleteCatalogRequestComment",
+      "nickname": "deleteRequestComment",
+      "apiClass": "CatalogApi",
+      "method": "DELETE",
+      "path": "/catalog/requests/{catalogRequestId}/comments/{commentId}",
+      "summary": "Delete a comment on a catalog request",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "catalogRequestId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "commentId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getCatalogOverviewCounts",
+      "nickname": "getOverviewCounts",
+      "apiClass": "CatalogApi",
+      "method": "GET",
+      "path": "/catalog/overviewCounts",
+      "summary": "Returns overview counts info for auditlogic catalog",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "CatalogOverview"
+    },
+    {
+      "operationId": "getCatalogOverviewSkeleton",
+      "nickname": "getOverviewSkeleton",
+      "apiClass": "CatalogApi",
+      "method": "GET",
+      "path": "/catalog/overviewSkeleton",
+      "summary": "Returns overview skeleton info for auditlogic catalog",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "CatalogOverview"
+    },
+    {
+      "operationId": "getCatalogRequest",
+      "nickname": "getRequest",
+      "apiClass": "CatalogApi",
+      "method": "GET",
+      "path": "/catalog/requests/{catalogRequestId}",
+      "summary": "Get a catalog request",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "catalogRequestId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "CatalogRequestExtended"
+    },
+    {
+      "operationId": "getCatalogSchema",
+      "nickname": "getSchema",
+      "apiClass": "CatalogApi",
+      "method": "GET",
+      "path": "/catalog/schemas/{artifactOrVersionId}",
+      "summary": "Returns overview info for auditlogic catalog",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "artifactOrVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "CatalogSchema"
+    },
+    {
+      "operationId": "listCatalogRequestComments",
+      "nickname": "listRequestComments",
+      "apiClass": "CatalogApi",
+      "method": "GET",
+      "path": "/catalog/requests/{catalogRequestId}/comments",
+      "summary": "List a catalog request&#39;s comments",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "catalogRequestId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;CatalogRequestCommentExtended&gt;"
+    },
+    {
+      "operationId": "listCatalogRequests",
+      "nickname": "listRequests",
+      "apiClass": "CatalogApi",
+      "method": "GET",
+      "path": "/catalog/requests",
+      "summary": "List catalog requests",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "artifactType",
+          "in": "query",
+          "required": false,
+          "type": "CatalogRequestArtifactType"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CatalogRequestExtended&gt;"
+    },
+    {
+      "operationId": "objectSearchByClassColumns",
+      "nickname": "objectSearchByClassColumns",
+      "apiClass": "CatalogApi",
+      "method": "GET",
+      "path": "/catalog/objectSearch/{classId}/columns",
+      "summary": "Get column information for object search for a class",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "classId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ObjectSearchColumns"
+    },
+    {
+      "operationId": "objectSearchClass",
+      "nickname": "objectSearchByClass",
+      "apiClass": "CatalogApi",
+      "method": "POST",
+      "path": "/catalog/objectSearch/{classId}",
+      "summary": "Search through objects within the catalog for a specific class",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "classId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "objectSearchFilterForClass",
+          "in": "body",
+          "required": true,
+          "type": "ObjectSearchFilterForClass",
+          "description": "Filters to apply to the search."
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ObjectSearchResultForClass&gt;"
+    },
+    {
+      "operationId": "objectSearchMetadataByClass",
+      "nickname": "objectSearchMetadataByClass",
+      "apiClass": "CatalogApi",
+      "method": "POST",
+      "path": "/catalog/objectSearchMetadata/{classId}",
+      "summary": "Search through objects within the catalog for a class and returns metadata about results that would be returned by objectSearch",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "classId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "objectSearchFilterForClass",
+          "in": "body",
+          "required": true,
+          "type": "ObjectSearchFilterForClass",
+          "description": "Filters to apply to the search."
+        }
+      ],
+      "returnType": "ObjectSearchResultsMetadata"
+    },
+    {
+      "operationId": "removeCatalogRequestUpvote",
+      "nickname": "removeRequestUpvote",
+      "apiClass": "CatalogApi",
+      "method": "DELETE",
+      "path": "/catalog/requests/{catalogRequestId}/upvotes",
+      "summary": "Remove a catalog request upvote",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "catalogRequestId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "searchCatalogRequests",
+      "nickname": "searchRequests",
+      "apiClass": "CatalogApi",
+      "method": "POST",
+      "path": "/catalog/requestSearch",
+      "summary": "Search catalog requests",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchRequestBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchRequestBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CatalogRequestExtended&gt;"
+    },
+    {
+      "operationId": "searchCatalogRequestsOptions",
+      "nickname": "searchRequestsOptions",
+      "apiClass": "CatalogApi",
+      "method": "GET",
+      "path": "/catalog/requestSearch/options",
+      "summary": "Returns options/filters for catalog requests",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "updateCatalogRequestComment",
+      "nickname": "updateRequestComment",
+      "apiClass": "CatalogApi",
+      "method": "PUT",
+      "path": "/catalog/requests/{catalogRequestId}/comments/{commentId}",
+      "summary": "Update a comment on a catalog request",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "catalogRequestId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "commentId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "createCatalogRequestComment",
+          "in": "body",
+          "required": true,
+          "type": "CreateCatalogRequestComment"
+        }
+      ],
+      "returnType": "CatalogRequestCommentExtended"
+    },
+    {
+      "operationId": "upvoteCatalogRequest",
+      "nickname": "upvoteRequest",
+      "apiClass": "CatalogApi",
+      "method": "PUT",
+      "path": "/catalog/requests/{catalogRequestId}/upvotes",
+      "summary": "Upvote a catalog request",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "catalogRequestId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "getClass",
+      "nickname": "get",
+      "apiClass": "ClassApi",
+      "method": "GET",
+      "path": "/classes/{classIdOrName}",
+      "summary": "Get class by id or name",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "classIdOrName",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "returnType": "ClassExtended"
+    },
+    {
+      "operationId": "listClasses",
+      "nickname": "list",
+      "apiClass": "ClassApi",
+      "method": "GET",
+      "path": "/classes",
+      "summary": "List classes",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "vendorId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "suiteId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "packageCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ClassExtended&gt;"
+    },
+    {
+      "operationId": "searchClasses",
+      "nickname": "search",
+      "apiClass": "ClassApi",
+      "method": "POST",
+      "path": "/classSearch",
+      "summary": "Search all catalog classes",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchClassBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchClassBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CatalogClass&gt;"
+    },
+    {
+      "operationId": "searchClassesOptions",
+      "nickname": "searchClassesOptions",
+      "apiClass": "ClassApi",
+      "method": "GET",
+      "path": "/classSearch/options",
+      "summary": "Returns options/filters for classes",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getCollectorBot",
+      "nickname": "get",
+      "apiClass": "CollectorBotApi",
+      "method": "GET",
+      "path": "/collectorBots/{collectorBotId}",
+      "summary": "Get collector bot by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "collectorBotId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "CollectorBotExtended"
+    },
+    {
+      "operationId": "listCollectorBotVersions",
+      "nickname": "listVersions",
+      "apiClass": "CollectorBotApi",
+      "method": "GET",
+      "path": "/collectorBots/{collectorBotId}/versions",
+      "summary": "Page versions for specified collector bot",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "collectorBotId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CollectorBot&gt;"
+    },
+    {
+      "operationId": "searchCollectorBots",
+      "nickname": "search",
+      "apiClass": "CollectorBotApi",
+      "method": "POST",
+      "path": "/collectorBotSearch",
+      "summary": "Search all catalog collector bots",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchCollectorBotBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchCollectorBotBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CollectorBotExtended&gt;"
+    },
+    {
+      "operationId": "searchCollectorBotsOptions",
+      "nickname": "searchCollectorBotsOptions",
+      "apiClass": "CollectorBotApi",
+      "method": "GET",
+      "path": "/collectorBotSearch/options",
+      "summary": "Returns options/filters for collector bots",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getComplianceFeature",
+      "nickname": "get",
+      "apiClass": "ComplianceFeatureApi",
+      "method": "GET",
+      "path": "/complianceFeatures/{complianceFeatureId}",
+      "summary": "Get compliance feature by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "complianceFeatureId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ComplianceFeatureExtended"
+    },
+    {
+      "operationId": "getComplianceFeatureVersion",
+      "nickname": "getVersion",
+      "apiClass": "ComplianceFeatureApi",
+      "method": "GET",
+      "path": "/complianceFeatureVersions/{complianceFeatureVersionId}",
+      "summary": "Get a compliance feature version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "complianceFeatureVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ComplianceFeatureVersionExtended"
+    },
+    {
+      "operationId": "listComplianceFeatureTypes",
+      "nickname": "listComplianceFeatureTypes",
+      "apiClass": "ComplianceFeatureApi",
+      "method": "GET",
+      "path": "/complianceFeatureTypes",
+      "summary": "Returns compliance feature types",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "Array&lt;ComplianceFeatureTypeEnum&gt;"
+    },
+    {
+      "operationId": "listComplianceFeatureVersionsSlim",
+      "nickname": "listVersionsSlim",
+      "apiClass": "ComplianceFeatureApi",
+      "method": "GET",
+      "path": "/complianceFeatures/{complianceFeatureId}/versions",
+      "summary": "List a compliance features versions slim",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "complianceFeatureId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "Array&lt;VersionSlim&gt;"
+    },
+    {
+      "operationId": "listComplianceFeatures",
+      "nickname": "list",
+      "apiClass": "ComplianceFeatureApi",
+      "method": "GET",
+      "path": "/complianceFeatures",
+      "summary": "List all compliance features",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ComplianceFeatureExtended&gt;"
+    },
+    {
+      "operationId": "searchComplianceFeatures",
+      "nickname": "search",
+      "apiClass": "ComplianceFeatureApi",
+      "method": "POST",
+      "path": "/complianceFeatureSearch",
+      "summary": "Search compliance features",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchComplianceFeatureBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchComplianceFeatureBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ComplianceFeatureExtended&gt;"
+    },
+    {
+      "operationId": "searchComplianceFeaturesColumnOptions",
+      "nickname": "searchColumnOptions",
+      "apiClass": "ComplianceFeatureApi",
+      "method": "GET",
+      "path": "/complianceFeatureSearch/searchOptions",
+      "summary": "Returns search options for compliance features by columnName and search",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "columnName",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "returnType": "ResultsSearchOptionsWrapper"
+    },
+    {
+      "operationId": "searchComplianceFeaturesOptions",
+      "nickname": "searchComplianceFeaturesOptions",
+      "apiClass": "ComplianceFeatureApi",
+      "method": "GET",
+      "path": "/complianceFeatureSearch/options",
+      "summary": "Returns options/filters for compliance features",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standard",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "products",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;UUID&gt;"
+        },
+        {
+          "name": "segments",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;UUID&gt;"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getComplianceService",
+      "nickname": "get",
+      "apiClass": "ComplianceServiceApi",
+      "method": "GET",
+      "path": "/complianceServices/{complianceServiceId}",
+      "summary": "Get compliance service",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "complianceServiceId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ComplianceServiceExtended"
+    },
+    {
+      "operationId": "searchComplianceServices",
+      "nickname": "search",
+      "apiClass": "ComplianceServiceApi",
+      "method": "POST",
+      "path": "/complianceServiceSearch",
+      "summary": "list all catalog compliance services",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchComplianceServiceBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchComplianceServiceBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ComplianceServiceExtended&gt;"
+    },
+    {
+      "operationId": "searchComplianceServicesOptions",
+      "nickname": "searchComplianceServicesOptions",
+      "apiClass": "ComplianceServiceApi",
+      "method": "GET",
+      "path": "/complianceServiceSearch/options",
+      "summary": "Returns options/filters for compliance services",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getCountermeasure",
+      "nickname": "get",
+      "apiClass": "CountermeasureApi",
+      "method": "GET",
+      "path": "/countermeasures/{countermeasureId}",
+      "summary": "Returns extended view of countermeasure given",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "countermeasureId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "CountermeasureExtended"
+    },
+    {
+      "operationId": "searchCountermeasureOptions",
+      "nickname": "searchCountermeasureOptions",
+      "apiClass": "CountermeasureApi",
+      "method": "GET",
+      "path": "/countermeasureSearch/options",
+      "summary": "Returns options/filters for countermeasures",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchCountermeasures",
+      "nickname": "search",
+      "apiClass": "CountermeasureApi",
+      "method": "POST",
+      "path": "/countermeasureSearch",
+      "summary": "Search all countermeasures",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchCountermeasureBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchCountermeasureBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CountermeasureExtended&gt;"
+    }
+,
+    {
+      "operationId": "getCrosswalk",
+      "nickname": "get",
+      "apiClass": "CrosswalkApi",
+      "method": "GET",
+      "path": "/crosswalks/{crosswalkId}",
+      "summary": "Get a crosswalk",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "crosswalkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "CrosswalkExtended"
+    },
+    {
+      "operationId": "getCrosswalkVersion",
+      "nickname": "getVersion",
+      "apiClass": "CrosswalkApi",
+      "method": "GET",
+      "path": "/crosswalkVersions/{crosswalkVersionId}",
+      "summary": "Get a crosswalk version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "crosswalkVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "CrosswalkVersionExtended"
+    },
+    {
+      "operationId": "searchCrosswalkOptions",
+      "nickname": "searchOptions",
+      "apiClass": "CrosswalkApi",
+      "method": "GET",
+      "path": "/crosswalkSearch/options",
+      "summary": "Returns options/filters for crosswalks",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchCrosswalkVersionElementOptions",
+      "nickname": "searchVersionElementOptions",
+      "apiClass": "CrosswalkApi",
+      "method": "GET",
+      "path": "/crosswalkVersions/{crosswalkVersionId}/elementSearch/options",
+      "summary": "Returns options/filters for crosswalk version element search",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "crosswalkVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchCrosswalkVersionElements",
+      "nickname": "searchVersionElements",
+      "apiClass": "CrosswalkApi",
+      "method": "POST",
+      "path": "/crosswalkVersions/{crosswalkVersionId}/elementSearch",
+      "summary": "Search crosswalk version elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "crosswalkVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchCrosswalkVersionElementBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchCrosswalkVersionElementBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;CrosswalkElementExtended&gt;"
+    },
+    {
+      "operationId": "searchCrosswalkVersionOptions",
+      "nickname": "searchVersionOptions",
+      "apiClass": "CrosswalkApi",
+      "method": "GET",
+      "path": "/crosswalkVersionSearch/options",
+      "summary": "Returns options/filters for crosswalk versions",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchCrosswalkVersions",
+      "nickname": "searchVersions",
+      "apiClass": "CrosswalkApi",
+      "method": "POST",
+      "path": "/crosswalkVersionSearch",
+      "summary": "Search crosswalk versions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchCrosswalkVersionBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchCrosswalkVersionBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;CrosswalkVersionExtended&gt;"
+    },
+    {
+      "operationId": "searchCrosswalks",
+      "nickname": "search",
+      "apiClass": "CrosswalkApi",
+      "method": "POST",
+      "path": "/crosswalkSearch",
+      "summary": "Search crosswalks",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchCrosswalkBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchCrosswalkBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;CrosswalkExtended&gt;"
+    },
+    {
+      "operationId": "suggestZerobiasElement",
+      "nickname": "suggestZerobiasElement",
+      "apiClass": "CrosswalkApi",
+      "method": "POST",
+      "path": "/crosswalks/suggestZerobiasElement",
+      "summary": "Suggested a new crosswalk element",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "suggestZerobiasElement",
+          "in": "body",
+          "required": true,
+          "type": "SuggestZerobiasElement"
+        }
+      ],
+      "returnType": "Task"
+    }
+,
+    {
+      "operationId": "getCyberArtifact",
+      "nickname": "get",
+      "apiClass": "CyberArtifactApi",
+      "method": "GET",
+      "path": "/cyberArtifacts/{cyberArtifactId}",
+      "summary": "Returns extended view of cyber artifact given",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "cyberArtifactId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "CyberArtifactExtended"
+    },
+    {
+      "operationId": "searchCyberArtifactOptions",
+      "nickname": "searchCyberArtifactOptions",
+      "apiClass": "CyberArtifactApi",
+      "method": "GET",
+      "path": "/cyberArtifactSearch/options",
+      "summary": "Returns options/filters for cyber artifacts",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchCyberArtifacts",
+      "nickname": "search",
+      "apiClass": "CyberArtifactApi",
+      "method": "POST",
+      "path": "/cyberArtifactSearch",
+      "summary": "Search all cyber artifacts",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchCyberArtifactBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchCyberArtifactBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CyberArtifactExtended&gt;"
+    }
+,
+    {
+      "operationId": "getEvidenceBot",
+      "nickname": "get",
+      "apiClass": "EvidenceBotApi",
+      "method": "GET",
+      "path": "/evidenceBots/{evidenceBotId}",
+      "summary": "Get evidence bot",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "evidenceBotId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "EvidenceBotForUI"
+    },
+    {
+      "operationId": "listEvidenceBots",
+      "nickname": "list",
+      "apiClass": "EvidenceBotApi",
+      "method": "GET",
+      "path": "/evidenceBots",
+      "summary": "List evidenceBots",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "PublishEvidenceStatusEnum",
+          "description": "Filter by status"
+        },
+        {
+          "name": "classId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "queryId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "productId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "evidenceDefinitionId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;EvidenceBotForUI&gt;"
+    },
+    {
+      "operationId": "searchEvidenceBots",
+      "nickname": "search",
+      "apiClass": "EvidenceBotApi",
+      "method": "POST",
+      "path": "/evidenceBotSearch",
+      "summary": "Search all evidence bots",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchEvidenceBotBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchEvidenceBotBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;EvidenceBotForUI&gt;"
+    },
+    {
+      "operationId": "searchEvidenceBotsOptions",
+      "nickname": "searchOptions",
+      "apiClass": "EvidenceBotApi",
+      "method": "GET",
+      "path": "/evidenceBotSearch/options",
+      "summary": "Returns options/filters for evidence bots",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getFindingExtended",
+      "nickname": "getFindingExtended",
+      "apiClass": "FindingApi",
+      "method": "GET",
+      "path": "/findings/{findingId}",
+      "summary": "Get finding overview",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "findingId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "FindingExtended"
+    },
+    {
+      "operationId": "listFindings",
+      "nickname": "listFindings",
+      "apiClass": "FindingApi",
+      "method": "GET",
+      "path": "/findings",
+      "summary": "List all findings",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "testCaseId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "componentId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "source",
+          "in": "query",
+          "required": false,
+          "type": "TestFindingSource"
+        },
+        {
+          "name": "state",
+          "in": "query",
+          "required": false,
+          "type": "FindingStateEnum"
+        },
+        {
+          "name": "objectId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "result",
+          "in": "query",
+          "required": false,
+          "type": "TestResultEnum"
+        },
+        {
+          "name": "discoveredDate",
+          "in": "query",
+          "required": false,
+          "type": "Date"
+        },
+        {
+          "name": "resolvedDate",
+          "in": "query",
+          "required": false,
+          "type": "Date"
+        },
+        {
+          "name": "configRule",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;FindingList&gt;"
+    },
+    {
+      "operationId": "searchFindings",
+      "nickname": "searchFindings",
+      "apiClass": "FindingApi",
+      "method": "POST",
+      "path": "/findingSearch",
+      "summary": "Search findings",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchFindingBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchFindingBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;FindingList&gt;"
+    },
+    {
+      "operationId": "searchFindingsOptions",
+      "nickname": "searchFindingsOptions",
+      "apiClass": "FindingApi",
+      "method": "GET",
+      "path": "/findingSearch/options",
+      "summary": "Returns options/filters for finding",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getFrameworkElementCrosswalkChain",
+      "nickname": "getFrameworkElementCrosswalkChain",
+      "apiClass": "FrameworkApi",
+      "method": "GET",
+      "path": "/frameworks/{frameworkId}/frameworkElements/{frameworkElementId}/crosswalkChain",
+      "summary": "Get framework element crosswalk chain",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "frameworkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "frameworkElementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "mappedElementId",
+          "in": "query",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "mappedElementRank",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "returnType": "Array&lt;ElementCrosswalkElement&gt;"
+    },
+    {
+      "operationId": "getFrameworkElementOverview",
+      "nickname": "getFrameworkElementOverview",
+      "apiClass": "FrameworkApi",
+      "method": "GET",
+      "path": "/frameworks/{frameworkId}/frameworkElements/{frameworkElementId}",
+      "summary": "Get framework element overview",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "frameworkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "frameworkElementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "FrameworkElementOverview"
+    },
+    {
+      "operationId": "getFrameworkOverview",
+      "nickname": "getOverview",
+      "apiClass": "FrameworkApi",
+      "method": "GET",
+      "path": "/frameworks/{frameworkId}",
+      "summary": "Get framework overview",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "frameworkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "FrameworkOverview"
+    },
+    {
+      "operationId": "listFrameworks",
+      "nickname": "list",
+      "apiClass": "FrameworkApi",
+      "method": "GET",
+      "path": "/frameworks",
+      "summary": "list all frameworks",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "StandardStatus"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "packageCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "vspId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;FrameworkExtended&gt;"
+    },
+    {
+      "operationId": "searchFrameworkElementCrosswalkElementOptions",
+      "nickname": "searchFrameworkElementCrosswalkElementOptions",
+      "apiClass": "FrameworkApi",
+      "method": "GET",
+      "path": "/frameworks/{frameworkId}/frameworkElements/{frameworkElementId}/crosswalkSearch/options",
+      "summary": "Returns options/filters for framework elements crosswalk elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "frameworkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "frameworkElementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchFrameworkElementCrosswalkElements",
+      "nickname": "searchFrameworkElementCrosswalkElements",
+      "apiClass": "FrameworkApi",
+      "method": "POST",
+      "path": "/frameworks/{frameworkId}/frameworkElements/{frameworkElementId}/crosswalkSearch",
+      "summary": "Search framework element crosswalk elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "frameworkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "frameworkElementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchElementCrosswalkElementBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchElementCrosswalkElementBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ElementCrosswalkElement&gt;"
+    },
+    {
+      "operationId": "searchFrameworkElementOptions",
+      "nickname": "searchElementOptions",
+      "apiClass": "FrameworkApi",
+      "method": "GET",
+      "path": "/frameworks/{frameworkId}/frameworkElementSearch/options",
+      "summary": "Returns options/filters for framework elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "frameworkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchFrameworkElements",
+      "nickname": "searchFrameworkElements",
+      "apiClass": "FrameworkApi",
+      "method": "POST",
+      "path": "/frameworks/{frameworkId}/frameworkElementSearch",
+      "summary": "search framework elements within a framework",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "frameworkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchFrameworkElementBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchFrameworkElementBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;FrameworkElementExtended&gt;"
+    },
+    {
+      "operationId": "searchFrameworkOptions",
+      "nickname": "searchOptions",
+      "apiClass": "FrameworkApi",
+      "method": "GET",
+      "path": "/frameworkSearch/options",
+      "summary": "Returns options/filters for frameworks",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchFrameworks",
+      "nickname": "search",
+      "apiClass": "FrameworkApi",
+      "method": "POST",
+      "path": "/frameworkSearch",
+      "summary": "search frameworks",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchFrameworkBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchFrameworkBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;FrameworkExtended&gt;"
+    }
+,
+    {
+      "operationId": "searchGraphqlQueries",
+      "nickname": "search",
+      "apiClass": "GraphqlQueryApi",
+      "method": "POST",
+      "path": "/graphqlQuerySearch",
+      "summary": "search graphql queries",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchGraphqlQueryBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchGraphqlQueryBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;GraphqlQuerySearch&gt;"
+    },
+    {
+      "operationId": "searchGraphqlQueryOptions",
+      "nickname": "searchOptions",
+      "apiClass": "GraphqlQueryApi",
+      "method": "GET",
+      "path": "/graphqlQuerySearch/options",
+      "summary": "Returns options/filters for graphql queries",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchGraphqlQueryUsage",
+      "nickname": "usageSearch",
+      "apiClass": "GraphqlQueryApi",
+      "method": "POST",
+      "path": "/graphqlQueryUsageSearch",
+      "summary": "Search graphql query usage",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchGraphqlQueryUsageBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchGraphqlQueryUsageBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryGraphqlQueryUsageItem&gt;"
+    },
+    {
+      "operationId": "searchGraphqlQueryUsageOptions",
+      "nickname": "usageOptions",
+      "apiClass": "GraphqlQueryApi",
+      "method": "GET",
+      "path": "/graphqlQuery/{id}/usage/options",
+      "summary": "Returns options/filters for graphql queries",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getGraphqlQueryVersion",
+      "nickname": "get",
+      "apiClass": "GraphqlQueryVersionApi",
+      "method": "GET",
+      "path": "/graphqlQueryVersions/{graphqlQueryVersionId}",
+      "summary": "Get a graphql query version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "graphqlQueryVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "GraphqlQueryVersionExtended"
+    }
+,
+    {
+      "operationId": "health",
+      "nickname": "health",
+      "apiClass": "HealthcheckApi",
+      "method": "GET",
+      "path": "/health",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "HealthCheckBody"
+    }
+,
+    {
+      "operationId": "listInternalControlsForUI",
+      "nickname": "list",
+      "apiClass": "InternalControlApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/internalDomains/{internalDomainId}/internalControls",
+      "summary": "List internal controls for UI given a boundary and internal domain id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "internalDomainId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sourceId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "PagedResults&lt;InternalControlListForUI&gt;"
+    }
+,
+    {
+      "operationId": "searchKBArticleOptions",
+      "nickname": "searchOptions",
+      "apiClass": "KbArticleApi",
+      "method": "GET",
+      "path": "/kbArticleSearch/options",
+      "summary": "Returns options/filters for kb articles",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchKBArticles",
+      "nickname": "search",
+      "apiClass": "KbArticleApi",
+      "method": "POST",
+      "path": "/kbArticleSearch",
+      "summary": "search kb articles",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchKbArticleBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchKbArticleBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;KbArticleExtended&gt;"
+    }
+,
+    {
+      "operationId": "getMitigation",
+      "nickname": "get",
+      "apiClass": "MitigationApi",
+      "method": "GET",
+      "path": "/mitigations/{mitigationId}",
+      "summary": "Returns extended view of mitigation given",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "mitigationId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "MitigationExtended"
+    },
+    {
+      "operationId": "searchMitigationOptions",
+      "nickname": "searchMitigationOptions",
+      "apiClass": "MitigationApi",
+      "method": "GET",
+      "path": "/mitigationSearch/options",
+      "summary": "Returns options/filters for mitigations",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchMitigations",
+      "nickname": "search",
+      "apiClass": "MitigationApi",
+      "method": "POST",
+      "path": "/mitigationSearch",
+      "summary": "Search all mitigations",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchMitigationBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchMitigationBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;MitigationExtended&gt;"
+    }
+,
+    {
+      "operationId": "getCMDBData",
+      "nickname": "getCMDBData",
+      "apiClass": "NavigationApi",
+      "method": "GET",
+      "path": "/navigation/cmdbInfos",
+      "summary": "Retrieves needed values for organization/user handling",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "CmdbData"
+    },
+    {
+      "operationId": "getNavigationItems",
+      "nickname": "getNavigationItems",
+      "apiClass": "NavigationApi",
+      "method": "GET",
+      "path": "/navigation/items",
+      "summary": "Retrieves navigation items",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "uiVersion",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by UI version"
+        },
+        {
+          "name": "log",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Whether to log or not"
+        }
+      ],
+      "returnType": "Array&lt;AppStructure&gt;"
+    }
+,
+    {
+      "operationId": "createPortalOrganization",
+      "nickname": "createPortalOrganization",
+      "apiClass": "OrchestrationApi",
+      "method": "POST",
+      "path": "/organizations",
+      "summary": "Creates a new portal organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "newPortalOrganization",
+          "in": "body",
+          "required": false,
+          "type": "NewPortalOrganization"
+        }
+      ],
+      "returnType": "PortalOrganization"
+    },
+    {
+      "operationId": "createUserInvite",
+      "nickname": "createUserInvite",
+      "apiClass": "OrchestrationApi",
+      "method": "POST",
+      "path": "/inviteEmails",
+      "summary": "Creates a new user invite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "emailInvite",
+          "in": "body",
+          "required": false,
+          "type": "EmailInvite"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "getBoundaryParty",
+      "nickname": "get",
+      "apiClass": "PartyApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/parties/{partyId}",
+      "summary": "Get boundary party",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "partyId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "PartyExtended"
+    },
+    {
+      "operationId": "searchBoundaryParties",
+      "nickname": "searchBoundary",
+      "apiClass": "PartyApi",
+      "method": "POST",
+      "path": "/boundaries/{boundaryId}/partySearch",
+      "summary": "Search for parties within a boundary",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchBoundaryPartyBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchBoundaryPartyBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;BoundaryParty&gt;"
+    },
+    {
+      "operationId": "searchBoundaryPartiesOptions",
+      "nickname": "searchBoundaryPartiesOptions",
+      "apiClass": "PartyApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/partySearch/options",
+      "summary": "Returns options/filters for parties in a boundary",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "searchPipelines",
+      "nickname": "searchPipelines",
+      "apiClass": "PipelineApi",
+      "method": "POST",
+      "path": "/pipelineSearch",
+      "summary": "Search pipelines",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchPipelineBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchPipelineBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;PipelineExtended&gt;"
+    },
+    {
+      "operationId": "searchPipelinesOptions",
+      "nickname": "searchPipelinesOptions",
+      "apiClass": "PipelineApi",
+      "method": "GET",
+      "path": "/pipelineSearch/options",
+      "summary": "Returns options/filters for pipeline",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "listPolicyFiles",
+      "nickname": "list",
+      "apiClass": "PolicyApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/policyFiles/{evidenceDefinitionId}",
+      "summary": "List policy evidence file information for a policy evidence definition",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "evidenceDefinitionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "Array&lt;PolicyEvidenceFile&gt;"
+    }
+,
+    {
+      "operationId": "compareProductComplianceFeatures",
+      "nickname": "compareComplianceFeatures",
+      "apiClass": "ProductApi",
+      "method": "POST",
+      "path": "/products/{productId}/compareFeatures",
+      "summary": "Compare compliance features and supported controls to product editions that support them within a product",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "compareProductFeaturesBody",
+          "in": "body",
+          "required": true,
+          "type": "CompareProductFeaturesBody"
+        }
+      ],
+      "returnType": "CompareComplianceFeaturesGridByFeature | CompareComplianceFeaturesGridByControl"
+    },
+    {
+      "operationId": "getProduct",
+      "nickname": "get",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products/{productId}",
+      "summary": "Get product",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ProductExtendedGet"
+    },
+    {
+      "operationId": "getProductVersion",
+      "nickname": "getVersion",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/productVersions/{productVersionId}",
+      "summary": "Get a product version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ProductVersionExtendedGet"
+    },
+    {
+      "operationId": "listProductVersionsSlim",
+      "nickname": "listVersionsSlim",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products/{productId}/versions",
+      "summary": "List a products versions slim",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "Array&lt;VersionSlim&gt;"
+    },
+    {
+      "operationId": "listProducts",
+      "nickname": "list",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products",
+      "summary": "List products",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "vendorId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "suiteId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "CatalogPublishStatusEnum"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ProductExtended&gt;"
+    },
+    {
+      "operationId": "searchComplianceFeaturesByProductVersion",
+      "nickname": "searchComplianceFeatures",
+      "apiClass": "ProductApi",
+      "method": "POST",
+      "path": "/productVersions/{productVersionId}/complianceFeatureSearch",
+      "summary": "Search compliance features by product version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchComplianceFeatureBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchComplianceFeatureBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ComplianceFeatureExtended&gt;"
+    },
+    {
+      "operationId": "searchComplianceFeaturesColumnOptionsByProductVersion",
+      "nickname": "searchColumnOptions",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/productVersions/{productVersionId}/complianceFeatureSearch/searchOptions",
+      "summary": "Returns search options for compliance features by columnName and search",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "columnName",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "productVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsSearchOptionsWrapper"
+    },
+    {
+      "operationId": "searchComplianceFeaturesOptionsByProductVersion",
+      "nickname": "searchComplianceFeaturesOptions",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/productVersions/{productVersionId}/complianceFeatureSearch/options",
+      "summary": "Returns options/filters for compliance features",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "standard",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "segments",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;UUID&gt;"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchProductComponents",
+      "nickname": "searchComponents",
+      "apiClass": "ProductApi",
+      "method": "POST",
+      "path": "/products/{productId}/componentSearch",
+      "summary": "Search a products components",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchProductComponentBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchProductComponentBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ProductComponentExtended&gt;"
+    },
+    {
+      "operationId": "searchProductComponentsOptions",
+      "nickname": "searchComponentsOptions",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products/{productId}/componentSearch/options",
+      "summary": "Returns options/filters for product components",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchProductEditions",
+      "nickname": "searchEditions",
+      "apiClass": "ProductApi",
+      "method": "POST",
+      "path": "/products/{productId}/editionSearch",
+      "summary": "Search a products editions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchProductEditionBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchProductEditionBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ProductEditionExtended&gt;"
+    },
+    {
+      "operationId": "searchProductEditionsOptions",
+      "nickname": "searchEditionsOptions",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products/{productId}/editionSearch/options",
+      "summary": "Returns options/filters for product editions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "productId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchProducts",
+      "nickname": "search",
+      "apiClass": "ProductApi",
+      "method": "POST",
+      "path": "/productSearch",
+      "summary": "Search products",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchProductBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchProductBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ProductExtended&gt;"
+    },
+    {
+      "operationId": "searchProductsOptions",
+      "nickname": "searchProductsOptions",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/productSearch/options",
+      "summary": "Returns options/filters for product",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getResourceLink",
+      "nickname": "getLink",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{resourceId}/resourceLinks/{resourceLinkId}",
+      "summary": "Get resource link for a resource",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "resourceId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "resourceLinkId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResourceLinkExtended"
+    }
+,
+    {
+      "operationId": "getSchema",
+      "nickname": "get",
+      "apiClass": "SchemaApi",
+      "method": "GET",
+      "path": "/schemas/{artifactOrVersionId}",
+      "summary": "Returns overview info for auditlogic catalog",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "artifactOrVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "CatalogSchema"
+    },
+    {
+      "operationId": "searchSchemas",
+      "nickname": "search",
+      "apiClass": "SchemaApi",
+      "method": "POST",
+      "path": "/schemaSearch",
+      "summary": "Search all catalog schemas",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchSchemaBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchSchemaBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;CatalogSchema&gt;"
+    },
+    {
+      "operationId": "searchSchemasOptions",
+      "nickname": "searchSchemasOptions",
+      "apiClass": "SchemaApi",
+      "method": "GET",
+      "path": "/schemaSearch/options",
+      "summary": "Returns options/filters for schemas",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "compareSegmentComplianceFeatures",
+      "nickname": "compareComplianceFeatures",
+      "apiClass": "SegmentApi",
+      "method": "POST",
+      "path": "/segments/{segmentId}/compareFeatures",
+      "summary": "Compare compliance features and supported controls to products and their editions that support them within a segment",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "segmentId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "compareSegmentFeaturesBody",
+          "in": "body",
+          "required": true,
+          "type": "CompareSegmentFeaturesBody"
+        }
+      ],
+      "returnType": "CompareComplianceFeaturesGridByFeature | CompareComplianceFeaturesGridByControl"
+    },
+    {
+      "operationId": "getSegment",
+      "nickname": "get",
+      "apiClass": "SegmentApi",
+      "method": "GET",
+      "path": "/segments/{segmentId}",
+      "summary": "Get segment",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "segmentId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "SegmentExtendedGet"
+    },
+    {
+      "operationId": "getSegmentVersion",
+      "nickname": "getVersion",
+      "apiClass": "SegmentApi",
+      "method": "GET",
+      "path": "/segmentVersions/{segmentVersionId}",
+      "summary": "Get a segment version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "segmentVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "SegmentVersionExtendedGet"
+    },
+    {
+      "operationId": "listSegmentTypes",
+      "nickname": "listSegmentTypes",
+      "apiClass": "SegmentApi",
+      "method": "GET",
+      "path": "/segmentTypes",
+      "summary": "Returns segment types",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;SegmentType&gt;"
+    },
+    {
+      "operationId": "listSegmentVersionsSlim",
+      "nickname": "listVersionsSlim",
+      "apiClass": "SegmentApi",
+      "method": "GET",
+      "path": "/segments/{segmentId}/versions",
+      "summary": "List a segments versions slim",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "segmentId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "Array&lt;VersionSlim&gt;"
+    },
+    {
+      "operationId": "searchComplianceFeaturesBySegmentVersion",
+      "nickname": "searchComplianceFeatures",
+      "apiClass": "SegmentApi",
+      "method": "POST",
+      "path": "/segmentVersions/{segmentVersionId}/complianceFeatureSearch",
+      "summary": "Search compliance features by segment version",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "segmentVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchComplianceFeatureBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchComplianceFeatureBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;ComplianceFeatureExtended&gt;"
+    },
+    {
+      "operationId": "searchComplianceFeaturesColumnOptionsBySegmentVersion",
+      "nickname": "searchColumnOptions",
+      "apiClass": "SegmentApi",
+      "method": "GET",
+      "path": "/segmentVersions/{segmentVersionId}/complianceFeatureSearch/searchOptions",
+      "summary": "Returns search options for compliance features by columnName and search",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "columnName",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "segmentVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsSearchOptionsWrapper"
+    },
+    {
+      "operationId": "searchComplianceFeaturesOptionsBySegmentVersion",
+      "nickname": "searchComplianceFeaturesOptions",
+      "apiClass": "SegmentApi",
+      "method": "GET",
+      "path": "/segmentVersions/{segmentVersionId}/complianceFeatureSearch/options",
+      "summary": "Returns options/filters for compliance features",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "segmentVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "standard",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "products",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;UUID&gt;"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchSegments",
+      "nickname": "search",
+      "apiClass": "SegmentApi",
+      "method": "POST",
+      "path": "/segmentSearch",
+      "summary": "list all catalog segments",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchSegmentBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchSegmentBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;SegmentExtended&gt;"
+    },
+    {
+      "operationId": "searchSegmentsOptions",
+      "nickname": "searchSegmentsOptions",
+      "apiClass": "SegmentApi",
+      "method": "GET",
+      "path": "/segmentSearch/options",
+      "summary": "Returns options/filters for segments",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getServerSpec",
+      "nickname": "getServerSpec",
+      "apiClass": "ServerApi",
+      "method": "GET",
+      "path": "/server/spec",
+      "summary": "Retrieves the server specification OpenAPI file",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "string"
+    },
+    {
+      "operationId": "ping",
+      "nickname": "ping",
+      "apiClass": "ServerApi",
+      "method": "GET",
+      "path": "/server/ping",
+      "summary": "Pings the server to make sure it&#39;s live and authentication is successful",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "PingObject"
+    }
+,
+    {
+      "operationId": "listSlimBoundaryProducts",
+      "nickname": "listBoundaryProducts",
+      "apiClass": "SlimApi",
+      "method": "GET",
+      "path": "/slim/boundaries/{boundaryId}/boundaryProducts",
+      "summary": "List all boundary products slim",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;IdNameDescriptionImageUrlObject&gt;"
+    }
+,
+    {
+      "operationId": "elementCrosswalkGraph",
+      "nickname": "elementCrosswalkGraph",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}/elements/{elementId}/crosswalkGraph",
+      "summary": "Returns standard elements crosswalk graph",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "depth",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        }
+      ],
+      "returnType": "Array&lt;ElementCrosswalkElement&gt;"
+    },
+    {
+      "operationId": "getBoundaryStandardBaselineControlTree",
+      "nickname": "getBoundaryStandardBaselineControlTree",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/boundaryStandardBaselines/{boundaryStandardBaselineId}/controlTree",
+      "summary": "Get boundary standard baseline control tree",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryStandardBaselineId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "{ [key: string]: ControlTreeNode; }"
+    },
+    {
+      "operationId": "getBoundaryStandardBaselineFilterTree",
+      "nickname": "getBoundaryStandardBaselineFilterTree",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/boundaryStandardBaselines/{boundaryStandardBaselineId}/filterTree",
+      "summary": "Get standard filter tree",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryStandardBaselineId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "{ [key: string]: StandardFilterTreeNode; }"
+    },
+    {
+      "operationId": "getBoundaryStandardBaselineMetrics",
+      "nickname": "getBoundaryStandardBaselineMetrics",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/boundaryStandardBaselines/{boundaryStandardBaselineId}/metrics",
+      "summary": "List boundary standard baseline metrics",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryStandardBaselineId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "BoundaryStandardBaselineMetrics"
+    },
+    {
+      "operationId": "getElementCrosswalkChain",
+      "nickname": "getElementCrosswalkChain",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}/elements/{elementId}/crosswalkChain",
+      "summary": "Get element crosswalk chain",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "mappedElementId",
+          "in": "query",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "mappedElementRank",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "returnType": "Array&lt;ElementCrosswalkElement&gt;"
+    },
+    {
+      "operationId": "getStandard",
+      "nickname": "get",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}",
+      "summary": "Get standard by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "StandardExtended"
+    },
+    {
+      "operationId": "getStandardElement",
+      "nickname": "getElement",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}/elements/{elementId}",
+      "summary": "Get standard element by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ElementExtended"
+    },
+    {
+      "operationId": "getStandardFilterTree",
+      "nickname": "getFilterTree",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}/filterTree",
+      "summary": "Get standard filter tree",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "{ [key: string]: StandardFilterTreeNode; }"
+    },
+    {
+      "operationId": "getStandardFilters",
+      "nickname": "getFilters",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standardFilters",
+      "summary": "Get standard filters",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardType",
+          "in": "query",
+          "required": false,
+          "type": "StandardType"
+        }
+      ],
+      "returnType": "StandardFilters"
+    },
+    {
+      "operationId": "searchElementComplianceFeatureColumnOptions",
+      "nickname": "searchElementComplianceFeatureColumnOptions",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}/elements/{elementId}/complianceFeatureSearch/searchOptions",
+      "summary": "Returns search options for standard element compliance features by columnName and search",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "columnName",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "standard",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsSearchOptionsWrapper"
+    },
+    {
+      "operationId": "searchElementComplianceFeatureOptions",
+      "nickname": "searchElementComplianceFeatureOptions",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}/elements/{elementId}/complianceFeatureSearch/options",
+      "summary": "Returns options/filters for standard element compliance features",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "standard",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchElementComplianceFeatures",
+      "nickname": "searchElementComplianceFeatures",
+      "apiClass": "StandardApi",
+      "method": "POST",
+      "path": "/standards/{standardId}/elements/{elementId}/complianceFeatureSearch",
+      "summary": "Search element compliance features",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchElementComplianceFeatureBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchElementComplianceFeatureBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ComplianceFeatureExtended&gt;"
+    },
+    {
+      "operationId": "searchElementCrosswalkElementOptions",
+      "nickname": "searchElementCrosswalkElementOptions",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}/elements/{elementId}/crosswalkSearch/options",
+      "summary": "Returns options/filters for standard elements crosswalk elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchElementCrosswalkElements",
+      "nickname": "searchElementCrosswalkElements",
+      "apiClass": "StandardApi",
+      "method": "POST",
+      "path": "/standards/{standardId}/elements/{elementId}/crosswalkSearch",
+      "summary": "Search element crosswalk elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "elementId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchElementCrosswalkElementBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchElementCrosswalkElementBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ElementCrosswalkElement&gt;"
+    },
+    {
+      "operationId": "searchElementOptions",
+      "nickname": "searchElementOptions",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardId}/elementSearch/options",
+      "summary": "Returns options/filters for standard elements",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchElements",
+      "nickname": "searchElements",
+      "apiClass": "StandardApi",
+      "method": "POST",
+      "path": "/standards/{standardId}/elementSearch",
+      "summary": "search elements within a standard",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchElementBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchElementBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ElementExtended&gt;"
+    },
+    {
+      "operationId": "searchStandards",
+      "nickname": "search",
+      "apiClass": "StandardApi",
+      "method": "POST",
+      "path": "/standardSearch",
+      "summary": "search standards",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchStandardBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchStandardBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "hide",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Whether to hide frameworks and benchmarks"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;StandardExtended&gt;"
+    },
+    {
+      "operationId": "searchStandardsByType",
+      "nickname": "searchByType",
+      "apiClass": "StandardApi",
+      "method": "POST",
+      "path": "/standards/{standardType}/search",
+      "summary": "search standards by type",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardType",
+          "in": "path",
+          "required": true,
+          "type": "StandardType"
+        },
+        {
+          "name": "searchStandardByTypeBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchStandardByTypeBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;StandardExtended&gt;"
+    },
+    {
+      "operationId": "searchStandardsByTypeOptions",
+      "nickname": "searchStandardsByTypeOptions",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standards/{standardType}/search/options",
+      "summary": "Returns options/filters for standards by type",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "standardType",
+          "in": "path",
+          "required": true,
+          "type": "StandardType"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchStandardsOptions",
+      "nickname": "searchStandardsOptions",
+      "apiClass": "StandardApi",
+      "method": "GET",
+      "path": "/standardSearch/options",
+      "summary": "Returns options/filters for standards",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "hide",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Whether to hide frameworks and benchmarks"
+        }
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "deleteSuggestedSuite",
+      "nickname": "deleteSuggested",
+      "apiClass": "SuiteApi",
+      "method": "DELETE",
+      "path": "/suites/{suiteId}",
+      "summary": "Delete a suggested suite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "suiteId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getSuite",
+      "nickname": "get",
+      "apiClass": "SuiteApi",
+      "method": "GET",
+      "path": "/suites/{suiteId}",
+      "summary": "Get suite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "suiteId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "SuiteExtended"
+    },
+    {
+      "operationId": "listSuites",
+      "nickname": "list",
+      "apiClass": "SuiteApi",
+      "method": "GET",
+      "path": "/suites",
+      "summary": "List suites",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "vendorId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "VspStatusEnum"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;SuiteExtended&gt;"
+    },
+    {
+      "operationId": "patchSuggestedSuite",
+      "nickname": "patchSuggested",
+      "apiClass": "SuiteApi",
+      "method": "PATCH",
+      "path": "/suites/{suiteId}",
+      "summary": "Patch a suggested suite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "suiteId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "patchSuggestedSuite",
+          "in": "body",
+          "required": true,
+          "type": "PatchSuggestedSuite"
+        }
+      ],
+      "returnType": "Suite"
+    },
+    {
+      "operationId": "publishSuggestedSuite",
+      "nickname": "publishSuggested",
+      "apiClass": "SuiteApi",
+      "method": "PUT",
+      "path": "/suites/{suiteId}",
+      "summary": "Publish a suggested suite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "suiteId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "publishSuggestedSuite",
+          "in": "body",
+          "required": true,
+          "type": "PublishSuggestedSuite"
+        }
+      ],
+      "returnType": "Suite"
+    },
+    {
+      "operationId": "searchSuites",
+      "nickname": "search",
+      "apiClass": "SuiteApi",
+      "method": "POST",
+      "path": "/suiteSearch",
+      "summary": "Search suites",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchSuiteBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchSuiteBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;SuiteExtended&gt;"
+    },
+    {
+      "operationId": "searchSuitesOptions",
+      "nickname": "searchSuitesOptions",
+      "apiClass": "SuiteApi",
+      "method": "GET",
+      "path": "/suiteSearch/options",
+      "summary": "Returns options/filters for suite",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "suggestSuite",
+      "nickname": "suggest",
+      "apiClass": "SuiteApi",
+      "method": "POST",
+      "path": "/suites",
+      "summary": "Suggested a new suite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "suggestNewSuite",
+          "in": "body",
+          "required": true,
+          "type": "SuggestNewSuite"
+        }
+      ],
+      "returnType": "Suite"
+    }
+,
+    {
+      "operationId": "getTactic",
+      "nickname": "get",
+      "apiClass": "TacticApi",
+      "method": "GET",
+      "path": "/tactics/{tacticId}",
+      "summary": "Returns extended view of tactic given",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "tacticId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "TacticExtended"
+    },
+    {
+      "operationId": "searchTacticOptions",
+      "nickname": "searchTacticOptions",
+      "apiClass": "TacticApi",
+      "method": "GET",
+      "path": "/tacticSearch/options",
+      "summary": "Returns options/filters for tactics",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchTactics",
+      "nickname": "search",
+      "apiClass": "TacticApi",
+      "method": "POST",
+      "path": "/tacticSearch",
+      "summary": "Search all tactics",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchTacticBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchTacticBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;TacticExtended&gt;"
+    }
+,
+    {
+      "operationId": "getBoundaryTagRule",
+      "nickname": "get",
+      "apiClass": "TagRuleApi",
+      "method": "GET",
+      "path": "/boundaries/{boundaryId}/tagRules/{tagRuleId}",
+      "summary": "Get tag rule",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "boundaryId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "tagRuleId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "TagRuleExtended"
+    },
+    {
+      "operationId": "searchBoundaryTagRuleOptions",
+      "nickname": "options",
+      "apiClass": "TagRuleApi",
+      "method": "GET",
+      "path": "/tagRuleSearch/options",
+      "summary": "Returns options/filters for tag rules",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchBoundaryTagRules",
+      "nickname": "search",
+      "apiClass": "TagRuleApi",
+      "method": "POST",
+      "path": "/tagRuleSearch",
+      "summary": "Search Tag Rules",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchTagRulesBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchTagRulesBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;TagRuleExtended&gt;"
+    }
+,
+    {
+      "operationId": "getTask",
+      "nickname": "get",
+      "apiClass": "TaskApi",
+      "method": "GET",
+      "path": "/tasks/{taskId}",
+      "summary": "Get task",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "taskId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "TaskExtended"
+    },
+    {
+      "operationId": "listTaskPhases",
+      "nickname": "listPhases",
+      "apiClass": "TaskApi",
+      "method": "GET",
+      "path": "/taskPhases",
+      "summary": "list task status phases",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "Array&lt;TaskPhase&gt;"
+    },
+    {
+      "operationId": "listTaskStatuses",
+      "nickname": "listStatuses",
+      "apiClass": "TaskApi",
+      "method": "GET",
+      "path": "/taskStatuses",
+      "summary": "list task statuses with phase and rank information",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "Array&lt;TaskStatusInfo&gt;"
+    },
+    {
+      "operationId": "myTasks",
+      "nickname": "myTasks",
+      "apiClass": "TaskApi",
+      "method": "POST",
+      "path": "/myTasks",
+      "summary": "list tasks related to current authenticated user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchMyTasksBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchMyTasksBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;TaskExtended&gt;"
+    },
+    {
+      "operationId": "myTasksOptions",
+      "nickname": "myTasksOptions",
+      "apiClass": "TaskApi",
+      "method": "GET",
+      "path": "/myTasks/options",
+      "summary": "Returns options/filters for current user&#39;s tasks",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchTasks",
+      "nickname": "search",
+      "apiClass": "TaskApi",
+      "method": "POST",
+      "path": "/taskSearch",
+      "summary": "list all tasks",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchTaskBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchTaskBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;TaskExtended&gt;"
+    },
+    {
+      "operationId": "searchTasksOptions",
+      "nickname": "searchTasksOptions",
+      "apiClass": "TaskApi",
+      "method": "GET",
+      "path": "/taskSearch/options",
+      "summary": "Returns options/filters for tasks",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getTechnique",
+      "nickname": "get",
+      "apiClass": "TechniqueApi",
+      "method": "GET",
+      "path": "/techniques/{techniqueId}",
+      "summary": "Returns extended view of technique given",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "techniqueId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "TechniqueExtended"
+    },
+    {
+      "operationId": "searchTechniqueOptions",
+      "nickname": "searchTechniqueOptions",
+      "apiClass": "TechniqueApi",
+      "method": "GET",
+      "path": "/techniqueSearch/options",
+      "summary": "Returns options/filters for techniques",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchTechniques",
+      "nickname": "search",
+      "apiClass": "TechniqueApi",
+      "method": "POST",
+      "path": "/techniqueSearch",
+      "summary": "Search all techniques",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchTechniqueBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchTechniqueBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;TechniqueExtended&gt;"
+    }
+,
+    {
+      "operationId": "getTestCase",
+      "nickname": "get",
+      "apiClass": "TestCaseApi",
+      "method": "GET",
+      "path": "/testCases/{testCaseId}",
+      "summary": "Get test case",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "testCaseId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "TestCaseExtended"
+    },
+    {
+      "operationId": "getTestCaseFilters",
+      "nickname": "getFilters",
+      "apiClass": "TestCaseApi",
+      "method": "GET",
+      "path": "/testCaseFilters",
+      "summary": "Get test_case filters",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "VspFilters"
+    },
+    {
+      "operationId": "listTestCases",
+      "nickname": "list",
+      "apiClass": "TestCaseApi",
+      "method": "GET",
+      "path": "/testCases",
+      "summary": "list all catalog test cases",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "severity",
+          "in": "query",
+          "required": false,
+          "type": "Severity"
+        },
+        {
+          "name": "source",
+          "in": "query",
+          "required": false,
+          "type": "TestCaseSource"
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;TestCaseExtended&gt;"
+    },
+    {
+      "operationId": "searchTestCases",
+      "nickname": "search",
+      "apiClass": "TestCaseApi",
+      "method": "POST",
+      "path": "/testCaseSearch",
+      "summary": "list all catalog test cases",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchTestCaseBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchTestCaseBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;TestCaseExtended&gt;"
+    },
+    {
+      "operationId": "searchTestCasesOptions",
+      "nickname": "searchTestCasesOptions",
+      "apiClass": "TestCaseApi",
+      "method": "GET",
+      "path": "/testCaseSearch/options",
+      "summary": "Returns options/filters for test case",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getTestSuite",
+      "nickname": "get",
+      "apiClass": "TestSuiteApi",
+      "method": "GET",
+      "path": "/testSuites/{testSuiteId}",
+      "summary": "Get test case",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "testSuiteId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "TestSuiteExtended"
+    },
+    {
+      "operationId": "getTestSuiteFilters",
+      "nickname": "getFilters",
+      "apiClass": "TestSuiteApi",
+      "method": "GET",
+      "path": "/testSuiteFilters",
+      "summary": "Get test suite filters",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "VspFilters"
+    },
+    {
+      "operationId": "listTestSuites",
+      "nickname": "list",
+      "apiClass": "TestSuiteApi",
+      "method": "GET",
+      "path": "/testSuites",
+      "summary": "list all catalog test suites",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;TestSuiteExtended&gt;"
+    },
+    {
+      "operationId": "searchTestSuiteOptions",
+      "nickname": "searchOptions",
+      "apiClass": "TestSuiteApi",
+      "method": "GET",
+      "path": "/testSuiteSearch/options",
+      "summary": "Returns options/filters for test suites",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchTestSuiteTestCases",
+      "nickname": "searchTestCases",
+      "apiClass": "TestSuiteApi",
+      "method": "POST",
+      "path": "/testSuites/{testSuiteId}/testCaseSearch",
+      "summary": "list test cases within a test suite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "testSuiteId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "searchTestCaseBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchTestCaseBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;TestCaseExtended&gt;"
+    },
+    {
+      "operationId": "searchTestSuites",
+      "nickname": "search",
+      "apiClass": "TestSuiteApi",
+      "method": "POST",
+      "path": "/testSuiteSearch",
+      "summary": "list all catalog test suites",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchTestSuiteBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchTestSuiteBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;TestSuiteExtended&gt;"
+    }
+,
+    {
+      "operationId": "deleteSuggestedVendor",
+      "nickname": "deleteSuggested",
+      "apiClass": "VendorApi",
+      "method": "DELETE",
+      "path": "/vendors/{vendorId}",
+      "summary": "Delete a suggested vendor",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getVendor",
+      "nickname": "get",
+      "apiClass": "VendorApi",
+      "method": "GET",
+      "path": "/vendors/{vendorId}",
+      "summary": "Get vendor",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "Vendor"
+    },
+    {
+      "operationId": "listVendors",
+      "nickname": "list",
+      "apiClass": "VendorApi",
+      "method": "GET",
+      "path": "/vendors",
+      "summary": "List vendors",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "search",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "VspStatusEnum"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;Vendor&gt;"
+    },
+    {
+      "operationId": "patchSuggestedVendor",
+      "nickname": "patchSuggested",
+      "apiClass": "VendorApi",
+      "method": "PATCH",
+      "path": "/vendors/{vendorId}",
+      "summary": "Patch a suggested vendor",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "patchSuggestedVendor",
+          "in": "body",
+          "required": true,
+          "type": "PatchSuggestedVendor"
+        }
+      ],
+      "returnType": "Vendor"
+    },
+    {
+      "operationId": "publishSuggestedVendor",
+      "nickname": "publishSuggested",
+      "apiClass": "VendorApi",
+      "method": "PUT",
+      "path": "/vendors/{vendorId}",
+      "summary": "Publish a suggested vendor",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "publishSuggestedVendor",
+          "in": "body",
+          "required": true,
+          "type": "PublishSuggestedVendor"
+        }
+      ],
+      "returnType": "Vendor"
+    },
+    {
+      "operationId": "searchVendors",
+      "nickname": "search",
+      "apiClass": "VendorApi",
+      "method": "POST",
+      "path": "/vendorSearch",
+      "summary": "Search vendors",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchVendorBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchVendorBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;Vendor&gt;"
+    },
+    {
+      "operationId": "searchVendorsOptions",
+      "nickname": "searchVendorsOptions",
+      "apiClass": "VendorApi",
+      "method": "GET",
+      "path": "/vendorSearch/options",
+      "summary": "Returns options/filters for vendor",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "suggestVendor",
+      "nickname": "suggest",
+      "apiClass": "VendorApi",
+      "method": "POST",
+      "path": "/vendors",
+      "summary": "Suggested a new vendor",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "suggestNewVendor",
+          "in": "body",
+          "required": true,
+          "type": "SuggestNewVendor"
+        }
+      ],
+      "returnType": "Vendor"
+    }
+,
+    {
+      "operationId": "getVulnerability",
+      "nickname": "get",
+      "apiClass": "VulnerabilityApi",
+      "method": "GET",
+      "path": "/vulnerabilitys/{vulnerabilityId}",
+      "summary": "Returns overview info for auditlogic catalog",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vulnerabilityId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "VulnerabilityExtended"
+    },
+    {
+      "operationId": "searchVulnerabilitys",
+      "nickname": "search",
+      "apiClass": "VulnerabilityApi",
+      "method": "POST",
+      "path": "/vulnerabilitySearch",
+      "summary": "Search all catalog vulnerabilitys",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchVulnerabilityBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchVulnerabilityBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;Vulnerability&gt;"
+    },
+    {
+      "operationId": "searchVulnerabilitysOptions",
+      "nickname": "searchVulnerabilitysOptions",
+      "apiClass": "VulnerabilityApi",
+      "method": "GET",
+      "path": "/vulnerabilitySearch/options",
+      "summary": "Returns options/filters for vulnerabilitys",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+,
+    {
+      "operationId": "getWeakness",
+      "nickname": "get",
+      "apiClass": "WeaknessApi",
+      "method": "GET",
+      "path": "/weaknesss/{weaknessId}",
+      "summary": "Returns overview info for auditlogic catalog",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "weaknessId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "WeaknessExtended"
+    },
+    {
+      "operationId": "searchWeaknesss",
+      "nickname": "search",
+      "apiClass": "WeaknessApi",
+      "method": "POST",
+      "path": "/weaknessSearch",
+      "summary": "Search all catalog weaknesss",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchWeaknessBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchWeaknessBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject"
+        }
+      ],
+      "returnType": "PagedResults&lt;WeaknessExtended&gt;"
+    },
+    {
+      "operationId": "searchWeaknesssOptions",
+      "nickname": "searchWeaknesssOptions",
+      "apiClass": "WeaknessApi",
+      "method": "GET",
+      "path": "/weaknessSearch/options",
+      "summary": "Returns options/filters for weaknesss",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    }
+
+  ],
+  "operationMap": {
+    "getAlertBot": "AlertBotApi.get",
+    "listAlertBots": "AlertBotApi.list",
+    "searchAlertBotOptions": "AlertBotApi.options",
+    "searchAlertBotUsage": "AlertBotApi.usageSearch",
+    "searchAlertBotUsageOptions": "AlertBotApi.usageOptions",
+    "searchAlertBots": "AlertBotApi.search"
+,
+    "getAlertBotVersion": "AlertBotVersionApi.get",
+    "searchAlertBotVersions": "AlertBotVersionApi.search",
+    "searchAlertBotVersionsOptions": "AlertBotVersionApi.options"
+,
+    "getAttackPattern": "AttackPatternApi.get",
+    "searchAttackPatternOptions": "AttackPatternApi.searchOptions",
+    "searchAttackPatterns": "AttackPatternApi.search"
+,
+    "boundaryObjectSearchByClassColumns": "AuditgraphApi.boundaryObjectSearchByClassColumns",
+    "boundaryObjectSearchClass": "AuditgraphApi.boundaryObjectSearchByClass",
+    "getAuditGraphHomePage": "AuditgraphApi.getAuditGraphHomePage"
+,
+    "getBenchmarkElementCrosswalkChain": "BenchmarkApi.getBenchmarkElementCrosswalkChain",
+    "getBenchmarkElementOverview": "BenchmarkApi.getBenchmarkElementOverview",
+    "getBenchmarkOverview": "BenchmarkApi.getOverview",
+    "listBenchmarks": "BenchmarkApi.list",
+    "searchBenchmarkElementCrosswalkElementOptions": "BenchmarkApi.searchBenchmarkElementCrosswalkElementOptions",
+    "searchBenchmarkElementCrosswalkElements": "BenchmarkApi.searchBenchmarkElementCrosswalkElements",
+    "searchBenchmarkElementOptions": "BenchmarkApi.searchElementOptions",
+    "searchBenchmarkElements": "BenchmarkApi.searchBenchmarkElements",
+    "searchBenchmarkOptions": "BenchmarkApi.searchOptions",
+    "searchBenchmarks": "BenchmarkApi.search"
+,
+    "listBoundaryProducts": "BoundaryApi.listProducts"
+,
+    "getBoundaryAlert": "BoundaryAlertApi.get",
+    "searchBoundaryAlertOptions": "BoundaryAlertApi.options",
+    "searchBoundaryAlertSubjectOptions": "BoundaryAlertApi.boundaryAlertSubjectOptions",
+    "searchBoundaryAlertSubjects": "BoundaryAlertApi.searchSubjects",
+    "searchBoundaryAlerts": "BoundaryAlertApi.search"
+,
+    "getBoundaryAlertBot": "BoundaryAlertBotApi.get",
+    "searchBoundaryAlertBotOptions": "BoundaryAlertBotApi.options",
+    "searchBoundaryAlertBots": "BoundaryAlertBotApi.search"
+,
+    "getBoundaryClass": "BoundaryClassApi.get",
+    "searchBoundaryClassOptions": "BoundaryClassApi.options",
+    "searchBoundaryClasses": "BoundaryClassApi.search"
+,
+    "getBoundaryGraphqlQuery": "BoundaryGraphqlQueryApi.get",
+    "searchBoundaryGraphqlQueries": "BoundaryGraphqlQueryApi.search",
+    "searchBoundaryGraphqlQueryOptions": "BoundaryGraphqlQueryApi.options"
+,
+    "catalogSearchClasses": "CatalogApi.searchClasses",
+    "catalogSearchSchemas": "CatalogApi.searchSchemas",
+    "createCatalogRequest": "CatalogApi.createRequest",
+    "createCatalogRequestComment": "CatalogApi.createRequestComment",
+    "deleteCatalogRequestComment": "CatalogApi.deleteRequestComment",
+    "getCatalogOverviewCounts": "CatalogApi.getOverviewCounts",
+    "getCatalogOverviewSkeleton": "CatalogApi.getOverviewSkeleton",
+    "getCatalogRequest": "CatalogApi.getRequest",
+    "getCatalogSchema": "CatalogApi.getSchema",
+    "listCatalogRequestComments": "CatalogApi.listRequestComments",
+    "listCatalogRequests": "CatalogApi.listRequests",
+    "objectSearchByClassColumns": "CatalogApi.objectSearchByClassColumns",
+    "objectSearchClass": "CatalogApi.objectSearchByClass",
+    "objectSearchMetadataByClass": "CatalogApi.objectSearchMetadataByClass",
+    "removeCatalogRequestUpvote": "CatalogApi.removeRequestUpvote",
+    "searchCatalogRequests": "CatalogApi.searchRequests",
+    "searchCatalogRequestsOptions": "CatalogApi.searchRequestsOptions",
+    "updateCatalogRequestComment": "CatalogApi.updateRequestComment",
+    "upvoteCatalogRequest": "CatalogApi.upvoteRequest"
+,
+    "getClass": "ClassApi.get",
+    "listClasses": "ClassApi.list",
+    "searchClasses": "ClassApi.search",
+    "searchClassesOptions": "ClassApi.searchClassesOptions"
+,
+    "getCollectorBot": "CollectorBotApi.get",
+    "listCollectorBotVersions": "CollectorBotApi.listVersions",
+    "searchCollectorBots": "CollectorBotApi.search",
+    "searchCollectorBotsOptions": "CollectorBotApi.searchCollectorBotsOptions"
+,
+    "getComplianceFeature": "ComplianceFeatureApi.get",
+    "getComplianceFeatureVersion": "ComplianceFeatureApi.getVersion",
+    "listComplianceFeatureTypes": "ComplianceFeatureApi.listComplianceFeatureTypes",
+    "listComplianceFeatureVersionsSlim": "ComplianceFeatureApi.listVersionsSlim",
+    "listComplianceFeatures": "ComplianceFeatureApi.list",
+    "searchComplianceFeatures": "ComplianceFeatureApi.search",
+    "searchComplianceFeaturesColumnOptions": "ComplianceFeatureApi.searchColumnOptions",
+    "searchComplianceFeaturesOptions": "ComplianceFeatureApi.searchComplianceFeaturesOptions"
+,
+    "getComplianceService": "ComplianceServiceApi.get",
+    "searchComplianceServices": "ComplianceServiceApi.search",
+    "searchComplianceServicesOptions": "ComplianceServiceApi.searchComplianceServicesOptions"
+,
+    "getCountermeasure": "CountermeasureApi.get",
+    "searchCountermeasureOptions": "CountermeasureApi.searchCountermeasureOptions",
+    "searchCountermeasures": "CountermeasureApi.search"
+,
+    "getCrosswalk": "CrosswalkApi.get",
+    "getCrosswalkVersion": "CrosswalkApi.getVersion",
+    "searchCrosswalkOptions": "CrosswalkApi.searchOptions",
+    "searchCrosswalkVersionElementOptions": "CrosswalkApi.searchVersionElementOptions",
+    "searchCrosswalkVersionElements": "CrosswalkApi.searchVersionElements",
+    "searchCrosswalkVersionOptions": "CrosswalkApi.searchVersionOptions",
+    "searchCrosswalkVersions": "CrosswalkApi.searchVersions",
+    "searchCrosswalks": "CrosswalkApi.search",
+    "suggestZerobiasElement": "CrosswalkApi.suggestZerobiasElement"
+,
+    "getCyberArtifact": "CyberArtifactApi.get",
+    "searchCyberArtifactOptions": "CyberArtifactApi.searchCyberArtifactOptions",
+    "searchCyberArtifacts": "CyberArtifactApi.search"
+,
+    "getEvidenceBot": "EvidenceBotApi.get",
+    "listEvidenceBots": "EvidenceBotApi.list",
+    "searchEvidenceBots": "EvidenceBotApi.search",
+    "searchEvidenceBotsOptions": "EvidenceBotApi.searchOptions"
+,
+    "getFindingExtended": "FindingApi.getFindingExtended",
+    "listFindings": "FindingApi.listFindings",
+    "searchFindings": "FindingApi.searchFindings",
+    "searchFindingsOptions": "FindingApi.searchFindingsOptions"
+,
+    "getFrameworkElementCrosswalkChain": "FrameworkApi.getFrameworkElementCrosswalkChain",
+    "getFrameworkElementOverview": "FrameworkApi.getFrameworkElementOverview",
+    "getFrameworkOverview": "FrameworkApi.getOverview",
+    "listFrameworks": "FrameworkApi.list",
+    "searchFrameworkElementCrosswalkElementOptions": "FrameworkApi.searchFrameworkElementCrosswalkElementOptions",
+    "searchFrameworkElementCrosswalkElements": "FrameworkApi.searchFrameworkElementCrosswalkElements",
+    "searchFrameworkElementOptions": "FrameworkApi.searchElementOptions",
+    "searchFrameworkElements": "FrameworkApi.searchFrameworkElements",
+    "searchFrameworkOptions": "FrameworkApi.searchOptions",
+    "searchFrameworks": "FrameworkApi.search"
+,
+    "searchGraphqlQueries": "GraphqlQueryApi.search",
+    "searchGraphqlQueryOptions": "GraphqlQueryApi.searchOptions",
+    "searchGraphqlQueryUsage": "GraphqlQueryApi.usageSearch",
+    "searchGraphqlQueryUsageOptions": "GraphqlQueryApi.usageOptions"
+,
+    "getGraphqlQueryVersion": "GraphqlQueryVersionApi.get"
+,
+    "health": "HealthcheckApi.health"
+,
+    "listInternalControlsForUI": "InternalControlApi.list"
+,
+    "searchKBArticleOptions": "KbArticleApi.searchOptions",
+    "searchKBArticles": "KbArticleApi.search"
+,
+    "getMitigation": "MitigationApi.get",
+    "searchMitigationOptions": "MitigationApi.searchMitigationOptions",
+    "searchMitigations": "MitigationApi.search"
+,
+    "getCMDBData": "NavigationApi.getCMDBData",
+    "getNavigationItems": "NavigationApi.getNavigationItems"
+,
+    "createPortalOrganization": "OrchestrationApi.createPortalOrganization",
+    "createUserInvite": "OrchestrationApi.createUserInvite"
+,
+    "getBoundaryParty": "PartyApi.get",
+    "searchBoundaryParties": "PartyApi.searchBoundary",
+    "searchBoundaryPartiesOptions": "PartyApi.searchBoundaryPartiesOptions"
+,
+    "searchPipelines": "PipelineApi.searchPipelines",
+    "searchPipelinesOptions": "PipelineApi.searchPipelinesOptions"
+,
+    "listPolicyFiles": "PolicyApi.list"
+,
+    "compareProductComplianceFeatures": "ProductApi.compareComplianceFeatures",
+    "getProduct": "ProductApi.get",
+    "getProductVersion": "ProductApi.getVersion",
+    "listProductVersionsSlim": "ProductApi.listVersionsSlim",
+    "listProducts": "ProductApi.list",
+    "searchComplianceFeaturesByProductVersion": "ProductApi.searchComplianceFeatures",
+    "searchComplianceFeaturesColumnOptionsByProductVersion": "ProductApi.searchColumnOptions",
+    "searchComplianceFeaturesOptionsByProductVersion": "ProductApi.searchComplianceFeaturesOptions",
+    "searchProductComponents": "ProductApi.searchComponents",
+    "searchProductComponentsOptions": "ProductApi.searchComponentsOptions",
+    "searchProductEditions": "ProductApi.searchEditions",
+    "searchProductEditionsOptions": "ProductApi.searchEditionsOptions",
+    "searchProducts": "ProductApi.search",
+    "searchProductsOptions": "ProductApi.searchProductsOptions"
+,
+    "getResourceLink": "ResourceApi.getLink"
+,
+    "getSchema": "SchemaApi.get",
+    "searchSchemas": "SchemaApi.search",
+    "searchSchemasOptions": "SchemaApi.searchSchemasOptions"
+,
+    "compareSegmentComplianceFeatures": "SegmentApi.compareComplianceFeatures",
+    "getSegment": "SegmentApi.get",
+    "getSegmentVersion": "SegmentApi.getVersion",
+    "listSegmentTypes": "SegmentApi.listSegmentTypes",
+    "listSegmentVersionsSlim": "SegmentApi.listVersionsSlim",
+    "searchComplianceFeaturesBySegmentVersion": "SegmentApi.searchComplianceFeatures",
+    "searchComplianceFeaturesColumnOptionsBySegmentVersion": "SegmentApi.searchColumnOptions",
+    "searchComplianceFeaturesOptionsBySegmentVersion": "SegmentApi.searchComplianceFeaturesOptions",
+    "searchSegments": "SegmentApi.search",
+    "searchSegmentsOptions": "SegmentApi.searchSegmentsOptions"
+,
+    "getServerSpec": "ServerApi.getServerSpec",
+    "ping": "ServerApi.ping"
+,
+    "listSlimBoundaryProducts": "SlimApi.listBoundaryProducts"
+,
+    "elementCrosswalkGraph": "StandardApi.elementCrosswalkGraph",
+    "getBoundaryStandardBaselineControlTree": "StandardApi.getBoundaryStandardBaselineControlTree",
+    "getBoundaryStandardBaselineFilterTree": "StandardApi.getBoundaryStandardBaselineFilterTree",
+    "getBoundaryStandardBaselineMetrics": "StandardApi.getBoundaryStandardBaselineMetrics",
+    "getElementCrosswalkChain": "StandardApi.getElementCrosswalkChain",
+    "getStandard": "StandardApi.get",
+    "getStandardElement": "StandardApi.getElement",
+    "getStandardFilterTree": "StandardApi.getFilterTree",
+    "getStandardFilters": "StandardApi.getFilters",
+    "searchElementComplianceFeatureColumnOptions": "StandardApi.searchElementComplianceFeatureColumnOptions",
+    "searchElementComplianceFeatureOptions": "StandardApi.searchElementComplianceFeatureOptions",
+    "searchElementComplianceFeatures": "StandardApi.searchElementComplianceFeatures",
+    "searchElementCrosswalkElementOptions": "StandardApi.searchElementCrosswalkElementOptions",
+    "searchElementCrosswalkElements": "StandardApi.searchElementCrosswalkElements",
+    "searchElementOptions": "StandardApi.searchElementOptions",
+    "searchElements": "StandardApi.searchElements",
+    "searchStandards": "StandardApi.search",
+    "searchStandardsByType": "StandardApi.searchByType",
+    "searchStandardsByTypeOptions": "StandardApi.searchStandardsByTypeOptions",
+    "searchStandardsOptions": "StandardApi.searchStandardsOptions"
+,
+    "deleteSuggestedSuite": "SuiteApi.deleteSuggested",
+    "getSuite": "SuiteApi.get",
+    "listSuites": "SuiteApi.list",
+    "patchSuggestedSuite": "SuiteApi.patchSuggested",
+    "publishSuggestedSuite": "SuiteApi.publishSuggested",
+    "searchSuites": "SuiteApi.search",
+    "searchSuitesOptions": "SuiteApi.searchSuitesOptions",
+    "suggestSuite": "SuiteApi.suggest"
+,
+    "getTactic": "TacticApi.get",
+    "searchTacticOptions": "TacticApi.searchTacticOptions",
+    "searchTactics": "TacticApi.search"
+,
+    "getBoundaryTagRule": "TagRuleApi.get",
+    "searchBoundaryTagRuleOptions": "TagRuleApi.options",
+    "searchBoundaryTagRules": "TagRuleApi.search"
+,
+    "getTask": "TaskApi.get",
+    "listTaskPhases": "TaskApi.listPhases",
+    "listTaskStatuses": "TaskApi.listStatuses",
+    "myTasks": "TaskApi.myTasks",
+    "myTasksOptions": "TaskApi.myTasksOptions",
+    "searchTasks": "TaskApi.search",
+    "searchTasksOptions": "TaskApi.searchTasksOptions"
+,
+    "getTechnique": "TechniqueApi.get",
+    "searchTechniqueOptions": "TechniqueApi.searchTechniqueOptions",
+    "searchTechniques": "TechniqueApi.search"
+,
+    "getTestCase": "TestCaseApi.get",
+    "getTestCaseFilters": "TestCaseApi.getFilters",
+    "listTestCases": "TestCaseApi.list",
+    "searchTestCases": "TestCaseApi.search",
+    "searchTestCasesOptions": "TestCaseApi.searchTestCasesOptions"
+,
+    "getTestSuite": "TestSuiteApi.get",
+    "getTestSuiteFilters": "TestSuiteApi.getFilters",
+    "listTestSuites": "TestSuiteApi.list",
+    "searchTestSuiteOptions": "TestSuiteApi.searchOptions",
+    "searchTestSuiteTestCases": "TestSuiteApi.searchTestCases",
+    "searchTestSuites": "TestSuiteApi.search"
+,
+    "deleteSuggestedVendor": "VendorApi.deleteSuggested",
+    "getVendor": "VendorApi.get",
+    "listVendors": "VendorApi.list",
+    "patchSuggestedVendor": "VendorApi.patchSuggested",
+    "publishSuggestedVendor": "VendorApi.publishSuggested",
+    "searchVendors": "VendorApi.search",
+    "searchVendorsOptions": "VendorApi.searchVendorsOptions",
+    "suggestVendor": "VendorApi.suggest"
+,
+    "getVulnerability": "VulnerabilityApi.get",
+    "searchVulnerabilitys": "VulnerabilityApi.search",
+    "searchVulnerabilitysOptions": "VulnerabilityApi.searchVulnerabilitysOptions"
+,
+    "getWeakness": "WeaknessApi.get",
+    "searchWeaknesss": "WeaknessApi.search",
+    "searchWeaknesssOptions": "WeaknessApi.searchWeaknesssOptions"
+
+  }
+}

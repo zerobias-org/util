@@ -2,7 +2,7 @@ openapi: 3.0.2
 info:
   version: 0.8.0
   description: Compliance Server OpenAPI Spec
-  title: '@auditmation/store-api'
+  title: '@zerobias-org/store-api'
 servers:
   - url: /
 paths:
@@ -1667,7 +1667,7 @@ components:
       type: oauth2
       flows:
         password:
-          tokenUrl: https://nf.auditmation.io/
+          tokenUrl: https://app.zerobias.com/
           scopes:
             read:product: Ability to read a product
             read:suite: Ability to read a suite

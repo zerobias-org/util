@@ -1,0 +1,1956 @@
+{
+  "serviceName": "StoreApi",
+  "version": "0.8.0",
+  "codegenVersion": "1.0.12",
+  "generatedAt": "2025-12-03T13:25:02Z",
+  "clientClass": "StoreApiClient",
+  "factoryFunction": "newStoreApi",
+  "operations": [
+    {
+      "operationId": "getConnectionProfile",
+      "nickname": "get",
+      "apiClass": "ConnectionProfileApi",
+      "method": "GET",
+      "path": "/connectionProfiles/{id}",
+      "summary": "Retrieves a Connection profile",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The id of the connection profile"
+        }
+      ],
+      "returnType": "ModuleConnectionProfile"
+    },
+    {
+      "operationId": "listConnectionProfileModules",
+      "nickname": "listModules",
+      "apiClass": "ConnectionProfileApi",
+      "method": "GET",
+      "path": "/connectionProfiles/{id}/modules",
+      "summary": "List modules that use the connection profile",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The id of the connection profile"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "ModuleStatus",
+          "description": "Filter by module status"
+        },
+        {
+          "name": "fileSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only modules file support active or inactive."
+        },
+        {
+          "name": "dataSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only modules data support active or inactive."
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;Module&gt;"
+    }
+,
+    {
+      "operationId": "getEvent",
+      "nickname": "get",
+      "apiClass": "EventApi",
+      "method": "GET",
+      "path": "/events/{eventId}",
+      "summary": "Retrieves an event by id. Every event represents a business event that may have been sent via notifications/subscriptions. All events will have additional properties that may used to filter the results: * resourceId : The id of the resource affected by this event * resourceType: The type of resource affected by this event * keywords/packageNames: set for resources that include those properties. i.e. (vendor/suite/product for keywords, operations/module/product/order for packageNames) * The event payload may be retried via the &#x60;payload&#x60; property.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "eventId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The id of the event"
+        }
+      ],
+      "returnType": "Event"
+    },
+    {
+      "operationId": "listEvents",
+      "nickname": "list",
+      "apiClass": "EventApi",
+      "method": "GET",
+      "path": "/events",
+      "summary": "Retrieves a list of events. Every event represents a business event that may have been sent via notifications/subscriptions. All events will have additional properties that may used to filter the results: * resourceId : The id of the resource affected by this event * resourceType: The type of resource affected by this event * keywords/packageNames: set for resources that include those properties. i.e. (vendor/suite/product for keywords, operations/module/product/order for packageNames) * The event payload may be retried via the &#x60;payload&#x60; property.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "resourceId",
+          "in": "query",
+          "required": false,
+          "type": "UUID"
+        },
+        {
+          "name": "resourceType",
+          "in": "query",
+          "required": false,
+          "type": "ResourceTypeEnum"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "OrderStatusParam",
+          "description": "This filter may be set if a filter has already been set for resourcetype. If set but without the aforementioned filter, an HTTP-400 will be returned.  Values used to filter the result set depend on the selected resource type.  * ModerationStatus applied to &#x60;vendor&#x60;, &#x60;suite&#x60; and &#x60;product  * OrderStatus, OperationOrderStatus and CatalogingOrderStatus apply to order &#x60;only&#x60; each of which belonging to a type of order. OrderStatus applies to all types of order while OperationOrderStatus also applies to &#x60;operation&#x60; orders and CatalogingOrderStatus applied to &#x60;catalog&#x60; orders."
+        },
+        {
+          "name": "orderType",
+          "in": "query",
+          "required": false,
+          "type": "OrderType",
+          "description": "This filter may be set if a filter has already been set for resourcetype on orders. If set but without the aforementioned filter, an HTTP-400 will be returned. "
+        },
+        {
+          "name": "packageNames",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Filter by product package name. This filter applies to the following event types: * order * module * product"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByEventParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParamDesc",
+          "description": "The order in which to sort the results, defaults to &#x60;desc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;Event&gt;"
+    }
+,
+    {
+      "operationId": "health",
+      "nickname": "health",
+      "apiClass": "HealthcheckApi",
+      "method": "GET",
+      "path": "/health",
+      "summary": "",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "HealthCheckBody"
+    }
+,
+    {
+      "operationId": "getDependencyReport",
+      "nickname": "getDependencyReport",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleKeyOrId}/dependencies",
+      "summary": "Generates a report that describes the given Module and Version Range.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleKeyOrId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "The module to look for.  Either the module id or its key (@devsupply/github)"
+        },
+        {
+          "name": "moduleVersionId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "A specific version of a module.  The provided moduleVersionId must belong to the given module"
+        },
+        {
+          "name": "version",
+          "in": "query",
+          "required": false,
+          "type": "VersionRange",
+          "description": "Version specification for the module"
+        }
+      ],
+      "returnType": "ModuleDependencyReport"
+    },
+    {
+      "operationId": "getModule",
+      "nickname": "get",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleId}",
+      "summary": "Retrieves a module",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "Module"
+    },
+    {
+      "operationId": "getModuleVersionByModuleAndVersion",
+      "nickname": "getVersion",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleId}/versions/{version}",
+      "summary": "Retrieves a module version for a given module",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Version id or Semantic version"
+        }
+      ],
+      "returnType": "ModuleVersionInfo"
+    },
+    {
+      "operationId": "listModuleOperations",
+      "nickname": "listOperations",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleId}/operations",
+      "summary": "Retrieves a list of operations for the given module. The list of operations will contain: * Orderable and Ordered catalog operations. * Active Api operations. * Ordered Operations that have been activated are taken away from this view. * Additionally, Active operations will contain information about operations the ordered operations they are linked to. In most cases, this will be an array of size 1, however this will not always be the case. Operations may be searched by name, using keywords search. The search will match against any operation name or their simbling&#39;s (ordered operations linked to api operations) If &#x60;latest&#x60; is set to true, only Active operations associated with the latest module version will be returned.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "OperationTypeParam",
+          "description": "Filter by operation type. Note: this is deprecated and will be removed in a future release.  Please use the status filter to filter operation by status."
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "This filter is now deprecated. Please use the &#x60;keywords&#x60; filter instead. Filters operation name(s). This filter is a text search filter which is based on: * The operation name, and all of it&#39;s linked operation names. * Split up sections of operation names, when those are easily identifiable:
+
+  * i.e. resources.projects.list may be filterd on resource, projects and list
+  * resourcesProjectsList may also match the same filters
+Search terms may be separated by a space, in which case the search currently assumes a logical AND. * name&#x3D;&quot;resource projects search&quot; &#x3D;&gt; the name(s) must match resource project and search terms"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "OperationStatus",
+          "description": "Filter by operation status"
+        },
+        {
+          "name": "method",
+          "in": "query",
+          "required": false,
+          "type": "OpenApiMethod",
+          "description": "Filter by HTTP Method. Note that this only applies to active operations.  Orderable and Ordered operations do not yet have a method."
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "latest",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Only return &#x60;active&#x60; operations that are present in the latest version of this module. Orderable operations will be filtered out from the result."
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;Operation&gt;"
+    },
+    {
+      "operationId": "listModuleVersionOperations",
+      "nickname": "listModuleVersionOperations",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleId}/versions/{version}/operations",
+      "summary": "Retrieves a list of operations that were published by the given module version * All operations returned by this endpoint are &#x60;active&#x60; api operations. Operations may be searched by name, using keywords search. The search will match against any operation name or their simbling&#39;s (catalog operations linked to api operations)",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Version id or Semantic version"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "This filter is now deprecated. Please use the &#x60;keywords&#x60; filter instead. Filters operation name(s). This filter is a text search filter which is based on: * The operation name, and all of it&#39;s linked operation names. * Split up sections of operation names, when those are easily identifiable:
+
+  * i.e. resources.projects.list may be filterd on resource, projects and list
+  * resourcesProjectsList may also match the same filters
+Search terms may be separated by a space, in which case the search currently assumes a logical AND. * name&#x3D;&quot;resource projects search&quot; &#x3D;&gt; the name(s) must match resource project and search terms"
+        },
+        {
+          "name": "method",
+          "in": "query",
+          "required": false,
+          "type": "OpenApiMethod",
+          "description": "Filter by HTTP Method. Note that this only applies to active operations.  Orderable and Ordered operations do not yet have a method."
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "productVersionId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filter by product version. This filter will list operations that are compatible with both the given module and product versions"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;Operation&gt;"
+    },
+    {
+      "operationId": "listModuleVersions",
+      "nickname": "listVersions",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules/{moduleId}/versions",
+      "summary": "Retrieves a list of module versions for a given module",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "fileSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only modules file support active or inactive."
+        },
+        {
+          "name": "dataSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only modules data support active or inactive."
+        }
+      ],
+      "returnType": "PagedResults&lt;ModuleVersion&gt;"
+    },
+    {
+      "operationId": "listModules",
+      "nickname": "list",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/modules",
+      "summary": "Retrieves a list of modules",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "ModuleStatus",
+          "description": "Filter by module status"
+        },
+        {
+          "name": "packageNames",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "List only modules compatible with the given product package names."
+        },
+        {
+          "name": "fileSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only modules file support active or inactive."
+        },
+        {
+          "name": "dataSupport",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "List only modules data support active or inactive."
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;Module&gt;"
+    },
+    {
+      "operationId": "searchModuleOptions",
+      "nickname": "searchOptions",
+      "apiClass": "ModuleApi",
+      "method": "GET",
+      "path": "/moduleSearch/options",
+      "summary": "Returns options/filters for modules",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "ResultsColumnOptionsWrapper"
+    },
+    {
+      "operationId": "searchModules",
+      "nickname": "search",
+      "apiClass": "ModuleApi",
+      "method": "POST",
+      "path": "/moduleSearch",
+      "summary": "search modules",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "searchModuleBody",
+          "in": "body",
+          "required": true,
+          "type": "SearchModuleBody"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortObject",
+          "description": "Sort object"
+        }
+      ],
+      "returnType": "PagedResults&lt;ModuleSearch&gt;"
+    }
+,
+    {
+      "operationId": "getModuleVersion",
+      "nickname": "get",
+      "apiClass": "ModuleVersionApi",
+      "method": "GET",
+      "path": "/moduleVersions/{moduleVersionId}",
+      "summary": "Retrieves a module version by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ModuleVersionInfo"
+    },
+    {
+      "operationId": "listModuleVersionScopes",
+      "nickname": "listModuleVersionScopes",
+      "apiClass": "ModuleVersionApi",
+      "method": "GET",
+      "path": "/moduleVersions/{moduleVersionId}/scopes",
+      "summary": "Retrieves a list of scopes for a module version by id",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "moduleVersionId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;ModuleVersionScope&gt;"
+    }
+,
+    {
+      "operationId": "getOperation",
+      "nickname": "get",
+      "apiClass": "OperationApi",
+      "method": "GET",
+      "path": "/operations/{operationId}",
+      "summary": "Retrieves a detailed operation with examples and content type",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "operationId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "The id of an operation"
+        }
+      ],
+      "returnType": "OperationInfo"
+    },
+    {
+      "operationId": "listOperations",
+      "nickname": "list",
+      "apiClass": "OperationApi",
+      "method": "GET",
+      "path": "/operations",
+      "summary": "Retrieves a list of operations The list of operations will contain:
+
+  * Orderable and Ordered catalog operations.
+  * Active Api operations.
+  * Ordered Operations that have been activated are taken away from this view.
+  * Additionally, Active operations will contain information about operations the ordered operations they are linked to.
+    In most cases, this will be an array of size 1, however this will not always be the case.
+Operations may be searched by name, using keywords search. The search will match against any operation name or their simbling&#39;s (ordered operations linked to api operations). If &#x60;latest&#x60; is set to true, only Active operations associated with the latest module version(s) will be returned.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "OperationTypeParam",
+          "description": "Filter by operation type. Note: this is deprecated and will be removed in a future release.  Please use the status filter to filter operation by status."
+        },
+        {
+          "name": "packageNames",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Filter by product package name. This filter cannot be combined with the productVersionId filter"
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "OperationStatus",
+          "description": "Filter by operation status"
+        },
+        {
+          "name": "productVersionId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filter by product version. This filter cannot be combined with the packageNames filter"
+        },
+        {
+          "name": "moduleVersionId",
+          "in": "query",
+          "required": false,
+          "type": "UUID",
+          "description": "Filter by module version. This filter cannot be combined with the packageNames filter"
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "This filter is now deprecated. Please use the &#x60;keywords&#x60; filter instead. Filters operation name(s). This filter is a text search filter which is based on: * The operation name, and all of it&#39;s linked operation names. * Split up sections of operation names, when those are easily identifiable:
+
+  * i.e. resources.projects.list may be filterd on resource, projects and list
+  * resourcesProjectsList may also match the same filters
+Search terms may be separated by a space, in which case the search currently assumes a logical AND. * name&#x3D;&quot;resource projects search&quot; &#x3D;&gt; the name(s) must match resource project and search terms"
+        },
+        {
+          "name": "method",
+          "in": "query",
+          "required": false,
+          "type": "OpenApiMethod",
+          "description": "Filter by HTTP Method. Note that this only applies to active operations.  Orderable and Ordered operations do not yet have a method."
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "latest",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Only return &#x60;active&#x60; operations that are present in the latest version of each module. Orderable operations will be filtered out from the result.  This parameter has no effect when a &#x60;moduleVersionId&#x60; is provided"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;Operation&gt;"
+    }
+,
+    {
+      "operationId": "addOrderItems",
+      "nickname": "addItems",
+      "apiClass": "OrderApi",
+      "method": "POST",
+      "path": "/orders/{orderId}/items",
+      "summary": "Adds an item to an order. This is currently only supported for product orders which may contain a single product id.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "uUID",
+          "in": "body",
+          "required": true,
+          "type": "Array&lt;UUID&gt;",
+          "description": "Adds a set of items to an order"
+        }
+      ],
+      "returnType": "Order"
+    },
+    {
+      "operationId": "createOrder",
+      "nickname": "create",
+      "apiClass": "OrderApi",
+      "method": "POST",
+      "path": "/orders",
+      "summary": "Create an order. One of 3 order types may be requested:
+  * product: A low fidelity product order
+  * catalog: Cataloging request for an existing verified product
+  * operation: Operations from an active cataloged product
+
+An Operation order is a high fidelity order that may contain up to 10 operations that belong to the same module.
+  * Operation orders may only contain &#x60;orderable&#x60; operations. 
+  * Any order containing operations that aren&#39;t &#x60;orderable&#x60; will be vetoed.
+A Product order is a low fidelity order that may contain information on a new product and its vendor and suite parent(s)
+  * The output of such an order is one or more products in the &#x60;verified&#x60; status
+A catalog order is a request to catalog a newly verified product.
+  * The output of such an order is a fully cataloged product with a new module that can connect to the given product
+  * Catalog orders have to go through business and lab analysis in order to lay out cost.
+
+All order types may be provided a custom json context that is set by the customer.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "createOperationOrderCreateProductOrderCreateCatalogingOrder",
+          "in": "body",
+          "required": true,
+          "type": "CreateOperationOrder | CreateProductOrder | CreateCatalogingOrder",
+          "description": "An order that may contain up 10 operations on the same module or a product."
+        }
+      ],
+      "returnType": "Order"
+    },
+    {
+      "operationId": "getOrder",
+      "nickname": "get",
+      "apiClass": "OrderApi",
+      "method": "GET",
+      "path": "/orders/{orderId}",
+      "summary": "Retrieves details about the given order",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        }
+      ],
+      "returnType": "ProductOrder | CatalogingOrder | OperationOrder"
+    },
+    {
+      "operationId": "listOrders",
+      "nickname": "list",
+      "apiClass": "OrderApi",
+      "method": "GET",
+      "path": "/orders",
+      "summary": "Retrieves a list of orders",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "orderStatus",
+          "in": "query",
+          "required": false,
+          "type": "OrderStatusParam",
+          "description": "Filter by order status"
+        },
+        {
+          "name": "orderType",
+          "in": "query",
+          "required": false,
+          "type": "OrderType",
+          "description": "Filter by order type"
+        },
+        {
+          "name": "priority",
+          "in": "query",
+          "required": false,
+          "type": "Priority",
+          "description": "Filter by order priority"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderApi.OrderByEnum",
+          "description": "Order by the given property"
+        }
+      ],
+      "returnType": "PagedResults&lt;Order&gt;"
+    },
+    {
+      "operationId": "removeOrderItems",
+      "nickname": "removeItems",
+      "apiClass": "OrderApi",
+      "method": "DELETE",
+      "path": "/orders/{orderId}/items",
+      "summary": "Removes items from an order.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "itemIds",
+          "in": "query",
+          "required": true,
+          "type": "Array&lt;UUID&gt;",
+          "description": "An array of items to remove from this order"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "updateOrder",
+      "nickname": "patch",
+      "apiClass": "OrderApi",
+      "method": "PATCH",
+      "path": "/orders/{orderId}",
+      "summary": "Updates an order",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "type": "UUID"
+        },
+        {
+          "name": "patchOrder",
+          "in": "body",
+          "required": true,
+          "type": "PatchOrder",
+          "description": "Properties that may be updated on an order"
+        }
+      ],
+      "returnType": "Order"
+    }
+,
+    {
+      "operationId": "getModuleCompatibilityMatrix",
+      "nickname": "getModuleCompatibilityMatrix",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products/{packageName}/moduleCompatibility",
+      "summary": "Retrieves a products compatibility matrix.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "packageName",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "moduleIds",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;UUID&gt;",
+          "description": "Filter to a specific set of modules"
+        }
+      ],
+      "returnType": "ProductModuleCompatibility"
+    },
+    {
+      "operationId": "getProduct",
+      "nickname": "get",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products/{packageName}",
+      "summary": "Retrieves detailed information about a product",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "packageName",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "returnType": "ProductHierarchy"
+    },
+    {
+      "operationId": "getProductCompatibilityMatrix",
+      "nickname": "getProductCompatibilityMatrix",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products/{packageName}/compatibility",
+      "summary": "Retrieves a products compatibility matrix. This operation has been deprecated and will be replaced by getModuleCompatibilityMatrix &#x60;/products/{packageName}/moduleCompatibility&#x60;",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "packageName",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "returnType": "ModuleCompatibility"
+    },
+    {
+      "operationId": "listProductVersions",
+      "nickname": "listVersions",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products/{packageName}/versions",
+      "summary": "Retrieves a product",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "packageName",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;StoreProductVersion&gt;"
+    },
+    {
+      "operationId": "listProducts",
+      "nickname": "list",
+      "apiClass": "ProductApi",
+      "method": "GET",
+      "path": "/products",
+      "summary": "Retrieves a list of products",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "VspStatusEnum",
+          "description": "Filter by resource status"
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by resource name. This filter is deprecated. Please use the &#x60;keywords&#x60; filter instead."
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByProductCatalogParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "tag",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by product resource tag"
+        }
+      ],
+      "returnType": "PagedResults&lt;StoreProduct&gt;"
+    }
+,
+    {
+      "operationId": "getCatalogSummaryReport",
+      "nickname": "getCatalogSummary",
+      "apiClass": "ReportApi",
+      "method": "GET",
+      "path": "/report/catalogSummary",
+      "summary": "Generates a catalog summary report.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "from",
+          "in": "query",
+          "required": false,
+          "type": "Date",
+          "description": "the from date of the interval."
+        },
+        {
+          "name": "to",
+          "in": "query",
+          "required": false,
+          "type": "Date",
+          "description": "the to date of the interval."
+        }
+      ],
+      "returnType": "CatalogSummaryReport"
+    }
+,
+    {
+      "operationId": "getResource",
+      "nickname": "getResource",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}",
+      "summary": "Returns a resource by ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "inflate",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "alerts",
+          "in": "query",
+          "required": false,
+          "type": "AlertFilter",
+          "description": "Flag indicating whether or not the result set should include alert aggregates, and whether they should be aggregated over recursively."
+        }
+      ],
+      "returnType": "ResourceView"
+    },
+    {
+      "operationId": "getResourceTypes",
+      "nickname": "getResourceTypes",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resourceTypes",
+      "summary": "Retrieves all types available in this application",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "Array&lt;ResourceType&gt;"
+    },
+    {
+      "operationId": "getTagsForResource",
+      "nickname": "getTagsForResource",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources/{id}/tags",
+      "summary": "Retrieves all Tags assigned to the given resource",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        }
+      ],
+      "returnType": "Array&lt;TagView&gt;"
+    },
+    {
+      "operationId": "resourceSearch",
+      "nickname": "resourceSearch",
+      "apiClass": "ResourceApi",
+      "method": "POST",
+      "path": "/resources",
+      "summary": "Searches resources by keywords, type, tags, and payload conditions",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "resourceSearchFilter",
+          "in": "body",
+          "required": false,
+          "type": "ResourceSearchFilter",
+          "description": "Filters to apply to the search."
+        }
+      ],
+      "returnType": "PagedResults&lt;ResourceView&gt;"
+    },
+    {
+      "operationId": "searchResources",
+      "nickname": "searchResources",
+      "apiClass": "ResourceApi",
+      "method": "GET",
+      "path": "/resources",
+      "summary": "Searches resources by keywords type and tags",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will be combined as an &#x60;or&#x60;. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "tags",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "Names of tags to search for. These will be combined as an &#x60;or&#x60;. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "types",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "Resource Type to search for. These will be combined as an &#x60;or&#x60;. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "inflate",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "description": "Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release."
+        }
+      ],
+      "returnType": "PagedResults&lt;ResourceView&gt;"
+    },
+    {
+      "operationId": "tagResource",
+      "nickname": "tagResource",
+      "apiClass": "ResourceApi",
+      "method": "POST",
+      "path": "/resources/{id}/tags",
+      "summary": "Adds the provided tags to the specified resource",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "uUID",
+          "in": "body",
+          "required": true,
+          "type": "Array&lt;UUID&gt;"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "untagResource",
+      "nickname": "untagResource",
+      "apiClass": "ResourceApi",
+      "method": "DELETE",
+      "path": "/resources/{resourceId}/tags/{tagId}",
+      "summary": "Removes a tag from a resource",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "resourceId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        },
+        {
+          "name": "tagId",
+          "in": "path",
+          "required": true,
+          "type": "UUID",
+          "description": "ID of the resource"
+        }
+      ],
+      "returnType": "void"
+    }
+,
+    {
+      "operationId": "getVendorSuite",
+      "nickname": "get",
+      "apiClass": "SuiteApi",
+      "method": "GET",
+      "path": "/vendors/{vendorCode}/suites/{suiteCode}",
+      "summary": "Retrieves a suites details by vendor and suite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "suiteCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "returnType": "StoreSuite"
+    },
+    {
+      "operationId": "listSuiteProducts",
+      "nickname": "listProducts",
+      "apiClass": "SuiteApi",
+      "method": "GET",
+      "path": "/vendors/{vendorCode}/suites/{suiteCode}/products",
+      "summary": "Retrieves products associated with a vendor and suite",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "suiteCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by resource name. This filter is deprecated. Please use the &#x60;keywords&#x60; filter instead."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "VspStatusEnum",
+          "description": "Filter by resource status"
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByProductCatalogParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "tag",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by product resource tag"
+        }
+      ],
+      "returnType": "PagedResults&lt;StoreProduct&gt;"
+    },
+    {
+      "operationId": "listSuites",
+      "nickname": "list",
+      "apiClass": "SuiteApi",
+      "method": "GET",
+      "path": "/suites",
+      "summary": "Retrieves a list of suites",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by resource name. This filter is deprecated. Please use the &#x60;keywords&#x60; filter instead."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "VspStatusEnum",
+          "description": "Filter by resource status"
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByProductCatalogParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;StoreSuite&gt;"
+    }
+,
+    {
+      "operationId": "addResourceTypesToTagType",
+      "nickname": "addResourceTypesToTagType",
+      "apiClass": "TagApi",
+      "method": "POST",
+      "path": "/tagTypes/{type}/resourceTypes",
+      "summary": "Associates the given ResourceTypes with the given Tag Type",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "type",
+          "in": "path",
+          "required": true,
+          "type": "Nmtoken",
+          "description": "Tag type"
+        },
+        {
+          "name": "nmtoken",
+          "in": "body",
+          "required": true,
+          "type": "Array&lt;Nmtoken&gt;"
+        }
+      ],
+      "returnType": "void"
+    },
+    {
+      "operationId": "getResourceTypesForTagType",
+      "nickname": "getResourceTypesForTagType",
+      "apiClass": "TagApi",
+      "method": "GET",
+      "path": "/tagTypes/{type}/resourceTypes",
+      "summary": "Retrieves a list of all resource types which are associated with the given tag type.",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "type",
+          "in": "path",
+          "required": true,
+          "type": "Nmtoken",
+          "description": "Tag type"
+        }
+      ],
+      "returnType": "Array&lt;ResourceType&gt;"
+    },
+    {
+      "operationId": "getTagTypes",
+      "nickname": "getTagTypes",
+      "apiClass": "TagApi",
+      "method": "GET",
+      "path": "/tagTypes",
+      "summary": "Retrieves all tag types available in this application",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "Array&lt;TagType&gt;"
+    },
+    {
+      "operationId": "listTags",
+      "nickname": "listTags",
+      "apiClass": "TagApi",
+      "method": "GET",
+      "path": "/tags",
+      "summary": "Retrieves a list of tags available in this application",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "tagTypes",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;Nmtoken&gt;",
+          "description": "Tag type(s) to filter by. These will be combined as an &#x60;or&#x60;"
+        },
+        {
+          "name": "nameFilter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter to apply to the &#x60;name&#x60; field. This will be &#x60;ORed&#x60; with other filters  and is case-insensitive."
+        }
+      ],
+      "returnType": "PagedResults&lt;TagView&gt;"
+    }
+,
+    {
+      "operationId": "getVendor",
+      "nickname": "get",
+      "apiClass": "VendorApi",
+      "method": "GET",
+      "path": "/vendors/{vendorCode}",
+      "summary": "Retrieves a vendor",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "returnType": "StoreVendor"
+    },
+    {
+      "operationId": "listVendorProducts",
+      "nickname": "listProducts",
+      "apiClass": "VendorApi",
+      "method": "GET",
+      "path": "/vendors/{vendorCode}/products",
+      "summary": "Retrieves products associated with a vendor",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by resource name. This filter is deprecated. Please use the &#x60;keywords&#x60; filter instead."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "VspStatusEnum",
+          "description": "Filter by resource status"
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByProductCatalogParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "tag",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by product resource tag"
+        }
+      ],
+      "returnType": "PagedResults&lt;StoreProduct&gt;"
+    },
+    {
+      "operationId": "listVendorSuites",
+      "nickname": "listSuites",
+      "apiClass": "VendorApi",
+      "method": "GET",
+      "path": "/vendors/{vendorCode}/suites",
+      "summary": "Retrieves product suites associated with a vendor",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "vendorCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by resource name. This filter is deprecated. Please use the &#x60;keywords&#x60; filter instead."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "VspStatusEnum",
+          "description": "Filter by resource status"
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByProductCatalogParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;StoreSuite&gt;"
+    },
+    {
+      "operationId": "listVendors",
+      "nickname": "list",
+      "apiClass": "VendorApi",
+      "method": "GET",
+      "path": "/vendors",
+      "summary": "Retrieves a list of vendors",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter by resource name. This filter is deprecated. Please use the &#x60;keywords&#x60; filter instead."
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "required": false,
+          "type": "VspStatusEnum",
+          "description": "Filter by resource status"
+        },
+        {
+          "name": "keywords",
+          "in": "query",
+          "required": false,
+          "type": "Array&lt;string&gt;",
+          "description": "Keywords to search by. These will match against resource name/description and aliases The following filter uses text search, results will be ordered by relevancy and whichever order/sort parameter was provided alongside. i.e. sort by rank desc, name asc"
+        },
+        {
+          "name": "orderBy",
+          "in": "query",
+          "required": false,
+          "type": "OrderByProductCatalogParam",
+          "description": "Order by the given property"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "SortParam",
+          "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        }
+      ],
+      "returnType": "PagedResults&lt;StoreVendor&gt;"
+    }
+
+  ],
+  "operationMap": {
+    "getConnectionProfile": "ConnectionProfileApi.get",
+    "listConnectionProfileModules": "ConnectionProfileApi.listModules"
+,
+    "getEvent": "EventApi.get",
+    "listEvents": "EventApi.list"
+,
+    "health": "HealthcheckApi.health"
+,
+    "getDependencyReport": "ModuleApi.getDependencyReport",
+    "getModule": "ModuleApi.get",
+    "getModuleVersionByModuleAndVersion": "ModuleApi.getVersion",
+    "listModuleOperations": "ModuleApi.listOperations",
+    "listModuleVersionOperations": "ModuleApi.listModuleVersionOperations",
+    "listModuleVersions": "ModuleApi.listVersions",
+    "listModules": "ModuleApi.list",
+    "searchModuleOptions": "ModuleApi.searchOptions",
+    "searchModules": "ModuleApi.search"
+,
+    "getModuleVersion": "ModuleVersionApi.get",
+    "listModuleVersionScopes": "ModuleVersionApi.listModuleVersionScopes"
+,
+    "getOperation": "OperationApi.get",
+    "listOperations": "OperationApi.list"
+,
+    "addOrderItems": "OrderApi.addItems",
+    "createOrder": "OrderApi.create",
+    "getOrder": "OrderApi.get",
+    "listOrders": "OrderApi.list",
+    "removeOrderItems": "OrderApi.removeItems",
+    "updateOrder": "OrderApi.patch"
+,
+    "getModuleCompatibilityMatrix": "ProductApi.getModuleCompatibilityMatrix",
+    "getProduct": "ProductApi.get",
+    "getProductCompatibilityMatrix": "ProductApi.getProductCompatibilityMatrix",
+    "listProductVersions": "ProductApi.listVersions",
+    "listProducts": "ProductApi.list"
+,
+    "getCatalogSummaryReport": "ReportApi.getCatalogSummary"
+,
+    "getResource": "ResourceApi.getResource",
+    "getResourceTypes": "ResourceApi.getResourceTypes",
+    "getTagsForResource": "ResourceApi.getTagsForResource",
+    "resourceSearch": "ResourceApi.resourceSearch",
+    "searchResources": "ResourceApi.searchResources",
+    "tagResource": "ResourceApi.tagResource",
+    "untagResource": "ResourceApi.untagResource"
+,
+    "getVendorSuite": "SuiteApi.get",
+    "listSuiteProducts": "SuiteApi.listProducts",
+    "listSuites": "SuiteApi.list"
+,
+    "addResourceTypesToTagType": "TagApi.addResourceTypesToTagType",
+    "getResourceTypesForTagType": "TagApi.getResourceTypesForTagType",
+    "getTagTypes": "TagApi.getTagTypes",
+    "listTags": "TagApi.listTags"
+,
+    "getVendor": "VendorApi.get",
+    "listVendorProducts": "VendorApi.listProducts",
+    "listVendorSuites": "VendorApi.listSuites",
+    "listVendors": "VendorApi.list"
+
+  }
+}
