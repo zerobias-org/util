@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-logger",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Module wrapping winston for handling different endpoints and transports.",
   "type": "module",
   "main": "dist/src/index.js",

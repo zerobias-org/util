@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-spectral-config",
   "description": "Zerobias spectral configuration options",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "author": "team@zerobias.com",
   "license": "ISC",
@@ -23,7 +23,7 @@
   "dependencies": {
     "@stoplight/json-ref-resolver": "3.1.6",
     "@stoplight/spectral-cli": "6.15.0",
-    "@zerobias-org/eslint-config": "^1.0.6",
+    "@zerobias-org/eslint-config": "^1.0.7",
     "@zerobias-org/types-format-spectral-ruleset": "^1.0.0"
   },
   "files": [
