@@ -144,13 +144,20 @@ export class LoggerEngine {
   private logLevel(level: string): number {
     if (level) {
       switch (level.toLowerCase()) {
-        case 'trace': return this.LEVEL_TRACE;
-        case 'debug': return this.LEVEL_DEBUG;
-        case 'info': return this.LEVEL_INFO;
-        case 'warn': return this.LEVEL_WARN;
-        case 'error': return this.LEVEL_ERROR;
-        case 'crit': return this.LEVEL_CRIT;
-        default: return this.LEVEL_ALL;
+        case 'trace': { return this.LEVEL_TRACE;
+        }
+        case 'debug': { return this.LEVEL_DEBUG;
+        }
+        case 'info': { return this.LEVEL_INFO;
+        }
+        case 'warn': { return this.LEVEL_WARN;
+        }
+        case 'error': { return this.LEVEL_ERROR;
+        }
+        case 'crit': { return this.LEVEL_CRIT;
+        }
+        default: { return this.LEVEL_ALL;
+        }
       }
     }
 
@@ -165,30 +172,30 @@ export class LoggerEngine {
 
   debug(msg: string, jsonDetails?: object): void {
     if (this.canLog('debug')) {
-      if (jsonDetails != null) {
-        this.logger.log({ level: 'debug', message: { logMessage: msg, jsonDetails } as unknown as string });
-      } else {
+      if (jsonDetails == null) {
         this.logger.log({ level: 'debug', message: { logMessage: msg } as unknown as string });
+      } else {
+        this.logger.log({ level: 'debug', message: { logMessage: msg, jsonDetails } as unknown as string });
       }
     }
   }
 
   info(msg: string, jsonDetails?: object): void {
     if (this.canLog('info')) {
-      if (jsonDetails != null) {
-        this.logger.log({ level: 'info', message: { logMessage: msg, jsonDetails } as unknown as string });
-      } else {
+      if (jsonDetails == null) {
         this.logger.log({ level: 'info', message: { logMessage: msg } as unknown as string });
+      } else {
+        this.logger.log({ level: 'info', message: { logMessage: msg, jsonDetails } as unknown as string });
       }
     }
   }
 
   warn(msg: string, jsonDetails?: object): void {
     if (this.canLog('warn')) {
-      if (jsonDetails != null) {
-        this.logger.log({ level: 'warning', message: { logMessage: msg, jsonDetails } as unknown as string });
-      } else {
+      if (jsonDetails == null) {
         this.logger.log({ level: 'warning', message: { logMessage: msg } as unknown as string });
+      } else {
+        this.logger.log({ level: 'warning', message: { logMessage: msg, jsonDetails } as unknown as string });
       }
     }
   }
@@ -199,20 +206,20 @@ export class LoggerEngine {
 
   error(msg: string, jsonDetails?: object): void {
     if (this.canLog('error')) {
-      if (jsonDetails != null) {
-        this.logger.log({ level: 'error', message: { logMessage: msg, jsonDetails } as unknown as string });
-      } else {
+      if (jsonDetails == null) {
         this.logger.log({ level: 'error', message: { logMessage: msg } as unknown as string });
+      } else {
+        this.logger.log({ level: 'error', message: { logMessage: msg, jsonDetails } as unknown as string });
       }
     }
   }
 
   crit(msg: string, jsonDetails?: object): void {
     if (this.canLog('crit')) {
-      if (jsonDetails != null) {
-        this.logger.log({ level: 'crit', message: { logMessage: msg, jsonDetails } as unknown as string });
-      } else {
+      if (jsonDetails == null) {
         this.logger.log({ level: 'crit', message: { logMessage: msg } as unknown as string });
+      } else {
+        this.logger.log({ level: 'crit', message: { logMessage: msg, jsonDetails } as unknown as string });
       }
     }
   }

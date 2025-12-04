@@ -16,8 +16,8 @@
     "transpile": "tsc",
     "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test -- --watch --reporter=min",
-    "lint": "eslint src/",
-    "lint:fix": "eslint --fix src/",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
     "build": "npm run transpile",
     "prepublishOnly": "npx nx run @zerobias-org/util-api-invoker-isomorphic:build"
   },

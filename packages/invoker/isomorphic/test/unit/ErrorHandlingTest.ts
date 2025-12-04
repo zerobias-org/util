@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 import { testErrorHandling } from '@zerobias-org/util-api-invoker-api/dist/test.js';
 import { ApiInvokerImpl } from '../../src/ApiInvokerImpl.js';
 

@@ -120,13 +120,13 @@ export class RequestInspector {
         this.requestHistory.push(record);
 
         // Invoke callbacks
-        this.requestCallbacks.forEach(cb => {
+        for (const cb of this.requestCallbacks) {
           try {
             cb(config);
           } catch (error) {
             console.error('Error in request callback:', error);
           }
-        });
+        }
 
         return config;
       },
@@ -144,9 +144,8 @@ export class RequestInspector {
 
         // Find corresponding request record
         const url = this.buildFullUrl(response.config);
-        const record = this.requestHistory
-          .slice()
-          .reverse()
+        const record = [...this.requestHistory]
+          .toReversed()
           .find(r => r.url === url && !r.response && !r.error);
 
         if (record) {
@@ -159,13 +158,13 @@ export class RequestInspector {
         }
 
         // Invoke callbacks
-        this.responseCallbacks.forEach(cb => {
+        for (const cb of this.responseCallbacks) {
           try {
             cb(response);
           } catch (error) {
             console.error('Error in response callback:', error);
           }
-        });
+        }
 
         return response;
       },
@@ -177,9 +176,8 @@ export class RequestInspector {
 
           // Find corresponding request record
           const url = this.buildFullUrl(error.config);
-          const record = this.requestHistory
-            .slice()
-            .reverse()
+          const record = [...this.requestHistory]
+            .toReversed()
             .find(r => r.url === url && !r.response && !r.error);
 
           if (record) {
@@ -196,13 +194,13 @@ export class RequestInspector {
         }
 
         // Invoke callbacks
-        this.errorCallbacks.forEach(cb => {
+        for (const cb of this.errorCallbacks) {
           try {
             cb(error);
           } catch (error) {
             console.error('Error in error callback:', error);
           }
-        });
+        }
 
         return Promise.reject(error);
       }
@@ -341,7 +339,7 @@ export class RequestInspector {
     let totalDuration = 0;
     let durationCount = 0;
 
-    this.requestHistory.forEach(record => {
+    for (const record of this.requestHistory) {
       // Count by method
       stats.byMethod[record.method] = (stats.byMethod[record.method] || 0) + 1;
 
@@ -364,7 +362,7 @@ export class RequestInspector {
       } else if (record.error) {
         stats.failed++;
       }
-    });
+    }
 
     if (durationCount > 0) {
       stats.averageDuration = totalDuration / durationCount;

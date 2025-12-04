@@ -10,6 +10,8 @@ import { ApiInvokerImpl } from '@zerobias-org/util-api-invoker-isomorphic';
 import { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { RequestInspector } from './RequestInspector.js';
 
+const DEFAULT_AXIOS_CONFIG: AxiosRequestConfig = { validateStatus: () => true };
+
 /**
  * Abstract base class for Platform API clients
  *
@@ -67,7 +69,7 @@ export class BaseApiClient {
    * @param axiosConfig - Axios configuration options
    *                      Defaults to accepting all status codes for custom error handling
    */
-  constructor(axiosConfig: AxiosRequestConfig = { validateStatus: () => true }) {
+  constructor(axiosConfig: AxiosRequestConfig = DEFAULT_AXIOS_CONFIG) {
     this.apiInvoker = new ApiInvokerImpl(axiosConfig);
   }
 
@@ -142,7 +144,7 @@ export class BaseApiClient {
     try {
       const response = await this.apiInvoker.client.get('/me');
       return response.status === 200;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -157,7 +159,7 @@ export class BaseApiClient {
    */
   async disconnect(): Promise<void> {
     this._connectionProfile = undefined;
-    return Promise.resolve();
+    return;
   }
 
   /**

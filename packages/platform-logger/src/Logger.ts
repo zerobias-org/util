@@ -29,8 +29,8 @@ export class Logger {
    * This public function goes through each instantiated logger engine instance and updates its transports log levels to current env var
    */
   public updateLoggerTransportLevels(): void {
-    this.loggerInstances.forEach((loggerEngine) => {
+    for (const loggerEngine of this.loggerInstances) {
       loggerEngine.updateTransportLevels();
-    });
+    }
   }
 }

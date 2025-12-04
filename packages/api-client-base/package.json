@@ -17,6 +17,8 @@
     "docs:typedoc": "typedoc --out docs/api src/index.ts",
     "docs": "npm run docs:typedoc",
     "build": "npm run clean && npm run compile && npm run docs",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts'",
     "test": "echo 'No tests defined'",
     "prepublishOnly": "npx nx run @zerobias-org/util-api-client-base:build"
   },

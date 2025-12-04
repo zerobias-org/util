@@ -1,5 +1,5 @@
 import * as winston from 'winston';
-import * as util from 'node:util';
+import { format as utilFormat } from 'node:util';
 import TransportStream from 'winston-transport';
 
 const { format } = winston;
@@ -9,7 +9,7 @@ function transform(info: any): any {
   const tempInfo = info;
 
   if (args) {
-    tempInfo.message = util.format(tempInfo.message, ...args);
+    tempInfo.message = utilFormat(tempInfo.message, ...args);
   }
 
   return tempInfo;

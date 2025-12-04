@@ -76,7 +76,7 @@ export abstract class BaseConnector {
   async disconnect(): Promise<void> {
     this.targetId = undefined;
     this.status = ConnectionStatus.Off;
-    return Promise.resolve();
+    return;
   }
 
   /**
@@ -88,9 +88,7 @@ export abstract class BaseConnector {
    * @returns Promise resolving to true if connected, false otherwise
    */
   async isConnected(): Promise<boolean> {
-    return Promise.resolve(
-      this.targetId !== undefined && this.status === ConnectionStatus.On
-    );
+    return this.targetId !== undefined && this.status === ConnectionStatus.On;
   }
 
   /**
