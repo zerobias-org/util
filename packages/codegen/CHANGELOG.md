@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.14 (2025-12-04)</small>
+
+* fix: publish with lint, update packages ([2dfca3d](https://github.com/zerobias-org/util/commit/2dfca3d))
+
+
+
+
+
 ## <small>1.0.13 (2025-12-03)</small>
 
 * fix: lets go ([9c0cc3a](https://github.com/zerobias-org/util/commit/9c0cc3a))
