@@ -102,9 +102,11 @@ jobs:
             echo "has_packages=false" >> $GITHUB_OUTPUT
           else
             echo "has_packages=true" >> $GITHUB_OUTPUT
-            echo "output<<EOF" >> $GITHUB_OUTPUT
-            echo "$output" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            # Escape for JSON: replace newlines with \n
+            escaped=$(echo "$output" | jq -Rs '.')
+            # Remove surrounding quotes added by jq
+            escaped="${escaped:1:-1}"
+            echo "output=${escaped}" >> $GITHUB_OUTPUT
           fi
 
       - name: Slack Notification on failure
