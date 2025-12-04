@@ -29,7 +29,8 @@
     "generate:test": "./bin/hub-generator.js generate -g hub-module -i ./api.yml -o generated -p modulePackage=../../src",
     "generate:server:test": "./bin/hub-generator.js generate -g hub-module-server -i ./api.yml -o generated/ -p modulePackage=../../src",
     "test:regression": "npm run build && mocha --inline-diffs --reporter=list test/unit/**/*.ts",
-    "test": "npm run generate:test"
+    "test": "npm run generate:test",
+    "prepublishOnly": "npm run build"
   },
   "files": [
     "bin/",

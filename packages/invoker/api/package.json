@@ -20,7 +20,8 @@
     "transpile": "tsc",
     "lint": "eslint src/",
     "lint:fix": "eslint --fix src/",
-    "build": "npm run transpile"
+    "build": "npm run transpile",
+    "prepublishOnly": "npm run build"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",

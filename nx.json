@@ -39,12 +39,10 @@
       "cache": true
     },
     "lint": {
-      "dependsOn": ["^transpile"],
       "inputs": ["default", "{workspaceRoot}/.eslintrc.json"],
       "cache": true
     },
     "lint:fix": {
-      "dependsOn": ["^transpile"],
       "cache": false
     },
     "generate": {

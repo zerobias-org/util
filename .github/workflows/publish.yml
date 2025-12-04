@@ -74,10 +74,8 @@ jobs:
             echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install and build
-        run: |
-          npm i
-          nx affected -t build --base=${{ steps.base_ref.outputs.BASE_REF }}
+      - name: Install dependencies
+        run: npm i
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
