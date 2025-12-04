@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 
 import { MimeType } from '@zerobias-org/types-core-js';
 

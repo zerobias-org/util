@@ -19,25 +19,23 @@ import axios, { AxiosInstance, AxiosRequestConfig, Method } from 'axios';
 import FormData, { AppendOptions } from 'form-data';
 import qs from 'qs';
 
+const DEFAULT_AXIOS_CONFIG: AxiosRequestConfig = { validateStatus: () => true };
+
 export class ApiInvokerImpl implements ApiInvoker {
   readonly client: AxiosInstance;
 
   protected axiosConfig: AxiosRequestConfig;
 
-  constructor(axiosConfig: AxiosRequestConfig = { validateStatus: () => true }) {
+  constructor(axiosConfig: AxiosRequestConfig = DEFAULT_AXIOS_CONFIG) {
     this.client = axios.create(axiosConfig);
     this.axiosConfig = axiosConfig;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+   
   protected async extractErrorMessage(output: ResponsePrototype): Promise<string> {
     const content = output.body;
     let message = '';
-    if (content instanceof Object) {
-      message = JSON.stringify(output.body);
-    } else {
-      message = String(content as any);
-    }
+    message = content instanceof Object ? JSON.stringify(output.body) : String(content as any);
     return message;
   }
 
@@ -79,11 +77,12 @@ export class ApiInvokerImpl implements ApiInvoker {
           throw new UnexpectedError(await this.extractErrorMessage(output));
         }
         case 504: {
-          const duration = Duration.fromMilliseconds((new Date().getTime()) - startTime);
+          const duration = Duration.fromMilliseconds((Date.now()) - startTime);
           throw new TimeoutError(duration);
         }
-        default:
+        default: {
           throw new UnexpectedError(await this.extractErrorMessage(output));
+        }
       }
     } else if (output.body && output.headers && output.headers['hub-error']) {
       // New spot to check for succesful hub attempts but failures in remote products
@@ -120,11 +119,12 @@ export class ApiInvokerImpl implements ApiInvoker {
             throw new UnexpectedError(await this.extractErrorMessage(output));
           }
           case '504': {
-            const duration = Duration.fromMilliseconds((new Date().getTime()) - startTime);
+            const duration = Duration.fromMilliseconds((Date.now()) - startTime);
             throw new TimeoutError(duration);
           }
-          default:
+          default: {
             throw new UnexpectedError(await this.extractErrorMessage(output));
+          }
         }
       }
 
@@ -132,15 +132,15 @@ export class ApiInvokerImpl implements ApiInvoker {
     }
   }
 
-  // eslint-disable-next-line class-methods-use-this
+   
   protected prepareRequest(input: RequestPrototype): AxiosRequestConfig {
     ApiInvokerImpl.sanitizeInput(input);
 
-    /* eslint-disable max-len */
+     
     const baseURL = input.location.hostname
       ? `${input.location.protocol}://${input.location.hostname}${input.location.port ? (`:${input.location.port}`) : ''}`
       : '';
-    /* eslint-enable max-len */
+     
 
     return {
       data: input.body,
@@ -161,7 +161,7 @@ export class ApiInvokerImpl implements ApiInvoker {
   }
 
   async invokeApi(input: RequestPrototype): Promise<ResponsePrototype> {
-    const startTime = new Date().getTime();
+    const startTime = Date.now();
     return this.client.request(this.prepareRequest(input))
       .then((response) => {
         // Convert AxiosHeaders to Record<string, string>, filtering out undefined values
@@ -196,7 +196,7 @@ export class ApiInvokerImpl implements ApiInvoker {
   protected static sanitizeInput(input: RequestPrototype) {
     if (input.options?.body?.type === RequestType.Multipart) {
       const formData = new FormData();
-      Object.keys(input.body as any).forEach((fieldName) => {
+      for (const fieldName of Object.keys(input.body as any)) {
         let appendOptions: AppendOptions | undefined;
         if (input.options?.body?.form?.fields?.[fieldName]) {
           appendOptions = {
@@ -208,13 +208,13 @@ export class ApiInvokerImpl implements ApiInvoker {
           };
         }
         formData.append(fieldName, (input.body as any)[fieldName], appendOptions);
-      });
+      }
       input.headers = { ...formData.getHeaders(), ...input.headers };
       input.body = formData;
     }
   }
 
-  // eslint-disable-next-line class-methods-use-this
+   
   async destroy(): Promise<void> {
     // no-op
   }
