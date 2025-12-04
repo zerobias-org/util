@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.8 (2025-12-04)</small>
+
+* fix: correct lint ([d7518ec](https://github.com/zerobias-org/util/commit/d7518ec))
+
+
+
+
+
 ## <small>1.0.7 (2025-12-03)</small>
 
 * fix: lets go ([9c0cc3a](https://github.com/zerobias-org/util/commit/9c0cc3a))
