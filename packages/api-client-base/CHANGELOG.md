@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.5 (2025-12-04)</small>
+
+* fix: tsconfig updates ([f26d6c0](https://github.com/zerobiasorg/util/commit/f26d6c0))
+
+
+
+
+
 ## <small>1.0.4 (2025-12-04)</small>
 
 * fix: added and corrected lint for all projects ([bf18b93](https://github.com/zerobiasorg/util/commit/bf18b93))
