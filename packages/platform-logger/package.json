@@ -16,7 +16,7 @@
     "compile": "tsc",
     "build": "npm run clean && npm run compile",
     "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npx nx run @zerobias-org/util-platform-logger:build"
   },
   "files": [
     "dist/src",

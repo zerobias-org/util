@@ -18,7 +18,7 @@
     "docs": "npm run docs:typedoc",
     "build": "npm run clean && npm run compile && npm run docs",
     "test": "echo 'No tests defined'",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npx nx run @zerobias-org/util-api-client-base:build"
   },
   "files": [
     "dist/src",

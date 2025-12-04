@@ -19,7 +19,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint --fix src/",
     "build": "npm run transpile",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npx nx run @zerobias-org/util-api-invoker-isomorphic:build"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",

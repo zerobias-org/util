@@ -16,7 +16,7 @@
     "compile": "tsc",
     "build": "npm run clean && npm run compile",
     "test": "mocha",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npx nx run @zerobias-org/util-logger:build"
   },
   "files": [
     "dist/src",
