@@ -124,16 +124,6 @@ jobs:
                   type: "mrkdwn"
                   text: "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
 
-      - name: Format Slack message
-        id: format_slack
-        if: success() && steps.get_package_versions.outputs.has_packages == 'true'
-        run: |
-          # Replace literal \n with actual newlines for Slack
-          formatted=$(echo '${{ steps.get_package_versions.outputs.output }}' | sed 's/\\n/\n/g')
-          echo "formatted<<EOF" >> $GITHUB_OUTPUT
-          echo "$formatted" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
       - name: Slack Notification
         uses: slackapi/slack-github-action@v2.1.1
         if: success() && steps.get_package_versions.outputs.has_packages == 'true'
@@ -146,7 +136,7 @@ jobs:
               - color: "#36a64f"
                 fallback: "New Utilities Published"
                 title: ":robot: New Utilities Published :tada:"
-                text: "${{ steps.format_slack.outputs.formatted }}"
+                text: "${{ steps.get_package_versions.outputs.output }}"
                 footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
                 mrkdwn_in:
                   - text
