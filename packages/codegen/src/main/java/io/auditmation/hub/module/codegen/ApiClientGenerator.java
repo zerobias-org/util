@@ -479,7 +479,12 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
         for (Map.Entry<String, Set<String>> entry : typesImports.entrySet()) {
             Map<String, String> im = new HashMap<>();
             im.put("classname", Joiner.on(", ").join(entry.getValue()));
-            im.put("filename", entry.getKey());
+            // For ESM compatibility, relative paths need /index.js extension
+            String importPath = entry.getKey();
+            if (importPath.startsWith(".")) {
+                importPath = importPath + "/index.js";
+            }
+            im.put("filename", importPath);
             tsImports.add(im);
         }
         return tsImports;
