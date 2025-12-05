@@ -16,16 +16,18 @@ import {
   InvalidCredentialsError,
   UnexpectedError,
 } from '@zerobias-org/types-core-js';
-import { middleware } from 'express-openapi-validator';
-import {
-  Format,
-  InternalServerError,
-  BadRequest,
-  NotFound,
-  Unauthorized,
-  Forbidden,
-  HttpError
-} from 'express-openapi-validator/dist/framework/types';
+import { middleware, error } from 'express-openapi-validator';
+
+// ESM-compatible: destructure error classes from the error export
+const { InternalServerError, BadRequest, NotFound, Unauthorized, Forbidden } = error;
+
+// Types defined inline since they're not exported from main module
+type Format = {
+  name: string;
+  type?: 'number' | 'string';
+  validate: (v: any) => boolean;
+};
+type HttpError = Error & { status: number; errors: any[] };
 import { {{apiName}} } from '{{modulePackage}}';
 import * as express from 'express';
 import * as path from 'path';
