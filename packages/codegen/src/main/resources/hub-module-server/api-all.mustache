@@ -28,6 +28,11 @@ type Format = {
   validate: (v: any) => boolean;
 };
 type HttpError = Error & { status: number; errors: any[] };
+
+// Type guard for HttpError since we can't use instanceof with a type
+function isHttpError(err: any): err is HttpError {
+  return err instanceof Error && typeof err.status === 'number' && Array.isArray(err.errors);
+}
 import { {{apiName}} } from '{{modulePackage}}';
 import * as express from 'express';
 import * as path from 'path';
@@ -131,8 +136,7 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
     } else if (err instanceof InternalServerError) {
       statusCode = err.status;
       json = (new UnexpectedError(err.message, statusCode)).toJSON();
-    } else if (err instanceof HttpError
-    ) {
+    } else if (isHttpError(err)) {
       statusCode = err.status;
       json = (new UnexpectedError(err.message, statusCode)).toJSON();
     } else {
