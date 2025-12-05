@@ -1,111 +1,36 @@
-import * as winston from 'winston';
-import { format as utilFormat } from 'node:util';
-import TransportStream from 'winston-transport';
-
-const { format } = winston;
-
-function transform(info: any): any {
-  const args = info[Symbol.for('splat')];
-  const tempInfo = info;
-
-  if (args) {
-    tempInfo.message = utilFormat(tempInfo.message, ...args);
-  }
-
-  return tempInfo;
-}
-
-function utilFormatter() {
-  return { transform };
-}
-
-function getTransportsFromConfig(config: any, defaultLogLevel: string = 'info'): {
-  transports: TransportStream[];
-  logMessage: string;
-  warnings: string;
-} {
-  let logMessage = '';
-  const warnings = '';
-  const transports: TransportStream[] = [
-    new winston.transports.Console({
-      level: defaultLogLevel,
-      format: format.combine(
-        format.colorize(),
-        format.printf(({ level, message, timestamp }) => {
-          let newMessage = message;
-          if (typeof message === 'object' || Array.isArray(message)) {
-            newMessage = JSON.stringify(newMessage);
-          }
-
-          return `${timestamp} ${level}: ${newMessage}`;
-        }),
-      ),
-      handleExceptions: true,
-    }),
-  ];
-
-  logMessage += 'Console';
-
-  return { transports, logMessage, warnings };
-}
+import { LoggerEngine } from './LoggerEngine.js';
 
 /**
- * Retrieves or creates an instance of winston logger based off tags and given options
- * @param labelName - Label to give the created winston logger
- * @param config - Object containing array of transports to add to logger
- * @param defaultLogLevel - Default log level (defaults to 'info')
- * @returns A winston Logger instance
+ * This is the logger access point. Creation of a new Logger should be done in one place, considering that the
+ * request ID (HTTP request ID) and chain of custody IDs where appropriate.
  */
-export function getLogger(labelName: string, config: any = {}, defaultLogLevel: string = 'info'): winston.Logger {
-  let loggerStatus = 'existed';
-  let logMessage = '';
-  let warnings = '';
-  let logger: winston.Logger;
+export class Logger {
+  public requestId: string;
 
-  if (!winston.loggers.has(labelName)) {
-    loggerStatus = 'created';
-    const response = getTransportsFromConfig(config, defaultLogLevel);
-    logMessage += response.logMessage;
-    warnings += response.warnings;
+  private loggerInstances: LoggerEngine[] = [];
 
-    winston.loggers.add(labelName, {
-      format: format.combine(
-        format.label({ label: labelName }),
-        format.json(),
-        format.timestamp({ format: 'MM-DD-YYYY HH:mm:ss.SSS' }),
-        utilFormatter(),
-      ),
-      transports: response.transports,
-      levels: winston.config.syslog.levels,
-      exitOnError: true,
-    });
+  constructor(requestId: string) {
+    this.requestId = requestId;
+  }
 
-    logger = winston.loggers.get(labelName);
-  } else if (Object.prototype.hasOwnProperty.call(config, 'transports')) {
-    loggerStatus = 'modified';
-    logger = winston.loggers.get(labelName);
-    logger.clear();
-    const response = getTransportsFromConfig(config);
-    logMessage += response.logMessage;
-    warnings += response.warnings;
-    for (const transport of response.transports) {
-      logger.add(transport);
+  /**
+   * Gets a new logger object for the specified module name. Chain of custody ID can be supplied if one applies.
+   *
+   * @param moduleName The name of the module for which the logging is being used.
+   * @param chainOfCustodyId The chain of custody ID to assign.
+   */
+  public getLogger(moduleName: string, chainOfCustodyId?: string): LoggerEngine {
+    const newLogger = new LoggerEngine(this.requestId, moduleName, chainOfCustodyId);
+    this.loggerInstances.push(newLogger);
+    return newLogger;
+  }
+
+  /**
+   * This public function goes through each instantiated logger engine instance and updates its transports log levels to current env var
+   */
+  public updateLoggerTransportLevels(): void {
+    for (const loggerEngine of this.loggerInstances) {
+      loggerEngine.updateTransportLevels();
     }
-  } else {
-    logger = winston.loggers.get(labelName);
   }
-
-  if (loggerStatus === 'created') {
-    logger.debug(`Successfully created new logger with transports: ${logMessage}.`);
-  } else if (loggerStatus === 'modified') {
-    logger.debug(`Successfully found logger but modified with new transports: ${logMessage}.`);
-  } else {
-    logger.debug(`Logger with label '${labelName}' already exists, successfully got and just returning it.`);
-  }
-
-  if (warnings !== '') {
-    logger.warning(`The following warnings occured when added transports: ${warnings}`);
-  }
-
-  return logger;
 }

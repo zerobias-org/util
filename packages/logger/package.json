@@ -1,7 +1,7 @@
 {
-  "name": "@zerobias-org/util-logger",
-  "version": "1.0.5",
-  "description": "Module wrapping winston for handling different endpoints and transports.",
+  "name": "@zerobias-org/logger",
+  "version": "1.0.0",
+  "description": "ZeroBias Logger - standard logging for all services",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -17,8 +17,8 @@
     "build": "npm run clean && npm run compile",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
-    "test": "mocha",
-    "prepublishOnly": "npx nx run @zerobias-org/util-logger:build"
+    "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
+    "prepublishOnly": "npx nx run @zerobias-org/logger:build"
   },
   "files": [
     "dist/src",
@@ -39,8 +39,7 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "winston": "^3.2.0",
-    "winston-transport": "^4.9.0"
+    "winston": "^3.2.0"
   },
   "engines": {
     "node": ">=22.0.0",

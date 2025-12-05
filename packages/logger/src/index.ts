@@ -1,1 +1,2 @@
-export { getLogger } from './Logger.js';
+export { Logger } from './Logger.js';
+export { LoggerEngine } from './LoggerEngine.js';

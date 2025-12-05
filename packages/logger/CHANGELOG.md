@@ -1,40 +1,9 @@
-# Change Log
+# Changelog
 
-All notable changes to this project will be documented in this file.
-See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
+## 1.0.0
 
-## <small>1.0.5 (2025-12-05)</small>
-
-* fix: update deps ([a668792](https://github.com/zerobiasorg/util/commit/a668792))
-
-
-
-
-
-## <small>1.0.4 (2025-12-04)</small>
-
-**Note:** Version bump only for package @zerobias-org/util-logger
-
-
-
-
-
-## <small>1.0.3 (2025-12-04)</small>
-
-* fix: added and corrected lint for all projects ([bf18b93](https://github.com/zerobiasorg/util/commit/bf18b93))
-
-
-
-
-
-## <small>1.0.2 (2025-12-04)</small>
-
-* fix: update deps, prepublish ([600c33b](https://github.com/zerobiasorg/util/commit/600c33b))
-
-
-
-
-
-## <small>1.0.1 (2025-12-03)</small>
-
-* fix: lets go ([9c0cc3a](https://github.com/zerobiasorg/util/commit/9c0cc3a))
+- Initial release
+- Consolidated from @zerobias-org/util-platform-logger
+- Standard logger for all ZeroBias services
+- ESM-compatible winston wrapper
+- Exports `Logger` class and `LoggerEngine` class
