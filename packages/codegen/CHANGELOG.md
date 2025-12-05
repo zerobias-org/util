@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.20 (2025-12-05)</small>
+
+**Note:** Version bump only for package @zerobias-org/util-codegen
+
+
+
+
+
 ## <small>1.0.19 (2025-12-05)</small>
 
 * fix: bad rc version ([a9b147d](https://github.com/zerobias-org/util/commit/a9b147d))

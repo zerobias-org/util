@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.5 (2025-12-05)</small>
+
+* fix: update deps ([a668792](https://github.com/zerobiasorg/util/commit/a668792))
+
+
+
+
+
 ## <small>1.0.4 (2025-12-04)</small>
 
 **Note:** Version bump only for package @zerobias-org/util-logger
