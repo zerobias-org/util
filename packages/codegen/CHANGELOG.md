@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.23 (2025-12-05)</small>
+
+* fix: one more ([6d68fbc](https://github.com/zerobias-org/util/commit/6d68fbc))
+
+
+
+
+
 ## <small>1.0.22 (2025-12-05)</small>
 
 * fix: another change ([e2d962f](https://github.com/zerobias-org/util/commit/e2d962f))
