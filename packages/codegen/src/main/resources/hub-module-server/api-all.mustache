@@ -30,8 +30,8 @@ type Format = {
 type HttpError = Error & { status: number; errors: any[] };
 
 // Type guard for HttpError since we can't use instanceof with a type
-function isHttpError(err: any): err is HttpError {
-  return err instanceof Error && typeof err.status === 'number' && Array.isArray(err.errors);
+function isHttpError(err: unknown): err is HttpError {
+  return err instanceof Error && 'status' in err && typeof err.status === 'number' && 'errors' in err && Array.isArray(err.errors);
 }
 import { {{apiName}} } from '{{modulePackage}}';
 import * as express from 'express';
