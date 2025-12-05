@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-codegen",
   "description": "OpenAPI Generator for models and server apis",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "type": "module",
   "author": "team@zerobias.com",
   "license": "ISC",
