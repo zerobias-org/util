@@ -43,6 +43,11 @@ public class HubModuleServerGenerator extends HubModuleCodegenGenerator {
         if (!additionalProperties.containsKey(MODULE_PACKAGE)) {
             throw new IllegalStateException("modulePackage must be provided");
         }
+        // For ESM compatibility, relative paths need /index.js extension
+        String modulePackage = (String) additionalProperties.get(MODULE_PACKAGE);
+        if (modulePackage.startsWith(".")) {
+            additionalProperties.put(MODULE_PACKAGE, modulePackage + "/index.js");
+        }
     }
 
     @Override
