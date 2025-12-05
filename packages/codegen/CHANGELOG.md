@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.19 (2025-12-05)</small>
+
+* fix: bad rc version ([a9b147d](https://github.com/zerobias-org/util/commit/a9b147d))
+
+
+
+
+
 ## <small>1.0.18-rc.1 (2025-12-05)</small>
 
 * fix: force publish ([5645cb8](https://github.com/zerobias-org/util/commit/5645cb8))
