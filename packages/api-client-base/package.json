@@ -45,8 +45,5 @@
   },
   "dependencies": {
     "@zerobias-org/util-api-invoker-isomorphic": "^1.0.5"
-  },
-  "devDependencies": {
-    "typedoc": "^0.28.15"
   }
 }
