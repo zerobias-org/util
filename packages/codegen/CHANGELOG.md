@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.17 (2025-12-05)</small>
+
+* fix: another codegen fix ([43fa066](https://github.com/zerobias-org/util/commit/43fa066))
+
+
+
+
+
 ## <small>1.0.16 (2025-12-04)</small>
 
 * fix: update codegen ([a18c41b](https://github.com/zerobias-org/util/commit/a18c41b))
