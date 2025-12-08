@@ -10,7 +10,8 @@
   },
   "exports": {
     ".": {
-      "import": "./bin/hub-generator.js"
+      "import": "./bin/hub-generator.js",
+      "default": "./bin/hub-generator.js"
     }
   },
   "repository": {
