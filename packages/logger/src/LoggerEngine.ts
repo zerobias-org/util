@@ -1,4 +1,6 @@
-import winston, { transports } from 'winston';
+import winston from 'winston';
+
+const { transports } = winston;
 
 const { combine, timestamp, label, printf, colorize } = winston.format;
 
