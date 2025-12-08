@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.7 (2025-12-08)</small>
+
+* fix: bump types deps, add exports ([fbdbab6](https://github.com/zerobiasorg/util/commit/fbdbab6))
+
+
+
+
+
 ## <small>1.0.6 (2025-12-05)</small>
 
 * fix: update deps ([a668792](https://github.com/zerobiasorg/util/commit/a668792))
