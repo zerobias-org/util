@@ -142,6 +142,21 @@ describe('LoggerEngine', () => {
       child.setLevel(LogLevel.WARN);
       expect(child.level).to.equal(LogLevel.WARN);
     });
+
+    it('should clear level and resume inheriting when set to null', () => {
+      root.setLevel(LogLevel.DEBUG);
+      const child = root.get('inherit-clear');
+
+      // Set explicit level
+      child.setLevel(LogLevel.ERROR);
+      expect(child.level).to.equal(LogLevel.ERROR);
+      expect(child.getEffectiveLevel()).to.equal(LogLevel.ERROR);
+
+      // Clear level - should resume inheriting
+      child.setLevel(null);
+      expect(child.level).to.be.undefined;
+      expect(child.getEffectiveLevel()).to.equal(LogLevel.DEBUG); // Inherited from root
+    });
   });
 
   describe('Logger Destruction', () => {

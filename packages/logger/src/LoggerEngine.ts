@@ -141,12 +141,13 @@ export class LoggerEngine {
 
   /**
    * Set log level for this logger
+   * Pass null to clear explicit level and inherit from parent
    */
-  setLevel(level: LogLevel): void {
+  setLevel(level: LogLevel | null): void {
     if (this._destroyed) {
       throw new Error(`Cannot set level on destroyed logger: ${this.path}`);
     }
-    this._level = level;
+    this._level = level === null ? undefined : level;
   }
 
   /**
