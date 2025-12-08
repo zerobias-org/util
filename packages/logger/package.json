@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/logger",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "description": "ZeroBias Logger - standard logging for all services",
   "type": "module",
   "main": "dist/src/index.js",
@@ -40,10 +40,18 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "winston": "^3.2.0"
+    "winston": "^3.2.0",
+    "winston-transport": "^4.9.0"
   },
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "chai": "^4.5.0",
+    "mocha": "^11.7.5",
+    "tsx": "^4.21.0"
   }
 }

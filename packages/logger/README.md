@@ -196,6 +196,7 @@ logger.trace(...)
 logger.get(childName: string, options?: LoggerOptions): LoggerEngine
 logger.parent: LoggerEngine | undefined
 logger.children: Map<string, LoggerEngine>
+logger.destroy(): void  // Destroy logger and cleanup all references
 
 // Configuration
 logger.level: LogLevel | undefined  // undefined = inherit
@@ -530,12 +531,173 @@ error(message: string, errorOrMetadata?: Error | object, metadata?: object): voi
 }
 ```
 
+## Logger Lifecycle Management
+
+### Destroying Loggers
+
+Child loggers can be explicitly destroyed to free resources and clean up references. This is important for preventing memory leaks in long-running applications that create many dynamic loggers.
+
+**Basic destruction:**
+```typescript
+const tempLogger = rootLogger.get('temporary');
+tempLogger.info('Doing some work...');
+
+// When done, destroy the logger
+tempLogger.destroy();
+
+// Logger is now unusable and removed from parent's children
+```
+
+### What `destroy()` Does
+
+The `destroy()` method performs complete cleanup:
+
+1. **Removes from parent's children map**: Parent no longer holds a reference
+2. **Clears parent reference**: Prevents memory leaks from circular references
+3. **Recursively destroys all children**: Entire subtree is cleaned up
+4. **Closes Winston logger**: Flushes buffers and closes transports
+5. **Clears children map**: Breaks all child references
+
+**Example:**
+```typescript
+const apiLogger = rootLogger.get('api');
+const authLogger = apiLogger.get('auth');
+const sessionLogger = authLogger.get('session-123');
+
+// Destroy auth logger - also destroys sessionLogger
+authLogger.destroy();
+
+// authLogger and sessionLogger are gone
+// apiLogger.children no longer contains 'auth'
+// sessionLogger.parent is now undefined
+```
+
+### Use Cases
+
+**1. Per-request loggers (prevent memory leaks):**
+```typescript
+app.use((req, res, next) => {
+  const requestLogger = apiLogger.get(`request-${req.id}`);
+  req.logger = requestLogger;
+
+  // Cleanup on response finish
+  res.on('finish', () => {
+    requestLogger.destroy();
+  });
+
+  next();
+});
+```
+
+**2. Dynamic module loggers:**
+```typescript
+class DynamicModule {
+  private logger: LoggerEngine;
+
+  constructor(name: string) {
+    this.logger = rootLogger.get(`module-${name}`);
+  }
+
+  async dispose() {
+    // Clean up resources
+    this.logger.info('Module shutting down');
+    this.logger.destroy();
+  }
+}
+```
+
+**3. Test cleanup:**
+```typescript
+describe('MyService', () => {
+  let serviceLogger: LoggerEngine;
+
+  beforeEach(() => {
+    serviceLogger = LoggerEngine.root().get('test-service');
+  });
+
+  afterEach(() => {
+    // Ensure clean state between tests
+    serviceLogger.destroy();
+  });
+
+  it('should process data', () => {
+    serviceLogger.info('Testing...');
+    // ... test logic
+  });
+});
+```
+
+**4. Tenant/workspace cleanup:**
+```typescript
+class Workspace {
+  private logger: LoggerEngine;
+
+  constructor(workspaceId: string) {
+    this.logger = rootLogger.get(`workspace-${workspaceId}`);
+  }
+
+  async delete() {
+    this.logger.info('Workspace deleted');
+    this.logger.destroy();
+    // ... other cleanup
+  }
+}
+```
+
+### Implementation Details
+
+```typescript
+class LoggerEngine {
+  destroy(): void {
+    // 1. Recursively destroy all children first
+    for (const child of this.children.values()) {
+      child.destroy();
+    }
+    this.children.clear();
+
+    // 2. Remove from parent's children map
+    if (this.parent) {
+      this.parent.children.delete(this.name);
+    }
+
+    // 3. Close Winston logger (flush and close transports)
+    this.logger.close();
+
+    // 4. Clear parent reference
+    this.parent = undefined;
+  }
+}
+```
+
+### Important Notes
+
+1. **Cannot destroy root logger**: Calling `destroy()` on root logger throws an error
+2. **Logger becomes unusable**: After destruction, any log calls will throw
+3. **Recursive destruction**: Destroying a parent destroys entire subtree
+4. **Idempotent**: Calling `destroy()` multiple times is safe (no-op after first call)
+5. **Not recreatable**: After destruction, `parent.get(name)` creates a NEW logger instance
+
+**Example of recreation:**
+```typescript
+const logger1 = rootLogger.get('myLogger');
+logger1.info('First instance');
+
+logger1.destroy();
+
+const logger2 = rootLogger.get('myLogger');  // NEW instance
+logger2.info('Second instance');
+
+// logger1 and logger2 are different objects
+console.log(logger1 === logger2);  // false
+```
+
 ## Advanced Usage
 
 ### Per-Request Logging
 
-For HTTP request tracing, create request-scoped child loggers with metadata:
+For HTTP request tracing, you have several approaches:
 
+**Approach 1: Child logger per request (with cleanup):**
 ```typescript
 import { LoggerEngine } from '@zerobias-org/logger';
 import express from 'express';
@@ -547,14 +709,17 @@ const apiLogger = rootLogger.get('api');
 app.use((req, res, next) => {
   // Create request-specific logger
   const requestLogger = apiLogger.get(`request-${req.id}`);
-
-  // Attach to request object
   req.logger = requestLogger;
 
   requestLogger.info('Request received', {
     method: req.method,
     path: req.path,
     ip: req.ip
+  });
+
+  // Clean up logger when request completes
+  res.on('finish', () => {
+    requestLogger.destroy();
   });
 
   next();
@@ -567,11 +732,14 @@ app.get('/api/users', (req, res) => {
 });
 ```
 
-**Alternative: Metadata-only approach (more efficient for high-volume):**
-
+**Approach 2: Metadata-only (more efficient for high-volume, no cleanup needed):**
 ```typescript
 app.use((req, res, next) => {
-  req.logContext = { requestId: req.id, method: req.method, path: req.path };
+  req.logContext = {
+    requestId: req.id,
+    method: req.method,
+    path: req.path
+  };
   next();
 });
 
@@ -581,6 +749,10 @@ app.get('/api/users', (req, res) => {
   apiLogger.info('Response sent', { ...req.logContext, statusCode: 200 });
 });
 ```
+
+**Which approach to use:**
+- **Child logger**: Better for complex request flows with many log points, clear hierarchy
+- **Metadata-only**: Better for high-throughput APIs (thousands of req/sec), no cleanup overhead
 
 ### Conditional Log Levels
 
@@ -734,6 +906,35 @@ describe('MyService', () => {
     expect(capturedLogs[0].error.stack).toContain('Error: Test error');
     expect(capturedLogs[0].operation).toBe('test');
   });
+
+  it('should clean up logger on destroy', () => {
+    const root = LoggerEngine.root();
+    const parent = root.get('parent');
+    const child = parent.get('child');
+
+    expect(parent.children.has('child')).toBe(true);
+    expect(child.parent).toBe(parent);
+
+    child.destroy();
+
+    expect(parent.children.has('child')).toBe(false);
+    expect(child.parent).toBeUndefined();
+  });
+
+  it('should recursively destroy child loggers', () => {
+    const root = LoggerEngine.root();
+    const level1 = root.get('level1');
+    const level2 = level1.get('level2');
+    const level3 = level2.get('level3');
+
+    level1.destroy();
+
+    // All destroyed
+    expect(root.children.has('level1')).toBe(false);
+    expect(level1.parent).toBeUndefined();
+    expect(level2.parent).toBeUndefined();
+    expect(level3.parent).toBeUndefined();
+  });
 });
 ```
 
@@ -746,6 +947,8 @@ describe('MyService', () => {
 - Manages Winston logger instance lifecycle
 - Implements hierarchy (parent/children relationships)
 - Provides logging methods: `crit`/`critical`, `error`, `warn`/`warning`, `info`, `verbose`, `debug`, `trace`
+- Supports error parameter for exception logging
+- Provides `destroy()` for cleanup and reference removal
 - Metadata parameter is simple `object` type (no generics) for maximum flexibility
 
 **ParentTransport** (extends `winston.Transport`)
@@ -954,6 +1157,56 @@ Each log event traverses up the tree, hitting each ancestor's transports. For de
 - **Deep trees (5+ levels)**: Consider adding transports only at root
 - **High-volume logging**: Use metadata instead of child loggers for request IDs
 
+### Memory Management
+
+**Child logger caching** prevents repeated allocations but can cause memory leaks if not managed:
+
+```typescript
+// ⚠️ MEMORY LEAK - creates 10,000 cached loggers
+for (let i = 0; i < 10000; i++) {
+  const logger = apiLogger.get(`request-${i}`);
+  logger.info('Processing...');
+  // Logger stays in apiLogger.children forever!
+}
+```
+
+**Solutions:**
+
+**1. Use destroy() for dynamic loggers:**
+```typescript
+// ✅ GOOD - cleanup after use
+for (let i = 0; i < 10000; i++) {
+  const logger = apiLogger.get(`request-${i}`);
+  logger.info('Processing...');
+  logger.destroy();  // Removes from parent.children
+}
+```
+
+**2. Use metadata for high-volume scenarios:**
+```typescript
+// ✅ GOOD - no child logger creation
+for (let i = 0; i < 10000; i++) {
+  apiLogger.info('Processing...', { requestId: i });
+}
+```
+
+**3. Pool loggers for bounded sets:**
+```typescript
+// ✅ GOOD - fixed number of loggers
+const userLogger = apiLogger.get('users');    // Reused
+const adminLogger = apiLogger.get('admins');  // Reused
+
+processUser(userId) {
+  userLogger.info('Processing user', { userId });
+}
+```
+
+**Memory guidelines:**
+- **Static hierarchies**: No cleanup needed (e.g., `api`, `database`, `worker`)
+- **Per-request loggers**: Always call `destroy()` when request completes
+- **High throughput (>1000 req/sec)**: Prefer metadata over child loggers
+- **Long-running processes**: Monitor `children.size` on key loggers
+
 ## Migration Strategy
 
 ### Phase 1: Parallel Implementation
@@ -1032,9 +1285,16 @@ When modifying this package:
 4. **Test transport chaining**: Validate multi-level hierarchies propagate correctly
 5. **Validate formatting options**: Test all transports with various configurations
 6. **Test error handling**: Verify Error objects are properly serialized (name, message, stack)
-7. **Check performance**: High log volume shouldn't degrade application performance
-8. **Update type definitions**: Keep TypeScript definitions in sync with implementation
-9. **Keep metadata simple**: Use `object` type, avoid generics for maximum flexibility
+7. **Test lifecycle management**:
+   - `destroy()` removes logger from parent's children map
+   - `destroy()` clears parent reference
+   - `destroy()` recursively destroys all children
+   - `destroy()` is idempotent
+   - Root logger cannot be destroyed
+8. **Check performance**: High log volume shouldn't degrade application performance
+9. **Verify memory cleanup**: Dynamic loggers should be destroyable without leaks
+10. **Update type definitions**: Keep TypeScript definitions in sync with implementation
+11. **Keep metadata simple**: Use `object` type, avoid generics for maximum flexibility
 
 ## License
 
