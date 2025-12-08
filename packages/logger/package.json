@@ -40,6 +40,7 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
+    "chalk": "^5.6.2",
     "winston": "^3.2.0",
     "winston-transport": "^4.9.0"
   },
@@ -50,6 +51,7 @@
   "devDependencies": {
     "@types/chai": "^4.3.20",
     "@types/mocha": "^10.0.10",
+    "@types/node": "^24.10.1",
     "chai": "^4.5.0",
     "mocha": "^11.7.5",
     "tsx": "^4.21.0"

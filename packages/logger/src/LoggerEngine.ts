@@ -3,6 +3,7 @@ import Transport from 'winston-transport';
 import { LogLevel } from './LogLevel.js';
 import type { LoggerOptions } from './types.js';
 import { ParentTransport } from './ParentTransport.js';
+import { ConsoleTransport } from './transports/ConsoleTransport.js';
 
 /**
  * Hierarchical logger engine
@@ -65,7 +66,7 @@ export class LoggerEngine {
     if (!LoggerEngine._root) {
       LoggerEngine._root = new LoggerEngine('root', undefined, {
         level: LogLevel.INFO,
-        transports: [new winston.transports.Console()]
+        transports: [new ConsoleTransport()]
       });
     }
     return LoggerEngine._root;

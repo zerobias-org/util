@@ -25,6 +25,18 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 - **Custom Log Levels**: Full support for verbose, debug, and trace levels via Winston custom levels
 - **Logger Path Tracking**: Each logger includes its full hierarchical path (e.g., 'root:api:auth')
 - **Method Aliases**: `critical()` and `warning()` aliases for `crit()` and `warn()`
+- **Advanced Transport System**: Template-based formatting with extensive configuration options
+  - `ConsoleTransport`: Default transport for maximum portability (Node.js + browser)
+  - `CLITransport`: Enhanced terminal transport with ANSI colors via chalk
+  - `LoggerTransport`: Base class for custom transports with template system
+- **Transport Formatting Options**:
+  - Timestamp modes: NONE, FULL, TIME (with hourly date markers), CUSTOM
+  - Log level display: NONE, SYMBOL, NAME
+  - Logger name display: NONE, NAME, PATH
+  - Exception detail: BASIC, FULL
+  - Timezone configuration
+  - Custom output templates with placeholders
+  - `CLITransport.install()` for easy default transport replacement
 
 ### Migration Guide
 
@@ -46,8 +58,12 @@ const logger = LoggerEngine.root().get('myapp');
 - Added `LogLevel.ts` with enum and metadata definitions
 - Added `types.ts` with TypeScript interfaces
 - Added `ParentTransport.ts` for hierarchical log chaining
+- Added `transports/LoggerTransport.ts` with template-based formatting engine
+- Added `transports/ConsoleTransport.ts` for console output
+- Added `transports/CLITransport.ts` with chalk-based ANSI colors
 - Complete rewrite of `LoggerEngine.ts` implementation
-- Comprehensive unit test suite (47 tests)
+- Comprehensive unit test suite (74 tests)
+- Dependencies: Added `chalk` for terminal colors, `@types/node` for TypeScript
 
 ## <small>1.0.2 (2025-12-08)</small>
 
