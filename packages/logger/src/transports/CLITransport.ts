@@ -28,7 +28,7 @@ export class CLITransport extends LoggerTransport {
 
     // Remove all existing transports
     const existingTransports = [...root.transports];
-    existingTransports.forEach(t => root.removeTransport(t));
+    for (const t of existingTransports) root.removeTransport(t);
 
     // Add CLI transport
     root.addTransport(new CLITransport(options));
@@ -39,24 +39,33 @@ export class CLITransport extends LoggerTransport {
    */
   protected applyColor(text: string, color: string): string {
     switch (color) {
-      case 'red':
+      case 'red': {
         return chalk.red(text);
-      case 'bold red':
+      }
+      case 'bold red': {
         return chalk.bold.red(text);
-      case 'yellow':
+      }
+      case 'yellow': {
         return chalk.yellow(text);
-      case 'green':
+      }
+      case 'green': {
         return chalk.green(text);
-      case 'blue':
+      }
+      case 'blue': {
         return chalk.blue(text);
-      case 'magenta':
+      }
+      case 'magenta': {
         return chalk.magenta(text);
-      case 'cyan':
+      }
+      case 'cyan': {
         return chalk.cyan(text);
-      case 'bold':
+      }
+      case 'bold': {
         return chalk.bold(text);
-      default:
+      }
+      default: {
         return text;
+      }
     }
   }
 

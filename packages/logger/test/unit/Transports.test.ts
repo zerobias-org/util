@@ -9,7 +9,7 @@ describe('Transports', () => {
     root = LoggerEngine.root();
 
     // Remove all transports for clean slate
-    root.transports.forEach(t => root.removeTransport(t));
+    for (const t of root.transports) root.removeTransport(t);
 
     // Reset level
     root.setLevel(LogLevel.INFO);
@@ -74,7 +74,7 @@ describe('Transports', () => {
 
       const testError = new Error('Test exception');
       root.error('Operation failed with context', testError, {
-        userId: 12345,
+        userId: 12_345,
         operation: 'database_query',
         retryCount: 3
       });

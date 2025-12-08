@@ -25,22 +25,24 @@ export class ConsoleTransport extends LoggerTransport {
 
     switch (level) {
       case 'crit':
-      case 'error':
+      case 'error': {
         console.error(formatted);
         break;
+      }
       case 'warning':
-      case 'warn':
+      case 'warn': {
         console.warn(formatted);
         break;
-      case 'info':
+      }
+      case 'info': {
         console.info(formatted);
         break;
-      case 'verbose':
-      case 'debug':
-      case 'trace':
-      default:
+      }
+      default: {
+        // verbose, debug, trace -> console.log
         console.log(formatted);
         break;
+      }
     }
 
     callback();

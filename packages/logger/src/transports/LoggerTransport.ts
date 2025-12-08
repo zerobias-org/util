@@ -2,7 +2,7 @@ import Transport from 'winston-transport';
 import { LOG_LEVEL_METADATA, LogLevel } from '../LogLevel.js';
 import type { TransportOptions } from '../types.js';
 
-export type { TransportOptions };
+
 
 /**
  * Base transport class with template-based formatting
@@ -42,16 +42,16 @@ export abstract class LoggerTransport extends Transport {
     this.customTimestampFormatter = options?.customTimestampFormatter;
 
     // Pre-compute log level lookups (O(1) instead of O(n))
-    Object.entries(LOG_LEVEL_METADATA).forEach(([_, meta]) => {
+    for (const [_, meta] of Object.entries(LOG_LEVEL_METADATA)) {
       this.levelSymbolLookup.set(meta.name, meta.symbol);
       this.levelNameLookup.set(meta.name, meta.name);
-    });
+    }
 
     // Pre-compile placeholder regexes
     const placeholders = ['timestamp', 'level', 'name', 'message', 'metadata', 'exception'];
-    placeholders.forEach(ph => {
-      this.placeholderRegexes.set(ph, new RegExp(`%\\{${ph}\\}`, 'g'));
-    });
+    for (const ph of placeholders) {
+      this.placeholderRegexes.set(ph, new RegExp(String.raw`%\{${ph}\}`, 'g'));
+    }
 
     // Pre-create timezone formatter for TIME mode (cached by V8)
     if (this.timestampMode === 'TIME') {
@@ -98,13 +98,13 @@ export abstract class LoggerTransport extends Transport {
     output = output.replace(this.placeholderRegexes.get('exception')!, exception);
 
     // Remove empty brackets (simplified - done after all replacements)
-    output = output.replace(/\[\s*\]/g, '');
+    output = output.replaceAll(/\[\s*]/g, '');
 
     // Clean up multiple spaces
-    output = output.replace(/\s+/g, ' ').trim();
+    output = output.replaceAll(/\s+/g, ' ').trim();
 
     // Clean up extra newlines
-    output = output.replace(/\n+/g, '\n').replace(/\n$/, '');
+    output = output.replaceAll(/\n+/g, '\n').replace(/\n$/, '');
 
     return output;
   }
@@ -136,7 +136,7 @@ export abstract class LoggerTransport extends Transport {
 
       // Get milliseconds with padding (preserves precision from original Date)
       const ms = date.getMilliseconds();
-      const milliseconds = ms < 10 ? `00${ms}` : ms < 100 ? `0${ms}` : `${ms}`;
+      const milliseconds = ms < 10 ? `00${ms}` : (ms < 100 ? `0${ms}` : `${ms}`);
 
       // Check if we need a date marker (when day changes)
       const year = parts.find(p => p.type === 'year')?.value || '';
@@ -206,7 +206,7 @@ export abstract class LoggerTransport extends Transport {
     const metadata: Record<string, any> = {};
     let hasMetadata = false;
 
-    for (const key in info) {
+    for (const key of Object.keys(info)) {
       if (!this.standardFieldsSet.has(key) && info[key] !== undefined) {
         metadata[key] = info[key];
         hasMetadata = true;
@@ -255,3 +255,5 @@ export abstract class LoggerTransport extends Transport {
    */
   abstract log(info: any, callback: () => void): void;
 }
+
+export {type TransportOptions} from '../types.js';

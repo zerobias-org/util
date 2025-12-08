@@ -20,7 +20,7 @@ describe('Logging Methods', () => {
     root = LoggerEngine.root();
 
     // Remove all existing transports
-    root.transports.forEach(t => root.removeTransport(t));
+    for (const t of root.transports) root.removeTransport(t);
 
     // Add memory transport
     memoryTransport = new MemoryTransport();
@@ -164,10 +164,10 @@ describe('Logging Methods', () => {
       root.trace('Trace', testError);
 
       expect(getCapturedLogs()).to.have.lengthOf(7);
-      getCapturedLogs().forEach(log => {
+      for (const log of getCapturedLogs()) {
         expect(log.error).to.exist;
         expect(log.error.message).to.equal('Test error');
-      });
+      }
     });
   });
 
