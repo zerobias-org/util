@@ -62,8 +62,12 @@ const logger = LoggerEngine.root().get('myapp');
 - Added `transports/ConsoleTransport.ts` for console output
 - Added `transports/CLITransport.ts` with chalk-based ANSI colors
 - Complete rewrite of `LoggerEngine.ts` implementation
-- Comprehensive unit test suite (74 tests)
+- Comprehensive unit test suite (72 tests)
 - Dependencies: Added `chalk` for terminal colors, `@types/node` for TypeScript
+
+## <small>1.0.3 (2025-12-08)</small>
+
+* fix: logger not exported correctly ([9ebd0c4](https://github.com/zerobiasorg/util/commit/9ebd0c4))
 
 ## <small>1.0.2 (2025-12-08)</small>
 
