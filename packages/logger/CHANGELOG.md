@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.3 (2025-12-08)</small>
+
+* fix: logger not exported correctly ([9ebd0c4](https://github.com/zerobiasorg/util/commit/9ebd0c4))
+
+
+
+
+
 ## <small>1.0.2 (2025-12-08)</small>
 
 * fix: bump types deps, add exports ([fbdbab6](https://github.com/zerobiasorg/util/commit/fbdbab6))
