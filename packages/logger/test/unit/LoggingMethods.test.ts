@@ -67,14 +67,14 @@ describe('Logging Methods', () => {
     it('should log warn message', () => {
       root.warn('Warning message');
       expect(getCapturedLogs()).to.have.lengthOf(1);
-      expect(getCapturedLogs()[0].level).to.equal('warning');
+      expect(getCapturedLogs()[0].level).to.equal('warn');
       expect(getCapturedLogs()[0].message).to.equal('Warning message');
     });
 
     it('should log warning message (alias)', () => {
       root.warning('Warning message');
       expect(getCapturedLogs()).to.have.lengthOf(1);
-      expect(getCapturedLogs()[0].level).to.equal('warning');
+      expect(getCapturedLogs()[0].level).to.equal('warn');
     });
 
     it('should log info message', () => {
@@ -186,7 +186,7 @@ describe('Logging Methods', () => {
       expect(getCapturedLogs()).to.have.lengthOf(3);
       expect(getCapturedLogs()[0].level).to.equal('crit');
       expect(getCapturedLogs()[1].level).to.equal('error');
-      expect(getCapturedLogs()[2].level).to.equal('warning');
+      expect(getCapturedLogs()[2].level).to.equal('warn');
     });
 
     it('should respect level inheritance for filtering', () => {

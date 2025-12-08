@@ -45,7 +45,7 @@ export class LoggerEngine {
     const customLevels = {
       crit: 0,
       error: 1,
-      warning: 2,
+      warn: 2,
       info: 3,
       verbose: 4,
       debug: 5,
@@ -304,7 +304,7 @@ export class LoggerEngine {
    * Log warning message
    */
   warn(message: string, errorOrMetadata?: Error | object, metadata?: object): void {
-    this.log(LogLevel.WARN, 'warning', message, errorOrMetadata, metadata);
+    this.log(LogLevel.WARN, 'warn', message, errorOrMetadata, metadata);
   }
 
   /**
