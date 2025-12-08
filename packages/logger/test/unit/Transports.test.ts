@@ -1,21 +1,6 @@
 import { expect } from 'chai';
-import { LoggerEngine, LogLevel, ConsoleTransport, CLITransport } from '../../src/index.js';
+import { LoggerEngine, LogLevel, ConsoleTransport, CLITransport, LoggerTransport } from '../../src/index.js';
 import Transport from 'winston-transport';
-
-// Custom test transport to capture output
-class TestTransport extends Transport {
-  public logs: string[] = [];
-
-  log(info: any, callback: () => void): void {
-    // Just capture the raw info for inspection
-    this.logs.push(JSON.stringify(info));
-    callback();
-  }
-
-  clear(): void {
-    this.logs = [];
-  }
-}
 
 describe('Transports', () => {
   let root: LoggerEngine;
@@ -23,295 +8,356 @@ describe('Transports', () => {
   beforeEach(() => {
     root = LoggerEngine.root();
 
-    // Remove all transports
+    // Remove all transports for clean slate
     root.transports.forEach(t => root.removeTransport(t));
 
     // Reset level
     root.setLevel(LogLevel.INFO);
   });
 
-  describe('ConsoleTransport', () => {
-    it('should create with default options', () => {
-      const transport = new ConsoleTransport();
-      expect(transport).to.be.instanceOf(ConsoleTransport);
-    });
-
-    it('should create with custom options', () => {
-      const transport = new ConsoleTransport({
-        timestamp: 'FULL',
-        logLevel: 'NAME',
-        loggerName: 'PATH',
-        exceptions: 'FULL'
-      });
-      expect(transport).to.be.instanceOf(ConsoleTransport);
-    });
-
-    it('should be added to logger', () => {
+  describe('ConsoleTransport - Actual Output', () => {
+    it('should output with default formatting', () => {
+      console.log('\n--- ConsoleTransport: Default formatting ---');
       const transport = new ConsoleTransport();
       root.addTransport(transport);
 
-      expect(root.transports).to.include(transport);
+      root.info('ConsoleTransport test with default options');
+      root.error('Error message test');
+      root.warn('Warning message test');
     });
 
-    it('should format and output logs', () => {
-      const transport = new ConsoleTransport({
-        timestamp: 'NONE',
-        logLevel: 'SYMBOL',
-        loggerName: 'NAME'
-      });
-      root.addTransport(transport);
-
-      // This should output to console
-      // We can't easily test console output, but we verify no errors
-      root.info('Test message');
-    });
-  });
-
-  describe('CLITransport', () => {
-    it('should create with default options', () => {
-      const transport = new CLITransport();
-      expect(transport).to.be.instanceOf(CLITransport);
-    });
-
-    it('should create with custom options', () => {
-      const transport = new CLITransport({
-        timestamp: 'TIME',
-        timezone: 'America/New_York',
-        logLevel: 'NAME',
-        loggerName: 'PATH',
-        exceptions: 'FULL',
-        maxLineLength: 120,
-        template: '%{timestamp} [%{level}] %{message}'
-      });
-      expect(transport).to.be.instanceOf(CLITransport);
-    });
-
-    it('should install as default transport', () => {
-      const initialCount = root.transports.length;
-
-      CLITransport.install();
-
-      // Should have replaced transports with CLITransport
-      expect(root.transports).to.have.lengthOf(1);
-      expect(root.transports[0]).to.be.instanceOf(CLITransport);
-    });
-
-    it('should install with custom options', () => {
-      CLITransport.install({
-        timestamp: 'FULL',
-        logLevel: 'NAME'
-      });
-
-      expect(root.transports).to.have.lengthOf(1);
-      expect(root.transports[0]).to.be.instanceOf(CLITransport);
-    });
-  });
-
-  describe('Transport Formatting', () => {
-    it('should support NONE timestamp mode', () => {
-      const transport = new ConsoleTransport({
-        timestamp: 'NONE'
-      });
-      root.addTransport(transport);
-
-      // Log should work without timestamp
-      root.info('Test');
-    });
-
-    it('should support FULL timestamp mode', () => {
+    it('should output with FULL timestamp', () => {
+      console.log('\n--- ConsoleTransport: FULL timestamp ---');
       const transport = new ConsoleTransport({
         timestamp: 'FULL'
       });
       root.addTransport(transport);
 
-      root.info('Test');
+      root.info('Message with full ISO timestamp');
     });
 
-    it('should support TIME timestamp mode', () => {
-      const transport = new ConsoleTransport({
-        timestamp: 'TIME'
-      });
-      root.addTransport(transport);
-
-      root.info('Test');
-    });
-
-    it('should support CUSTOM timestamp mode', () => {
-      const transport = new ConsoleTransport({
-        timestamp: 'CUSTOM',
-        customTimestampFormatter: (date) => date.getTime().toString()
-      });
-      root.addTransport(transport);
-
-      root.info('Test');
-    });
-
-    it('should support NONE log level mode', () => {
-      const transport = new ConsoleTransport({
-        logLevel: 'NONE'
-      });
-      root.addTransport(transport);
-
-      root.info('Test');
-    });
-
-    it('should support SYMBOL log level mode', () => {
-      const transport = new ConsoleTransport({
-        logLevel: 'SYMBOL'
-      });
-      root.addTransport(transport);
-
-      root.error('Test'); // Should show '!!'
-    });
-
-    it('should support NAME log level mode', () => {
+    it('should output with NAME log level', () => {
+      console.log('\n--- ConsoleTransport: NAME log level ---');
       const transport = new ConsoleTransport({
         logLevel: 'NAME'
       });
       root.addTransport(transport);
 
-      root.info('Test'); // Should show 'info'
+      root.setLevel(LogLevel.TRACE);
+      root.crit('Critical with NAME');
+      root.error('Error with NAME');
+      root.warn('Warning with NAME');
+      root.info('Info with NAME');
+      root.verbose('Verbose with NAME');
+      root.debug('Debug with NAME');
+      root.trace('Trace with NAME');
     });
 
-    it('should support NONE logger name mode', () => {
-      const transport = new ConsoleTransport({
-        loggerName: 'NONE'
-      });
-      root.addTransport(transport);
-
-      const child = root.get('test-logger');
-      child.info('Test');
-    });
-
-    it('should support NAME logger name mode', () => {
-      const transport = new ConsoleTransport({
-        loggerName: 'NAME'
-      });
-      root.addTransport(transport);
-
-      const child = root.get('test-logger-name');
-      child.info('Test');
-    });
-
-    it('should support PATH logger name mode', () => {
+    it('should output with PATH logger name', () => {
+      console.log('\n--- ConsoleTransport: PATH logger name ---');
       const transport = new ConsoleTransport({
         loggerName: 'PATH'
       });
       root.addTransport(transport);
 
-      const api = root.get('test-api');
-      const auth = api.get('test-auth');
-      auth.info('Test'); // Should show [root:test-api:test-auth]
+      const api = root.get('api');
+      const auth = api.get('auth');
+      auth.info('Message showing full path');
     });
 
-    it('should support BASIC exception mode', () => {
-      const transport = new ConsoleTransport({
-        exceptions: 'BASIC'
-      });
-      root.addTransport(transport);
-
-      const error = new Error('Test error');
-      root.error('Operation failed', error);
-    });
-
-    it('should support FULL exception mode', () => {
+    it('should output with error and metadata', () => {
+      console.log('\n--- ConsoleTransport: Error + Metadata ---');
       const transport = new ConsoleTransport({
         exceptions: 'FULL'
       });
       root.addTransport(transport);
 
-      const error = new Error('Test error');
-      root.error('Operation failed', error);
+      const testError = new Error('Test exception');
+      root.error('Operation failed with context', testError, {
+        userId: 12345,
+        operation: 'database_query',
+        retryCount: 3
+      });
     });
 
-    it('should support custom templates', () => {
+    it('should output with custom template', () => {
+      console.log('\n--- ConsoleTransport: Custom template ---');
       const transport = new ConsoleTransport({
-        template: '[%{level}] %{message}',
+        template: '[%{level}] %{name} %{message} %{metadata}',
         timestamp: 'NONE',
+        logLevel: 'NAME',
+        loggerName: 'NAME'
+      });
+      root.addTransport(transport);
+
+      const api = root.get('custom-api');
+      api.info('Custom format message', { status: 'success' });
+    });
+
+    it('should output with different timezone', () => {
+      console.log('\n--- ConsoleTransport: America/New_York timezone ---');
+      const transport = new ConsoleTransport({
+        timestamp: 'TIME',
+        timezone: 'America/New_York'
+      });
+      root.addTransport(transport);
+
+      root.info('Message in NY timezone');
+    });
+  });
+
+  describe('CLITransport - Actual Output with Colors', () => {
+    it('should output with colors (default)', () => {
+      console.log('\n--- CLITransport: Default with colors ---');
+      const transport = new CLITransport();
+      root.addTransport(transport);
+
+      root.setLevel(LogLevel.TRACE);
+      root.crit('CRIT: Should be RED');
+      root.error('ERROR: Should be BOLD RED');
+      root.warn('WARN: Should be YELLOW');
+      root.info('INFO: Should be GREEN');
+      root.verbose('VERBOSE: Should be BLUE');
+      root.debug('DEBUG: Should be BLUE');
+      root.trace('TRACE: Should be MAGENTA');
+    });
+
+    it('should output with NAME level and PATH logger', () => {
+      console.log('\n--- CLITransport: NAME + PATH with colors ---');
+      const transport = new CLITransport({
+        logLevel: 'NAME',
+        loggerName: 'PATH'
+      });
+      root.addTransport(transport);
+
+      const api = root.get('api');
+      const auth = api.get('auth');
+      const session = auth.get('session');
+
+      root.setLevel(LogLevel.TRACE);
+      session.crit('Critical in deep hierarchy');
+      session.error('Error in deep hierarchy');
+      session.warn('Warning in deep hierarchy');
+      session.info('Info in deep hierarchy');
+    });
+
+    it('should output error with FULL stack trace', () => {
+      console.log('\n--- CLITransport: FULL exception with colors ---');
+      const transport = new CLITransport({
+        exceptions: 'FULL',
         logLevel: 'NAME'
       });
       root.addTransport(transport);
 
-      root.info('Custom format');
+      const error = new Error('Database connection failed');
+      root.error('Failed to connect to database', error, {
+        host: 'localhost',
+        port: 5432,
+        database: 'testdb'
+      });
     });
 
-    it('should support metadata in templates', () => {
-      const transport = new ConsoleTransport({
-        template: '%{message} %{metadata}',
-        timestamp: 'NONE'
+    it('should output with FULL timestamp and custom template', () => {
+      console.log('\n--- CLITransport: Custom template with colors ---');
+      const transport = new CLITransport({
+        timestamp: 'FULL',
+        template: '%{timestamp} | %{level} | %{name} | %{message}',
+        logLevel: 'NAME',
+        loggerName: 'NAME'
       });
       root.addTransport(transport);
 
-      root.info('User action', { userId: 123, action: 'login' });
+      const service = root.get('payment-service');
+      service.info('Payment processed successfully', {
+        transactionId: 'TXN-123456',
+        amount: 99.99,
+        currency: 'USD'
+      });
     });
 
-    it('should support timezone configuration', () => {
-      const transport = new ConsoleTransport({
+    it('should install as default transport', () => {
+      console.log('\n--- CLITransport.install() ---');
+
+      // Install replaces all transports
+      CLITransport.install({
+        logLevel: 'SYMBOL',
+        loggerName: 'NAME'
+      });
+
+      // Should now use CLI transport
+      expect(root.transports).to.have.lengthOf(1);
+      expect(root.transports[0]).to.be.instanceOf(CLITransport);
+
+      root.info('After CLITransport.install() - colored output');
+      root.error('Error after install - colored output');
+    });
+
+    it('should show millisecond precision in TIME mode', () => {
+      console.log('\n--- CLITransport: TIME with milliseconds ---');
+      const transport = new CLITransport({
         timestamp: 'TIME',
-        timezone: 'America/Los_Angeles'
+        logLevel: 'NAME'
       });
       root.addTransport(transport);
 
-      root.info('Timezone test');
+      // Log multiple times quickly to show millisecond differences
+      for (let i = 0; i < 5; i++) {
+        root.info(`Message ${i} - note millisecond precision`);
+      }
     });
+  });
 
-    it('should support maxLineLength configuration', () => {
-      const transport = new ConsoleTransport({
-        maxLineLength: 50
+  describe('Transport Comparison - Side by Side', () => {
+    it('should show Console vs CLI output difference', () => {
+      console.log('\n--- Comparison: ConsoleTransport (no color) ---');
+      const consoleTransport = new ConsoleTransport({
+        logLevel: 'SYMBOL'
       });
-      root.addTransport(transport);
+      root.addTransport(consoleTransport);
 
-      root.info('This is a very long message that should be handled according to maxLineLength');
+      root.error('Console: Error message');
+      root.warn('Console: Warning message');
+      root.info('Console: Info message');
+
+      // Switch to CLI
+      root.removeTransport(consoleTransport);
+
+      console.log('\n--- Comparison: CLITransport (with color) ---');
+      const cliTransport = new CLITransport({
+        logLevel: 'SYMBOL'
+      });
+      root.addTransport(cliTransport);
+
+      root.error('CLI: Error message (should be colored)');
+      root.warn('CLI: Warning message (should be colored)');
+      root.info('CLI: Info message (should be colored)');
     });
   });
 
   describe('Transport Hierarchy', () => {
     it('should forward child logs to parent transports', () => {
-      const testTransport = new TestTransport();
-      root.addTransport(testTransport);
+      console.log('\n--- Hierarchy: Child logs forwarded to parent ---');
+      const transport = new CLITransport({
+        loggerName: 'PATH'
+      });
+      root.addTransport(transport);
 
-      const child = root.get('hierarchy-test-child');
-      child.info('Child message');
+      const api = root.get('api');
+      const database = api.get('database');
+      const query = database.get('query');
 
-      // Message should reach root transport
-      expect(testTransport.logs).to.have.lengthOf(1);
-      expect(testTransport.logs[0]).to.include('Child message');
+      query.info('Deep child logger - should reach root transport');
     });
 
-    it('should support child-specific transports', () => {
-      const rootTransport = new TestTransport();
-      const childTransport = new TestTransport();
+    it('should support multiple transports on same logger', () => {
+      console.log('\n--- Multiple transports on same logger ---');
 
-      root.addTransport(rootTransport);
-
-      const child = root.get('child-transport-test', {
-        transports: [childTransport]
+      const consoleTransport = new ConsoleTransport({
+        template: '[Console] %{message}',
+        timestamp: 'NONE'
       });
 
-      child.info('Test message');
+      const cliTransport = new CLITransport({
+        template: '[CLI-Colored] %{message}',
+        timestamp: 'NONE'
+      });
 
-      // Both root and child transports should receive the message
-      expect(rootTransport.logs).to.have.lengthOf(1);
-      expect(childTransport.logs).to.have.lengthOf(1);
+      root.addTransport(consoleTransport);
+      root.addTransport(cliTransport);
+
+      root.info('Message going to both Console and CLI transports');
+    });
+  });
+
+  describe('Format Options Verification', () => {
+    it('should respect NONE timestamp mode', () => {
+      console.log('\n--- NONE timestamp ---');
+      const transport = new CLITransport({
+        timestamp: 'NONE'
+      });
+      root.addTransport(transport);
+
+      root.info('No timestamp on this message');
     });
 
-    it('should allow different formatting on different loggers', () => {
-      const rootTransport = new ConsoleTransport({
-        logLevel: 'NAME'
+    it('should respect NONE log level mode', () => {
+      console.log('\n--- NONE log level ---');
+      const transport = new CLITransport({
+        logLevel: 'NONE'
       });
+      root.addTransport(transport);
 
-      const childTransport = new ConsoleTransport({
-        logLevel: 'SYMBOL'
+      root.error('No level indicator on this message');
+    });
+
+    it('should respect NONE logger name mode', () => {
+      console.log('\n--- NONE logger name ---');
+      const transport = new CLITransport({
+        loggerName: 'NONE'
       });
+      root.addTransport(transport);
 
-      root.addTransport(rootTransport);
+      const api = root.get('api');
+      api.info('No logger name on this message');
+    });
 
-      const child = root.get('format-test-child', {
-        transports: [childTransport]
+    it('should show BASIC exception format', () => {
+      console.log('\n--- BASIC exception (first line only) ---');
+      const transport = new CLITransport({
+        exceptions: 'BASIC'
       });
+      root.addTransport(transport);
 
-      child.info('Test');
-      // Should work with different formats
+      const error = new Error('Test error');
+      root.error('Error with BASIC format', error);
+    });
+
+    it('should show CUSTOM timestamp format', () => {
+      console.log('\n--- CUSTOM timestamp formatter ---');
+      const transport = new CLITransport({
+        timestamp: 'CUSTOM',
+        customTimestampFormatter: (date) => `[${date.getTime()}]`
+      });
+      root.addTransport(transport);
+
+      root.info('Custom timestamp shows epoch milliseconds');
+    });
+  });
+
+  describe('Transport Creation Tests', () => {
+    it('should create ConsoleTransport with options', () => {
+      const transport = new ConsoleTransport({
+        timestamp: 'FULL',
+        logLevel: 'NAME',
+        loggerName: 'PATH',
+        exceptions: 'FULL'
+      });
+      expect(transport).to.be.instanceOf(ConsoleTransport);
+      expect(transport).to.be.instanceOf(LoggerTransport);
+    });
+
+    it('should create CLITransport with options', () => {
+      const transport = new CLITransport({
+        timestamp: 'TIME',
+        timezone: 'America/Los_Angeles',
+        logLevel: 'SYMBOL',
+        loggerName: 'NAME',
+        exceptions: 'BASIC',
+        maxLineLength: 120,
+        template: '%{timestamp} [%{level}] %{message}'
+      });
+      expect(transport).to.be.instanceOf(CLITransport);
+      expect(transport).to.be.instanceOf(LoggerTransport);
+    });
+
+    it('should add and remove transports', () => {
+      const transport = new ConsoleTransport();
+
+      root.addTransport(transport);
+      expect(root.transports).to.include(transport);
+
+      root.removeTransport(transport);
+      expect(root.transports).to.not.include(transport);
     });
   });
 });

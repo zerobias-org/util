@@ -103,8 +103,9 @@ export abstract class LoggerTransport extends Transport {
       const hours = String(localDate.getHours()).padStart(2, '0');
       const minutes = String(localDate.getMinutes()).padStart(2, '0');
       const seconds = String(localDate.getSeconds()).padStart(2, '0');
+      const milliseconds = String(localDate.getMilliseconds()).padStart(3, '0');
 
-      return marker + `${hours}:${minutes}:${seconds}`;
+      return marker + `${hours}:${minutes}:${seconds}.${milliseconds}`;
     }
 
     return '';
