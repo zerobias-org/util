@@ -113,13 +113,13 @@ describe('Transports', () => {
       root.addTransport(transport);
 
       root.setLevel(LogLevel.TRACE);
-      root.crit('CRIT: Should be RED');
-      root.error('ERROR: Should be BOLD RED');
-      root.warn('WARN: Should be YELLOW');
-      root.info('INFO: Should be GREEN');
-      root.verbose('VERBOSE: Should be BLUE');
-      root.debug('DEBUG: Should be BLUE');
-      root.trace('TRACE: Should be MAGENTA');
+      root.crit('CRIT message - should be RED');
+      root.error('ERROR message - should be BOLD RED');
+      root.warn('WARN message - should be YELLOW');
+      root.info('INFO message - terminal default (no color)');
+      root.verbose('VERBOSE message - should be BLUE');
+      root.debug('DEBUG message - should be BLUE');
+      root.trace('TRACE message - should be MAGENTA');
     });
 
     it('should output with NAME level and PATH logger', () => {

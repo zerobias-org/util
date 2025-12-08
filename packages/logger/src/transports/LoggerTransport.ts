@@ -19,6 +19,15 @@ export abstract class LoggerTransport extends Transport {
 
   private lastDateMarker: string | null = null;
 
+  // Performance optimizations: Pre-computed lookups
+  private readonly levelSymbolLookup: Map<string, string> = new Map();
+  private readonly levelNameLookup: Map<string, string> = new Map();
+  private readonly standardFieldsSet: Set<string> = new Set(['level', 'message', 'name', 'path', 'error', 'timestamp']);
+  private readonly timezoneFormatter?: Intl.DateTimeFormat;
+
+  // Performance: Pre-compiled regex patterns
+  private readonly placeholderRegexes: Map<string, RegExp> = new Map();
+
   constructor(options?: TransportOptions) {
     super();
 
@@ -31,6 +40,32 @@ export abstract class LoggerTransport extends Transport {
     this.maxLineLength = options?.maxLineLength || 100;
     this.template = options?.template || '%{timestamp} %{name} [%{level}] %{message}\n%{metadata}\n%{exception}';
     this.customTimestampFormatter = options?.customTimestampFormatter;
+
+    // Pre-compute log level lookups (O(1) instead of O(n))
+    Object.entries(LOG_LEVEL_METADATA).forEach(([_, meta]) => {
+      this.levelSymbolLookup.set(meta.name, meta.symbol);
+      this.levelNameLookup.set(meta.name, meta.name);
+    });
+
+    // Pre-compile placeholder regexes
+    const placeholders = ['timestamp', 'level', 'name', 'message', 'metadata', 'exception'];
+    placeholders.forEach(ph => {
+      this.placeholderRegexes.set(ph, new RegExp(`%\\{${ph}\\}`, 'g'));
+    });
+
+    // Pre-create timezone formatter for TIME mode (cached by V8)
+    if (this.timestampMode === 'TIME') {
+      this.timezoneFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: this.timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+    }
   }
 
   /**
@@ -41,26 +76,32 @@ export abstract class LoggerTransport extends Transport {
 
     // Format timestamp
     const timestamp = this.formatTimestamp(new Date());
-    output = output.replace(/%\{timestamp\}/g, timestamp);
+    output = output.replace(this.placeholderRegexes.get('timestamp')!, timestamp);
 
     // Format log level
     const level = this.formatLogLevel(info.level);
-    output = output.replace(/%\{level\}/g, level);
+    output = output.replace(this.placeholderRegexes.get('level')!, level);
 
     // Format logger name
     const name = this.formatLoggerName(info.name, info.path);
-    output = output.replace(/%\{name\}/g, name);
+    output = output.replace(this.placeholderRegexes.get('name')!, name);
 
     // Format message
-    output = output.replace(/%\{message\}/g, info.message || '');
+    output = output.replace(this.placeholderRegexes.get('message')!, info.message || '');
 
     // Format metadata (exclude standard fields)
     const metadata = this.formatMetadata(info);
-    output = output.replace(/%\{metadata\}/g, metadata);
+    output = output.replace(this.placeholderRegexes.get('metadata')!, metadata);
 
     // Format exception
     const exception = this.formatException(info.error);
-    output = output.replace(/%\{exception\}/g, exception);
+    output = output.replace(this.placeholderRegexes.get('exception')!, exception);
+
+    // Remove empty brackets (simplified - done after all replacements)
+    output = output.replace(/\[\s*\]/g, '');
+
+    // Clean up multiple spaces
+    output = output.replace(/\s+/g, ' ').trim();
 
     // Clean up extra newlines
     output = output.replace(/\n+/g, '\n').replace(/\n$/, '');
@@ -80,45 +121,39 @@ export abstract class LoggerTransport extends Transport {
       return this.customTimestampFormatter(date);
     }
 
-    // Convert to specified timezone
-    const dateString = date.toLocaleString('en-US', {
-      timeZone: this.timezone
-    });
-    const localDate = new Date(dateString);
-
     if (this.timestampMode === 'FULL') {
       return date.toISOString();
     }
 
-    if (this.timestampMode === 'TIME') {
-      // Check if we need a date marker (hourly)
-      const currentDateMarker = this.getDateMarker(localDate);
-      let marker = '';
+    if (this.timestampMode === 'TIME' && this.timezoneFormatter) {
+      // Use pre-created Intl.DateTimeFormat for efficient timezone handling
+      const parts = this.timezoneFormatter.formatToParts(date);
 
+      // Extract time components from formatter parts
+      const hours = parts.find(p => p.type === 'hour')?.value || '00';
+      const minutes = parts.find(p => p.type === 'minute')?.value || '00';
+      const seconds = parts.find(p => p.type === 'second')?.value || '00';
+
+      // Get milliseconds with padding (preserves precision from original Date)
+      const ms = date.getMilliseconds();
+      const milliseconds = ms < 10 ? `00${ms}` : ms < 100 ? `0${ms}` : `${ms}`;
+
+      // Check if we need a date marker (when day changes)
+      const year = parts.find(p => p.type === 'year')?.value || '';
+      const month = parts.find(p => p.type === 'month')?.value || '';
+      const day = parts.find(p => p.type === 'day')?.value || '';
+      const currentDateMarker = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+      let marker = '';
       if (this.lastDateMarker !== currentDateMarker) {
         this.lastDateMarker = currentDateMarker;
-        marker = `--- ${currentDateMarker} ---\n`;
+        marker = `--- ${currentDateMarker} (${this.timezone}) ---\n`;
       }
-
-      const hours = String(localDate.getHours()).padStart(2, '0');
-      const minutes = String(localDate.getMinutes()).padStart(2, '0');
-      const seconds = String(localDate.getSeconds()).padStart(2, '0');
-      const milliseconds = String(localDate.getMilliseconds()).padStart(3, '0');
 
       return marker + `${hours}:${minutes}:${seconds}.${milliseconds}`;
     }
 
     return '';
-  }
-
-  /**
-   * Get date marker for TIME mode (YYYY-MM-DD)
-   */
-  protected getDateMarker(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
   }
 
   /**
@@ -129,23 +164,12 @@ export abstract class LoggerTransport extends Transport {
       return '';
     }
 
-    // Find matching log level
-    const logLevelEntry = Object.entries(LOG_LEVEL_METADATA).find(
-      ([_, meta]) => meta.name === level
-    );
-
-    if (!logLevelEntry) {
-      return level; // Fallback to raw level
-    }
-
-    const [_, metadata] = logLevelEntry;
-
     if (this.logLevelMode === 'SYMBOL') {
-      return metadata.symbol;
+      return this.levelSymbolLookup.get(level) || level;
     }
 
     if (this.logLevelMode === 'NAME') {
-      return metadata.name;
+      return this.levelNameLookup.get(level) || level;
     }
 
     return '';
@@ -179,16 +203,17 @@ export abstract class LoggerTransport extends Transport {
    * Format metadata (exclude standard fields)
    */
   protected formatMetadata(info: any): string {
-    const standardFields = ['level', 'message', 'name', 'path', 'error', 'timestamp'];
     const metadata: Record<string, any> = {};
+    let hasMetadata = false;
 
     for (const key in info) {
-      if (!standardFields.includes(key) && info[key] !== undefined) {
+      if (!this.standardFieldsSet.has(key) && info[key] !== undefined) {
         metadata[key] = info[key];
+        hasMetadata = true;
       }
     }
 
-    if (Object.keys(metadata).length === 0) {
+    if (!hasMetadata) {
       return '';
     }
 

@@ -52,7 +52,7 @@ export const LOG_LEVEL_METADATA: Record<LogLevel, LogLevelMetadata> = {
     name: 'info',
     value: 3,
     symbol: '',
-    color: 'green'
+    color: '' // No color - use terminal default
   },
   [LogLevel.VERBOSE]: {
     name: 'verbose',
