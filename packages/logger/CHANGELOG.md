@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>2.0.1 (2025-12-08)</small>
+
+* fix: add millisecond precision and improve transport tests ([ed5c594](https://github.com/zerobiasorg/util/commit/ed5c594))
+* fix: correct warn/warning level name mismatch for yellow color ([25b0217](https://github.com/zerobiasorg/util/commit/25b0217))
+* fix: resolve linting errors ([93746f9](https://github.com/zerobiasorg/util/commit/93746f9))
+* feat: add advanced transport formatting system (Phase 6) ([df938fd](https://github.com/zerobiasorg/util/commit/df938fd))
+* feat: implement hierarchical logger architecture (v2.0.0) ([d37b09e](https://github.com/zerobiasorg/util/commit/d37b09e))
+* feat: initial checkin ([f3d9877](https://github.com/zerobiasorg/util/commit/f3d9877))
+* feat(logger): support setLevel(null) to clear explicit level and resume inheritance ([09ae8d2](https://github.com/zerobiasorg/util/commit/09ae8d2))
+* perf(logger): optimize transport formatter for 60-75% performance improvement ([d8dda8d](https://github.com/zerobiasorg/util/commit/d8dda8d))
+
+
+
+
+
 ## 2.0.0 (TBD)
 
 ### BREAKING CHANGES
