@@ -38,9 +38,8 @@ import * as express from 'express';
 import * as path from 'path';
 import { LoggerEngine } from '@zerobias-org/logger';
 
-// Create a standalone logger for the API server (no request context)
-const EXEMPT_LOGGER_ID = '12345678-ABCD-1234-5678-ABCDEFABCDEF';
-const logger = new LoggerEngine(EXEMPT_LOGGER_ID, '{{apiName}}');
+// Use the hierarchical logger root
+const logger = LoggerEngine.root();
 
 {{#apis}}
 import { {{classname}}Controller } from './{{ classFilename }}.js';
