@@ -1,4 +1,5 @@
 import { LoggerTransport, TransportOptions } from './LoggerTransport.js';
+import { TransportType } from '../TransportType.js';
 
 /**
  * Console transport - outputs to console object methods
@@ -14,7 +15,7 @@ import { LoggerTransport, TransportOptions } from './LoggerTransport.js';
  */
 export class ConsoleTransport extends LoggerTransport {
   constructor(options?: TransportOptions) {
-    super(options);
+    super(TransportType.CONSOLE, options);
   }
 
   log(info: any, callback: () => void): void {

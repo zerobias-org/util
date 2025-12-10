@@ -10,9 +10,9 @@ describe('LoggerEngine', () => {
       expect(root1).to.equal(root2);
     });
 
-    it('should have name "root"', () => {
+    it('should have name empty string', () => {
       const root = LoggerEngine.root();
-      expect(root.name).to.equal('root');
+      expect(root.name).to.equal('');
     });
 
     it('should have no parent', () => {
@@ -81,12 +81,12 @@ describe('LoggerEngine', () => {
     });
 
     it('should return "root" for root logger', () => {
-      expect(root.path).to.equal('root');
+      expect(root.path).to.equal('');
     });
 
     it('should construct path for single child', () => {
       const api = root.get('api');
-      expect(api.path).to.equal('root:api');
+      expect(api.path).to.equal(':api');
     });
 
     it('should construct path for nested children', () => {
@@ -94,7 +94,7 @@ describe('LoggerEngine', () => {
       const auth = api.get('auth');
       const session = auth.get('session');
 
-      expect(session.path).to.equal('root:api:auth:session');
+      expect(session.path).to.equal(':api:auth:session');
     });
   });
 
