@@ -72,13 +72,13 @@ export abstract class LoggerTransport extends Transport {
     if (options.logLevel !== undefined) {
       this.logLevelMode = options.logLevel;
     } else if (!this.logLevelMode) {
-      this.logLevelMode = 'SYMBOL';
+      this.logLevelMode = 'NAME';
     }
 
     if (options.loggerName !== undefined) {
       this.loggerNameMode = options.loggerName;
     } else if (!this.loggerNameMode) {
-      this.loggerNameMode = 'NAME';
+      this.loggerNameMode = 'PATH';
     }
 
     if (options.exceptions !== undefined) {
