@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>2.0.3 (2025-12-10)</small>
+
+* fix: resolve linting error in CLITransport ternary expression ([8cb4ade](https://github.com/zerobiasorg/util/commit/8cb4ade))
+* fix: timestamp formatter initialization and color output bugs ([ba0a19c](https://github.com/zerobiasorg/util/commit/ba0a19c))
+* chore: adjust defaults ([a9e1db3](https://github.com/zerobiasorg/util/commit/a9e1db3))
+
+
+
+
+
 ## <small>2.0.2 (2025-12-10)</small>
 
 * chore: fix lint ([6fe1381](https://github.com/zerobiasorg/util/commit/6fe1381))
