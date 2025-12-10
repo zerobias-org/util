@@ -231,7 +231,7 @@ The root logger initializes with:
 - No color support
 
 **CLITransport (recommended for terminals):**
-- ANSI color support for color-aware terminals
+- ANSI color support for color-aware terminals (colors only the log level indicator)
 - Replaces `ConsoleTransport` when installed
 - Enhanced formatting for CLI usage
 

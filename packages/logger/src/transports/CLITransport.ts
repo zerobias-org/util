@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { LoggerTransport, TransportOptions } from './LoggerTransport.js';
 import { LOG_LEVEL_METADATA, LogLevel } from '../LogLevel.js';
 import { LoggerEngine } from '../LoggerEngine.js';
+import { TransportType } from '../TransportType.js';
 
 /**
  * CLI Transport - ANSI color support for terminals
@@ -16,7 +17,7 @@ import { LoggerEngine } from '../LoggerEngine.js';
  */
 export class CLITransport extends LoggerTransport {
   constructor(options?: TransportOptions) {
-    super(options);
+    super(TransportType.CLI, options);
   }
 
   /**
@@ -36,6 +37,7 @@ export class CLITransport extends LoggerTransport {
 
   /**
    * Apply color to text using chalk
+   * Overrides base class to add ANSI color codes
    */
   protected applyColor(text: string, color: string): string {
     switch (color) {
@@ -70,27 +72,28 @@ export class CLITransport extends LoggerTransport {
   }
 
   /**
-   * Format log with colors
+   * Format log level with color
+   * Overrides base class to add ANSI color codes
    */
-  protected formatLog(info: any): string {
-    // Get base formatted output
-    let output = super.formatLog(info);
+  protected formatLogLevel(level: string): string {
+    // Get uncolored level from base class
+    const uncoloredLevel = super.formatLogLevel(level);
 
-    // Apply color based on log level
-    const level = info.level?.toLowerCase() || 'info';
+    if (!uncoloredLevel) {
+      return '';
+    }
+
+    // Look up color for this level
     const logLevelEntry = Object.entries(LOG_LEVEL_METADATA).find(
       ([_, meta]) => meta.name === level
     );
 
     if (logLevelEntry) {
       const [_, metadata] = logLevelEntry;
-      const color = metadata.color;
-
-      // Color the entire output
-      output = this.applyColor(output, color);
+      return this.applyColor(uncoloredLevel, metadata.color);
     }
 
-    return output;
+    return uncoloredLevel;
   }
 
   log(info: any, callback: () => void): void {

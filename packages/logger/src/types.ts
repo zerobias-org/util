@@ -9,6 +9,12 @@ export interface LoggerOptions {
   level?: LogLevel;
   /** Optional custom transports */
   transports?: Transport[];
+  /**
+   * If true, logger is not cached in parent's children map and can be garbage collected.
+   * Use for high-volume dynamic loggers (per-request, per-session) that don't need manual cleanup.
+   * Ephemeral loggers can have children; the whole chain gets garbage collected when references are lost.
+   */
+  ephemeral?: boolean;
 }
 
 /**

@@ -1,6 +1,7 @@
 import Transport from 'winston-transport';
 import { LOG_LEVEL_METADATA, LogLevel } from '../LogLevel.js';
 import type { TransportOptions } from '../types.js';
+import { TransportType } from '../TransportType.js';
 
 
 
@@ -8,14 +9,17 @@ import type { TransportOptions } from '../types.js';
  * Base transport class with template-based formatting
  */
 export abstract class LoggerTransport extends Transport {
-  protected readonly timestampMode: 'NONE' | 'FULL' | 'TIME' | 'CUSTOM';
-  protected readonly timezone: string;
-  protected readonly logLevelMode: 'NONE' | 'SYMBOL' | 'NAME';
-  protected readonly loggerNameMode: 'NONE' | 'NAME' | 'PATH';
-  protected readonly exceptionsMode: 'BASIC' | 'FULL';
-  protected readonly maxLineLength: number;
-  protected readonly template: string;
-  protected readonly customTimestampFormatter?: (date: Date) => string;
+  /** Well-known transport type for programmatic identification */
+  public readonly transportType: TransportType;
+
+  protected timestampMode!: 'NONE' | 'FULL' | 'TIME' | 'CUSTOM';
+  protected timezone!: string;
+  protected logLevelMode!: 'NONE' | 'SYMBOL' | 'NAME';
+  protected loggerNameMode!: 'NONE' | 'NAME' | 'PATH';
+  protected exceptionsMode!: 'BASIC' | 'FULL';
+  protected maxLineLength!: number;
+  protected template!: string;
+  protected customTimestampFormatter?: (date: Date) => string;
 
   private lastDateMarker: string | null = null;
 
@@ -23,48 +27,114 @@ export abstract class LoggerTransport extends Transport {
   private readonly levelSymbolLookup: Map<string, string> = new Map();
   private readonly levelNameLookup: Map<string, string> = new Map();
   private readonly standardFieldsSet: Set<string> = new Set(['level', 'message', 'name', 'path', 'error', 'timestamp']);
-  private readonly timezoneFormatter?: Intl.DateTimeFormat;
+  private timezoneFormatter?: Intl.DateTimeFormat;
 
   // Performance: Pre-compiled regex patterns
-  private readonly placeholderRegexes: Map<string, RegExp> = new Map();
+  private placeholderRegexes: Map<string, RegExp> = new Map();
 
-  constructor(options?: TransportOptions) {
+  constructor(transportType: TransportType, options?: TransportOptions) {
     super();
+    this.transportType = transportType;
 
-    // Set defaults
-    this.timestampMode = options?.timestamp || 'TIME';
-    this.timezone = options?.timezone || 'GMT';
-    this.logLevelMode = options?.logLevel || 'SYMBOL';
-    this.loggerNameMode = options?.loggerName || 'NAME';
-    this.exceptionsMode = options?.exceptions || 'BASIC';
-    this.maxLineLength = options?.maxLineLength || 100;
-    this.template = options?.template || '%{timestamp} %{name} [%{level}] %{message}\n%{metadata}\n%{exception}';
-    this.customTimestampFormatter = options?.customTimestampFormatter;
-
-    // Pre-compute log level lookups (O(1) instead of O(n))
+    // Initialize level lookups (these never change)
     for (const [_, meta] of Object.entries(LOG_LEVEL_METADATA)) {
       this.levelSymbolLookup.set(meta.name, meta.symbol);
       this.levelNameLookup.set(meta.name, meta.name);
     }
 
-    // Pre-compile placeholder regexes
-    const placeholders = ['timestamp', 'level', 'name', 'message', 'metadata', 'exception'];
-    for (const ph of placeholders) {
-      this.placeholderRegexes.set(ph, new RegExp(String.raw`%\{${ph}\}`, 'g'));
+    // Apply initial configuration
+    this.apply(options || {});
+  }
+
+  /**
+   * Apply configuration options (partial or full)
+   * Can be called at construction or runtime to reconfigure the transport
+   */
+  apply(options: Partial<TransportOptions>): void {
+    // Track what changed to minimize downstream recomputation
+    const timestampChanged = options.timestamp !== undefined && options.timestamp !== this.timestampMode;
+    const timezoneChanged = options.timezone !== undefined && options.timezone !== this.timezone;
+    const templateChanged = options.template !== undefined && options.template !== this.template;
+
+    // Update configuration
+    if (options.timestamp !== undefined) {
+      this.timestampMode = options.timestamp;
+    } else if (!this.timestampMode) {
+      this.timestampMode = 'TIME';
     }
 
-    // Pre-create timezone formatter for TIME mode (cached by V8)
-    if (this.timestampMode === 'TIME') {
-      this.timezoneFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: this.timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
+    if (options.timezone !== undefined) {
+      this.timezone = options.timezone;
+    } else if (!this.timezone) {
+      this.timezone = 'GMT';
+    }
+
+    if (options.logLevel !== undefined) {
+      this.logLevelMode = options.logLevel;
+    } else if (!this.logLevelMode) {
+      this.logLevelMode = 'SYMBOL';
+    }
+
+    if (options.loggerName !== undefined) {
+      this.loggerNameMode = options.loggerName;
+    } else if (!this.loggerNameMode) {
+      this.loggerNameMode = 'NAME';
+    }
+
+    if (options.exceptions !== undefined) {
+      this.exceptionsMode = options.exceptions;
+    } else if (!this.exceptionsMode) {
+      this.exceptionsMode = 'BASIC';
+    }
+
+    if (options.maxLineLength !== undefined) {
+      this.maxLineLength = options.maxLineLength;
+    } else if (!this.maxLineLength) {
+      this.maxLineLength = 100;
+    }
+
+    if (options.template !== undefined) {
+      this.template = options.template;
+    } else if (!this.template) {
+      this.template = '%{timestamp} %{name} [%{level}] %{message}\n%{metadata}\n%{exception}';
+    }
+
+    if (options.customTimestampFormatter !== undefined) {
+      this.customTimestampFormatter = options.customTimestampFormatter;
+    }
+
+    // Recompute downstream state if needed
+
+    // Reset date marker if timezone changed
+    if (timezoneChanged) {
+      this.lastDateMarker = null;
+    }
+
+    // Re-create timezone formatter if timestamp mode or timezone changed (cached for performance)
+    if (timestampChanged || timezoneChanged) {
+      if (this.timestampMode === 'TIME' || this.timestampMode === 'FULL') {
+        this.timezoneFormatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: this.timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
+      } else {
+        this.timezoneFormatter = undefined;
+      }
+    }
+
+    // Re-compile placeholder regexes if template changed
+    if (templateChanged || this.placeholderRegexes.size === 0) {
+      this.placeholderRegexes.clear();
+      const placeholders = ['timestamp', 'level', 'name', 'message', 'metadata', 'exception'];
+      for (const ph of placeholders) {
+        this.placeholderRegexes.set(ph, new RegExp(String.raw`%\{${ph}\}`, 'g'));
+      }
     }
   }
 
@@ -122,35 +192,33 @@ export abstract class LoggerTransport extends Transport {
     }
 
     if (this.timestampMode === 'FULL') {
+      // Format full timestamp: YYYY-MM-DDTHH:mm:ss.SSS (timezone)
+      // Uses cached formatter for performance
+      if (this.timezoneFormatter) {
+        const formatted = this.timezoneFormatter.format(date).replace(', ', 'T');
+        const ms = date.getMilliseconds().toString().padStart(3, '0');
+        return `${formatted}.${ms} (${this.timezone})`;
+      }
       return date.toISOString();
     }
 
-    if (this.timestampMode === 'TIME' && this.timezoneFormatter) {
-      // Use pre-created Intl.DateTimeFormat for efficient timezone handling
-      const parts = this.timezoneFormatter.formatToParts(date);
+    if (this.timestampMode === 'TIME') {
+      // Format time only: HH:mm:ss.SSS with date marker on day change
+      // Uses cached formatter for performance
+      if (this.timezoneFormatter) {
+        const fullDate = this.timezoneFormatter.format(date);
+        const [dateStr, timeStr] = fullDate.split(', ');
+        const ms = date.getMilliseconds().toString().padStart(3, '0');
 
-      // Extract time components from formatter parts
-      const hours = parts.find(p => p.type === 'hour')?.value || '00';
-      const minutes = parts.find(p => p.type === 'minute')?.value || '00';
-      const seconds = parts.find(p => p.type === 'second')?.value || '00';
+        let marker = '';
+        if (this.lastDateMarker !== dateStr) {
+          this.lastDateMarker = dateStr;
+          marker = `--- ${dateStr} (${this.timezone}) ---\n`;
+        }
 
-      // Get milliseconds with padding (preserves precision from original Date)
-      const ms = date.getMilliseconds();
-      const milliseconds = ms < 10 ? `00${ms}` : (ms < 100 ? `0${ms}` : `${ms}`);
-
-      // Check if we need a date marker (when day changes)
-      const year = parts.find(p => p.type === 'year')?.value || '';
-      const month = parts.find(p => p.type === 'month')?.value || '';
-      const day = parts.find(p => p.type === 'day')?.value || '';
-      const currentDateMarker = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-
-      let marker = '';
-      if (this.lastDateMarker !== currentDateMarker) {
-        this.lastDateMarker = currentDateMarker;
-        marker = `--- ${currentDateMarker} (${this.timezone}) ---\n`;
+        return marker + `${timeStr}.${ms}`;
       }
-
-      return marker + `${hours}:${minutes}:${seconds}.${milliseconds}`;
+      return '';
     }
 
     return '';

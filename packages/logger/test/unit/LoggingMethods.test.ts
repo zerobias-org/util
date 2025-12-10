@@ -227,7 +227,7 @@ describe('Logging Methods', () => {
       auth.info('Test message');
 
       expect(getCapturedLogs()).to.have.lengthOf(1);
-      expect(getCapturedLogs()[0].path).to.equal('root:context-api:context-auth');
+      expect(getCapturedLogs()[0].path).to.equal(':context-api:context-auth');
     });
   });
 });

@@ -4,6 +4,8 @@ import { LogLevel } from './LogLevel.js';
 import type { LoggerOptions } from './types.js';
 import { ParentTransport } from './ParentTransport.js';
 import { ConsoleTransport } from './transports/ConsoleTransport.js';
+import { TransportType } from './TransportType.js';
+import { LoggerTransport } from './transports/LoggerTransport.js';
 
 /**
  * Hierarchical logger engine
@@ -17,6 +19,7 @@ export class LoggerEngine {
   private _level: LogLevel | undefined;
   private readonly _logger: winston.Logger;
   private _destroyed: boolean = false;
+  private readonly _ephemeral: boolean;
 
   /**
    * Private constructor - use LoggerEngine.root() or parent.get(name)
@@ -26,6 +29,7 @@ export class LoggerEngine {
     this._parent = parent;
     this._children = new Map();
     this._level = options?.level;
+    this._ephemeral = options?.ephemeral ?? false;
 
     // Create Winston logger with transports
     const transports: Transport[] = [];
@@ -64,7 +68,7 @@ export class LoggerEngine {
    */
   static root(): LoggerEngine {
     if (!LoggerEngine._root) {
-      LoggerEngine._root = new LoggerEngine('root', undefined, {
+      LoggerEngine._root = new LoggerEngine('', undefined, {
         level: LogLevel.INFO,
         transports: [new ConsoleTransport()]
       });
@@ -80,6 +84,12 @@ export class LoggerEngine {
       throw new Error(`Cannot get child logger from destroyed logger: ${this.path}`);
     }
 
+    // If requesting ephemeral logger, always create new instance (no caching)
+    if (options?.ephemeral) {
+      return new LoggerEngine(childName, this, options);
+    }
+
+    // Non-ephemeral: cache and reuse
     let child = this._children.get(childName);
 
     if (!child) {
@@ -113,8 +123,10 @@ export class LoggerEngine {
     }
     this._children.clear();
 
-    // 2. Remove from parent's children map
-    this._parent._children.delete(this._name);
+    // 2. Remove from parent's children map (if cached)
+    if (!this._ephemeral) {
+      this._parent._children.delete(this._name);
+    }
 
     // 3. Close Winston logger
     this._logger.close();
@@ -189,6 +201,13 @@ export class LoggerEngine {
   }
 
   /**
+   * Check if logger is ephemeral
+   */
+  get ephemeral(): boolean {
+    return this._ephemeral;
+  }
+
+  /**
    * Get transports
    */
   get transports(): Transport[] {
@@ -214,13 +233,62 @@ export class LoggerEngine {
   }
 
   /**
-   * Remove a transport
+   * Remove a transport by instance
    */
-  removeTransport(transport: Transport): void {
+  removeTransport(transport: Transport): void;
+  /**
+   * Remove all transports by type
+   */
+  removeTransport(transportType: TransportType): void;
+  /**
+   * Remove transport(s) - by instance or by type
+   */
+  removeTransport(transportOrType: Transport | TransportType): void {
     if (this._destroyed) {
       throw new Error(`Cannot remove transport from destroyed logger: ${this.path}`);
     }
-    this._logger.remove(transport);
+
+    // If it's a TransportType, remove all matching transports
+    if (typeof transportOrType === 'string') {
+      const transportType = transportOrType as TransportType;
+      const toRemove = this._logger.transports.filter(
+        (t): t is LoggerTransport =>
+          t instanceof LoggerTransport && t.transportType === transportType
+      );
+      for (const transport of toRemove) {
+        this._logger.remove(transport);
+      }
+    } else {
+      // Remove by instance
+      this._logger.remove(transportOrType);
+    }
+  }
+
+  /**
+   * Get first transport of given type
+   */
+  getTransport<T extends LoggerTransport>(transportType: TransportType): T | undefined {
+    return this._logger.transports.find(
+      (t): t is T => t instanceof LoggerTransport && t.transportType === transportType
+    ) as T | undefined;
+  }
+
+  /**
+   * Get all transports of given type
+   */
+  getTransports<T extends LoggerTransport>(transportType: TransportType): T[] {
+    return this._logger.transports.filter(
+      (t): t is T => t instanceof LoggerTransport && t.transportType === transportType
+    ) as T[];
+  }
+
+  /**
+   * Check if transport of given type exists
+   */
+  hasTransport(transportType: TransportType): boolean {
+    return this._logger.transports.some(
+      t => t instanceof LoggerTransport && t.transportType === transportType
+    );
   }
 
   /**
