@@ -25,18 +25,15 @@ export class CLITransport extends LoggerTransport {
     // In chalk 5.x, we need to use the Chalk constructor to force colors
     // This ensures colors work even when stdout is redirected or TTY detection fails
     const colorLevel = process.env.FORCE_COLOR
-      ? parseInt(process.env.FORCE_COLOR, 10) || 1
+      ? Number.parseInt(process.env.FORCE_COLOR, 10) || 1
       : chalk.level;
 
     // Create new Chalk instance with forced color level (minimum level 1)
     // This fixes the issue where chalk disables colors when stdout is redirected
     const chalkConstructor = (chalk as any).constructor;
-    if (chalkConstructor && colorLevel >= 0) {
-      this.chalk = new chalkConstructor({ level: Math.max(colorLevel, 1) });
-    } else {
-      // Fallback to default chalk instance
-      this.chalk = chalk;
-    }
+    this.chalk = (chalkConstructor && colorLevel >= 0)
+      ? new chalkConstructor({ level: Math.max(colorLevel, 1) })
+      : chalk;
   }
 
   /**
