@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>2.0.2 (2025-12-10)</small>
+
+* chore: fix lint ([6fe1381](https://github.com/zerobiasorg/util/commit/6fe1381))
+* feat: add ephemeral loggers, transport reconfiguration, and timezone support ([41efdb8](https://github.com/zerobiasorg/util/commit/41efdb8))
+
+
+
+
+
 ## <small>2.0.1 (2025-12-08)</small>
 
 * fix: add millisecond precision and improve transport tests ([ed5c594](https://github.com/zerobiasorg/util/commit/ed5c594))
