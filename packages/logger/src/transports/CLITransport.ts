@@ -16,8 +16,24 @@ import { TransportType } from '../TransportType.js';
  *   CLITransport.install()
  */
 export class CLITransport extends LoggerTransport {
+  private readonly chalk: typeof chalk;
+
   constructor(options?: TransportOptions) {
     super(TransportType.CLI, options);
+
+    // Create chalk instance with explicit color level
+    // In chalk 5.x, we need to use the Chalk constructor to force colors
+    // This ensures colors work even when stdout is redirected or TTY detection fails
+    const colorLevel = process.env.FORCE_COLOR
+      ? Number.parseInt(process.env.FORCE_COLOR, 10) || 1
+      : chalk.level;
+
+    // Create new Chalk instance with forced color level (minimum level 1)
+    // This fixes the issue where chalk disables colors when stdout is redirected
+    const chalkConstructor = (chalk as any).constructor;
+    this.chalk = (chalkConstructor && colorLevel >= 0)
+      ? new chalkConstructor({ level: Math.max(colorLevel, 1) })
+      : chalk;
   }
 
   /**
@@ -42,28 +58,28 @@ export class CLITransport extends LoggerTransport {
   protected applyColor(text: string, color: string): string {
     switch (color) {
       case 'red': {
-        return chalk.red(text);
+        return this.chalk.red(text);
       }
       case 'bold red': {
-        return chalk.bold.red(text);
+        return this.chalk.bold.red(text);
       }
       case 'yellow': {
-        return chalk.yellow(text);
+        return this.chalk.yellow(text);
       }
       case 'green': {
-        return chalk.green(text);
+        return this.chalk.green(text);
       }
       case 'blue': {
-        return chalk.blue(text);
+        return this.chalk.blue(text);
       }
       case 'magenta': {
-        return chalk.magenta(text);
+        return this.chalk.magenta(text);
       }
       case 'cyan': {
-        return chalk.cyan(text);
+        return this.chalk.cyan(text);
       }
       case 'bold': {
-        return chalk.bold(text);
+        return this.chalk.bold(text);
       }
       default: {
         return text;

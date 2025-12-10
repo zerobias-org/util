@@ -72,13 +72,13 @@ export abstract class LoggerTransport extends Transport {
     if (options.logLevel !== undefined) {
       this.logLevelMode = options.logLevel;
     } else if (!this.logLevelMode) {
-      this.logLevelMode = 'SYMBOL';
+      this.logLevelMode = 'NAME';
     }
 
     if (options.loggerName !== undefined) {
       this.loggerNameMode = options.loggerName;
     } else if (!this.loggerNameMode) {
-      this.loggerNameMode = 'NAME';
+      this.loggerNameMode = 'PATH';
     }
 
     if (options.exceptions !== undefined) {
@@ -111,8 +111,12 @@ export abstract class LoggerTransport extends Transport {
     }
 
     // Re-create timezone formatter if timestamp mode or timezone changed (cached for performance)
-    if (timestampChanged || timezoneChanged) {
-      this.timezoneFormatter = this.timestampMode === 'TIME' || this.timestampMode === 'FULL' ? new Intl.DateTimeFormat('en-CA', {
+    // Also create if we need one but don't have it yet (handles default initialization)
+    const needsFormatter = (this.timestampMode === 'TIME' || this.timestampMode === 'FULL');
+    const shouldCreateFormatter = timestampChanged || timezoneChanged || (needsFormatter && !this.timezoneFormatter);
+
+    if (shouldCreateFormatter) {
+      this.timezoneFormatter = needsFormatter ? new Intl.DateTimeFormat('en-CA', {
           timeZone: this.timezone,
           year: 'numeric',
           month: '2-digit',
