@@ -112,8 +112,7 @@ export abstract class LoggerTransport extends Transport {
 
     // Re-create timezone formatter if timestamp mode or timezone changed (cached for performance)
     if (timestampChanged || timezoneChanged) {
-      if (this.timestampMode === 'TIME' || this.timestampMode === 'FULL') {
-        this.timezoneFormatter = new Intl.DateTimeFormat('en-CA', {
+      this.timezoneFormatter = this.timestampMode === 'TIME' || this.timestampMode === 'FULL' ? new Intl.DateTimeFormat('en-CA', {
           timeZone: this.timezone,
           year: 'numeric',
           month: '2-digit',
@@ -122,10 +121,7 @@ export abstract class LoggerTransport extends Transport {
           minute: '2-digit',
           second: '2-digit',
           hour12: false,
-        });
-      } else {
-        this.timezoneFormatter = undefined;
-      }
+        }) : undefined;
     }
 
     // Re-compile placeholder regexes if template changed
