@@ -1,0 +1,45 @@
+{
+  "name": "@zerobias-org/util-fetch-alert-results",
+  "version": "1.0.0",
+  "description": "Fetch alert results from the portal API",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "clean": "rm -rf dist/",
+    "compile": "tsc",
+    "build": "npm run clean && npm run compile",
+    "start": "tsx src/main.ts",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npx nx run @zerobias-org/util-fetch-alert-results:build"
+  },
+  "files": [
+    "dist/src",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "alert",
+    "portal",
+    "fetch"
+  ],
+  "author": "ZeroBias <support@zerobias.com>",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zerobiasorg/util",
+    "directory": "packages/fetch-alert-results"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "dependencies": {
+    "@auditmation/module-auditmation-auditmation-portal": "4.0.18",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}
