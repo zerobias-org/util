@@ -114,6 +114,9 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
       if (err.errors[0]['errorCode']) {
         if (err.errors[0]['errorCode'] === 'required.openapi.validation') {
           json = (new ParameterRequiredError(err.errors[0].path)).toJSON();
+        } else if (err.errors[0]['errorCode'] === 'type.openapi.validation') {
+          const errorObj = err.errors[0];
+          json = (new IllegalArgumentError(`${errorObj.path} - ${errorObj.message}`)).toJSON();
         } else if (err.errors[0]['errorCode'] === 'format.openapi.validation') {
           const errorObj = err.errors[0];
           const format = (errorObj.path ? errorObj.path.split('/').pop() : undefined) || 'unknown';
