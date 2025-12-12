@@ -36,6 +36,42 @@ export interface FetchConfig {
   orgId: string;
 }
 
+export interface FetchAlertsConfig {
+  portalUrl: string;
+  boundaryId: string;
+  apiKey: string;
+  orgId: string;
+}
+
+export interface AlertListItem {
+  id: string;
+  name: string;
+  severity: string;
+  created: string;
+}
+
+/**
+ * Fetches all alerts for a boundary from the portal API
+ */
+export function fetchAlerts(config: FetchAlertsConfig): AlertListItem[] {
+  const { portalUrl, boundaryId, apiKey, orgId } = config;
+  const url = `${portalUrl}/boundaries/${boundaryId}/alerts`;
+  const curlCmd = `curl -s '${url}' --header 'Accept: */*' --header 'Authorization: APIKey ${apiKey}' --header 'dana-org-id: ${orgId}'`;
+  const result = execSync(curlCmd, { encoding: 'utf-8' });
+  const response = JSON.parse(result);
+
+  // Handle both array response and paginated response
+  if (Array.isArray(response)) {
+    return response as AlertListItem[];
+  } else if (response.data && Array.isArray(response.data)) {
+    return response.data as AlertListItem[];
+  } else if (response.items && Array.isArray(response.items)) {
+    return response.items as AlertListItem[];
+  }
+
+  return [];
+}
+
 /**
  * Fetches an alert from the portal API using curl
  */

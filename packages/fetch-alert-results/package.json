@@ -10,6 +10,7 @@
     "compile": "tsc",
     "build": "npm run clean && npm run compile",
     "start": "tsx src/main.ts",
+    "scheduler": "tsx src/scheduler.ts",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "test": "vitest run",
@@ -37,7 +38,8 @@
   },
   "dependencies": {
     "@auditmation/module-auditmation-auditmation-portal": "4.0.18",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "vitest": "^2.0.0"
