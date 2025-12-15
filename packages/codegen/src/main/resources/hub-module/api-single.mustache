@@ -419,7 +419,7 @@ export class {{classname}}HubImpl implements {{producerName}} {
   {{#vendorExtensions.x-returns-paged-results}}
   {{! For paged results, keep _body for results.body assignment }}
   const _body = {
-      {{#vendorExtensions.x-single-body-param}}...{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}}{{/vendorExtensions.x-producer-omit}}{{/allParams}},{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
+      {{#vendorExtensions.x-single-body-param}}...{{#bodyParams}}{{paramName}}{{/bodyParams}},{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
   };
   {{/vendorExtensions.x-returns-paged-results}}
   {{! Build path with path params substituted }}
@@ -464,7 +464,7 @@ export class {{classname}}HubImpl implements {{producerName}} {
   {{^vendorExtensions.x-use-spec-http-methods}}
   {{! Old behavior for backward compatibility }}
   const _body = {
-      {{#vendorExtensions.x-single-body-param}}...{{#allParams}}{{paramName}}{{/allParams}},{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
+      {{#vendorExtensions.x-single-body-param}}...{{#bodyParams}}{{paramName}}{{/bodyParams}},{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
   };
   return this.client.put(
     '/{{operationId}}',

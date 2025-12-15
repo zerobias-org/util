@@ -232,7 +232,7 @@ export class {{classname}}HttpImpl implements {{producerName}} {
   {{/vendorExtensions.x-returns-paged-results}}
   {{#vendorExtensions.x-returns-paged-results}}
   const _body = {
-      {{#vendorExtensions.x-single-body-param}}...{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}}{{/vendorExtensions.x-producer-omit}}{{/allParams}},{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
+      {{#vendorExtensions.x-single-body-param}}...{{#bodyParams}}{{paramName}}{{/bodyParams}},{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
   };
   {{/vendorExtensions.x-returns-paged-results}}
   {{! Build path with path params substituted }}
