@@ -711,7 +711,8 @@ public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
             // Add flag when operation has single body parameter (needs spreading)
             // When requestBody has a schema reference, OpenAPI Generator creates a single parameter
             // We need to spread it: { ...param } instead of { param }
-            if (useSpecHttpMethods && op.allParams.size() == 1 && op.bodyParams.size() == 1) {
+            // This applies regardless of path params count (e.g., PUT /resource/{id} with body)
+            if (useSpecHttpMethods && op.bodyParams.size() == 1) {
                 op.vendorExtensions.put("x-single-body-param", true);
             }
 

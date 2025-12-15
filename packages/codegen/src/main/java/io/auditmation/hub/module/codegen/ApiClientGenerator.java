@@ -544,7 +544,9 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
             if ("DELETE".equals(op.httpMethod)) {
                 op.vendorExtensions.put("x-is-delete-method", true);
             }
-            if (op.allParams.size() == 1 && op.bodyParams.size() == 1) {
+            // When there's a single body parameter, spread it: { ...param } instead of { param }
+            // This applies regardless of path params count (e.g., PUT /resource/{id} with body)
+            if (op.bodyParams.size() == 1) {
                 op.vendorExtensions.put("x-single-body-param", true);
             }
 
