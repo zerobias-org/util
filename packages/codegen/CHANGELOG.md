@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.29 (2025-12-15)</small>
+
+* fix: needed one more fix ([64a8014](https://github.com/zerobias-org/util/commit/64a8014))
+
+
+
+
+
 ## <small>1.0.28 (2025-12-15)</small>
 
 * fix: correct issue with handling body parameters ([ca5b9f5](https://github.com/zerobias-org/util/commit/ca5b9f5))
