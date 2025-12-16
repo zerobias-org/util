@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              http://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <!--
+    Maven Settings Template for Publishing to Maven Central via Central Portal
+
+    Copy this file to ~/.m2/settings.xml (create the directory if it doesn't exist)
+    and replace the placeholder values with your actual credentials.
+
+    IMPORTANT: Never commit this file with real credentials to version control!
+
+    To generate a user token:
+    1. Log in to https://central.sonatype.com/
+    2. Click on your profile → View Account
+    3. Click "Generate User Token"
+    4. Copy the generated username and password below
+    -->
+
+    <servers>
+        <!-- Central Portal credentials (user token) -->
+        <server>
+            <id>central</id>
+            <username>YOUR_TOKEN_USERNAME</username>
+            <password>YOUR_TOKEN_PASSWORD</password>
+        </server>
+    </servers>
+
+    <profiles>
+        <profile>
+            <id>ossrh</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <!-- GPG Configuration -->
+                <!-- Optional: Uncomment if you need to specify GPG executable path -->
+                <!-- <gpg.executable>gpg</gpg.executable> -->
+
+                <!-- Optional: Uncomment to use a specific GPG key -->
+                <!-- <gpg.keyname>YOUR_GPG_KEY_ID</gpg.keyname> -->
+
+                <!-- Optional: Uncomment to provide GPG passphrase (not recommended for security) -->
+                <!-- Better to use gpg-agent or enter passphrase interactively -->
+                <!-- <gpg.passphrase>YOUR_GPG_PASSPHRASE</gpg.passphrase> -->
+            </properties>
+        </profile>
+    </profiles>
+</settings>
