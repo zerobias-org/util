@@ -51,7 +51,10 @@ export async function ensureRequestPrototype(
   // Parse URL from connection profile
   let connectionProfileBasePath = '';
   if (connectionProfile && connectionProfile.url) {
-    const urlObj = new URL(connectionProfile.url);
+    const urlStr = typeof connectionProfile.url === 'string'
+      ? connectionProfile.url
+      : connectionProfile.url.toString();
+    const urlObj = new URL(urlStr);
     input.location.hostname = urlObj.hostname;
     input.location.protocol = urlObj.protocol.replace(':', '') as 'http' | 'https';
     input.location.port = urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80');

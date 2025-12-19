@@ -3,7 +3,7 @@
  * @module types
  */
 
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, URL } from '@zerobias-org/types-core-js';
 
 /**
  * Connection profile for Platform API clients
@@ -19,8 +19,10 @@ export interface ConnectionProfile {
    * - 'http://localhost:8888'
    * - 'https://ci.zerobias.com/api/hub'
    * - 'http://localhost:3000/api'
+   *
+   * Can be a string or a URL object from @zerobias-org/types-core-js
    */
-  url: string;
+  url: string | URL;
 
   /**
    * JWT token for authentication

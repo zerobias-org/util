@@ -112,7 +112,9 @@ export class BaseApiClient {
     // Configure axios instance with baseURL from connection profile
     const axiosClient = this.httpClient();
     if (axiosClient) {
-      axiosClient.defaults.baseURL = connectionProfile.url;
+      axiosClient.defaults.baseURL = typeof connectionProfile.url === 'string'
+        ? connectionProfile.url
+        : connectionProfile.url.toString();
 
       // Set authentication headers
       if (connectionProfile.apiKey) {
