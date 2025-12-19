@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.8 (2025-12-19)</small>
+
+* fix: correct api client base to have compatible connection profile ([0652c28](https://github.com/zerobiasorg/util/commit/0652c28))
+
+
+
+
+
 ## <small>1.0.7 (2025-12-08)</small>
 
 * fix: bump types deps, add exports ([fbdbab6](https://github.com/zerobiasorg/util/commit/fbdbab6))
