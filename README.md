@@ -13,7 +13,7 @@ packages/
 
 ## Requirements
 
-- Node.js >= 24.11.0
+- Node.js >= 22.0.0
 - npm >= 10.0.0
 - Java 8+ (for codegen)
 

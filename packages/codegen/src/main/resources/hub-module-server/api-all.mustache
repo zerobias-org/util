@@ -97,11 +97,11 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
 {{/apis}}
 
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    let { message = 'Unknown Error', key = 'err.unknown', statusCode = 500, args = {} } = err;
+    let { message = 'Unknown Error', stack = {}, key = 'err.unknown', statusCode = 500, args = {} } = err;
     if (statusCode >= 400 && statusCode < 500) {
       logger.info(`Request validation failed (${statusCode}): ${req.method} ${req.path} - ${err.message}`);
     } else {
-      logger.error(`Server error (${statusCode}): ${req.method} ${req.path} - ${err.message}`);
+      logger.error(`Server error (${statusCode}): ${req.method} ${req.path} - ${err.message} - ${JSON.stringify(err.stack)}`);
     }
     let json = {};
     if (err instanceof CoreError) {
@@ -143,6 +143,7 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
         key,
         timestamp: new Date().toISOString(),
         message,
+        stack,
         args,
       };
     }
