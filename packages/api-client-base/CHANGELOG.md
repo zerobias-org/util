@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.9 (2026-01-06)</small>
+
+**Note:** Version bump only for package @zerobias-org/util-api-client-base
+
+
+
+
+
 ## <small>1.0.8 (2025-12-19)</small>
 
 * fix: correct api client base to have compatible connection profile ([0652c28](https://github.com/zerobiasorg/util/commit/0652c28))

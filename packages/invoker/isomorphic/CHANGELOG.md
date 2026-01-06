@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.7 (2026-01-06)</small>
+
+**Note:** Version bump only for package @zerobias-org/util-api-invoker-isomorphic
+
+
+
+
+
 ## <small>1.0.6 (2025-12-05)</small>
 
 * fix: update deps ([a668792](https://github.com/zerobiasorg/util/commit/a668792))

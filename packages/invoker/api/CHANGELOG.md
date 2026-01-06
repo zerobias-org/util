@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.6 (2026-01-06)</small>
+
+* fix: fix testing issue with api invoker ([97f040d](https://github.com/zerobiasorg/util/commit/97f040d))
+
+
+
+
+
 ## <small>1.0.5 (2025-12-04)</small>
 
 * fix: tsconfig updates ([f26d6c0](https://github.com/zerobiasorg/util/commit/f26d6c0))
