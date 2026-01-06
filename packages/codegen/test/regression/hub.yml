@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   description: REST server implementation of the Hub API
   version: 3.15.0
-  title: '@auditmation/hub-server'
+  title: '@zerobias-com/hub-server'
 servers:
   - url: /
 paths:

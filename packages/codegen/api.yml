@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   description: REST server implementation of the Hub API
   version: 0.34.3
-  title: '@auditmation/hub-server'
+  title: '@zerobias-org/util-codegen'
 tags:
   - name: node
     description: Data and configuration for your Nodes

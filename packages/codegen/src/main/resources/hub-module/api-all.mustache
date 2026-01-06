@@ -27,9 +27,9 @@ import {
   ConnectionMetadata,
   OperationSupportStatus,
   OperationSupportStatusDef
-} from '@auditmation/hub-core';
+} from '@zerobias-com/hub-core';
 {{#hasState}}
-import { OAuthConnectionDetails } from '@auditmation/hub-core';
+import { OAuthConnectionDetails } from '@zerobias-com/hub-core';
 {{/hasState}}
 
 import { ConnectionProfile } from '../model/ConnectionProfile.js';
@@ -125,7 +125,7 @@ export abstract class {{apiName}}InvokerBase implements {{apiName}}{{#isConnecto
 {{/hasInvoker}}
 
 {{^skipHubImpl}}
-import { HubConnector as HubCoreHubConnector } from '@auditmation/hub-core';
+import { HubConnector as HubCoreHubConnector } from '@zerobias-com/hub-core';
 export class {{apiName}}HubImpl extends HubCoreHubConnector implements {{apiName}} {
 {{#apis}}
   get{{classname}}(): {{classname}} {
