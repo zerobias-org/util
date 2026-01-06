@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>2.0.1 (2026-01-06)</small>
+
+* fix: move codegen up to new breaking change with zerobias imports ([caee29f](https://github.com/zerobias-org/util/commit/caee29f))
+
+
+
+
+
 ## <small>1.0.30 (2025-12-29)</small>
 
 * fix: add stack to errors we throw from server ([797e539](https://github.com/zerobias-org/util/commit/797e539))
