@@ -75,7 +75,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: npm i
+        run: npm ci
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}

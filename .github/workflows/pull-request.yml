@@ -73,7 +73,7 @@ jobs:
 
       - name: Install and build
         run: |
-          npm i
+          npm ci
           nx affected -t build --base=${{ steps.base_ref.outputs.BASE_REF }}
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
