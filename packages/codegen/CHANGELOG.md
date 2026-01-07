@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>2.0.3 (2026-01-07)</small>
+
+* fix: codegen rebuilt to not use hub-core and instead uses basic util connector ([d0e4a7e](https://github.com/zerobias-org/util/commit/d0e4a7e))
+
+
+
+
+
 ## <small>2.0.2 (2026-01-07)</small>
 
 * fix: remove use of require in codegen ([8aabc5c](https://github.com/zerobias-org/util/commit/8aabc5c))
