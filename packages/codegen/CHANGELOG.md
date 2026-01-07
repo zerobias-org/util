@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>2.0.2 (2026-01-07)</small>
+
+* fix: remove use of require in codegen ([8aabc5c](https://github.com/zerobias-org/util/commit/8aabc5c))
+
+
+
+
+
 ## <small>2.0.1 (2026-01-06)</small>
 
 * fix: move codegen up to new breaking change with zerobias imports ([caee29f](https://github.com/zerobias-org/util/commit/caee29f))
