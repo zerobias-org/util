@@ -16,6 +16,15 @@ import { NumberFormat, DateTime, DateFormat, CoreType, PagedResults, IllegalArgu
 import { {{classname}} } from '{{{ classFilename }}}.js';
 {{/model}}
 {{/models}}
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+{{#inlineEnums}}
+import { {{classname}} } from '../api/{{{ classFilename }}}.js';
+{{/inlineEnums}}
+{{/operations}}
+{{/apis}}
+{{/apiInfo}}
 
 /* tslint:disable:no-unused-variable */
 const primitives = [
@@ -73,7 +82,7 @@ let enumsMap: {[index: string]: any} = {
       {{#apis}}
         {{#operations}}
         {{#inlineEnums}}
-        '{{classname}}.{{enumName}}': '../api/{{classFilename}}',
+        '{{classname}}.{{enumName}}': {{classname}}.{{enumName}},
         {{/inlineEnums}}
         {{/operations}}
       {{/apis}}
@@ -288,11 +297,6 @@ export class ObjectSerializer {
           return transformedData;
         } else {
             if (enumsMap[type]) {
-              if (typeof enumsMap[type] === 'string') {
-                let mod = require(enumsMap[type]);
-                type.split('.').forEach((k) => (mod = mod[k]));
-                enumsMap[type] = mod;
-              }
               // is Enum
               if (`${Number(data)}` === `${data}`) {
                 return enumsMap[type].from(Number(data));
