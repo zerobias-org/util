@@ -1,0 +1,42 @@
+{
+  "name": "@zerobias-org/util-connector",
+  "version": "1.0.0",
+  "description": "TypeScript connector implementation for hub and modules utilizing hub",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "clean": "rimraf dist/ .docs/",
+    "transpile": "tsc -b",
+    "build": "npm run transpile",
+    "test": "mocha --inline-diffs --reporter=list 'test/unit/**/*.ts'",
+    "test:unit": "mocha --inline-diffs --reporter=list test/unit/*.ts",
+    "test:watch": "npm run test -- --watch --reporter=min",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
+    "prepublishOnly": "npx nx run @zerobias-org/util-connector:build"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "author": "team@zerobias.com",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/connector"
+  },
+  "publishConfig": {
+    "registry": "https://pkg.zerobias.org/"
+  },
+  "files": [
+    "dist/src",
+    "*.md"
+  ],
+  "dependencies": {
+    "@zerobias-org/types-core-js": "^1.2.4",
+    "@zerobias-org/logger": "^2.0.3",
+    "axios": "1.13.2"
+  }
+}

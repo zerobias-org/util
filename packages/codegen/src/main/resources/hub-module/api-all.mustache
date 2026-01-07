@@ -22,14 +22,14 @@ export const VERSION = new Semver('{{version}}');
 {{/apiInfo}}
 
 {{#isConnector}}
+import { Connector } from '@zerobias-org/util-connector';
 import {
-  Connector,
   ConnectionMetadata,
   OperationSupportStatus,
   OperationSupportStatusDef
-} from '@zerobias-com/hub-core';
+} from '@zerobias-org/types-core-js';
 {{#hasState}}
-import { OAuthConnectionDetails } from '@zerobias-com/hub-core';
+import { OauthConnectionDetails } from '@zerobias-org/types-core-js';
 {{/hasState}}
 
 import { ConnectionProfile } from '../model/ConnectionProfile.js';
@@ -102,7 +102,7 @@ export abstract class {{apiName}}InvokerBase implements {{apiName}}{{#isConnecto
 
   abstract connect(
     connectionProfile: ConnectionProfile{{#hasState}},
-    oauthConnectionDetails?: OAuthConnectionDetails{{/hasState}}
+    oauthConnectionDetails?: OauthConnectionDetails{{/hasState}}
   ): Promise<{{#hasState}}ConnectionState{{/hasState}}{{^hasState}}void{{/hasState}}>;
 
   abstract disconnect(): Promise<void>;
@@ -118,14 +118,14 @@ export abstract class {{apiName}}InvokerBase implements {{apiName}}{{#isConnecto
   abstract refresh?(
     connectionProfile: ConnectionProfile,
     connectionState: ConnectionState,
-    oauthConnectionDetails?: OAuthConnectionDetails
+    oauthConnectionDetails?: OauthConnectionDetails
   ): Promise<ConnectionState>;
 {{/hasState}}{{/isConnector}}
 }
 {{/hasInvoker}}
 
 {{^skipHubImpl}}
-import { HubConnector as HubCoreHubConnector } from '@zerobias-com/hub-core';
+import { HubConnector as HubCoreHubConnector } from '@zerobias-org/util-connector';
 export class {{apiName}}HubImpl extends HubCoreHubConnector implements {{apiName}} {
 {{#apis}}
   get{{classname}}(): {{classname}} {
