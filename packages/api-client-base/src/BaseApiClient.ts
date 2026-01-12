@@ -64,13 +64,22 @@ export class BaseApiClient {
   protected _debugEnabled: boolean = false;
 
   /**
+   * Base path to append to connection profile URL
+   * @protected
+   */
+  protected _basePath: string = '';
+
+  /**
    * Creates instance of BaseApiClient
    *
    * @param axiosConfig - Axios configuration options
    *                      Defaults to accepting all status codes for custom error handling
+   * @param basePath - Base path to append to connection profile URL (e.g., '/store', '/hub')
+   *                   This is typically derived from the OpenAPI servers[0].url
    */
-  constructor(axiosConfig: AxiosRequestConfig = DEFAULT_AXIOS_CONFIG) {
+  constructor(axiosConfig: AxiosRequestConfig = DEFAULT_AXIOS_CONFIG, basePath: string = '') {
     this.apiInvoker = new ApiInvokerImpl(axiosConfig);
+    this._basePath = basePath;
   }
 
   /**
@@ -80,6 +89,15 @@ export class BaseApiClient {
    */
   get connectionProfile(): ConnectionProfile | undefined {
     return this._connectionProfile;
+  }
+
+  /**
+   * Gets the base path configured for this client
+   *
+   * @returns Base path string (e.g., '/store', '/hub') or empty string if not configured
+   */
+  get basePath(): string {
+    return this._basePath;
   }
 
   /**
@@ -109,12 +127,20 @@ export class BaseApiClient {
   async connect(connectionProfile: ConnectionProfile): Promise<void> {
     this._connectionProfile = connectionProfile;
 
-    // Configure axios instance with baseURL from connection profile
+    // Configure axios instance with baseURL from connection profile + basePath
     const axiosClient = this.httpClient();
     if (axiosClient) {
-      axiosClient.defaults.baseURL = typeof connectionProfile.url === 'string'
+      let baseURL = typeof connectionProfile.url === 'string'
         ? connectionProfile.url
         : connectionProfile.url.toString();
+
+      // Append basePath if configured (e.g., '/store', '/hub')
+      if (this._basePath) {
+        // Remove trailing slash from URL and leading slash from basePath to avoid double slashes
+        baseURL = baseURL.replace(/\/$/, '') + this._basePath;
+      }
+
+      axiosClient.defaults.baseURL = baseURL;
 
       // Set authentication headers
       if (connectionProfile.apiKey) {

@@ -159,6 +159,7 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
     }
 
     private String apiName;
+    private String basePath = "";
     private Set<String> enumTypes = new HashSet<>();
 
     public ApiClientGenerator() {
@@ -863,6 +864,7 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
     public Map<String, Object> postProcessSupportingFileData(Map<String, Object> objs) {
         Map<String, Object> processed = super.postProcessSupportingFileData(objs);
         processed.put("apiName", this.apiName);
+        processed.put("basePath", this.basePath);
         processed.put("generatedDate", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(new Date()));
         processed.put("packageName", additionalProperties.getOrDefault("packageName", "sdk"));
         processed.put("specFile", additionalProperties.getOrDefault("specFile", "api.yml"));
@@ -890,6 +892,16 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
         }
 
         this.apiName = camelize(apiName);
+
+        // Extract base path from servers[0].url for SDK base path
+        if (openAPI.getServers() != null && !openAPI.getServers().isEmpty()) {
+            String serverUrl = openAPI.getServers().get(0).getUrl();
+            // Only use if it's a path (starts with /) and not just "/"
+            if (serverUrl != null && serverUrl.startsWith("/") && !serverUrl.equals("/")) {
+                this.basePath = serverUrl;
+                LOGGER.info("Using base path from servers[0].url: {}", this.basePath);
+            }
+        }
     }
 
     /**
