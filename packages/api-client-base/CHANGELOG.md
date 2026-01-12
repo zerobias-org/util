@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.10 (2026-01-12)</small>
+
+* fix: allow for base path extension ([92472ea](https://github.com/zerobiasorg/util/commit/92472ea))
+
+
+
+
+
 ## <small>1.0.9 (2026-01-06)</small>
 
 **Note:** Version bump only for package @zerobias-org/util-api-client-base

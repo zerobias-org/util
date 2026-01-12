@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>2.0.4 (2026-01-12)</small>
+
+* fix: allow for base path extension ([92472ea](https://github.com/zerobias-org/util/commit/92472ea))
+
+
+
+
+
 ## <small>2.0.3 (2026-01-07)</small>
 
 * fix: codegen rebuilt to not use hub-core and instead uses basic util connector ([d0e4a7e](https://github.com/zerobias-org/util/commit/d0e4a7e))
