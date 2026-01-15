@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2.0.0-rc.1 (2026-01-15)
+
+* feat: move hub-module-utils to zerobias-org ([e29c758](https://github.com/zerobias-org/util/commit/e29c758))
+
+
+
+
+
 ## [1.0.35](https://github.com/auditmation/util/compare/@auditmation/util-hub-module-utils@1.0.34...@auditmation/util-hub-module-utils@1.0.35) (2025-11-24)
 
 

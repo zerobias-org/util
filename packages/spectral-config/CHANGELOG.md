@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.6 (2026-01-15)</small>
+
+**Note:** Version bump only for package @zerobias-org/util-spectral-config
+
+
+
+
+
 ## <small>1.0.5 (2026-01-07)</small>
 
 * fix: update dep ([9f5e219](https://github.com/zerobias-org/util/commit/9f5e219))
