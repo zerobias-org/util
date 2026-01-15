@@ -1,0 +1,19 @@
+openapi: 3.0.2
+info:
+  version: 0.0.0
+  title: test
+paths:
+  /test:
+    get:
+      responses:
+        '200': 
+          description: Successful response
+components:
+  schemas:
+    Enum:
+      type: string
+      enum:
+        - val1
+        - val2
+        - val3
+        - NON-SnakeCase
