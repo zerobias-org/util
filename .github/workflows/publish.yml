@@ -148,5 +148,5 @@ jobs:
 
   # sbom-recorder:
   #   needs: publish
-  #   uses: auditmation/devops/.github/workflows/sbom-recorder.yml@main
+  #   uses: zerobias-com/devops/.github/workflows/sbom-recorder.yml@main
   #   secrets: inherit

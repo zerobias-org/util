@@ -17,17 +17,17 @@
   },
   "scripts": {
     "clean": "rm -rf dist/",
-    "transpile": "tsc",
+    "transpile": "tsc -b",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
-    "build": "npm run transpile",
+    "build": "npm run lint && npm run transpile",
     "prepublishOnly": "npx nx run @zerobias-org/util-api-invoker-api:build"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zerobiasorg/util.git",
+    "url": "https://github.com/zerobias-org/util.git",
     "directory": "packages/invoker/api"
   },
   "publishConfig": {
@@ -38,6 +38,7 @@
     "bom.json"
   ],
   "dependencies": {
-    "@zerobias-org/types-core-js": "^1.0.6"
+    "@zerobias-org/types-core-js": "^1.0.6",
+    "axios": "^1.0.0"
   }
 }

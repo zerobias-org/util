@@ -103,11 +103,11 @@ export function mapArray<I, O>(
     throw new UnexpectedError(`Expected array, but got ${typeof data}`);
   }
   const collector: O[] = [];
-  data.forEach((elem) => {
+  for (const elem of data) {
     if (elem !== undefined) {
       collector.push(mapper(elem));
     }
-  });
+  }
   return collector;
 }
 
@@ -157,9 +157,12 @@ export function fromCloudRegion(
   let enumType: typeof AwsRegion | typeof AzureRegion;
 
   switch (cloudRegionData.provider) {
-    case 'aws': enumType = AwsRegion; break;
-    case 'azure': enumType = AzureRegion; break;
-    default: throw new InvalidInputError('cloudRegion provider', cloudRegionData.provider);
+    case 'aws': { enumType = AwsRegion; break;
+    }
+    case 'azure': { enumType = AzureRegion; break;
+    }
+    default: { throw new InvalidInputError('cloudRegion provider', cloudRegionData.provider);
+    }
   }
 
   return toEnum(enumType, cloudRegionData.providerCode, (str) => str);

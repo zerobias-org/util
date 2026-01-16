@@ -8,7 +8,7 @@
   "scripts": {
     "clean": "rimraf dist/ .docs/",
     "transpile": "tsc -b",
-    "build": "npm run transpile",
+    "build": "npm run lint && npm run transpile",
     "test": "mocha --inline-diffs --reporter=list 'test/unit/**/*.ts'",
     "test:unit": "mocha --inline-diffs --reporter=list test/unit/*.ts",
     "test:watch": "npm run test -- --watch --reporter=min",

@@ -2,19 +2,20 @@
   "name": "@zerobias-org/collector-utils",
   "version": "1.0.1",
   "description": "Common utilities for collector bots - HTTP fetching, data chunking, CSV/YAML parsing",
+  "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
-      "require": "./dist/src/index.js",
+      "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     }
   },
   "scripts": {
     "clean": "rm -rf dist/",
-    "compile": "tsc",
-    "build": "npm run clean && npm run compile",
+    "transpile": "tsc -b",
+    "build": "npm run lint && npm run transpile",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
@@ -35,29 +36,20 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zerobiasorg/util",
+    "url": "https://github.com/zerobias-org/util",
     "directory": "packages/collector-utils"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@auditmation/hub-core": "latest",
-    "@auditmation/module-auditmation-auditmation-platform": "latest",
-    "@auditmation/types-core-js": "latest",
-    "@zerobias-org/logger": "latest",
-    "axios": "^0.27.2",
-    "csv-parse": "^5.6.0",
-    "js-yaml": "^4.1.0"
-  },
-  "devDependencies": {
-    "@types/chai": "^4.3.20",
-    "@types/js-yaml": "^4.0.9",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "^22.10.0",
-    "chai": "^4.5.0",
-    "mocha": "^11.7.5",
-    "tsx": "^4.21.0"
+    "@zerobias-org/util-connector": "^1.0.1",
+    "@zerobias-com/platform-sdk": "^1.0.20",
+    "@zerobias-org/types-core-js": "^1.2.5",
+    "@zerobias-org/logger": "^2.0.3",
+    "axios": "^1.0.0",
+    "csv-parse": "^6.0.0",
+    "js-yaml": "^4.0.0"
   },
   "engines": {
     "node": ">=22.0.0",

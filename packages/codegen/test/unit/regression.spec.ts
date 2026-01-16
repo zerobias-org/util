@@ -41,7 +41,7 @@ describe('Platform SDK Regression Tests', function() {
         try {
           const cmd = `${path.join(__dirname, '../../bin/hub-generator.js')} generate -g api-client -i ${specPath} -o ${sdkOutputDir}/ --skip-validate-spec`;
           execSync(cmd, { stdio: 'pipe' });
-        } catch (error) {
+        } catch (error: any) {
           throw new Error(`Failed to generate SDK for ${spec}: ${error.message}`);
         }
       });
@@ -115,10 +115,6 @@ describe('Platform SDK Regression Tests', function() {
             '@zerobias-org/util-api-client-base': '^1.1.3',
             'jsonata': '1.8.6',
             'axios': '^0.27.2'
-          },
-          devDependencies: {
-            '@types/node': '16.18.71',
-            'typescript': '^4.8.4'
           }
         };
         
@@ -145,7 +141,7 @@ describe('Platform SDK Regression Tests', function() {
             cwd: sdkOutputDir, 
             stdio: 'pipe' 
           });
-        } catch (error) {
+        } catch (error: any) {
           // Check for specific enum errors
           const errorOutput = error.stdout?.toString() || error.stderr?.toString() || '';
           

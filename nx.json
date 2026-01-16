@@ -30,6 +30,12 @@
       "outputs": ["{projectRoot}/dist", "{projectRoot}/build"],
       "cache": true
     },
+    "compile": {
+      "dependsOn": ["^compile", "generate"],
+      "inputs": ["production", "^production"],
+      "outputs": ["{projectRoot}/dist", "{projectRoot}/build"],
+      "cache": true
+    },
     "sql:copy": {
       "dependsOn": ["transpile"],
       "cache": true

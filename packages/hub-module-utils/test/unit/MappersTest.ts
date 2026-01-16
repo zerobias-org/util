@@ -2,8 +2,8 @@ import { AwsRegion } from '@zerobias-org/types-amazon-js';
 import { CloudProvider, CloudRegion, EnumValue, IllegalArgumentError, InvalidInputError, UnexpectedError, UUID } from '@zerobias-org/types-core-js';
 import { AzureRegion } from '@zerobias-org/types-microsoft-js';
 import { expect } from 'chai';
-import { Enum, EnumDef } from '../../generated/model';
-import { fromCloudRegion, map, mapArray, toCloudRegion, toEnum } from '../../src';
+import { Enum, EnumDef } from '../../generated/model/index.js';
+import { fromCloudRegion, map, mapArray, toCloudRegion, toEnum } from '../../src/index.js';
 
 describe('Mappers test', () => {
   describe('#map', () => {
