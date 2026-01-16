@@ -13,12 +13,12 @@
   },
   "scripts": {
     "clean": "rm -rf dist/",
-    "transpile": "tsc",
+    "transpile": "tsc -b",
     "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test -- --watch --reporter=min",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
-    "build": "npm run transpile",
+    "build": "npm run lint && npm run transpile",
     "prepublishOnly": "npx nx run @zerobias-org/util-api-invoker-isomorphic:build"
   },
   "author": "ZeroBias <support@zerobias.com>",

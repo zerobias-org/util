@@ -12,8 +12,8 @@
   },
   "scripts": {
     "clean": "rm -rf dist/ generated/",
-    "transpile": "tsc",
-    "build": "npm run generate && npm run transpile",
+    "transpile": "tsc -b",
+    "build": "npm run lint && npm run generate && npm run transpile",
     "generate": "hub-generator generate -g hub-module -i test/unit/enum.yml -o generated/",
     "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test:generate && npm run test -- --watch --reporter=min",

@@ -1,16 +1,14 @@
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
 import { UnexpectedError } from '@zerobias-org/types-core-js';
 import jsonata from 'jsonata';
 export { snakeCase, camelCase, pascalCase } from 'change-case';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = import.meta.dirname;
 // When running from src: go up 3 levels to monorepo root
 // When running from dist/src: go up 4 levels to monorepo root
 const parentModulePath = __dirname.includes('/dist/')
-  ? resolve(__dirname, '..', '..', '..', '..')
-  : resolve(__dirname, '..', '..', '..');
+  ? path.resolve(__dirname, '..', '..', '..', '..')
+  : path.resolve(__dirname, '..', '..', '..');
 /**
  * Creates a Basic Authentication header value out of given username and password.
  * @returns Authentication header
@@ -35,8 +33,8 @@ export async function getAttributes(
   type: string,
   modelPath?: string
 ): Promise<string[]> {
-  const basePath = modelPath || resolve(parentModulePath, 'generated/model');
-  const resolvedPath = resolve(parentModulePath, basePath);
+  const basePath = modelPath || path.resolve(parentModulePath, 'generated/model');
+  const resolvedPath = path.resolve(parentModulePath, basePath);
   const module = await import(resolvedPath);
   const model = module[modelName];
   return model.getAttributeTypeMap().filter((t: { type: string }) => t.type === type).map((t: { name: string }) => t.name);

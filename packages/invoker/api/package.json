@@ -17,10 +17,10 @@
   },
   "scripts": {
     "clean": "rm -rf dist/",
-    "transpile": "tsc",
+    "transpile": "tsc -b",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
-    "build": "npm run transpile",
+    "build": "npm run lint && npm run transpile",
     "prepublishOnly": "npx nx run @zerobias-org/util-api-invoker-api:build"
   },
   "author": "ZeroBias <support@zerobias.com>",
