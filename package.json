@@ -60,6 +60,10 @@
   "overrides": {
     "mocha": {
       "diff": "^8.0.3"
+    },
+    "@stoplight/spectral-cli": {
+      "glob": "^10.0.0",
+      "magic-string": "^0.30.0"
     }
   }
 }
