@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.7 (2026-01-16)</small>
+
+* fix: final fixes ([b0cd4d6](https://github.com/zerobias-org/util/commit/b0cd4d6))
+* fix: no more vulns,  ems changes ([c27f255](https://github.com/zerobias-org/util/commit/c27f255))
+
+
+
+
+
 ## <small>1.0.6 (2026-01-06)</small>
 
 * fix: fix testing issue with api invoker ([97f040d](https://github.com/zerobiasorg/util/commit/97f040d))

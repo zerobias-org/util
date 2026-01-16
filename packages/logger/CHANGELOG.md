@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>2.0.4 (2026-01-16)</small>
+
+* fix: final fixes ([b0cd4d6](https://github.com/zerobias-org/util/commit/b0cd4d6))
+* fix: no more vulns,  ems changes ([c27f255](https://github.com/zerobias-org/util/commit/c27f255))
+
+
+
+
+
 ## <small>2.0.3 (2025-12-10)</small>
 
 * fix: resolve linting error in CLITransport ternary expression ([8cb4ade](https://github.com/zerobiasorg/util/commit/8cb4ade))

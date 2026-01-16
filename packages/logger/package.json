@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/logger",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "ZeroBias Logger - standard logging for all services",
   "type": "module",
   "main": "dist/src/index.js",

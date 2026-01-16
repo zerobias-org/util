@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## <small>1.0.8 (2026-01-16)</small>
+
+* fix: correct test ([ab2425b](https://github.com/zerobias-org/util/commit/ab2425b))
+* fix: final fixes ([b0cd4d6](https://github.com/zerobias-org/util/commit/b0cd4d6))
+* fix: no more vulns,  ems changes ([c27f255](https://github.com/zerobias-org/util/commit/c27f255))
+
+
+
+
+
 ## <small>1.0.7 (2026-01-06)</small>
 
 **Note:** Version bump only for package @zerobias-org/util-api-invoker-isomorphic
