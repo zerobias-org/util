@@ -3,20 +3,16 @@
  * Provides helpers for error handling and batch lifecycle management
  */
 
-import { UUID } from '@auditmation/types-core-js';
+import { UUID, Tag, UnexpectedError } from '@zerobias-org/types-core-js';
 import {
-  Platform,
+  PlatformApiClient,
   BatchLogLevelEnum,
   BatchImportItem,
   type BatchLogLevelEnumDef,
   type NewBatch,
   type NewBatchLog,
-} from '@auditmation/module-auditmation-auditmation-platform';
-import type { Tag } from '@auditmation/hub-core';
+} from '@zerobias-com/platform-sdk';
 import type { LoggerEngine } from '@zerobias-org/logger';
-
-
-
 
 /**
  * Batch item with payload and optional raw data
@@ -47,7 +43,7 @@ export interface BatchItem<T> {
  */
 export class Batch<T extends object = Record<string, unknown>> {
   private readonly className: string;
-  private readonly platform: Platform;
+  private readonly platform: PlatformApiClient;
   private readonly logger: LoggerEngine;
   private readonly jobId: UUID;
   private readonly tags?: Tag[];
@@ -71,7 +67,7 @@ export class Batch<T extends object = Record<string, unknown>> {
    */
   constructor(
     className: string,
-    platform: Platform,
+    platform: PlatformApiClient,
     logger: LoggerEngine,
     jobId: UUID,
     tags?: Tag[],
@@ -92,6 +88,10 @@ export class Batch<T extends object = Record<string, unknown>> {
    */
   private async init(): Promise<UUID | null> {
     if (!this.initialized) {
+      if (!this.platform.isConnected()) {
+        throw new UnexpectedError('PlatformApiClient was not properly connected, please call connect() with a connection profile.');
+      }
+
       const tagIds = this.tags ? this.tags.map((x) => x.id) : [];
       const newBatch: NewBatch = {
         className: this.className,
@@ -286,13 +286,13 @@ export interface BatchEntry {
  * ```
  */
 export class BatchManager {
-  private readonly platform: Platform;
+  private readonly platform: PlatformApiClient;
   private readonly logger: LoggerEngine;
   private readonly jobId: UUID;
   private readonly tags: Tag[];
   private readonly batches: Batch<any>[] = [];
 
-  constructor(platform: Platform, logger: LoggerEngine, jobId: UUID, tags: Tag[] = []) {
+  constructor(platform: PlatformApiClient, logger: LoggerEngine, jobId: UUID, tags: Tag[] = []) {
     this.platform = platform;
     this.logger = logger;
     this.jobId = jobId;
@@ -372,14 +372,13 @@ export async function withTempDir<T>(fn: (tempDir: string) => Promise<T>): Promi
   }
 }
 
-export {UnexpectedError, UUID} from '@auditmation/types-core-js';
+export { UnexpectedError, UUID, Tag } from '@zerobias-org/types-core-js';
 export {
-  Platform, 
+  PlatformApiClient, 
   BatchLogLevelEnum, 
   BatchImportItem, 
   type BatchLogLevelEnumDef, 
   type NewBatch, 
   type NewBatchLog
-} from '@auditmation/module-auditmation-auditmation-platform';
-export {type Tag} from '@auditmation/hub-core';
-export {type LoggerEngine} from '@zerobias-org/logger';
+} from '@zerobias-com/platform-sdk';
+export { type LoggerEngine } from '@zerobias-org/logger';

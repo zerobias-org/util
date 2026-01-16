@@ -35,37 +35,15 @@
     "dist",
     "bom.json"
   ],
-  "devDependencies": {
-    "@types/chai": "latest",
-    "@types/mocha": "latest",
-    "@types/node": "latest",
-    "@types/request": "latest",
-    "@typescript-eslint/eslint-plugin": "latest",
-    "@typescript-eslint/parser": "latest",
-    "@zerobias-org/eslint-config": "latest",
-    "@zerobias-org/util-codegen": "latest",
-    "@zerobias-org/util-connector": "latest",
-    "chai": "latest",
-    "eslint": "latest",
-    "eslint-config-airbnb-base": "latest",
-    "eslint-config-airbnb-typescript": "latest",
-    "eslint-plugin-import": "latest",
-    "mocha": "latest",
-    "ts-node": "latest",
-    "typescript": "latest"
-  },
-  "peerDependencies": {
-    "@zerobias-org/types-amazon-js": "latest",
-    "@zerobias-org/types-core": "latest",
-    "@zerobias-org/types-core-js": "latest",
-    "@zerobias-org/types-microsoft-js": "latest"
-  },
   "dependencies": {
-    "@typescript-eslint/typescript-estree": "^7.18.0",
-    "camel-case": "latest",
-    "jsonata": "latest",
-    "pascal-case": "latest",
-    "snake-case": "latest"
+    "@zerobias-org/types-amazon-js": "^1.0.0",
+    "@zerobias-org/types-core": "^1.0.0",
+    "@zerobias-org/types-core-js": "^1.0.0",
+    "@zerobias-org/types-microsoft-js": "^1.0.0",
+    "change-case": "^5.0.0",
+    "jsonata": "^2.0.0"
   },
-  "gitHead": "9f6207d5f9cef19eb02399dea29bcbde246972f5"
+  "devDependencies": {
+    "@zerobias-org/util-codegen": "^2.0.4"
+  }
 }

@@ -115,10 +115,6 @@ describe('Platform SDK Regression Tests', function() {
             '@zerobias-org/util-api-client-base': '^1.1.3',
             'jsonata': '1.8.6',
             'axios': '^0.27.2'
-          },
-          devDependencies: {
-            '@types/node': '16.18.71',
-            'typescript': '^4.8.4'
           }
         };
         

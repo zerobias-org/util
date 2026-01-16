@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { camelCase, convertBooleans, convertNumbers, getAttributes, getBasicAuthHeader, pascalCase, snakeCase } from "../../src";
+import { camelCase, convertBooleans, convertNumbers, getAttributes, getBasicAuthHeader, pascalCase, snakeCase } from "../../src/index.js";
 
 describe('Common functions test', () => {
 
@@ -45,10 +45,10 @@ describe('Common functions test', () => {
   const modelsPath = 'node_modules/@zerobias-org/types-core-js/dist/generated/model';
 
   describe('#getAttributes', () => {
-    it('Should get attributes', () => {
-      const numberAttributes = getAttributes('UnexpectedError', 'number', modelsPath);
-      const stringAttributes = getAttributes('UnexpectedError', 'string', modelsPath);
-      const booleanAttributes = getAttributes('Type', 'boolean', modelsPath);
+    it('Should get attributes', async () => {
+      const numberAttributes = await getAttributes('UnexpectedError', 'number', modelsPath);
+      const stringAttributes = await getAttributes('UnexpectedError', 'string', modelsPath);
+      const booleanAttributes = await getAttributes('Type', 'boolean', modelsPath);
       expect(numberAttributes).eql(['statusCode']);
       expect(stringAttributes).eql(['key', 'template', 'msg', 'stack']);
       expect(booleanAttributes).eql(['isEnum']);
@@ -57,12 +57,12 @@ describe('Common functions test', () => {
 
 
   describe('#convertBooleans', () => {
-    it('Should convert booleans', () => {
+    it('Should convert booleans', async () => {
       const body = {
         "key1": "value1",
         "isEnum": "false"
       };
-      const converted = convertBooleans(body, 'Type', modelsPath);
+      const converted = await convertBooleans(body, 'Type', modelsPath);
       expect(converted).eql({
         "key1": "value1",
         "isEnum": false
@@ -72,12 +72,12 @@ describe('Common functions test', () => {
   });
 
   describe('#convertNumbers', () => {
-    it('Should convert numbers', () => {
+    it('Should convert numbers', async () => {
       const body = {
         "key1": "value1",
         "statusCode": "500"
       };
-      const converted = convertNumbers(body, 'UnexpectedError', modelsPath);
+      const converted = await convertNumbers(body, 'UnexpectedError', modelsPath);
       expect(converted).eql({
         "key1": "value1",
         "statusCode": 500

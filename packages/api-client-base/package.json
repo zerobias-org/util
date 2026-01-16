@@ -38,13 +38,14 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zerobiasorg/util",
+    "url": "https://github.com/zerobias-org/util",
     "directory": "packages/api-client-base"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@zerobias-org/util-api-invoker-isomorphic": "^1.0.7"
+    "@zerobias-org/util-api-invoker-isomorphic": "^1.0.7",
+    "axios": "^1.0.0"
   }
 }

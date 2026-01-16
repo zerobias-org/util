@@ -39,7 +39,7 @@ export {
   BatchImportItem,
   UUID,
   UnexpectedError,
-  Platform,
+  PlatformApiClient,
   Tag,
   withTempDir,
   type BatchLogLevelEnumDef,

@@ -25,7 +25,7 @@
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zerobiasorg/util.git",
+    "url": "https://github.com/zerobias-org/util.git",
     "directory": "packages/invoker/isomorphic"
   },
   "publishConfig": {

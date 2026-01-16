@@ -1,11 +1,11 @@
 import { expect } from "chai";
 import jsonata from "jsonata";
-import { camelCase, camelCaseAllPropertyNames, snakeCase, snakeCaseAllPropertyNames } from "../../src";
+import { camelCase, camelCaseAllPropertyNames, snakeCase, snakeCaseAllPropertyNames } from "../../src/index.js";
 
 describe('Common functions test', () => {
 
   describe('#camelCaseAllPropertyNames', () => {
-    it('Should rename all properties to camel case ', () => {
+    it('Should rename all properties to camel case ', async () => {
       const body = {
         'body': {
           'KeyOne': 'value1',
@@ -15,7 +15,7 @@ describe('Common functions test', () => {
       };
       const expression = jsonata(`$~>${camelCaseAllPropertyNames}`);
       expression.registerFunction('camelCase', camelCase, '<s:s>');
-      const transformed = expression.evaluate(body);
+      const transformed = await expression.evaluate(body);
       expect(transformed).eql(
         {
           'body': {
@@ -35,7 +35,7 @@ describe('Common functions test', () => {
   });
 
   describe('#snakeCaseAllPropertyNames', () => {
-    it('Should rename all properties to snake case', () => {
+    it('Should rename all properties to snake case', async () => {
       const body = {
         "body": {
           'KeyOne': 'value1',
@@ -45,7 +45,7 @@ describe('Common functions test', () => {
       };
       const expression = jsonata(`$~>${snakeCaseAllPropertyNames}`);
       expression.registerFunction('snakeCase', snakeCase, '<s:s>');
-      const transformed = expression.evaluate(body);
+      const transformed = await expression.evaluate(body);
       expect(transformed).eql(
         {
           'body': {
