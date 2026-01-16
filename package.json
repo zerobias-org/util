@@ -37,12 +37,49 @@
     "node": ">=22.0.0",
     "npm": ">=10.0.0"
   },
+  "overrides": {
+    "mocha": {
+      "diff": "^8.0.3"
+    },
+    "tar": "^7.5.3",
+    "@stoplight/spectral-cli": {
+      "glob": "^10.0.0",
+      "magic-string": "^0.30.0"
+    },
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js"
+  },
+  "dependencies": {
+    "@stoplight/json-ref-resolver": "^3.1.6",
+    "@typescript-eslint/eslint-plugin": "^8.53.0",
+    "@typescript-eslint/parser": "^8.53.0",
+    "@zerobias-com/platform-sdk": "^1.0.20",
+    "@zerobias-org/types-amazon-js": "^1.0.0",
+    "@zerobias-org/types-core": "^1.0.0",
+    "@zerobias-org/types-core-js": "^1.2.5",
+    "@zerobias-org/types-format-spectral-ruleset": "^1.0.24",
+    "@zerobias-org/types-microsoft-js": "^1.0.0",
+    "axios": "^1.13.2",
+    "chalk": "^5.6.2",
+    "change-case": "^5.0.0",
+    "csv-parse": "^6.0.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-unicorn": "^62.0.0",
+    "form-data": "^4.0.0",
+    "js-yaml": "^4.0.0",
+    "jsonata": "^2.0.0",
+    "qs": "^6.14.0",
+    "winston": "^3.2.0",
+    "winston-transport": "^4.9.0"
+  },
   "devDependencies": {
     "@commitlint/cli": "^19.6.1",
     "@commitlint/config-conventional": "^19.6.0",
+    "@stoplight/spectral-cli": "^6.15.0",
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.10.1",
+    "@types/request": "latest",
+    "@zerobias-org/devops-tools": "^1.0.0",
     "@zerobias-org/eslint-config": "^1.0.6",
     "chai": "^6.0.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",
@@ -54,16 +91,6 @@
     "rimraf": "^6.1.0",
     "tsx": "^4.21.0",
     "typedoc": "^0.28.15",
-    "typescript": "^5.9.3",
-    "@types/request": "latest"
-  },
-  "overrides": {
-    "mocha": {
-      "diff": "^8.0.3"
-    },
-    "@stoplight/spectral-cli": {
-      "glob": "^10.0.0",
-      "magic-string": "^0.30.0"
-    }
+    "typescript": "^5.9.3"
   }
 }

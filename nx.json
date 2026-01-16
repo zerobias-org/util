@@ -98,7 +98,7 @@
       "cache": false
     },
     "nx:prepublish": {
-      "dependsOn": ["nx:prepublish"],
+      "dependsOn": ["^nx:prepublish", "transpile"],
       "cache": false
     },
     "nx:publish": {

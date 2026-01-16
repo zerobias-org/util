@@ -14,7 +14,8 @@
     "test:watch": "npm run test -- --watch --reporter=min",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
-    "prepublishOnly": "npx nx run @zerobias-org/util-connector:build"
+    "nx:prepublish": "prepublish-standalone",
+    "nx:publish": "publish"
   },
   "engines": {
     "node": ">=22.0.0",
@@ -35,8 +36,6 @@
     "*.md"
   ],
   "dependencies": {
-    "@zerobias-org/logger": "^2.0.4",
-    "@zerobias-org/types-core-js": "^1.2.4",
-    "axios": "1.13.2"
+    "@zerobias-org/logger": "^2.0.4"
   }
 }

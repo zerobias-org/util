@@ -21,7 +21,8 @@
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "build": "npm run lint && npm run transpile",
-    "prepublishOnly": "npx nx run @zerobias-org/util-api-invoker-api:build"
+    "nx:prepublish": "prepublish-standalone",
+    "nx:publish": "publish"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",
@@ -38,7 +39,6 @@
     "bom.json"
   ],
   "dependencies": {
-    "@zerobias-org/types-core-js": "^1.0.6",
-    "axios": "^1.0.0"
+    "@zerobias-org/types-core-js": "^1.0.6"
   }
 }

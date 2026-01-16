@@ -20,7 +20,8 @@
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test -- --watch --reporter=min",
-    "prepublishOnly": "npx nx run @zerobias-org/collector-utils:build"
+    "nx:prepublish": "prepublish-standalone",
+    "nx:publish": "publish"
   },
   "files": [
     "dist/src",
@@ -43,13 +44,8 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@zerobias-com/platform-sdk": "^1.0.20",
     "@zerobias-org/logger": "^2.0.4",
-    "@zerobias-org/types-core-js": "^1.2.5",
-    "@zerobias-org/util-connector": "^1.0.2",
-    "axios": "^1.0.0",
-    "csv-parse": "^6.0.0",
-    "js-yaml": "^4.0.0"
+    "@zerobias-org/util-connector": "^1.0.2"
   },
   "engines": {
     "node": ">=22.0.0",

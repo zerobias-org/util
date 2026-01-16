@@ -13,7 +13,7 @@ permissions:
 
 env:
   ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
-  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NPM_TOKEN: ${{ secrets.READ_TOKEN }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   READ_TOKEN: ${{ secrets.READ_TOKEN }}
   DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
@@ -43,22 +43,26 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
-      - name: Setup java v3
-        uses: actions/setup-java@v3
+      - name: Setup java v4
+        uses: actions/setup-java@v4
         with:
-          java-version: '8'
-          distribution: 'zulu'
-      
+          java-version: '17'
+          distribution: 'temurin'
+
       - name: Configure git user
         run: |
           git config --global user.email "ci@neverfail.com"
           git config --global user.name "@$GITHUB_ACTOR"
 
+      - name: Git fetch main for nx affected
+        run: |
+          git fetch --no-tags --prune origin main
+
       - name: Install nx
         run: |
           npm install -g nx@20.5.0
         env:
-          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
       - name: Determine base ref for nx affected
@@ -74,79 +78,76 @@ jobs:
             echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install and build
+        run: |
+          npm ci
+          nx run-many -t build
         env:
-          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-      - name: Lint affected packages
+      - name: Version affected packages, then commit
         run: |
-          nx affected -t lint --base=${{ steps.base_ref.outputs.BASE_REF }}
+          AFFECTED=$(nx show projects --affected --base=${{ steps.base_ref.outputs.BASE_REF }} 2>/dev/null || echo "")
+          if [ -n "$AFFECTED" ]; then
+            for pkg in $AFFECTED; do
+              PKG_ROOT=$(nx show project "$pkg" --json 2>/dev/null | jq -r '.root' || echo "")
+              if [ -n "$PKG_ROOT" ] && [ -f "$PKG_ROOT/package.json" ]; then
+                cd "$PKG_ROOT"
+                npm version patch --no-git-tag-version
+                cd - > /dev/null
+              fi
+            done
+            git add -A "*/package.json" "package.json" 2>/dev/null || true
+            git commit -m "chore: bump versions [skip ci]" || echo "No version changes to commit"
+            git push
+          fi
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-      - name: Generate bom
+      - name: Save package.json state before prepublish
         run: |
-          nx affected -t generate:bom --base=${{ steps.base_ref.outputs.BASE_REF }}
+          echo "Saving package.json files before prepublish modifications..."
+          mkdir -p /tmp/package-json-backup
+          find . -name "package.json" -not -path "*/node_modules/*" -exec cp --parents {} /tmp/package-json-backup/ \;
 
-      - name: Publish
+      - name: Prepare standalone packages
         run: |
-          npm run lerna:publish -- --yes
+          nx affected -t nx:prepublish --base=${{ steps.base_ref.outputs.BASE_REF }}
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Publish packages
+        run: |
+          nx affected -t nx:publish --base=${{ steps.base_ref.outputs.BASE_REF }}
         env:
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
-          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          NPM_TOKEN: ${{ env.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ env.GITHUB_TOKEN }}
 
-      - name: Get published versions
-        id: get_package_versions
+      - name: Restore package.json state after publish
         run: |
-          output=$(./bin/generate_slack_message.sh)
-          if [ "$output" = "No packages published" ] || [ -z "$output" ]; then
-            echo "has_packages=false" >> $GITHUB_OUTPUT
-          else
-            echo "has_packages=true" >> $GITHUB_OUTPUT
-            # Escape for JSON: replace newlines with \n
-            escaped=$(echo "$output" | jq -Rs '.')
-            # Remove surrounding quotes added by jq
-            escaped="${escaped:1:-1}"
-            echo "output=${escaped}" >> $GITHUB_OUTPUT
-          fi
+          echo "Restoring package.json files to pre-prepublish state..."
+          cp -r /tmp/package-json-backup/./* .
 
       - name: Slack Notification on failure
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v2.0.0
         if: failure()
         with:
           webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
           webhook-type: incoming-webhook
           payload: |
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: ":fire: ${{ github.repository }} Github Workflow Failed"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+            {
+              "text": ":fire: util publish failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "text": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+                }
+              ]
+            }
 
-      - name: Slack Notification
-        uses: slackapi/slack-github-action@v2.1.1
-        if: success() && steps.get_package_versions.outputs.has_packages == 'true'
-        with:
-          webhook: ${{ env.SLACK_RELEASES_WEBHOOK }}
-          webhook-type: incoming-webhook
-          payload: |
-            text: "New ${{ github.repository }} Published"
-            attachments:
-              - color: "#36a64f"
-                fallback: "New Utilities Published"
-                title: ":robot: New Utilities Published :tada:"
-                text: "${{ steps.get_package_versions.outputs.output }}"
-                footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
-                mrkdwn_in:
-                  - text
-                  - footer
-
-  # sbom-recorder:
-  #   needs: publish
-  #   uses: zerobias-com/devops/.github/workflows/sbom-recorder.yml@main
-  #   secrets: inherit
+      - name: Release Announcement
+        uses: zerobias-org/devops/actions/release-announcement@main

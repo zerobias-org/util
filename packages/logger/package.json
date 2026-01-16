@@ -19,7 +19,8 @@
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
     "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
-    "prepublishOnly": "npx nx run @zerobias-org/logger:build"
+    "nx:prepublish": "prepublish-standalone",
+    "nx:publish": "publish"
   },
   "files": [
     "dist/src",
@@ -39,11 +40,7 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
-  "dependencies": {
-    "chalk": "^5.6.2",
-    "winston": "^3.2.0",
-    "winston-transport": "^4.9.0"
-  },
+  "dependencies": {},
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"

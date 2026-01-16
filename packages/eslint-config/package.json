@@ -22,11 +22,9 @@
     "eslint",
     "eslintconfig"
   ],
-  "dependencies": {
-    "@typescript-eslint/eslint-plugin": "8.53.0",
-    "@typescript-eslint/parser": "8.53.0",
-    "eslint": "9.39.2",
-    "eslint-plugin-unicorn": "62.0.0"
+  "scripts": {
+    "nx:prepublish": "prepublish-standalone",
+    "nx:publish": "publish"
   },
   "files": [
     "eslint.config.js"

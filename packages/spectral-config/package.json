@@ -20,11 +20,12 @@
   "publishConfig": {
     "registry": "https://pkg.zerobias.org/"
   },
+  "scripts": {
+    "nx:prepublish": "prepublish-standalone",
+    "nx:publish": "publish"
+  },
   "dependencies": {
-    "@stoplight/json-ref-resolver": "3.1.6",
-    "@stoplight/spectral-cli": "6.15.0",
-    "@zerobias-org/eslint-config": "^1.0.9",
-    "@zerobias-org/types-format-spectral-ruleset": "^1.0.24"
+    "@zerobias-org/eslint-config": "^1.0.9"
   },
   "files": [
     "index.js",
