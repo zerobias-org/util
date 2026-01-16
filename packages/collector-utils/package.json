@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/collector-utils",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Common utilities for collector bots - HTTP fetching, data chunking, CSV/YAML parsing",
   "type": "module",
   "main": "dist/src/index.js",
