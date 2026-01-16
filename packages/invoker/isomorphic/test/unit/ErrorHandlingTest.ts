@@ -1,5 +1,5 @@
  
-import { testErrorHandling } from '@zerobias-org/util-api-invoker-api/dist/test.js';
+import { testErrorHandling } from '@zerobias-org/util-api-invoker-api/testing';
 import { ApiInvokerImpl } from '../../src/ApiInvokerImpl.js';
 
 describe('Api Invoker Impl', () => {

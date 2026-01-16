@@ -2,7 +2,7 @@
 import {
   testInvokeApi,
   testFetchJson
-} from '@zerobias-org/util-api-invoker-api';
+} from '@zerobias-org/util-api-invoker-api/testing';
 import { ApiInvokerImpl } from '../../src/ApiInvokerImpl.js';
 
 describe('api-invoker', () => {
