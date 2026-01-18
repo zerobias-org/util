@@ -1292,7 +1292,7 @@ public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
                     PAGE_NUMBER.equals(param.baseName) || PAGE_TOKEN.equals(param.baseName)
                   )
                   .distinct()
-                  .count() == 1
+                  .count() >= 1
                 && operation.responseHeaders.stream()
                   .filter(header -> PAGED_LINK_HEADER.equals(header.baseName))
                   .findFirst()
