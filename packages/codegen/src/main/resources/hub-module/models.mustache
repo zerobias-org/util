@@ -19,9 +19,9 @@ import { {{classname}} } from '{{{ classFilename }}}.js';
 {{#apiInfo}}
 {{#apis}}
 {{#operations}}
-{{#inlineEnums}}
-import { {{classname}} } from '../api/{{{ classFilename }}}.js';
-{{/inlineEnums}}
+{{#hasInlineEnums}}
+import { {{classname}} } from '../api/{{classname}}.js';
+{{/hasInlineEnums}}
 {{/operations}}
 {{/apis}}
 {{/apiInfo}}

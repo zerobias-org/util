@@ -676,6 +676,7 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
         }
 
         operations.put("inlineEnums", apiInlineEnums.values());
+        operations.put("hasInlineEnums", !apiInlineEnums.isEmpty());
         operations.put("producerName", toApiName(toApiBaseName((String) objs.get("classname")) + "Producer"));
 
         if (!authMethodsMap.isEmpty()) {

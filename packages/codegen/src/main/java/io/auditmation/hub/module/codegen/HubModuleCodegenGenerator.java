@@ -882,6 +882,7 @@ public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
         }
         operations.put("usesJsonata", usesJsonata);
         operations.put("inlineEnums", apiInlineEnums.values());
+        operations.put("hasInlineEnums", !apiInlineEnums.isEmpty());
         this.hasInvoker = this.hasInvoker || hasInvoker;
 
         if (hasInvoker) {
