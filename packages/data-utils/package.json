@@ -1,0 +1,44 @@
+{
+  "name": "@zerobias-org/data-utils",
+  "version": "1.0.0",
+  "description": "Utility library for DataProducer implementations and data mapping - schema generation, validation, type mapping, field transformations, and DataProducer client",
+  "keywords": [
+    "DataProducer",
+    "Data Mapping",
+    "Data Explorer",
+    "Schema",
+    "OpenAPI",
+    "TypeScript",
+    "Validation",
+    "JSONata"
+  ],
+  "author": "Zerobias Team <team@zerobias.com>",
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/zerobias-org/zb-client.git",
+    "directory": "zb-client-data-utils"
+  },
+  "scripts": {
+    "clean": "rm -rf dist/",
+    "transpile": "tsc",
+    "build": "npm run clean && npm run transpile",
+    "test": "mocha --require ts-node/register 'test/**/*.test.ts'",
+    "test:watch": "mocha --require ts-node/register --watch 'test/**/*.test.ts'"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.19.1",
+    "npm": ">=10.2.4"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "./dist/**/*",
+    "package.json",
+    "README.md"
+  ]
+}
