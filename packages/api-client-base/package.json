@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-api-client-base",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "Base classes and utilities for platform API clients",
   "type": "module",
   "main": "dist/src/index.js",
