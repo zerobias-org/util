@@ -53,6 +53,8 @@
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "@zerobias-com/platform-sdk": "^1.0.20",
+    "@zerobias-org/module-interface-dataproducer": "^1.0.0",
+    "@zerobias-org/module-interface-dataproducer-client-ts": "^1.0.0",
     "@zerobias-org/types-amazon-js": "^1.0.0",
     "@zerobias-org/types-core": "^1.0.0",
     "@zerobias-org/types-core-js": "^1.2.5",
@@ -72,6 +74,7 @@
     "winston-transport": "^4.9.0"
   },
   "devDependencies": {
+    "@auditlogic/module-github-github": "^6.7.1",
     "@commitlint/cli": "^19.6.1",
     "@commitlint/config-conventional": "^19.6.0",
     "@stoplight/spectral-cli": "^6.15.0",
