@@ -7,8 +7,8 @@
  * - Query schema definitions
  * - Extract required fields and descriptions
  */
-import * as fs from 'fs';
-import { promises as fsPromises } from 'fs';
+import * as fs from 'node:fs';
+import { promises as fsPromises } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 import { UrlLoadOptions } from '../types/SchemaConfig';
 
@@ -142,13 +142,10 @@ export class OpenAPILoader {
 
     const sourceStr = source instanceof URL ? source.toString() : source;
 
-    // Check if it's a URL
-    if (sourceStr.startsWith('http://') || sourceStr.startsWith('https://')) {
-      await this.loadFromUrl(sourceStr, options);
-    } else {
-      // Treat as file path
-      await this.loadFromPathAsync(sourceStr);
-    }
+    // Check if it's a URL or file path
+    await (sourceStr.startsWith('http://') || sourceStr.startsWith('https://')
+      ? this.loadFromUrl(sourceStr, options)
+      : this.loadFromPathAsync(sourceStr));
   }
 
   /**
@@ -175,7 +172,7 @@ export class OpenAPILoader {
    * ```
    */
   async loadFromUrl(url: string, options: UrlLoadOptions = {}): Promise<void> {
-    const { headers = {}, timeout = 30000, contentType = 'auto' } = options;
+    const { headers = {}, timeout = 30_000, contentType = 'auto' } = options;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -318,17 +315,8 @@ export class OpenAPILoader {
   private loadFromObject(spec: object): void {
     this.spec = spec as OpenAPISpec;
 
-    if (!this.spec.components?.schemas) {
-      // Some specs may have schemas at top level or different location
-      // Try to find schemas
-      if ((spec as any).schemas) {
-        this.schemas = (spec as any).schemas;
-      } else {
-        this.schemas = {};
-      }
-    } else {
-      this.schemas = this.spec.components.schemas;
-    }
+    // Use components.schemas if available, otherwise check top level or default to empty
+    this.schemas = this.spec.components?.schemas || (spec as any).schemas || {};
   }
 
   /**
@@ -495,14 +483,14 @@ export class OpenAPILoader {
    * Convert snake_case to camelCase
    */
   private snakeToCamel(str: string): string {
-    return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    return str.replaceAll(/_([a-z])/g, (_, letter) => letter.toUpperCase());
   }
 
   /**
    * Convert camelCase to snake_case
    */
   static camelToSnake(str: string): string {
-    return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    return str.replaceAll(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
   }
 
   /**

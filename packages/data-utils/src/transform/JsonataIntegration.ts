@@ -17,7 +17,7 @@ import { ValueConverter } from './ValueConverter';
  * Provides methods to register all transform utilities as JSONata custom functions
  * and lookup modifiers for post-processing chains.
  */
-export class JsonataIntegration {
+export const JsonataIntegration = {
   /**
    * Registers all transform utilities as JSONata custom functions
    *
@@ -43,7 +43,7 @@ export class JsonataIntegration {
    * // Result: "JOHN"
    * ```
    */
-  static registerFunctions(expression: any): void {
+  registerFunctions(expression: any): void {
     // String modifiers
     expression.registerFunction('uppercase', StringModifiers.uppercase);
     expression.registerFunction('lowercase', StringModifiers.lowercase);
@@ -114,7 +114,7 @@ export class JsonataIntegration {
     expression.registerFunction('toDate', ValueConverter.toDate);
     expression.registerFunction('toDateString', ValueConverter.toDateString);
     expression.registerFunction('toString', ValueConverter.toString);
-  }
+  },
 
   /**
    * Gets a modifier function by name for post-processing chains
@@ -138,7 +138,7 @@ export class JsonataIntegration {
    * // Result: "HELLO"
    * ```
    */
-  static getModifier(name: string): Function | undefined {
+  getModifier(name: string): Function | undefined {
     const modifiers: Record<string, Function> = {
       // String modifiers
       'uppercase': StringModifiers.uppercase,
@@ -196,14 +196,14 @@ export class JsonataIntegration {
     };
 
     return modifiers[name];
-  }
+  },
 
   /**
    * Gets all available modifier names
    *
    * @returns Array of all registered modifier names
    */
-  static getModifierNames(): string[] {
+  getModifierNames(): string[] {
     return [
       // String modifiers
       'uppercase', 'lowercase', 'capitalize', 'trim', 'reverse', 'slugify', 'padLeft',
@@ -219,5 +219,5 @@ export class JsonataIntegration {
       // Value converters
       'toBoolean', 'toNumber', 'toDate', 'toDateString', 'toString',
     ];
-  }
-}
+  },
+};

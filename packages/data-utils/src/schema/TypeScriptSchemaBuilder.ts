@@ -210,7 +210,7 @@ export class TypeScriptSchemaBuilder {
    * Convert snake_case to camelCase
    */
   private snakeToCamel(str: string): string {
-    return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    return str.replaceAll(/_([a-z])/g, (_, letter) => letter.toUpperCase());
   }
 
   /**

@@ -189,11 +189,11 @@ export class ObjectsApi {
       type: node.type || node.objectType || '',
       parentId: node.parentId || node.parent || null,
       schemaId: node.schemaId || node.schema || undefined,
-      hasChildren: node.hasChildren !== undefined ? node.hasChildren : (node.childCount > 0),
+      hasChildren: node.hasChildren === undefined ? (node.childCount > 0) : node.hasChildren,
       childCount: node.childCount || 0,
       metadata: node.metadata || {},
       icon: node.icon || undefined,
-      expandable: node.expandable !== undefined ? node.expandable : node.hasChildren,
+      expandable: node.expandable === undefined ? node.hasChildren : node.expandable,
       path: node.path || undefined,
       objectClass: node.objectClass || undefined
     };

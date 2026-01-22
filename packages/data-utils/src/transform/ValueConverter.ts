@@ -17,7 +17,7 @@ export type DataType = 'string' | 'number' | 'boolean' | 'date' | 'array' | 'obj
  *
  * All methods handle null/undefined gracefully and return null for invalid inputs.
  */
-export class ValueConverter {
+export const ValueConverter = {
   /**
    * Converts a value to boolean
    *
@@ -33,7 +33,7 @@ export class ValueConverter {
    * ValueConverter.toBoolean(null)    // null
    * ```
    */
-  static toBoolean(value: any): boolean | null {
+  toBoolean(value: any): boolean | null {
     if (value === null || value === undefined) {
       return null;
     }
@@ -51,7 +51,7 @@ export class ValueConverter {
     }
 
     return Boolean(value);
-  }
+  },
 
   /**
    * Converts a value to number
@@ -69,25 +69,25 @@ export class ValueConverter {
    * ValueConverter.toNumber(null)       // null
    * ```
    */
-  static toNumber(value: any): number | null {
+  toNumber(value: any): number | null {
     if (value === null || value === undefined) {
       return null;
     }
 
     if (typeof value === 'number') {
-      return isNaN(value) ? null : value;
+      return Number.isNaN(value) ? null : value;
     }
 
     if (typeof value === 'string') {
       // Remove common formatting characters
-      const cleaned = value.replace(/[$,]/g, '');
-      const numValue = parseFloat(cleaned);
-      return isNaN(numValue) ? null : numValue;
+      const cleaned = value.replaceAll(/[$,]/g, '');
+      const numValue = Number.parseFloat(cleaned);
+      return Number.isNaN(numValue) ? null : numValue;
     }
 
     const numValue = Number(value);
-    return isNaN(numValue) ? null : numValue;
-  }
+    return Number.isNaN(numValue) ? null : numValue;
+  },
 
   /**
    * Converts a value to Date
@@ -103,22 +103,22 @@ export class ValueConverter {
    * ValueConverter.toDate('invalid')                 // null
    * ```
    */
-  static toDate(value: any): Date | null {
+  toDate(value: any): Date | null {
     if (value === null || value === undefined) {
       return null;
     }
 
     if (value instanceof Date) {
-      return isNaN(value.getTime()) ? null : value;
+      return Number.isNaN(value.getTime()) ? null : value;
     }
 
     try {
       const date = new Date(value);
-      return isNaN(date.getTime()) ? null : date;
+      return Number.isNaN(date.getTime()) ? null : date;
     } catch {
       return null;
     }
-  }
+  },
 
   /**
    * Converts a value to ISO date string
@@ -132,10 +132,10 @@ export class ValueConverter {
    * ValueConverter.toDateString(new Date())    // ISO string
    * ```
    */
-  static toDateString(value: any): string | null {
+  toDateString(value: any): string | null {
     const date = this.toDate(value);
     return date ? date.toISOString() : null;
-  }
+  },
 
   /**
    * Converts a value to string
@@ -151,7 +151,7 @@ export class ValueConverter {
    * ValueConverter.toString({a: 1})  // '[object Object]'
    * ```
    */
-  static toString(value: any): string {
+  toString(value: any): string {
     if (value === null || value === undefined) {
       return '';
     }
@@ -161,7 +161,7 @@ export class ValueConverter {
     }
 
     return String(value);
-  }
+  },
 
   /**
    * Converts a value to the specified data type
@@ -177,22 +177,29 @@ export class ValueConverter {
    * ValueConverter.convert(123, 'string')      // '123'
    * ```
    */
-  static convert(value: any, dataType: DataType): any {
+  convert(value: any, dataType: DataType): any {
     switch (dataType) {
-      case 'boolean':
+      case 'boolean': {
         return this.toBoolean(value);
-      case 'number':
+      }
+      case 'number': {
         return this.toNumber(value);
-      case 'date':
+      }
+      case 'date': {
         return this.toDate(value);
-      case 'string':
+      }
+      case 'string': {
         return this.toString(value);
-      case 'array':
-        return Array.isArray(value) ? value : value !== null && value !== undefined ? [value] : [];
-      case 'object':
+      }
+      case 'array': {
+        return Array.isArray(value) ? value : (value !== null && value !== undefined ? [value] : []);
+      }
+      case 'object': {
         return typeof value === 'object' ? value : null;
-      default:
+      }
+      default: {
         return value;
+      }
     }
-  }
-}
+  },
+};

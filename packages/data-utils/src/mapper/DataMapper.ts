@@ -16,6 +16,11 @@ import {
 import { ValidationRule } from './types/validation.types';
 
 /**
+ * Normalizes a field name for comparison
+ */
+const normalizeFieldName = (str: string) => str ? str.toLowerCase().replaceAll(/[_-]/g, '') : '';
+
+/**
  * Core data mapper class for creating and executing field mappings
  *
  * Framework-agnostic implementation that can be used in any JavaScript environment
@@ -119,8 +124,8 @@ export class DataMapper {
   ): MappingRule[] {
     const rules: MappingRule[] = [];
 
-    destinationFields.forEach(destField => {
-      const matchingSource = sourceFields.find(sourceField =>
+    for (const destField of destinationFields) {
+      const matchingSource = sourceFields.find((sourceField) =>
         this.fieldNamesMatch(sourceField.name, destField.name) ||
         this.fieldNamesMatch(sourceField.key, destField.key)
       );
@@ -133,7 +138,7 @@ export class DataMapper {
           transform: { type: 'direct' }
         });
       }
-    });
+    }
 
     return rules;
   }
@@ -141,9 +146,12 @@ export class DataMapper {
   /**
    * Checks if two field names match (normalized comparison)
    */
-  private fieldNamesMatch(source: string, dest: string): boolean {
-    const normalize = (str: string) => str ? str.toLowerCase().replace(/[_-]/g, '') : '';
-    return normalize(source) === normalize(dest);
+  private fieldNamesMatch(source?: string, dest?: string): boolean {
+    if (!source || !dest) {
+      return false;
+    }
+
+    return normalizeFieldName(source) === normalizeFieldName(dest);
   }
 
   /**
@@ -173,43 +181,47 @@ export class DataMapper {
 
       // Apply main transform
       switch (rule.transform.type) {
-        case 'direct':
+        case 'direct': {
           transformedValue = sourceValues[0];
           break;
+        }
 
-        case 'convert':
+        case 'convert': {
           const dataType = rule.transform.options?.dataType || 'string';
           const sourceVal = sourceValues[0];
           // Handle array-to-array conversion (convert each element)
-          if (Array.isArray(sourceVal)) {
-            transformedValue = sourceVal.map(item => this.convertValue(item, dataType));
-          } else {
-            transformedValue = this.convertValue(sourceVal, dataType);
-          }
-          break;
+          transformedValue = Array.isArray(sourceVal)
+            ? sourceVal.map(item => this.convertValue(item, dataType))
+            : this.convertValue(sourceVal, dataType);
 
-        case 'combine':
+          break;
+        }
+
+        case 'combine': {
           const separator = rule.transform.options?.combineWith || ' ';
           transformedValue = sourceValues
             .filter(val => val !== null && val !== undefined && val !== '')
             .join(separator);
           break;
+        }
 
-        case 'split':
+        case 'split': {
           const splitOn = rule.transform.options?.splitOn || ',';
           const sourceValue = sourceValues[0]?.toString() || '';
           transformedValue = sourceValue.split(splitOn);
           break;
+        }
 
-        case 'expression':
+        case 'expression': {
           const expression = rule.transform.options?.expression;
           if (!expression) {
             throw new Error('Expression is required for expression transform');
           }
           transformedValue = await this.evaluateExpression(expression, sources, sourceData);
           break;
+        }
 
-        case 'default':
+        case 'default': {
           const value = sourceValues[0];
           const applyOnNull = rule.transform.options?.applyOnNull !== false; // default true
           const applyOnEmpty = rule.transform.options?.applyOnEmpty || false; // default false
@@ -223,8 +235,9 @@ export class DataMapper {
             transformedValue = value;
           }
           break;
+        }
 
-        case 'conditional':
+        case 'conditional': {
           const sourceForCondition = sourceValues[0];
           const trueValue = rule.transform.options?.trueValue;
           const falseValue = rule.transform.options?.falseValue;
@@ -253,24 +266,27 @@ export class DataMapper {
             transformedValue = conditionMet ? trueValue : falseValue;
           }
           break;
+        }
 
-        case 'lookup':
+        case 'lookup': {
           const lookupKey = String(sourceValues[0]);
           const lookupTable = rule.transform.options?.lookupTable || {};
           const lookupDefault = rule.transform.options?.lookupDefault;
 
           if (lookupTable.hasOwnProperty(lookupKey)) {
             transformedValue = lookupTable[lookupKey];
-          } else if (lookupDefault !== undefined) {
-            transformedValue = lookupDefault;
-          } else {
+          } else if (lookupDefault === undefined) {
             // Return original value when key not found and no default specified
             transformedValue = sourceValues[0];
+          } else {
+            transformedValue = lookupDefault;
           }
           break;
+        }
 
-        default:
+        default: {
           transformedValue = sourceValues[0];
+        }
       }
 
       // Apply modifiers
@@ -399,25 +415,25 @@ export class DataMapper {
     }
 
     switch (dataType) {
-      case 'boolean':
+      case 'boolean': {
         return value === 'true' || value === true;
-
-      case 'number':
-        const numStr = typeof value === 'string' ? value.replace(/[$,]/g, '') : value;
-        const numValue = parseFloat(numStr);
-        return isNaN(numValue) ? 0 : numValue;
-
-      case 'date':
+      }
+      case 'number': {
+        const numStr = typeof value === 'string' ? value.replaceAll(/[$,]/g, '') : value;
+        const numValue = Number.parseFloat(numStr);
+        return Number.isNaN(numValue) ? 0 : numValue;
+      }
+      case 'date': {
         try {
           const dateValue = new Date(value);
           return dateValue.toISOString();
         } catch {
           return null;
         }
-
-      case 'string':
-      default:
+      }
+      default: {
         return value.toString();
+      }
     }
   }
 
@@ -433,10 +449,10 @@ export class DataMapper {
     const dataContext: any = {};
 
     // Add individual source fields
-    sources.forEach(source => {
+    for (const source of sources) {
       const value = this.getSourceValue(source, sourceData);
-      dataContext[source.key] = value !== undefined ? value : null;
-    });
+      dataContext[source.key] = value === undefined ? null : value;
+    }
 
     // For single source, also provide $source variable
     if (sources.length === 1) {
@@ -490,43 +506,55 @@ export class DataMapper {
         try {
           // Extract parameters based on modifier type
           switch (modifier.type) {
-            case 'padLeft':
+            case 'padLeft': {
               result = modifierFn(result, modifier.params?.length, modifier.params?.padChar);
               break;
-            case 'round':
+            }
+            case 'round': {
               result = modifierFn(result, modifier.params?.decimals);
               break;
-            case 'formatCurrency':
+            }
+            case 'formatCurrency': {
               result = modifierFn(result, modifier.params?.currency, modifier.params?.locale);
               break;
-            case 'pow':
+            }
+            case 'pow': {
               result = modifierFn(result, modifier.params?.exponent);
               break;
-            case 'log':
+            }
+            case 'log': {
               result = modifierFn(result, modifier.params?.base);
               break;
-            case 'percentage':
+            }
+            case 'percentage': {
               result = modifierFn(result, modifier.params?.total, modifier.params?.decimals);
               break;
-            case 'formatDate':
+            }
+            case 'formatDate': {
               result = modifierFn(result, modifier.params?.dateFormat);
               break;
-            case 'addDays':
+            }
+            case 'addDays': {
               result = modifierFn(result, modifier.params?.days);
               break;
-            case 'subtractDays':
+            }
+            case 'subtractDays': {
               result = modifierFn(result, modifier.params?.days);
               break;
-            case 'join':
+            }
+            case 'join': {
               result = modifierFn(result, modifier.params?.separator);
               break;
-            case 'slice':
+            }
+            case 'slice': {
               result = modifierFn(result, modifier.params?.start, modifier.params?.end);
               break;
-            default:
+            }
+            default: {
               // No parameters, just call the function
               result = modifierFn(result);
               break;
+            }
           }
         } catch (error) {
           console.warn(`[DataMapper] Error applying modifier '${modifier.type}':`, error);
@@ -534,38 +562,44 @@ export class DataMapper {
       } else {
         // Handle modifiers not yet in package
         switch (modifier.type) {
-          case 'extractHour':
+          case 'extractHour': {
             if (result instanceof Date || typeof result === 'string') {
               const date = result instanceof Date ? result : new Date(result);
               result = date.getHours();
             }
             break;
-          case 'extractMinute':
+          }
+          case 'extractMinute': {
             if (result instanceof Date || typeof result === 'string') {
               const date = result instanceof Date ? result : new Date(result);
               result = date.getMinutes();
             }
             break;
-          case 'length':
+          }
+          case 'length': {
             if (Array.isArray(result) || typeof result === 'string') {
               result = result.length;
             }
             break;
-          case 'arrayReverse':
+          }
+          case 'arrayReverse': {
             if (Array.isArray(result)) {
-              result = [...result].reverse();
+              result = [...result].toReversed();
             }
             break;
-          case 'padRight':
+          }
+          case 'padRight': {
             if (typeof result === 'string') {
               const length = modifier.params?.length ?? 10;
               const padChar = modifier.params?.padChar ?? ' ';
               result = result.padEnd(length, padChar);
             }
             break;
-          default:
+          }
+          default: {
             console.warn(`[DataMapper] Unknown modifier: ${modifier.type}`);
             break;
+          }
         }
       }
     }
@@ -578,25 +612,33 @@ export class DataMapper {
    */
   private evaluateCondition(sourceValue: any, operator: any, compareValue: any): boolean {
     switch (operator) {
-      case 'equals':
-        return sourceValue == compareValue; // Intentionally using == for loose equality
-      case 'notEquals':
+      case 'equals': {
+        return sourceValue == compareValue;
+      } // Intentionally using == for loose equality
+      case 'notEquals': {
         return sourceValue != compareValue;
-      case 'greaterThan':
+      }
+      case 'greaterThan': {
         return sourceValue > compareValue;
-      case 'lessThan':
+      }
+      case 'lessThan': {
         return sourceValue < compareValue;
-      case 'contains':
+      }
+      case 'contains': {
         if (typeof sourceValue === 'string' && typeof compareValue === 'string') {
           return sourceValue.includes(compareValue);
         }
         return false;
-      case 'isEmpty':
+      }
+      case 'isEmpty': {
         return sourceValue === null || sourceValue === undefined || sourceValue === '';
-      case 'isNotEmpty':
+      }
+      case 'isNotEmpty': {
         return sourceValue !== null && sourceValue !== undefined && sourceValue !== '';
-      default:
+      }
+      default: {
         return false;
+      }
     }
   }
 
@@ -616,9 +658,9 @@ export class DataMapper {
       );
 
       if (logic.logicalOperator === 'AND') {
-        return results.every(result => result);
+        return results.every(Boolean);
       } else if (logic.logicalOperator === 'OR') {
-        return results.some(result => result);
+        return results.some(Boolean);
       }
     }
 
@@ -660,44 +702,49 @@ export class DataMapper {
       let defaultMessage = '';
 
       switch (rule.type) {
-        case 'required':
+        case 'required': {
           isValid = value !== null && value !== undefined && value !== '';
           defaultMessage = 'This field is required';
           break;
+        }
 
-        case 'minLength':
+        case 'minLength': {
           if (typeof value === 'string' || Array.isArray(value)) {
             const length = rule.config?.length || 0;
             isValid = value.length >= length;
             defaultMessage = `Minimum length is ${length}`;
           }
           break;
+        }
 
-        case 'maxLength':
+        case 'maxLength': {
           if (typeof value === 'string' || Array.isArray(value)) {
             const length = rule.config?.length || 0;
             isValid = value.length <= length;
             defaultMessage = `Maximum length is ${length}`;
           }
           break;
+        }
 
-        case 'min':
+        case 'min': {
           if (typeof value === 'number') {
             const min = rule.config?.value || 0;
             isValid = value >= min;
             defaultMessage = `Minimum value is ${min}`;
           }
           break;
+        }
 
-        case 'max':
+        case 'max': {
           if (typeof value === 'number') {
             const max = rule.config?.value || 0;
             isValid = value <= max;
             defaultMessage = `Maximum value is ${max}`;
           }
           break;
+        }
 
-        case 'pattern':
+        case 'pattern': {
           if (typeof value === 'string' && rule.config?.pattern) {
             try {
               const regex = new RegExp(rule.config.pattern);
@@ -709,16 +756,18 @@ export class DataMapper {
             }
           }
           break;
+        }
 
-        case 'email':
+        case 'email': {
           if (typeof value === 'string') {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             isValid = emailRegex.test(value);
             defaultMessage = 'Invalid email address';
           }
           break;
+        }
 
-        case 'url':
+        case 'url': {
           if (typeof value === 'string') {
             try {
               new URL(value);
@@ -729,13 +778,15 @@ export class DataMapper {
             }
           }
           break;
+        }
 
-        case 'custom':
+        case 'custom': {
           // TODO: Implement custom validation function support
           // For now, skip custom validations
           console.warn('Custom validation functions not yet implemented');
           isValid = true;
           break;
+        }
       }
 
       if (!isValid) {
@@ -750,7 +801,7 @@ export class DataMapper {
    * Generates a unique ID for mapping rules
    */
   private generateId(): string {
-    return 'mapping_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    return 'mapping_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
   }
 
   /**
@@ -773,7 +824,10 @@ export class DataMapper {
       current = current[parts[i]];
     }
 
-    current[parts[parts.length - 1]] = value;
+    const pathPath = parts.at(-1);
+    if (pathPath) {
+      current[pathPath] = value;
+    }
   }
 
   /**
@@ -791,14 +845,14 @@ export class DataMapper {
     // If values is an array, create/update array items
     if (Array.isArray(values)) {
       // Create objects for each value if needed
-      for (let i = 0; i < values.length; i++) {
+      for (const [i, value] of values.entries()) {
         if (!obj[arrayPath][i]) {
           obj[arrayPath][i] = {};
         }
         if (itemPath) {
-          this.setNestedValue(obj[arrayPath][i], itemPath, values[i]);
+          this.setNestedValue(obj[arrayPath][i], itemPath, value);
         } else {
-          obj[arrayPath][i] = values[i];
+          obj[arrayPath][i] = value;
         }
       }
     } else {
@@ -840,21 +894,23 @@ export class DataMapper {
         const errorStrategy = rule.errorStrategy || 'fail';
 
         switch (errorStrategy) {
-          case 'skip':
+          case 'skip': {
             // Skip this mapping and continue
             continue;
-          case 'default':
+          }
+          case 'default': {
             // Use default value
             if (rule.errorDefault !== undefined) {
               const destPath = rule.destination.path || rule.destination.key;
               this.setNestedValue(result, destPath, rule.errorDefault);
             }
             break;
-          case 'fail':
-          default:
+          }
+          default: {
             // Record error and continue (original behavior)
             errors.push(`${rule.destination.name}: ${mappingResult.error}`);
             break;
+          }
         }
       }
     }

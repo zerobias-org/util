@@ -10,44 +10,44 @@
 /**
  * String transformation utilities
  */
-export class StringModifiers {
+export const StringModifiers = {
   /**
    * Converts string to uppercase
    */
-  static uppercase(value: string): string {
+  uppercase(value: string): string {
     return typeof value === 'string' ? value.toUpperCase() : value;
-  }
+  },
 
   /**
    * Converts string to lowercase
    */
-  static lowercase(value: string): string {
+  lowercase(value: string): string {
     return typeof value === 'string' ? value.toLowerCase() : value;
-  }
+  },
 
   /**
    * Capitalizes first letter of string
    */
-  static capitalize(value: string): string {
+  capitalize(value: string): string {
     if (typeof value !== 'string' || value.length === 0) {
       return value;
     }
     return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
-  }
+  },
 
   /**
    * Trims whitespace from string
    */
-  static trim(value: string): string {
+  trim(value: string): string {
     return typeof value === 'string' ? value.trim() : value;
-  }
+  },
 
   /**
    * Reverses a string
    */
-  static reverse(value: string): string {
-    return typeof value === 'string' ? value.split('').reverse().join('') : value;
-  }
+  reverse(value: string): string {
+    return typeof value === 'string' ? [...value].toReversed().join('') : value;
+  },
 
   /**
    * Converts string to URL-friendly slug
@@ -58,7 +58,7 @@ export class StringModifiers {
    * Modifiers.slugify('My Title  ')    // 'my-title'
    * ```
    */
-  static slugify(value: string): string {
+  slugify(value: string): string {
     if (typeof value !== 'string') {
       return value;
     }
@@ -66,10 +66,10 @@ export class StringModifiers {
     return value
       .toLowerCase()
       .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
+      .replaceAll(/[^\s\w-]/g, '')
+      .replaceAll(/[\s_-]+/g, '-')
+      .replaceAll(/^-+|-+$/g, '');
+  },
 
   /**
    * Pads a string to the left with a character
@@ -85,9 +85,9 @@ export class StringModifiers {
    * ValueConverter.padLeft('hi', 5, '-') // '--hi'
    * ```
    */
-  static padLeft(value: string, length: number, char: string = ' '): string {
+  padLeft(value: string, length: number, char: string = ' '): string {
     return value.padStart(length, char);
-  }
+  },
 
   /**
    * Converts a value to an array
@@ -102,7 +102,7 @@ export class StringModifiers {
    * ValueConverter.toArray('hello')  // ['hello']
    * ```
    */
-  static toArray(value: any): any[] {
+  toArray(value: any): any[] {
     if (value === null || value === undefined) {
       return [];
     }
@@ -112,44 +112,44 @@ export class StringModifiers {
     }
 
     return [value];
-  }
-}
+  },
+};
 
 /**
  * Number transformation utilities
  */
-export class NumberModifiers {
+export const NumberModifiers = {
   /**
    * Rounds number to nearest integer
    */
-  static round(value: number, decimals: number = 0): number {
+  round(value: number, decimals: number = 0): number {
     if (typeof value !== 'number') {
       return value;
     }
     const multiplier = Math.pow(10, decimals);
     return Math.round(value * multiplier) / multiplier;
-  }
+  },
 
   /**
    * Rounds number down to nearest integer
    */
-  static floor(value: number): number {
+  floor(value: number): number {
     return typeof value === 'number' ? Math.floor(value) : value;
-  }
+  },
 
   /**
    * Rounds number up to nearest integer
    */
-  static ceil(value: number): number {
+  ceil(value: number): number {
     return typeof value === 'number' ? Math.ceil(value) : value;
-  }
+  },
 
   /**
    * Returns absolute value
    */
-  static abs(value: number): number {
+  abs(value: number): number {
     return typeof value === 'number' ? Math.abs(value) : value;
-  }
+  },
 
   /**
    * Formats number as currency (USD)
@@ -165,7 +165,7 @@ export class NumberModifiers {
    * NumberModifiers.formatCurrency(1234.56, '€', 'de-DE')  // '1.234,56 €'
    * ```
    */
-  static formatCurrency(value: number, currency: string = '$', locale: string = 'en-US'): string {
+  formatCurrency(value: number, currency: string = '$', locale: string = 'en-US'): string {
     if (typeof value !== 'number') {
       return value;
     }
@@ -183,7 +183,7 @@ export class NumberModifiers {
     } catch {
       return `${currency}${value.toFixed(2)}`;
     }
-  }
+  },
 
   /**
    * Raises number to a power
@@ -192,23 +192,23 @@ export class NumberModifiers {
    * @param exponent - Exponent (default: 2)
    * @returns Result of value^exponent
    */
-  static pow(value: number, exponent: number = 2): number {
+  pow(value: number, exponent: number = 2): number {
     return typeof value === 'number' ? Math.pow(value, exponent) : value;
-  }
+  },
 
   /**
    * Calculates square root
    */
-  static sqrt(value: number): number {
+  sqrt(value: number): number {
     return typeof value === 'number' ? Math.sqrt(value) : value;
-  }
+  },
 
   /**
    * Calculates base-10 logarithm
    */
-  static log(value: number): number {
+  log(value: number): number {
     return typeof value === 'number' ? Math.log10(value) : value;
-  }
+  },
 
   /**
    * Converts number to percentage
@@ -225,25 +225,21 @@ export class NumberModifiers {
    * NumberModifiers.percentage(1/3, null, 2)  // 33.33
    * ```
    */
-  static percentage(value: number, total?: number, decimals: number = 2): number {
+  percentage(value: number, total?: number, decimals: number = 2): number {
     if (typeof value !== 'number') {
       return value;
     }
 
-    if (total && typeof total === 'number') {
-      value = (value / total) * 100;
-    } else {
-      value = value * 100;
-    }
+    value = total && typeof total === 'number' ? (value / total) * 100 : value * 100;
 
     return this.round(value, decimals);
-  }
-}
+  },
+};
 
 /**
  * Date transformation utilities
  */
-export class DateModifiers {
+export const DateModifiers = {
   /**
    * Formats date to locale string
    *
@@ -251,10 +247,10 @@ export class DateModifiers {
    * @param format - Optional format string (ignored, uses locale default)
    * @returns Formatted date string
    */
-  static formatDate(value: Date | string, format?: string): string {
+  formatDate(value: Date | string, format?: string): string {
     const date = value instanceof Date ? value : new Date(value);
-    return isNaN(date.getTime()) ? value as string : date.toLocaleDateString();
-  }
+    return Number.isNaN(date.getTime()) ? value as string : date.toLocaleDateString();
+  },
 
   /**
    * Extracts date only (no time) as ISO string
@@ -264,10 +260,10 @@ export class DateModifiers {
    * DateModifiers.dateOnly(new Date('2023-01-15T10:30:00'))  // '2023-01-15'
    * ```
    */
-  static dateOnly(value: Date | string): string {
+  dateOnly(value: Date | string): string {
     const date = value instanceof Date ? value : new Date(value);
-    return isNaN(date.getTime()) ? value as string : date.toISOString().split('T')[0];
-  }
+    return Number.isNaN(date.getTime()) ? value as string : date.toISOString().split('T')[0];
+  },
 
   /**
    * Extracts time only from date
@@ -277,18 +273,18 @@ export class DateModifiers {
    * DateModifiers.timeOnly(new Date('2023-01-15T10:30:00'))  // '10:30:00.000Z'
    * ```
    */
-  static timeOnly(value: Date | string): string {
+  timeOnly(value: Date | string): string {
     const date = value instanceof Date ? value : new Date(value);
-    return isNaN(date.getTime()) ? value as string : date.toISOString().split('T')[1];
-  }
+    return Number.isNaN(date.getTime()) ? value as string : date.toISOString().split('T')[1];
+  },
 
   /**
    * Converts date to Unix timestamp (seconds)
    */
-  static toTimestamp(value: Date | string): number | string {
+  toTimestamp(value: Date | string): number | string {
     const date = value instanceof Date ? value : new Date(value);
-    return isNaN(date.getTime()) ? value as string : Math.floor(date.getTime() / 1000);
-  }
+    return Number.isNaN(date.getTime()) ? value as string : Math.floor(date.getTime() / 1000);
+  },
 
   /**
    * Adds days to a date
@@ -297,14 +293,14 @@ export class DateModifiers {
    * @param days - Number of days to add (default: 1)
    * @returns New Date object
    */
-  static addDays(value: Date | string, days: number = 1): Date | string {
+  addDays(value: Date | string, days: number = 1): Date | string {
     const date = value instanceof Date ? new Date(value) : new Date(value);
-    if (isNaN(date.getTime())) {
+    if (Number.isNaN(date.getTime())) {
       return value;
     }
     date.setDate(date.getDate() + days);
     return date;
-  }
+  },
 
   /**
    * Subtracts days from a date
@@ -313,73 +309,73 @@ export class DateModifiers {
    * @param days - Number of days to subtract (default: 1)
    * @returns New Date object
    */
-  static subtractDays(value: Date | string, days: number = 1): Date | string {
+  subtractDays(value: Date | string, days: number = 1): Date | string {
     return this.addDays(value, -days);
-  }
+  },
 
   /**
    * Extracts year from date
    */
-  static extractYear(value: Date | string): number | string {
+  extractYear(value: Date | string): number | string {
     const date = value instanceof Date ? value : new Date(value);
-    return isNaN(date.getTime()) ? value as string : date.getFullYear();
-  }
+    return Number.isNaN(date.getTime()) ? value as string : date.getFullYear();
+  },
 
   /**
    * Extracts month from date (1-12)
    */
-  static extractMonth(value: Date | string): number | string {
+  extractMonth(value: Date | string): number | string {
     const date = value instanceof Date ? value : new Date(value);
-    return isNaN(date.getTime()) ? value as string : date.getMonth() + 1;
-  }
+    return Number.isNaN(date.getTime()) ? value as string : date.getMonth() + 1;
+  },
 
   /**
    * Extracts day from date (1-31)
    */
-  static extractDay(value: Date | string): number | string {
+  extractDay(value: Date | string): number | string {
     const date = value instanceof Date ? value : new Date(value);
-    return isNaN(date.getTime()) ? value as string : date.getDate();
-  }
-}
+    return Number.isNaN(date.getTime()) ? value as string : date.getDate();
+  },
+};
 
 /**
  * Array transformation utilities
  */
-export class ArrayModifiers {
+export const ArrayModifiers = {
   /**
    * Returns first element of array
    */
-  static first<T>(array: T[]): T | undefined {
+  first<T>(array: T[]): T | undefined {
     return Array.isArray(array) && array.length > 0 ? array[0] : undefined;
-  }
+  },
 
   /**
    * Returns last element of array
    */
-  static last<T>(array: T[]): T | undefined {
-    return Array.isArray(array) && array.length > 0 ? array[array.length - 1] : undefined;
-  }
+  last<T>(array: T[]): T | undefined {
+    return Array.isArray(array) && array.length > 0 ? array.at(-1) : undefined;
+  },
 
   /**
    * Returns unique elements from array
    */
-  static unique<T>(array: T[]): T[] {
+  unique<T>(array: T[]): T[] {
     return Array.isArray(array) ? [...new Set(array)] : array;
-  }
+  },
 
   /**
    * Returns array length
    */
-  static size<T>(array: T[]): number {
+  size<T>(array: T[]): number {
     return Array.isArray(array) ? array.length : 0;
-  }
+  },
 
   /**
    * Reverses an array (creates new array)
    */
-  static reverse<T>(array: T[]): T[] {
-    return Array.isArray(array) ? [...array].reverse() : array;
-  }
+  reverse<T>(array: T[]): T[] {
+    return Array.isArray(array) ? array.toReversed() : array;
+  },
 
   /**
    * Joins array elements with separator
@@ -388,9 +384,9 @@ export class ArrayModifiers {
    * @param separator - Separator string (default: ',')
    * @returns Joined string
    */
-  static join<T>(array: T[], separator: string = ','): string {
+  join<T>(array: T[], separator: string = ','): string {
     return Array.isArray(array) ? array.join(separator) : '';
-  }
+  },
 
   /**
    * Returns slice of array
@@ -400,7 +396,7 @@ export class ArrayModifiers {
    * @param end - End index (exclusive)
    * @returns Sliced array
    */
-  static slice<T>(array: T[], start: number, end?: number): T[] {
+  slice<T>(array: T[], start: number, end?: number): T[] {
     return Array.isArray(array) ? array.slice(start, end) : array;
-  }
-}
+  },
+};

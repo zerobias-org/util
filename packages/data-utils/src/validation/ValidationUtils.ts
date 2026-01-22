@@ -40,7 +40,7 @@ export function validateArray<T>(
   }
 
   if (!Array.isArray(value)) {
-    throw new Error(
+    throw new TypeError(
       `${context}: Expected array, received ${typeof value}. ` +
       `This may indicate an API format change.`
     );
@@ -70,7 +70,7 @@ export function validatePagedResult<T>(
   }
 
   if (typeof result !== 'object') {
-    throw new Error(`${context}: Expected object, received ${typeof result}`);
+    throw new TypeError(`${context}: Expected object, received ${typeof result}`);
   }
 
   const typedResult = result as { items?: unknown };
@@ -138,7 +138,7 @@ export function validateRequiredFields(
   }
 
   if (typeof obj !== 'object') {
-    throw new Error(`${context}: Expected object, received ${typeof obj}`);
+    throw new TypeError(`${context}: Expected object, received ${typeof obj}`);
   }
 
   const typedObj = obj as Record<string, unknown>;
@@ -170,7 +170,7 @@ export function validateNonEmptyString(
   fieldName: string
 ): asserts value is string {
   if (typeof value !== 'string') {
-    throw new Error(
+    throw new TypeError(
       `${context}: Expected ${fieldName} to be string, received ${typeof value}`
     );
   }
@@ -201,13 +201,13 @@ export function validateNumber(
   fieldName: string
 ): asserts value is number {
   if (typeof value !== 'number') {
-    throw new Error(
+    throw new TypeError(
       `${context}: Expected ${fieldName} to be number, received ${typeof value}`
     );
   }
 
-  if (Number.isNaN(value)) {
-    throw new Error(
+  if (Number.Number.isNaN(value)) {
+    throw new TypeError(
       `${context}: ${fieldName} cannot be NaN`
     );
   }

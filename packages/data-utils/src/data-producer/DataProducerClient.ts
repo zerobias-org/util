@@ -2,11 +2,15 @@
  * DataProducerClient - Framework-agnostic DataProducer client wrapper
  *
  * This client provides a unified interface for interacting with DataProducer APIs.
- * It wraps the underlying DataProducer client from @zerobias-org/module-interface-dataproducer-client-ts
+ * It wraps the underlying DataProducer client from @zerobias-org/module-interface-dataproducer-sdk
  * and provides strongly-typed, validated access to all API modules.
  */
 
-import { DataproducerClient, newDataproducer } from '@zerobias-org/module-interface-dataproducer-client-ts';
+import {
+  DynamicDataProducerClient,
+  newDynamicDataProducer,
+  ConnectionProfile
+} from '@zerobias-org/module-interface-dataproducer-sdk';
 import { UUID } from '@zerobias-org/types-core-js';
 import { DataProducerConfig, ConnectionResult, DataProducerError, DataProducerErrorType } from './types/common.types';
 import { ObjectsApi } from './apis/ObjectsApi';
@@ -34,7 +38,7 @@ import { BinaryApi } from './apis/BinaryApi';
  * ```
  */
 export class DataProducerClient {
-  private _dataProducer: DataproducerClient;
+  private _dataProducer: DynamicDataProducerClient;
   private _config: DataProducerConfig | null = null;
   private _connected: boolean = false;
 
@@ -52,7 +56,7 @@ export class DataProducerClient {
    * @param config - Optional initial configuration
    */
   constructor(config?: DataProducerConfig) {
-    this._dataProducer = newDataproducer();
+    this._dataProducer = newDynamicDataProducer();
     if (config) {
       this._config = config;
     }
@@ -72,7 +76,7 @@ export class DataProducerClient {
    *
    * @internal
    */
-  public getDataProducer(): DataproducerClient & any {
+  public getDataProducer(): DynamicDataProducerClient {
     return this._dataProducer;
   }
 
@@ -117,10 +121,10 @@ export class DataProducerClient {
         ? new UUID(connectionConfig.targetId)
         : connectionConfig.targetId;
 
-      const connectionProfile = {
-        server: connectionConfig.server,
-        targetId: targetId,
-        scopeId: connectionConfig.scopeId,
+      const connectionProfile: ConnectionProfile = {
+        url: connectionConfig.server,
+        // targetId: targetId,
+        // scopeId: connectionConfig.scopeId,
         ...(connectionConfig.headers && { headers: connectionConfig.headers }),
         ...(connectionConfig.timeout && { timeout: connectionConfig.timeout })
       };
@@ -150,7 +154,7 @@ export class DataProducerClient {
    */
   public async disconnect(): Promise<boolean> {
     try {
-      const isConnected = await this._dataProducer.isConnected();
+      const isConnected = this._dataProducer.isConnected();
       if (isConnected) {
         await this._dataProducer.disconnect();
       }
@@ -167,7 +171,7 @@ export class DataProducerClient {
    *
    * @returns True if connected, false otherwise
    */
-  public async isConnected(): Promise<boolean> {
+  public isConnected(): boolean {
     try {
       // First check our wrapper's connection state
       if (!this._connected) {
@@ -175,10 +179,10 @@ export class DataProducerClient {
       }
 
       // Then verify with the underlying dataProducer
-      const connected = await this._dataProducer.isConnected();
+      const connected = this._dataProducer.isConnected();
       this._connected = connected;
       return connected;
-    } catch (error) {
+    } catch {
       this._connected = false;
       return false;
     }
@@ -197,9 +201,9 @@ export class DataProducerClient {
         await (this._dataProducer as any).ping();
         return true;
       } else {
-        return await this.isConnected();
+        return this.isConnected();
       }
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -241,24 +245,20 @@ export class DataProducerClient {
     }
 
     // Case 4: Reconnect if targetId changed
-    if (targetId !== null && currentTargetId !== null) {
+    if (targetId && currentTargetId) {
       const currentIdStr = typeof currentTargetId === 'string' ? currentTargetId : currentTargetId.toString();
       const newIdStr = typeof targetId === 'string' ? targetId : targetId.toString();
 
       if (currentIdStr !== newIdStr) {
         const disconnected = await this.disconnect();
-        if (disconnected) {
-          return await this.connect({
+        return disconnected ? (await this.connect({
             server: server || currentConfig?.server || '',
             targetId,
             scopeId
-          });
-        } else {
-          return {
+          })) : {
             success: false,
             error: 'Failed to disconnect from previous connection'
           };
-        }
       }
     }
 

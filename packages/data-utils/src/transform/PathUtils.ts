@@ -15,7 +15,7 @@
  * - Array paths: `addresses[].street`
  * - Mixed paths: `users[].profile.name`
  */
-export class PathUtils {
+export const PathUtils = {
   /**
    * Gets a nested value from an object using dot notation
    *
@@ -30,7 +30,7 @@ export class PathUtils {
    * PathUtils.getNestedValue(obj, 'user.phone')         // undefined
    * ```
    */
-  static getNestedValue(obj: any, path: string): any {
+  getNestedValue(obj: any, path: string): any {
     if (!path) {
       return obj;
     }
@@ -56,7 +56,7 @@ export class PathUtils {
     }
 
     return current;
-  }
+  },
 
   /**
    * Sets a nested value in an object using dot notation
@@ -74,7 +74,7 @@ export class PathUtils {
    * // obj is now { user: { address: { city: 'Boston' } } }
    * ```
    */
-  static setNestedValue(obj: any, path: string, value: any): void {
+  setNestedValue(obj: any, path: string, value: any): void {
     if (!path || obj === null || obj === undefined) {
       return;
     }
@@ -92,8 +92,8 @@ export class PathUtils {
       current = current[part];
     }
 
-    current[parts[parts.length - 1]] = value;
-  }
+    current[parts.at(-1)] = value;
+  },
 
   /**
    * Gets values from array items
@@ -118,7 +118,7 @@ export class PathUtils {
    * // ['123 Main St', '456 Oak Ave']
    * ```
    */
-  static getArrayItemValues(obj: any, path: string): any[] {
+  getArrayItemValues(obj: any, path: string): any[] {
     if (!path.includes('[]')) {
       return [];
     }
@@ -126,8 +126,8 @@ export class PathUtils {
     // Split only on first occurrence: "addresses[].street" -> ["addresses", "street"]
     // For nested: "departments[].employees[].name" -> ["departments", "employees[].name"]
     const arrayMarkerIndex = path.indexOf('[]');
-    const arrayPath = path.substring(0, arrayMarkerIndex);
-    const itemPath = path.substring(arrayMarkerIndex + 3); // Skip past '[].
+    const arrayPath = path.slice(0, Math.max(0, arrayMarkerIndex));
+    const itemPath = path.slice(Math.max(0, arrayMarkerIndex + 3)); // Skip past '[].
 
     // Get the array
     const array = this.getNestedValue(obj, arrayPath);
@@ -147,7 +147,7 @@ export class PathUtils {
     }
 
     return array;
-  }
+  },
 
   /**
    * Sets values in array items
@@ -169,7 +169,7 @@ export class PathUtils {
    * // addresses[1].city is now 'NYC'
    * ```
    */
-  static setArrayItemValues(obj: any, path: string, values: any[]): void {
+  setArrayItemValues(obj: any, path: string, values: any[]): void {
     if (!path.includes('[]') || !Array.isArray(values)) {
       return;
     }
@@ -183,16 +183,16 @@ export class PathUtils {
     }
 
     if (itemPath) {
-      array.forEach((item, index) => {
+      for (const [index, item] of array.entries()) {
         if (index < values.length) {
           this.setNestedValue(item, itemPath, values[index]);
         }
-      });
+      }
     } else {
       // Replace entire array
       this.setNestedValue(obj, arrayPath, values);
     }
-  }
+  },
 
   /**
    * Checks if a path exists in an object
@@ -208,10 +208,10 @@ export class PathUtils {
    * PathUtils.hasPath(obj, 'user.email')  // false
    * ```
    */
-  static hasPath(obj: any, path: string): boolean {
+  hasPath(obj: any, path: string): boolean {
     const value = this.getNestedValue(obj, path);
     return value !== undefined && value !== null;
-  }
+  },
 
   /**
    * Deletes a nested property from an object
@@ -227,7 +227,7 @@ export class PathUtils {
    * // obj is now { user: { name: 'John' } }
    * ```
    */
-  static deletePath(obj: any, path: string): boolean {
+  deletePath(obj: any, path: string): boolean {
     if (!path || obj === null || obj === undefined) {
       return false;
     }
@@ -245,12 +245,12 @@ export class PathUtils {
       current = current[part];
     }
 
-    const lastPart = parts[parts.length - 1];
+    const lastPart = parts.at(-1);
     if (lastPart in current) {
       delete current[lastPart];
       return true;
     }
 
     return false;
-  }
-}
+  },
+};

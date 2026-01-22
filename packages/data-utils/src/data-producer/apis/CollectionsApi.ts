@@ -6,7 +6,7 @@
  * similar to database tables or spreadsheet data.
  */
 
-import { SortDirection as ExternalSortDirection } from '@zerobias-org/module-interface-dataproducer-client-ts';
+import { SortDirection as ExternalSortDirection } from '@zerobias-org/module-interface-dataproducer-sdk';
 import { PagedResults } from '@zerobias-org/types-core-js';
 import {
   Collection,
@@ -68,7 +68,7 @@ export class CollectionsApi {
       } else if (typeof collectionsApi.listCollections === 'function') {
         collectionsData = await collectionsApi.listCollections();
       } else {
-        throw new Error('CollectionsApi.getCollections is not available');
+        throw new TypeError('CollectionsApi.getCollections is not available');
       }
 
       // Validate the response
@@ -239,11 +239,9 @@ export class CollectionsApi {
       filter: params.filter
     };
 
-    if (params.filter) {
-      return this.searchCollectionElements(params.collectionId, params.filter, options);
-    } else {
-      return this.getCollectionElements(params.collectionId, options);
-    }
+    return params.filter
+      ? this.searchCollectionElements(params.collectionId, params.filter, options)
+      : this.getCollectionElements(params.collectionId, options);
   }
 
   /**

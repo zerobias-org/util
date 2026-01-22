@@ -58,7 +58,7 @@ export class SchemasApi {
       } else if (typeof schemasApi.listSchemas === 'function') {
         schemasData = await schemasApi.listSchemas();
       } else {
-        throw new Error('SchemasApi.getSchemas is not available');
+        throw new TypeError('SchemasApi.getSchemas is not available');
       }
 
       // Validate the response
