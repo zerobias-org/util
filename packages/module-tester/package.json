@@ -1,0 +1,62 @@
+{
+  "name": "@zerobias-org/module-tester",
+  "description": "Test harness for Hub modules - enables REST-level testing on Docker containers",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist/",
+    "transpile": "tsc -b",
+    "build": "npm run lint && npm run transpile",
+    "test": "mocha --inline-diffs --reporter=list 'test/unit/**/*.ts'",
+    "test:watch": "npm run test -- --watch --reporter=min",
+    "lint": "eslint src/",
+    "lint:fix": "eslint --fix src/",
+    "nx:prepublish": "prepublish-standalone",
+    "nx:publish": "publish"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zerobias-org/util.git",
+    "directory": "packages/module-tester"
+  },
+  "author": "team@zerobias.com",
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "bom.json"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "dockerode": "^4.0.0",
+    "get-port": "^7.1.0",
+    "js-yaml": "^4.1.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.0.0",
+    "@types/dockerode": "^3.3.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/mocha": "^10.0.0",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^9.0.0",
+    "chai": "^6.0.0",
+    "mocha": "^11.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,44 @@
+# Example Test Profile Template
+# Copy this file to test-profiles/ and customize for your module
+
+# Profile name (used in test output)
+name: my-module-integration
+
+# Module package name
+module: "@auditlogic/module-my-service"
+
+# Module version (optional, defaults to 'latest')
+version: "1.0.0"
+
+# Docker image (optional, derived from module name if not specified)
+# image: pkg.ci.zerobias.com/auditlogic-module-my-service:1.0.0
+
+# Skip conditions
+skipCi: false      # Set true if this test can't run in CI
+skipLocal: false   # Set true if this test can't run locally
+
+# Connection configuration
+connection:
+  # Profile type must match the module's expected connection profile type
+  profileType: MyServiceConnectionProfile
+
+  # Option 1: Reference secrets by path (recommended for sensitive data)
+  # secretsPath: "myservice/test-credentials"
+
+  # Option 2: Inline profile (for non-sensitive test data only)
+  profile:
+    endpoint: "https://api.example.com"
+    apiVersion: "v1"
+    # Don't put secrets here! Use secretsPath instead.
+
+# Operations to test (optional)
+# If not specified, all operations will be available
+# operations:
+#   - listResources
+#   - getResource
+#   - createResource
+
+# Environment variables for the container (optional)
+# environment:
+#   DEBUG: "true"
+#   LOG_LEVEL: "debug"
