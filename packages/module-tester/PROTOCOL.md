@@ -228,37 +228,213 @@ Checks if a specific operation is supported.
 
 Executes an operation against the connected system.
 
-**Method Format:**
-The method parameter uses `{ApiClass}.{methodName}` format where:
-- `ApiClass` is derived from the OpenAPI tag (e.g., tag `organization` → `OrganizationApi`)
-- `methodName` is from `x-method-name` in the spec, or defaults to the `operationId`
+#### Critical: OpenAPI Spec ≠ Docker API
 
-**Request:**
-```json
+The OpenAPI specification defines one API, but the Docker container exposes a different REST interface. The test harness must transform between them.
+
+**OpenAPI Spec Example:**
+```yaml
+paths:
+  /organizations:
+    get:
+      tags:
+        - organization
+      operationId: listMyOrganizations
+      parameters:
+        - name: page
+          in: query
+        - name: perPage
+          in: query
+```
+
+**Docker Container API:**
+```http
+POST /connections/{connectionId}/OrganizationApi.listMyOrganizations
+Content-Type: application/json
+
 {
   "argMap": {
-    "param1": "value1",
-    "param2": "value2"
+    "page": 1,
+    "perPage": 10
   }
 }
 ```
 
-The `argMap` keys must match the parameter names in the generated API code (check OpenAPI spec).
+#### Method Format
 
-**Examples:**
-```bash
-# List organizations (operationId: listMyOrganizations)
-POST /connections/{connId}/OrganizationApi.listMyOrganizations
-{ "argMap": { "page": 1, "perPage": 10 } }
+The method parameter uses `{ApiClass}.{methodName}` format:
 
-# Get organization (x-method-name: get)
-POST /connections/{connId}/OrganizationApi.get
-{ "argMap": { "organizationName": "zerobias-org" } }
+**ApiClass Derivation:**
+- OpenAPI `tags` field determines the API class
+- Hub codegen converts tag to PascalCase + "Api" suffix
+- Examples:
+  - `tag: "organization"` → `OrganizationApi`
+  - `tag: "objects"` → `ObjectsApi`
+  - `tag: "repository"` → `RepositoryApi`
+
+**Method Name:**
+- Uses `operationId` from OpenAPI spec
+- Examples: `listMyOrganizations`, `getObject`, `getChildren`
+
+#### Parameter Flattening
+
+**All parameters are flattened into the `argMap` object**, regardless of their location in the OpenAPI spec:
+
+| OpenAPI Location | Example | argMap |
+|------------------|---------|--------|
+| Query parameter | `?page=1&perPage=10` | `{ "page": 1, "perPage": 10 }` |
+| Path parameter | `/objects/{objectId}` | `{ "objectId": "/" }` |
+| Request body | `{ "name": "foo" }` | `{ "name": "foo" }` |
+
+**Example transformation:**
+```yaml
+# OpenAPI spec
+/objects/{objectId}/children:
+  get:
+    parameters:
+      - name: objectId
+        in: path
+      - name: pageSize
+        in: query
 ```
 
-**Response:** Operation result (varies by operation)
-- Content-Type: `application/json` for structured data
-- Content-Type: `application/octet-stream` for binary/streaming data
+```http
+# Docker API call
+POST /connections/{connId}/ObjectsApi.getChildren
+{ "argMap": { "objectId": "/", "pageSize": 100 } }
+```
+
+#### Response Format
+
+**Standard Response:**
+```json
+{
+  "id": "obj-123",
+  "name": "My Object",
+  "properties": { ... }
+}
+```
+
+**Known Deviation - Pagination Wrapper:**
+Many modules wrap array responses in a pagination object, even though the OpenAPI spec returns arrays directly:
+
+**OpenAPI spec:**
+```yaml
+responses:
+  '200':
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/Object'
+```
+
+**Actual response from module:**
+```json
+{
+  "items": [
+    { "id": "1", "name": "Object 1" },
+    { "id": "2", "name": "Object 2" }
+  ],
+  "count": 2,
+  "pageNumber": 1,
+  "pageSize": 100
+}
+```
+
+**Test clients must unwrap this:**
+```typescript
+const response = await harness.invokeMethod<PagedResponse<Object>>('ObjectsApi', 'getChildren', args, connectionId);
+return response.items;  // Unwrap to match interface
+```
+
+This deviation affects:
+- GitHub module: `OrganizationApi`, `RepositoryApi`, `ObjectsApi`
+- SQL module: `ObjectsApi.getChildren`, `ObjectsApi.search`
+
+**Binary/Streaming Response:**
+- Content-Type: `application/octet-stream`
+- Response is raw stream data (not JSON)
+
+#### Complete Example
+
+**OpenAPI Definition:**
+```yaml
+paths:
+  /objects/{objectId}/children:
+    get:
+      tags:
+        - objects
+      operationId: getChildren
+      parameters:
+        - name: objectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Object'
+```
+
+**Test Harness Call:**
+```typescript
+// Using module-tester framework
+const children = await harness.invokeMethod<PagedResponse<Object>>(
+  'ObjectsApi',           // tag "objects" → "ObjectsApi"
+  'getChildren',          // operationId
+  {                       // All params in argMap
+    objectId: '/',
+    pageSize: 10
+  },
+  connectionId
+);
+
+// Unwrap pagination wrapper
+return children.items;
+```
+
+**Actual HTTP Request:**
+```http
+POST /connections/conn-123-456/ObjectsApi.getChildren HTTP/1.1
+Host: localhost:54321
+Content-Type: application/json
+auditmation-auth: secret-uuid-value
+
+{
+  "argMap": {
+    "objectId": "/",
+    "pageSize": 10
+  }
+}
+```
+
+**Actual HTTP Response:**
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "items": [
+    { "id": "/org1", "name": "Organization 1", "objectClass": ["container"] },
+    { "id": "/org2", "name": "Organization 2", "objectClass": ["container"] }
+  ],
+  "count": 2,
+  "pageNumber": 1,
+  "pageSize": 10
+}
+```
 
 ## Error Handling
 
