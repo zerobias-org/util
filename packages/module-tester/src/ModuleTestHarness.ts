@@ -251,6 +251,58 @@ export class ModuleTestHarness {
   }
 
   /**
+   * Invoke a module method via REST API
+   *
+   * Used by generated/hand-written test clients to translate typed method calls
+   * to REST calls: client.organization.listMyOrganizations({ page: 1 })
+   *   -> invokeMethod('OrganizationApi', 'listMyOrganizations', { page: 1 }, connectionId)
+   *
+   * @param apiClass API class name (e.g., 'OrganizationApi')
+   * @param method Method name (e.g., 'listMyOrganizations')
+   * @param argMap Method arguments
+   * @param connectionId Connection ID for the request
+   * @param deploymentId Deployment ID (optional, uses default)
+   * @returns Method result
+   */
+  async invokeMethod<T = unknown>(
+    apiClass: string,
+    method: string,
+    argMap: Record<string, unknown>,
+    connectionId: string,
+    deploymentId?: string
+  ): Promise<T> {
+    const state = this.getState(deploymentId);
+    const url = `/connections/${connectionId}/${apiClass}.${method}`;
+
+    this.logger.debug(`Invoking: ${apiClass}.${method}`);
+
+    try {
+      const response = await state.client.post<T>(url, { argMap });
+
+      // Handle streaming or JSON response
+      if (typeof response.data === 'string') {
+        try {
+          return JSON.parse(response.data) as T;
+        } catch {
+          return response.data as T;
+        }
+      }
+      return response.data;
+    } catch (error: unknown) {
+      const axiosError = error as {
+        response?: { status: number; data?: unknown };
+        message: string;
+      };
+
+      // Re-throw with more context
+      const errorMsg = axiosError.response?.data
+        ? JSON.stringify(axiosError.response.data)
+        : axiosError.message;
+      throw new Error(`${apiClass}.${method} failed: ${errorMsg}`);
+    }
+  }
+
+  /**
    * Invoke a module operation
    *
    * @param request Invocation request
@@ -334,7 +386,7 @@ export class ModuleTestHarness {
    */
   async healthCheck(deploymentId?: string): Promise<HealthCheckResult> {
     const state = this.getState(deploymentId);
-    return this.dockerManager.healthCheck(state.deployment, state.port);
+    return this.dockerManager.healthCheck(state.deployment, state.port, { useHttps: !this.config.insecure });
   }
 
   /**

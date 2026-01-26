@@ -243,6 +243,8 @@ export class DockerManager {
     const startTime = Date.now();
     const { useHttps = false } = options;
 
+    this.logger.debug(`Health check using ${useHttps ? 'HTTPS' : 'HTTP'} on port ${port}`);
+
     try {
       const client = this.createAxiosClient(deployment, port, { useHttps });
       const response = await client.get<ModuleInfo>('/', { timeout: 5000 });
@@ -262,7 +264,7 @@ export class DockerManager {
         responseTimeMs: Date.now() - startTime
       };
     } catch (error: unknown) {
-      const axiosError = error as { response?: { status: number }; message: string };
+      const axiosError = error as { response?: { status: number; data?: unknown }; message: string };
       if (axiosError.response?.status === 401) {
         return {
           healthy: false,
@@ -271,9 +273,19 @@ export class DockerManager {
         };
       }
 
+      // Include response data in error if available
+      let errorMsg = axiosError.message;
+      if (axiosError.response?.data) {
+        try {
+          errorMsg += ` - Response: ${JSON.stringify(axiosError.response.data)}`;
+        } catch {
+          errorMsg += ` - Response data could not be serialized`;
+        }
+      }
+
       return {
         healthy: false,
-        error: axiosError.message,
+        error: errorMsg,
         responseTimeMs: Date.now() - startTime
       };
     }

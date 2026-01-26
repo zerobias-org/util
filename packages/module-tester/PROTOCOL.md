@@ -224,18 +224,36 @@ Checks if a specific operation is supported.
 
 ### Execute Operation
 
-**Endpoint:** `POST /connections/{connectionId}/{operationId}`
+**Endpoint:** `POST /connections/{connectionId}/{ApiClass}.{methodName}`
 
 Executes an operation against the connected system.
+
+**Method Format:**
+The method parameter uses `{ApiClass}.{methodName}` format where:
+- `ApiClass` is derived from the OpenAPI tag (e.g., tag `organization` → `OrganizationApi`)
+- `methodName` is from `x-method-name` in the spec, or defaults to the `operationId`
 
 **Request:**
 ```json
 {
   "argMap": {
-    "bucketName": "my-bucket",
-    "prefix": "data/"
+    "param1": "value1",
+    "param2": "value2"
   }
 }
+```
+
+The `argMap` keys must match the parameter names in the generated API code (check OpenAPI spec).
+
+**Examples:**
+```bash
+# List organizations (operationId: listMyOrganizations)
+POST /connections/{connId}/OrganizationApi.listMyOrganizations
+{ "argMap": { "page": 1, "perPage": 10 } }
+
+# Get organization (x-method-name: get)
+POST /connections/{connId}/OrganizationApi.get
+{ "argMap": { "organizationName": "zerobias-org" } }
 ```
 
 **Response:** Operation result (varies by operation)
@@ -304,7 +322,63 @@ docker stop -t 10 ${containerId}
 
 ## Test Harness Configuration
 
-For testing modules without a full Hub Server deployment:
+For testing modules without a full Hub Server deployment.
+
+### Test Profiles
+
+Test profiles are YAML files that define module connection settings. They support both literal values and secret references using the `${...}` syntax:
+
+```yaml
+# test-profiles/github-local.yml
+name: github-local
+module: '@auditlogic/module-github-github'
+version: '1.0.0'
+image: 'pkg.ci.zerobias.com/auditlogic-module-github-github:1.0.0'
+
+# Skip conditions
+skipCi: true      # Skip in CI environment
+skipLocal: false  # Run in local development
+
+# Connection profile with secret references
+connectionProfile:
+  tokenType: Bearer           # Literal value
+  url: https://github.com     # Literal value
+  apiToken: ${file.github.apiToken}  # Secret reference
+```
+
+### Secret Path Syntax
+
+Values are either literals or secret references using Mustache `{{...}}` syntax:
+
+| Value | Type | Description |
+|-------|------|-------------|
+| `Bearer` | Literal | Used as-is |
+| `https://github.com` | Literal | Used as-is |
+| `{{file.name.key}}` | File secret | Key from `~/.zerobias/secrets/name.json` |
+| `{{env.VAR}}` | Env secret | Value from environment variable |
+
+Each secret path resolves to a single scalar value (string, number, or boolean).
+
+**File Secrets** are loaded from `~/.zerobias/secrets/` (or `FILE_SECRET_ROOT`):
+```bash
+# Create secret file
+mkdir -p ~/.zerobias/secrets
+echo '{"apiToken": "ghp_xxx"}' > ~/.zerobias/secrets/github.json
+```
+```yaml
+# Reference in profile - gets the apiToken key value
+apiToken: "{{file.github.apiToken}}"
+```
+
+**Environment Secrets** are loaded directly from environment variables:
+```bash
+# Set env var (CI)
+export GITHUB_API_TOKEN='ghp_xxx'
+```
+```yaml
+# Reference in profile
+apiToken: "{{env.GITHUB_API_TOKEN}}"
+```
 
 ### Local Development (HTTP)
 

@@ -7,3 +7,4 @@
 export * from './SecretsProvider.js';
 export * from './EnvSecretsProvider.js';
 export * from './FileSecretsProvider.js';
+export * from './ProfileResolver.js';

@@ -42,6 +42,10 @@
  * @packageDocumentation
  */
 
+// Framework entry point
+export { moduleTest } from './moduleTest.js';
+export type { ModuleTestOptions, TestClient, ClientFactory } from './moduleTest.js';
+
 // Main classes
 export { ModuleTestHarness, createTestHarness } from './ModuleTestHarness.js';
 export { DockerManager, generateDeploymentId, generateAuthKey } from './DockerManager.js';
@@ -62,6 +66,9 @@ export type { EnvSecretsProviderConfig } from './providers/EnvSecretsProvider.js
 
 export { FileSecretsProvider, createSecretFile, deleteSecretFile } from './providers/FileSecretsProvider.js';
 export type { FileSecretsProviderConfig } from './providers/FileSecretsProvider.js';
+
+export { ProfileResolver, createProfileResolver } from './providers/ProfileResolver.js';
+export type { ProfileResolverConfig } from './providers/ProfileResolver.js';
 
 // Types
 export type {
