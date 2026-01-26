@@ -8,7 +8,7 @@
  * - Content type detection
  */
 import { expect } from 'chai';
-import { Schema } from '@zerobias-org/module-interface-dataproducer';
+import { Schema } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
 import { OpenAPISchemaBuilder, OpenAPILoader } from '../src';
 
 // Public OpenAPI spec URLs for testing

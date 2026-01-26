@@ -5,7 +5,7 @@
  * `attributeTypeMap` static property (produced by OpenAPI codegen) and transforms
  * them into DataProducer Schema objects.
  */
-import { Schema, Property, Type } from '@auditlogic/module-auditmation-interface-dataproducer';
+import { Schema, Property, Type } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
 import { OpenAPILoader } from './OpenAPILoader';
 import { TypeMapper } from './TypeMapper';
 import {

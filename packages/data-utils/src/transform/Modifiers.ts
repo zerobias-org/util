@@ -103,7 +103,7 @@ export const StringModifiers = {
    * ```
    */
   toArray(value: any): any[] {
-    if (value === null || value === undefined) {
+    if (!value) {
       return [];
     }
 
@@ -220,9 +220,9 @@ export const NumberModifiers = {
    *
    * @example
    * ```typescript
-   * NumberModifiers.percentage(0.5)       // 50
-   * NumberModifiers.percentage(25, 100)   // 25
-   * NumberModifiers.percentage(1/3, null, 2)  // 33.33
+   * NumberModifiers.percentage(0.5)                // 50
+   * NumberModifiers.percentage(25, 100)            // 25
+   * NumberModifiers.percentage(1/3, undefined, 2)  // 33.33
    * ```
    */
   percentage(value: number, total?: number, decimals: number = 2): number {

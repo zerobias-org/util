@@ -13,7 +13,7 @@ export type TransformType =
   | 'combine'       // Combine multiple source fields
   | 'split'         // Split string into array
   | 'expression'    // JSONata expression (for advanced operations)
-  | 'default'       // Provide default value for null/empty
+  | 'default'       // Provide default value for undefined/empty
   | 'conditional'   // If/then/else logic
   | 'lookup';       // Dictionary/mapping table lookup
 

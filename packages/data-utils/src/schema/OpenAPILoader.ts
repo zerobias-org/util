@@ -85,7 +85,7 @@ interface OpenAPISpec {
  * ```
  */
 export class OpenAPILoader {
-  private spec: OpenAPISpec | null = null;
+  private spec: OpenAPISpec | undefined = undefined;
   private schemas: Record<string, OpenAPISchema> = {};
 
   /**
@@ -323,7 +323,7 @@ export class OpenAPILoader {
    * Check if spec is loaded
    */
   isLoaded(): boolean {
-    return this.spec !== null;
+    return this.spec !== undefined;
   }
 
   /**

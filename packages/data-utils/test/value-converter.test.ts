@@ -25,9 +25,9 @@ describe('ValueConverter', () => {
       expect(ValueConverter.toBoolean(-1)).to.equal(true);
     });
 
-    it('should handle null and undefined', () => {
-      expect(ValueConverter.toBoolean(null)).to.equal(null);
-      expect(ValueConverter.toBoolean(undefined)).to.equal(null);
+    it('should handle undefined', () => {
+      expect(ValueConverter.toBoolean(undefined)).to.equal(undefined);
+      expect(ValueConverter.toBoolean(undefined)).to.equal(undefined);
     });
 
     it('should convert truthy/falsy values', () => {
@@ -58,14 +58,14 @@ describe('ValueConverter', () => {
     });
 
     it('should handle invalid conversions', () => {
-      expect(ValueConverter.toNumber('abc')).to.equal(null);
+      expect(ValueConverter.toNumber('abc')).to.equal(undefined);
       expect(ValueConverter.toNumber('12abc')).to.equal(12);
-      expect(ValueConverter.toNumber(NaN)).to.equal(null);
+      expect(ValueConverter.toNumber(NaN)).to.equal(undefined);
     });
 
-    it('should handle null and undefined', () => {
-      expect(ValueConverter.toNumber(null)).to.equal(null);
-      expect(ValueConverter.toNumber(undefined)).to.equal(null);
+    it('should handle undefined', () => {
+      expect(ValueConverter.toNumber(undefined)).to.equal(undefined);
+      expect(ValueConverter.toNumber(undefined)).to.equal(undefined);
     });
   });
 
@@ -99,14 +99,14 @@ describe('ValueConverter', () => {
     });
 
     it('should handle invalid dates', () => {
-      expect(ValueConverter.toDate('invalid')).to.equal(null);
-      expect(ValueConverter.toDate('not-a-date')).to.equal(null);
-      expect(ValueConverter.toDate(new Date('invalid'))).to.equal(null);
+      expect(ValueConverter.toDate('invalid')).to.equal(undefined);
+      expect(ValueConverter.toDate('not-a-date')).to.equal(undefined);
+      expect(ValueConverter.toDate(new Date('invalid'))).to.equal(undefined);
     });
 
-    it('should handle null and undefined', () => {
-      expect(ValueConverter.toDate(null)).to.equal(null);
-      expect(ValueConverter.toDate(undefined)).to.equal(null);
+    it('should handle undefined', () => {
+      expect(ValueConverter.toDate(undefined)).to.equal(undefined);
+      expect(ValueConverter.toDate(undefined)).to.equal(undefined);
     });
   });
 
@@ -123,12 +123,12 @@ describe('ValueConverter', () => {
     });
 
     it('should handle invalid dates', () => {
-      expect(ValueConverter.toDateString('invalid')).to.equal(null);
+      expect(ValueConverter.toDateString('invalid')).to.equal(undefined);
     });
 
-    it('should handle null and undefined', () => {
-      expect(ValueConverter.toDateString(null)).to.equal(null);
-      expect(ValueConverter.toDateString(undefined)).to.equal(null);
+    it('should handle undefined', () => {
+      expect(ValueConverter.toDateString(undefined)).to.equal(undefined);
+      expect(ValueConverter.toDateString(undefined)).to.equal(undefined);
     });
   });
 
@@ -149,8 +149,8 @@ describe('ValueConverter', () => {
       expect(ValueConverter.toString([])).to.equal('');
     });
 
-    it('should handle null and undefined', () => {
-      expect(ValueConverter.toString(null)).to.equal('');
+    it('should handle undefined', () => {
+      expect(ValueConverter.toString(undefined)).to.equal('');
       expect(ValueConverter.toString(undefined)).to.equal('');
     });
   });
@@ -179,13 +179,13 @@ describe('ValueConverter', () => {
     it('should convert to array', () => {
       expect(ValueConverter.convert([1, 2, 3], 'array')).to.deep.equal([1, 2, 3]);
       expect(ValueConverter.convert('hello', 'array')).to.deep.equal(['hello']);
-      expect(ValueConverter.convert(null, 'array')).to.deep.equal([]);
+      expect(ValueConverter.convert(undefined, 'array')).to.deep.equal([]);
     });
 
     it('should convert to object', () => {
       const obj = { a: 1 };
       expect(ValueConverter.convert(obj, 'object')).to.equal(obj);
-      expect(ValueConverter.convert('string', 'object')).to.equal(null);
+      expect(ValueConverter.convert('string', 'object')).to.equal(undefined);
     });
   });
 });

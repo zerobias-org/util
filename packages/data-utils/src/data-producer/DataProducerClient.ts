@@ -7,10 +7,10 @@
  */
 
 import {
-  DynamicDataProducerClient,
-  newDynamicDataProducer,
+  DataproducerHubImpl,
+  newDataproducerHub,
   ConnectionProfile
-} from '@zerobias-org/module-interface-dataproducer-sdk';
+} from '@zerobias-org/module-interface-dataproducer-hub-sdk';
 import { UUID } from '@zerobias-org/types-core-js';
 import { DataProducerConfig, ConnectionResult, DataProducerError, DataProducerErrorType } from './types/common.types';
 import { ObjectsApi } from './apis/ObjectsApi';
@@ -38,8 +38,8 @@ import { BinaryApi } from './apis/BinaryApi';
  * ```
  */
 export class DataProducerClient {
-  private _dataProducer: DynamicDataProducerClient;
-  private _config: DataProducerConfig | null = null;
+  private _dataProducer: DataproducerHubImpl;
+  private _config?: DataProducerConfig;
   private _connected: boolean = false;
 
   // API module instances
@@ -56,7 +56,7 @@ export class DataProducerClient {
    * @param config - Optional initial configuration
    */
   constructor(config?: DataProducerConfig) {
-    this._dataProducer = newDynamicDataProducer();
+    this._dataProducer = newDataproducerHub();
     if (config) {
       this._config = config;
     }
@@ -76,14 +76,14 @@ export class DataProducerClient {
    *
    * @internal
    */
-  public getDataProducer(): DynamicDataProducerClient {
+  public getDataProducer(): DataproducerHubImpl {
     return this._dataProducer;
   }
 
   /**
    * Get the current configuration
    */
-  public getConfig(): DataProducerConfig | null {
+  public getConfig(): DataProducerConfig | undefined {
     return this._config;
   }
 
@@ -122,9 +122,8 @@ export class DataProducerClient {
         : connectionConfig.targetId;
 
       const connectionProfile: ConnectionProfile = {
-        url: connectionConfig.server,
-        // targetId: targetId,
-        // scopeId: connectionConfig.scopeId,
+        server: connectionConfig.server,
+        targetId: targetId,
         ...(connectionConfig.headers && { headers: connectionConfig.headers }),
         ...(connectionConfig.timeout && { timeout: connectionConfig.timeout })
       };
@@ -154,7 +153,7 @@ export class DataProducerClient {
    */
   public async disconnect(): Promise<boolean> {
     try {
-      const isConnected = this._dataProducer.isConnected();
+      const isConnected = await this._dataProducer.isConnected();
       if (isConnected) {
         await this._dataProducer.disconnect();
       }
@@ -171,7 +170,7 @@ export class DataProducerClient {
    *
    * @returns True if connected, false otherwise
    */
-  public isConnected(): boolean {
+  public async isConnected(): Promise<boolean> {
     try {
       // First check our wrapper's connection state
       if (!this._connected) {
@@ -179,7 +178,7 @@ export class DataProducerClient {
       }
 
       // Then verify with the underlying dataProducer
-      const connected = this._dataProducer.isConnected();
+      const connected = await this._dataProducer.isConnected();
       this._connected = connected;
       return connected;
     } catch {
@@ -212,35 +211,34 @@ export class DataProducerClient {
    * Initialize connection with auto-reconnect logic
    *
    * This method handles switching between different connections:
-   * - If targetId is null and client is connected, disconnects
+   * - If targetId is undefined and client is connected, disconnects
    * - If targetId changes, disconnects from old and connects to new
    * - If targetId is same, does nothing
    *
-   * @param targetId - Target UUID to connect to (null to disconnect)
+   * @param targetId - Target UUID to connect to (undefined to disconnect)
    * @param scopeId - Scope ID for the connection
    * @param server - Optional server URL (uses config if not provided)
    */
-  public async init(targetId: UUID | string | null, scopeId: string, server?: string): Promise<ConnectionResult> {
+  public async init(targetId?: UUID | string, server?: string): Promise<ConnectionResult> {
     const currentConfig = this._config;
     const currentTargetId = currentConfig?.targetId;
 
-    // Case 1: Disconnect if targetId is null and currently connected
-    if (targetId === null && this._connected) {
+    // Case 1: Disconnect if targetId is undefined and currently connected
+    if (!targetId && this._connected) {
       await this.disconnect();
-      return { success: false, error: 'Disconnected due to null targetId' };
+      return { success: false, error: 'Disconnected due to undefined targetId' };
     }
 
     // Case 2: Return error if targetId is null and not connected
-    if (targetId === null && !this._connected) {
+    if (!targetId && !this._connected) {
       return { success: false, error: 'Cannot initialize with null targetId' };
     }
 
     // Case 3: Connect if not currently connected
-    if (targetId !== null && !this._connected) {
+    if (targetId && !this._connected) {
       return await this.connect({
         server: server || currentConfig?.server || '',
-        targetId,
-        scopeId
+        targetId
       });
     }
 
@@ -254,7 +252,6 @@ export class DataProducerClient {
         return disconnected ? (await this.connect({
             server: server || currentConfig?.server || '',
             targetId,
-            scopeId
           })) : {
             success: false,
             error: 'Failed to disconnect from previous connection'

@@ -19,7 +19,7 @@
  */
 
 /**
- * Validates that a value is a non-null array
+ * Validates that a value is an array
  *
  * @param value - The value to validate
  * @param context - Context for error message (e.g., function name)
@@ -35,15 +35,12 @@ export function validateArray<T>(
   value: unknown,
   context: string
 ): asserts value is T[] {
-  if (value === null || value === undefined) {
-    throw new Error(`${context}: Expected array, received ${value}`);
+  if (!value) {
+    throw new Error(`${context}: Expected array, received undefined`);
   }
 
   if (!Array.isArray(value)) {
-    throw new TypeError(
-      `${context}: Expected array, received ${typeof value}. ` +
-      `This may indicate an API format change.`
-    );
+    throw new TypeError(`${context}: Expected array, received ${typeof value}. This may indicate an API format change.`);
   }
 }
 
@@ -133,8 +130,8 @@ export function validateRequiredFields(
   fields: string[],
   context: string
 ): void {
-  if (obj === null || obj === undefined) {
-    throw new Error(`${context}: Object is null or undefined`);
+  if (!obj) {
+    throw new Error(`${context}: Object is undefined`);
   }
 
   if (typeof obj !== 'object') {
@@ -145,9 +142,7 @@ export function validateRequiredFields(
   const missingFields = fields.filter(field => !(field in typedObj));
 
   if (missingFields.length > 0) {
-    throw new Error(
-      `${context}: Missing required fields: ${missingFields.join(', ')}`
-    );
+    throw new Error(`${context}: Missing required fields: ${missingFields.join(', ')}`);
   }
 }
 
@@ -170,15 +165,11 @@ export function validateNonEmptyString(
   fieldName: string
 ): asserts value is string {
   if (typeof value !== 'string') {
-    throw new TypeError(
-      `${context}: Expected ${fieldName} to be string, received ${typeof value}`
-    );
+    throw new TypeError(`${context}: Expected ${fieldName} to be string, received ${typeof value}`);
   }
 
   if (value.trim().length === 0) {
-    throw new Error(
-      `${context}: ${fieldName} cannot be empty`
-    );
+    throw new Error(`${context}: ${fieldName} cannot be empty`);
   }
 }
 
@@ -201,25 +192,20 @@ export function validateNumber(
   fieldName: string
 ): asserts value is number {
   if (typeof value !== 'number') {
-    throw new TypeError(
-      `${context}: Expected ${fieldName} to be number, received ${typeof value}`
-    );
+    throw new TypeError(`${context}: Expected ${fieldName} to be number, received ${typeof value}`);
   }
 
-  if (Number.Number.isNaN(value)) {
-    throw new TypeError(
-      `${context}: ${fieldName} cannot be NaN`
-    );
+  if (Number.isNaN(value)) {
+    throw new TypeError(`${context}: ${fieldName} cannot be NaN`);
   }
 }
 
 /**
- * Validates that a value is defined (not null or undefined)
- *
+ * Validates that a value is defined
  * @param value - Value to validate
  * @param context - Context string for error messages
  * @param fieldName - Name of the field being validated
- * @throws Error if value is null or undefined
+ * @throws Error if value undefined
  *
  * @example
  * ```typescript
@@ -227,13 +213,11 @@ export function validateNumber(
  * ```
  */
 export function validateDefined<T>(
-  value: T | null | undefined,
+  value: T | undefined,
   context: string,
   fieldName: string
 ): asserts value is T {
-  if (value === null || value === undefined) {
-    throw new Error(
-      `${context}: ${fieldName} is ${value === null ? 'null' : 'undefined'}`
-    );
+  if (!value) {
+    throw new Error(`${context}: ${fieldName} is undefined`);
   }
 }

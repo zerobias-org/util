@@ -20,11 +20,6 @@ export interface DataProducerConfig {
   targetId: UUID | string;
 
   /**
-   * Scope ID (boundary/context ID)
-   */
-  scopeId: string;
-
-  /**
    * Optional timeout in milliseconds
    */
   timeout?: number;

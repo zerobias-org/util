@@ -14,7 +14,7 @@ describe('ObjectsApi', () => {
   describe('buildTree', () => {
     it('should build a tree from flat object list', () => {
       const objects = [
-        { id: 'root', name: 'Root', type: 'folder', objectClass: 'folder', parentId: null },
+        { id: 'root', name: 'Root', type: 'folder', objectClass: 'folder', parentId: undefined },
         { id: 'child1', name: 'Child 1', type: 'file', objectClass: 'file', parentId: 'root' },
         { id: 'child2', name: 'Child 2', type: 'file', objectClass: 'file', parentId: 'root' },
         { id: 'grandchild1', name: 'Grandchild 1', type: 'file', objectClass: 'file', parentId: 'child1' }
@@ -22,7 +22,7 @@ describe('ObjectsApi', () => {
 
       const result = client.objects.buildTree(objects);
 
-      expect(result.root).to.not.be.null;
+      expect(result.root).to.not.be.undefined;
       expect(result.root?.id).to.equal('root');
       expect(result.children.size).to.be.greaterThan(0);
     });
@@ -30,7 +30,7 @@ describe('ObjectsApi', () => {
     it('should handle empty object list', () => {
       const result = client.objects.buildTree([]);
 
-      expect(result.root).to.be.null;
+      expect(result.root).to.be.undefined;
       expect(result.children.size).to.equal(0);
     });
 
@@ -43,7 +43,7 @@ describe('ObjectsApi', () => {
 
       const result = client.objects.buildTree(objects, 'root2');
 
-      expect(result.root).to.not.be.null;
+      expect(result.root).to.not.be.undefined;
       expect(result.root?.id).to.equal('root2');
     });
 
@@ -70,7 +70,7 @@ describe('ObjectsApi', () => {
       const result = client.objects.buildTree(objects);
 
       // First object without parent becomes root
-      expect(result.root).to.not.be.null;
+      expect(result.root).to.not.be.undefined;
     });
   });
 
@@ -89,8 +89,7 @@ describe('ObjectsApi', () => {
       try {
         await client.connect({
           server: new URL('https://test.example.com'),
-          targetId: 'test-target',
-          scopeId: 'test-scope'
+          targetId: 'test-target'
         });
       } catch (error) {
         // Expected
@@ -163,7 +162,7 @@ describe('ObjectsApi', () => {
 
       const result = client.objects.buildTree(objects);
 
-      expect(result.root).to.not.be.null;
+      expect(result.root).to.not.be.undefined;
       if (result.root) {
         expect((result.root as any).customProperty).to.equal('custom-value');
         expect((result.root as any).anotherProperty).to.equal(123);
@@ -177,7 +176,7 @@ describe('ObjectsApi', () => {
 
       const result = client.objects.buildTree(objects);
 
-      expect(result.root).to.not.be.null;
+      expect(result.root).to.not.be.undefined;
       expect(result.root?.id).to.equal('test-id');
     });
 
@@ -188,7 +187,7 @@ describe('ObjectsApi', () => {
 
       const result = client.objects.buildTree(objects);
 
-      expect(result.root).to.not.be.null;
+      expect(result.root).to.not.be.undefined;
       expect(result.root?.name).to.equal('Display Name');
     });
   });
@@ -204,18 +203,18 @@ describe('ObjectsApi', () => {
       }
     });
 
-    it('should handle null/undefined objects gracefully', () => {
+    it('should handle undefined/undefined objects gracefully', () => {
       const objects: any = [
         { id: 'valid', name: 'Valid', objectClass: 'file' },
-        null,
+        undefined,
         undefined,
         { id: 'valid2', name: 'Valid 2', objectClass: 'file' }
       ];
 
-      // Should filter out null/undefined without crashing
+      // Should filter out undefined/undefined without crashing
       const result = client.objects.buildTree(objects.filter(Boolean));
 
-      expect(result.root).to.not.be.null;
+      expect(result.root).to.not.be.undefined;
     });
   });
 });

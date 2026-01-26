@@ -35,7 +35,7 @@ export const PathUtils = {
       return obj;
     }
 
-    if (obj === null || obj === undefined) {
+    if (!obj) {
       return undefined;
     }
 
@@ -92,7 +92,10 @@ export const PathUtils = {
       current = current[part];
     }
 
-    current[parts.at(-1)] = value;
+    const lastPart = parts.at(-1);
+    if (lastPart) {
+      current[lastPart] = value;
+    }
   },
 
   /**
@@ -131,7 +134,6 @@ export const PathUtils = {
 
     // Get the array
     const array = this.getNestedValue(obj, arrayPath);
-
     if (!Array.isArray(array)) {
       return [];
     }
@@ -175,9 +177,7 @@ export const PathUtils = {
     }
 
     const [arrayPath, itemPath] = path.split('[].');
-
     const array = this.getNestedValue(obj, arrayPath);
-
     if (!Array.isArray(array)) {
       return;
     }
@@ -199,7 +199,7 @@ export const PathUtils = {
    *
    * @param obj - Source object
    * @param path - Path to check
-   * @returns True if path exists and has a non-null value
+   * @returns True if path exists and has a value
    *
    * @example
    * ```typescript
@@ -210,7 +210,11 @@ export const PathUtils = {
    */
   hasPath(obj: any, path: string): boolean {
     const value = this.getNestedValue(obj, path);
-    return value !== undefined && value !== null;
+    if (value) {
+      return true;
+    }
+
+    return false;
   },
 
   /**
@@ -228,7 +232,7 @@ export const PathUtils = {
    * ```
    */
   deletePath(obj: any, path: string): boolean {
-    if (!path || obj === null || obj === undefined) {
+    if (!path || !obj) {
       return false;
     }
 
@@ -246,7 +250,7 @@ export const PathUtils = {
     }
 
     const lastPart = parts.at(-1);
-    if (lastPart in current) {
+    if (lastPart && lastPart in current) {
       delete current[lastPart];
       return true;
     }

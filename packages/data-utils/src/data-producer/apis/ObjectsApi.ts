@@ -56,16 +56,16 @@ export class ObjectsApi {
 
       // Handle response that might be wrapped
       let rootObject = response;
-      if (response && typeof response === 'object' && !response.id && !response.objectId) {
-        // Response might be wrapped - check for common wrapper properties
-        if (response.data) {
-          rootObject = response.data;
-        } else if (response.object) {
-          rootObject = response.object;
-        } else if (response.root) {
-          rootObject = response.root;
-        }
-      }
+      // if (response && typeof response === 'object' && !response.id && !response.objectId) {
+      //   // Response might be wrapped - check for common wrapper properties
+      //   if (response.data) {
+      //     rootObject = response.data;
+      //   } else if (response.object) {
+      //     rootObject = response.object;
+      //   } else if (response.root) {
+      //     rootObject = response.root;
+      //   }
+      // }
 
       return this._normalizeObjectNode(rootObject);
     } catch (error) {
@@ -101,27 +101,7 @@ export class ObjectsApi {
       validateDefined(response, 'ObjectsApi.getChildren', 'response');
 
       // Handle different response formats
-      let children: any[];
-      if (Array.isArray(response)) {
-        children = response;
-      } else if (response && typeof response === 'object') {
-        // Check if response has a children property
-        if (Array.isArray(response.children)) {
-          children = response.children;
-        } else if (Array.isArray(response.items)) {
-          children = response.items;
-        } else if (Array.isArray(response.data)) {
-          children = response.data;
-        } else {
-          // Single object returned - wrap in array
-          children = [response];
-        }
-      } else {
-        // Throw error instead of silently returning empty array
-        throw new Error('Unexpected response format from API: no recognizable data structure found');
-      }
-
-      // Normalize all child nodes
+      const children = response.items;
       return children.map((child: any) => this._normalizeObjectNode(child));
     } catch (error) {
       this.client.handleError(error, `Failed to get children for object ${objectId}`);
@@ -187,7 +167,7 @@ export class ObjectsApi {
       id: node.id || node.objectId || '',
       name: node.name || node.displayName || '',
       type: node.type || node.objectType || '',
-      parentId: node.parentId || node.parent || null,
+      parentId: node.parentId || node.parent || undefined,
       schemaId: node.schemaId || node.schema || undefined,
       hasChildren: node.hasChildren === undefined ? (node.childCount > 0) : node.hasChildren,
       childCount: node.childCount || 0,
@@ -245,13 +225,13 @@ export class ObjectsApi {
    * const tree = client.objects.buildTree([root, ...children], root.id);
    * ```
    */
-  public buildTree(objects: ObjectNode[], rootId?: string): { root: ObjectNode | null; children: Map<string, ObjectNode[]> } {
+  public buildTree(objects: ObjectNode[], rootId?: string): { root?: ObjectNode; children: Map<string, ObjectNode[]> } {
     const children = new Map<string, ObjectNode[]>();
-    let root: ObjectNode | null = null;
+    let root: ObjectNode | undefined;
 
     // Handle empty array gracefully
     if (objects.length === 0) {
-      return { root: null, children };
+      return { root: undefined, children };
     }
 
     // Normalize all objects first to handle different property names
@@ -261,7 +241,7 @@ export class ObjectsApi {
     for (const obj of normalizedObjects) {
       if (rootId && obj.id === rootId) {
         root = obj;
-      } else if (!rootId && (!obj.parentId || obj.parentId === null)) {
+      } else if (!rootId && (!obj.parentId)) {
         root = obj;
       }
 

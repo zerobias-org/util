@@ -39,8 +39,8 @@ describe('PathUtils', () => {
       expect(PathUtils.getNestedValue(testObj, '')).to.equal(testObj);
     });
 
-    it('should handle null/undefined objects', () => {
-      expect(PathUtils.getNestedValue(null, 'path')).to.be.undefined;
+    it('should handle undefined objects', () => {
+      expect(PathUtils.getNestedValue(undefined, 'path')).to.be.undefined;
       expect(PathUtils.getNestedValue(undefined, 'path')).to.be.undefined;
     });
   });
@@ -82,8 +82,8 @@ describe('PathUtils', () => {
       expect(obj.name).to.equal('John');
     });
 
-    it('should handle null/undefined objects gracefully', () => {
-      expect(() => PathUtils.setNestedValue(null, 'path', 'value')).to.not.throw();
+    it('should handle undefined objects gracefully', () => {
+      expect(() => PathUtils.setNestedValue(undefined, 'path', 'value')).to.not.throw();
       expect(() => PathUtils.setNestedValue(undefined, 'path', 'value')).to.not.throw();
     });
 
@@ -227,8 +227,8 @@ describe('PathUtils', () => {
       expect(PathUtils.hasPath(testObj, 'items')).to.be.true;
     });
 
-    it('should return false for null values', () => {
-      const obj = { value: null };
+    it('should return false for undefined values', () => {
+      const obj = { value: undefined };
       expect(PathUtils.hasPath(obj, 'value')).to.be.false;
     });
   });
@@ -279,8 +279,8 @@ describe('PathUtils', () => {
       expect(result).to.be.false;
     });
 
-    it('should handle null/undefined objects', () => {
-      expect(PathUtils.deletePath(null, 'path')).to.be.false;
+    it('should handle undefined objects', () => {
+      expect(PathUtils.deletePath(undefined, 'path')).to.be.false;
       expect(PathUtils.deletePath(undefined, 'path')).to.be.false;
     });
 

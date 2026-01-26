@@ -6,7 +6,7 @@
  * similar to database tables or spreadsheet data.
  */
 
-import { SortDirection as ExternalSortDirection } from '@zerobias-org/module-interface-dataproducer-sdk';
+import { SortDirection as ExternalSortDirection } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
 import { PagedResults } from '@zerobias-org/types-core-js';
 import {
   Collection,
@@ -55,7 +55,6 @@ export class CollectionsApi {
    * const collections = await client.collections.getCollections();
    * console.log(`Found ${collections.length} collections`);
    * ```
-   */
   public async getCollections(): Promise<Collection[]> {
     try {
       const dataProducer = this.client.getDataProducer();
@@ -85,6 +84,7 @@ export class CollectionsApi {
       this.client.handleError(error, 'Failed to get collections');
     }
   }
+  */
 
   /**
    * Get collection elements (rows/records)
@@ -127,6 +127,7 @@ export class CollectionsApi {
       // Call the underlying API
       const result = await collectionsApi.getCollectionElements(
         collectionId,
+        undefined,
         pageNumber,
         pageSize,
         sortBy,
@@ -190,6 +191,7 @@ export class CollectionsApi {
       // Call the underlying API
       const result = await collectionsApi.searchCollectionElements(
         collectionId,
+        undefined,
         pageNumber,
         pageSize,
         filter,
@@ -275,12 +277,12 @@ export class CollectionsApi {
    * Converts string or array to array format expected by API
    *
    * @param sortBy - Sort field(s)
-   * @returns Array of sort fields or null
+   * @returns Array of sort fields or undefined
    * @private
    */
-  private _normalizeSortBy(sortBy?: string | string[]): string[] | null {
+  private _normalizeSortBy(sortBy?: string | string[]): string[] | undefined {
     if (!sortBy) {
-      return null;
+      return undefined;
     }
 
     if (typeof sortBy === 'string') {
@@ -291,7 +293,7 @@ export class CollectionsApi {
       return sortBy;
     }
 
-    return null;
+    return undefined;
   }
 
   /**
@@ -300,14 +302,14 @@ export class CollectionsApi {
    * Converts our SortDirection enum to the external API's SortDirection
    *
    * @param sortDirection - Sort direction(s)
-   * @returns Array of ExternalSortDirection or null
+   * @returns Array of ExternalSortDirection or undefined
    * @private
    */
   private _normalizeSortDirection(
     sortDirection?: 'asc' | 'desc' | SortDirection | SortDirection[] | any | any[]
-  ): any[] | null {
+  ): any[] | undefined {
     if (!sortDirection) {
-      return null;
+      return undefined;
     }
 
     // If it's already an array, convert each element

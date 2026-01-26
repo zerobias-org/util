@@ -6,7 +6,7 @@
  * and collections.
  */
 
-import { Schema as ExternalSchema } from '@zerobias-org/module-interface-dataproducer';
+import { Schema as ExternalSchema } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
 import { Schema, SchemaField, SchemaRegistryEntry } from '../types/schemas.types';
 import { validateDefined } from '../../validation';
 
@@ -45,7 +45,6 @@ export class SchemasApi {
    * const schemas = await client.schemas.getSchemas();
    * console.log(`Found ${schemas.length} schemas`);
    * ```
-   */
   public async getSchemas(): Promise<SchemaRegistryEntry[]> {
     try {
       const dataProducer = this.client.getDataProducer();
@@ -75,6 +74,7 @@ export class SchemasApi {
       this.client.handleError(error, 'Failed to get schemas');
     }
   }
+  */
 
   /**
    * Get a schema by ID
@@ -129,7 +129,6 @@ export class SchemasApi {
    * const schema = await client.schemas.getSchemaByName('User');
    * console.log('Schema ID:', schema.id);
    * ```
-   */
   public async getSchemaByName(name: string): Promise<Schema> {
     try {
       const dataProducer = this.client.getDataProducer();
@@ -156,6 +155,7 @@ export class SchemasApi {
       this.client.handleError(error, `Failed to get schema by name "${name}"`);
     }
   }
+  */
 
   /**
    * Get a schema by ID (alternative method name)
@@ -239,14 +239,14 @@ export class SchemasApi {
 
     // Basic validation
     if (!data) {
-      errors.push('Data is null or undefined');
+      errors.push('Data is undefined');
       return { valid: false, errors };
     }
 
     // Check required fields
     if (schema.required && Array.isArray(schema.required)) {
       for (const requiredField of schema.required) {
-        if (!(requiredField in data) || data[requiredField] === undefined || data[requiredField] === null) {
+        if (!(requiredField in data) || !data[requiredField]) {
           errors.push(`Required field "${requiredField}" is missing`);
         }
       }
@@ -273,7 +273,7 @@ export class SchemasApi {
       const fieldValue = data[fieldName];
 
       // Skip if field is not present and not required
-      if (fieldValue === undefined || fieldValue === null) {
+      if (!fieldValue) {
         if (field.required) {
           errors.push(`Required field "${fieldName}" is missing`);
         }
