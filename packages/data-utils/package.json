@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/data-utils",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Utility library for DataProducer implementations and data mapping - schema generation, validation, type mapping, field transformations, and DataProducer client",
   "keywords": [
     "DataProducer",
