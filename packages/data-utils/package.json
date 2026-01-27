@@ -1,0 +1,52 @@
+{
+  "name": "@zerobias-org/data-utils",
+  "version": "1.0.0",
+  "description": "Utility library for DataProducer implementations and data mapping - schema generation, validation, type mapping, field transformations, and DataProducer client",
+  "keywords": [
+    "DataProducer",
+    "Data Mapping",
+    "Data Explorer",
+    "Schema",
+    "OpenAPI",
+    "TypeScript",
+    "Validation",
+    "JSONata"
+  ],
+  "author": "Zerobias Team <team@zerobias.com>",
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/data-utils"
+  },
+  "scripts": {
+    "clean": "rimraf dist/ .docs/",
+    "transpile": "tsc -b",
+    "build": "npm run lint && npm run transpile",
+    "test": "mocha --inline-diffs --reporter=list 'test/unit/**/*.ts'",
+    "test:unit": "mocha --inline-diffs --reporter=list test/unit/*.ts",
+    "test:watch": "npm run test -- --watch --reporter=min",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts'",
+    "nx:prepublish": "prepublish-standalone",
+    "nx:publish": "publish"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "./dist/**/*",
+    "package.json",
+    "README.md"
+  ],
+  "dependencies": {
+    "@zerobias-org/util-connector": "^1.0.12"
+  }
+}
