@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/logger",
-  "version": "2.0.16",
+  "version": "2.0.17",
   "description": "ZeroBias Logger - standard logging for all services",
   "type": "module",
   "main": "dist/src/index.js",
@@ -41,7 +41,6 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
-  "dependencies": {},
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"
