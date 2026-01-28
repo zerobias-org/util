@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-connector",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "TypeScript connector implementation for hub and modules utilizing hub",
   "type": "module",
   "main": "dist/src/index.js",
@@ -35,6 +35,6 @@
     "*.md"
   ],
   "dependencies": {
-    "@zerobias-org/logger": "^2.0.19"
+    "@zerobias-org/logger": "^2.0.21"
   }
 }
