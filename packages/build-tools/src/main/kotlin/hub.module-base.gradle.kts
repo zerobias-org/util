@@ -1,17 +1,10 @@
+import com.zerobias.buildtools.HubModuleExtension
 import com.zerobias.buildtools.PropertyResolver
 import com.zerobias.buildtools.VaultSecretsService
 
 // ────────────────────────────────────────────────────────────
 // Extension: module-specific configuration
 // ────────────────────────────────────────────────────────────
-interface HubModuleExtension {
-    val vendor: Property<String>
-    val product: Property<String>
-    val hasConnectionProfile: Property<Boolean>
-    val hasOpenApiSdk: Property<Boolean>
-    val dockerImageName: Property<String>
-}
-
 val hubModule = extensions.create<HubModuleExtension>("hubModule").apply {
     // Auto-detect vendor from parent directory name
     vendor.convention(project.projectDir.parentFile.name)
@@ -72,6 +65,9 @@ val npmDistTag: String = when (branch) {
     "dev"  -> "alpha"
     else   -> "dev"
 }
+
+// Store as extra property for child plugins to access
+extra["npmDistTag"] = npmDistTag
 
 // ────────────────────────────────────────────────────────────
 // Utility task: print resolved version
