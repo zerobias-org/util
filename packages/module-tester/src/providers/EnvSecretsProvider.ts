@@ -84,7 +84,7 @@ export class EnvSecretsProvider implements SecretsProvider {
 
     for (const [key, value] of Object.entries(process.env)) {
       if (key.startsWith(prefix) && value !== undefined) {
-        const subKey = this.envKeyToProperty(key.substring(prefix.length));
+        const subKey = this.envKeyToProperty(key.slice(prefix.length));
         result[subKey] = this.parseValue(value);
         found = true;
       }
@@ -121,9 +121,9 @@ export class EnvSecretsProvider implements SecretsProvider {
   private pathToEnvKey(path: string): string {
     const normalized = path
       .toUpperCase()
-      .replace(/[\/\\]/g, '_')  // Replace path separators
-      .replace(/-/g, '_')       // Replace hyphens
-      .replace(/[^A-Z0-9_]/g, ''); // Remove invalid chars
+      .replaceAll(/[/\\]/g, '_')  // Replace path separators
+      .replaceAll('-', '_')       // Replace hyphens
+      .replaceAll(/[^\dA-Z_]/g, ''); // Remove invalid chars
 
     return `${this.config.prefix}${normalized}`;
   }
@@ -135,7 +135,7 @@ export class EnvSecretsProvider implements SecretsProvider {
   private envKeyToProperty(envKey: string): string {
     return envKey
       .toLowerCase()
-      .replace(/_([a-z])/g, (_, char) => char.toUpperCase());
+      .replaceAll(/_([a-z])/g, (_, char) => char.toUpperCase());
   }
 
   /**
@@ -154,8 +154,8 @@ export class EnvSecretsProvider implements SecretsProvider {
     // Try common type conversions
     if (value === 'true') return true;
     if (value === 'false') return false;
-    if (/^\d+$/.test(value)) return parseInt(value, 10);
-    if (/^\d+\.\d+$/.test(value)) return parseFloat(value);
+    if (/^\d+$/.test(value)) return Number.parseInt(value, 10);
+    if (/^\d+\.\d+$/.test(value)) return Number.parseFloat(value);
 
     return value;
   }
@@ -177,7 +177,7 @@ export class EnvSecretsProvider implements SecretsProvider {
  * Set a secret in environment variables (for testing)
  */
 export function setEnvSecret(path: string, value: Record<string, unknown>, prefix = DEFAULTS.PREFIX): void {
-  const envKey = `${prefix}${path.toUpperCase().replace(/[\/\\-]/g, '_')}`;
+  const envKey = `${prefix}${path.toUpperCase().replaceAll(/[/\\-]/g, '_')}`;
   process.env[envKey] = JSON.stringify(value);
 }
 
@@ -185,7 +185,7 @@ export function setEnvSecret(path: string, value: Record<string, unknown>, prefi
  * Clear a secret from environment variables (for testing)
  */
 export function clearEnvSecret(path: string, prefix = DEFAULTS.PREFIX): void {
-  const envKey = `${prefix}${path.toUpperCase().replace(/[\/\\-]/g, '_')}`;
+  const envKey = `${prefix}${path.toUpperCase().replaceAll(/[/\\-]/g, '_')}`;
   delete process.env[envKey];
 
   // Also clear any prefixed vars

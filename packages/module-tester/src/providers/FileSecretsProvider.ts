@@ -71,7 +71,7 @@ export class FileSecretsProvider implements SecretsProvider {
       throw new Error(`Secret file not found for path: ${path_} (looked in ${this.resolvedBaseDir})`);
     }
 
-    const content = await fs.promises.readFile(filePath, 'utf-8');
+    const content = await fs.promises.readFile(filePath, 'utf8');
     const ext = path.extname(filePath).toLowerCase();
 
     let parsed: unknown;
@@ -106,7 +106,7 @@ export class FileSecretsProvider implements SecretsProvider {
    */
   private resolveFilePath(secretPath: string): string | null {
     // Normalize the path
-    const normalizedPath = secretPath.replace(/\\/g, '/');
+    const normalizedPath = secretPath.replaceAll('\\', '/');
     const basePath = path.join(this.resolvedBaseDir, normalizedPath);
 
     // Check if exact path exists (with extension)
@@ -160,8 +160,8 @@ export class FileSecretsProvider implements SecretsProvider {
           // Check if it's a supported extension
           const ext = path.extname(entry.name).toLowerCase();
           if (this.config.extensions.includes(ext)) {
-            const baseName = entry.name.substring(0, entry.name.length - ext.length);
-            secrets.push(path.join(prefix, baseName).replace(/\\/g, '/'));
+            const baseName = entry.name.slice(0, Math.max(0, entry.name.length - ext.length));
+            secrets.push(path.join(prefix, baseName).replaceAll('\\', '/'));
           }
         }
       }

@@ -21,8 +21,7 @@
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "build": "npm run lint && npm run transpile",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "nx:build": "npm run transpile"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",

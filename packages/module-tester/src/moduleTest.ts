@@ -17,9 +17,9 @@
  * ```
  */
 
-import * as path from 'path';
-import * as fs from 'fs';
-import { pathToFileURL } from 'url';
+import path from 'node:path';
+import * as fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { ModuleTestHarness, createTestHarness } from './ModuleTestHarness.js';
 import { TestProfileLoader } from './TestProfileLoader.js';
 import { ProfileResolver } from './providers/ProfileResolver.js';
@@ -43,7 +43,7 @@ export interface ModuleTestOptions {
  * Test client interface - base type for generated or hand-written clients
  * Typed clients should extend this with specific API groups
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+ 
 export interface TestClient {
   // Marker interface - actual clients define their API groups
 }
@@ -296,7 +296,7 @@ export function moduleTest<T extends TestClient = TestClient>(
             }
             const fn = apiGroup[method];
             if (typeof fn !== 'function') {
-              throw new Error(`Unknown method: ${prop}.${method}`);
+              throw new TypeError(`Unknown method: ${prop}.${method}`);
             }
             return fn(...args);
           };
@@ -308,7 +308,7 @@ export function moduleTest<T extends TestClient = TestClient>(
   // Wrap in Mocha describe block
   describe(`Module: ${moduleName}`, function () {
     // Set timeout for container operations
-    this.timeout(options.timeout ?? 180000);
+    this.timeout(options.timeout ?? 180_000);
 
     before(async function () {
       // 1. Create harness
@@ -330,8 +330,8 @@ export function moduleTest<T extends TestClient = TestClient>(
       // 3. Discover and load profile
       try {
         state.profile = await discoverProfile(moduleName, options, logger);
-      } catch (err) {
-        logger.error(`Failed to load profile: ${(err as Error).message}`);
+      } catch (error) {
+        logger.error(`Failed to load profile: ${(error as Error).message}`);
         this.skip();
         return;
       }

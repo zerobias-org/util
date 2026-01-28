@@ -7,11 +7,16 @@ import { ConsoleTransport } from './transports/ConsoleTransport.js';
 import { TransportType } from './TransportType.js';
 import { LoggerTransport } from './transports/LoggerTransport.js';
 
+/** Symbol used to store root logger on globalThis for cross-package singleton */
+const GLOBAL_ROOT_KEY = Symbol.for('@zerobias-org/logger:root');
+
 /**
  * Hierarchical logger engine
+ *
+ * Uses globalThis to ensure a single root logger instance across all copies
+ * of the package, so libraries sharing the logger get unified configuration.
  */
 export class LoggerEngine {
-  private static _root: LoggerEngine | undefined;
 
   private readonly _name: string;
   private _parent: LoggerEngine | undefined;
@@ -65,15 +70,17 @@ export class LoggerEngine {
 
   /**
    * Get the singleton root logger
+   * Uses globalThis to ensure a single root instance across all copies of the package
    */
   static root(): LoggerEngine {
-    if (!LoggerEngine._root) {
-      LoggerEngine._root = new LoggerEngine('', undefined, {
+    const g = globalThis as any;
+    if (!g[GLOBAL_ROOT_KEY]) {
+      g[GLOBAL_ROOT_KEY] = new LoggerEngine('', undefined, {
         level: LogLevel.INFO,
         transports: [new ConsoleTransport()]
       });
     }
-    return LoggerEngine._root;
+    return g[GLOBAL_ROOT_KEY];
   }
 
   /**
