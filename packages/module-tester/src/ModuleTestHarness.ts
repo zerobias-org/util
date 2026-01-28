@@ -36,7 +36,7 @@ import type {
  * Default configuration values
  */
 const DEFAULTS = {
-  CONTAINER_TIMEOUT: 120000, // 2 minutes
+  CONTAINER_TIMEOUT: 120_000, // 2 minutes
   CLEANUP: true,
   DEBUG: false,
   IS_CI: process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true'
@@ -320,15 +320,11 @@ export class ModuleTestHarness {
       const url = `/operations/${request.operationId}`;
       let response: AxiosResponse<T>;
 
-      if (request.body !== undefined) {
-        response = await state.client.post<T>(url, request.body, {
+      response = await (request.body === undefined ? state.client.get<T>(url, {
           params: request.parameters
-        });
-      } else {
-        response = await state.client.get<T>(url, {
+        }) : state.client.post<T>(url, request.body, {
           params: request.parameters
-        });
-      }
+        }));
 
       return {
         success: true,
@@ -435,7 +431,7 @@ export class ModuleTestHarness {
    * Stop all running containers
    */
   async stopAll(): Promise<void> {
-    const deploymentIds = Array.from(this.connections.keys());
+    const deploymentIds = [...this.connections.keys()];
 
     for (const id of deploymentIds) {
       await this.stop(id);
@@ -480,7 +476,7 @@ export class ModuleTestHarness {
    * Get active deployment IDs
    */
   getActiveDeployments(): string[] {
-    return Array.from(this.connections.keys());
+    return [...this.connections.keys()];
   }
 
   /**
@@ -510,7 +506,7 @@ export class ModuleTestHarness {
     // Remove @ prefix and replace / with -
     const imageName = module
       .replace(/^@/, '')
-      .replace(/\//g, '-');
+      .replaceAll('/', '-');
 
     return `pkg.ci.zerobias.com/${imageName}:${version}`;
   }

@@ -35,8 +35,7 @@
     "dist",
     "bom.json"
   ],
-  "dependencies": {},
-  "devDependencies": {
-    "@zerobias-org/util-codegen": "^2.0.5"
+  "dependencies": {
+    "@zerobias-org/util-codegen": "^2.0.17"
   }
 }

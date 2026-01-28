@@ -36,6 +36,6 @@
     "bom.json"
   ],
   "dependencies": {
-    "@zerobias-org/util-api-invoker-api": "^1.0.7"
+    "@zerobias-org/util-api-invoker-api": "^1.0.19"
   }
 }

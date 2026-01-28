@@ -124,7 +124,7 @@ export class TestProfileLoader {
    * Load a profile from a specific file path
    */
   async loadProfileFromFile(filePath: string): Promise<TestProfile> {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
+    const content = await fs.promises.readFile(filePath, 'utf8');
     const ext = path.extname(filePath).toLowerCase();
 
     let raw: unknown;

@@ -27,9 +27,9 @@ import { AUTH_HEADERS } from './types.js';
  */
 const DEFAULTS = {
   SOCKET_PATH: '/var/run/docker.sock',
-  HEALTH_CHECK_TIMEOUT: 60000, // 60 seconds
+  HEALTH_CHECK_TIMEOUT: 60_000, // 60 seconds
   HEALTH_CHECK_INTERVAL: 500, // 500ms between checks
-  PULL_TIMEOUT: 300000, // 5 minutes
+  PULL_TIMEOUT: 300_000, // 5 minutes
   CONTAINER_PORT: 8888, // Module containers listen on this port
   STOP_TIMEOUT: 10 // 10 seconds graceful shutdown
 } as const;
@@ -56,15 +56,11 @@ export class DockerManager {
     this.logger = logger ?? this.createDefaultLogger();
 
     // Initialize Docker client
-    if (this.config.host) {
-      this.docker = new Docker({
+    this.docker = this.config.host ? new Docker({
         host: this.config.host,
         port: this.config.port,
         protocol: this.config.tls ? 'https' : 'http'
-      });
-    } else {
-      this.docker = new Docker({ socketPath: this.config.socketPath });
-    }
+      }) : new Docker({ socketPath: this.config.socketPath });
   }
 
   /**
@@ -178,7 +174,7 @@ export class DockerManager {
 
     // Start the container
     await container.start();
-    this.logger.info(`Container started: ${containerId.substring(0, 12)} on port ${port}`);
+    this.logger.info(`Container started: ${containerId.slice(0, 12)} on port ${port}`);
 
     // Wait for health check - use HTTP in insecure mode, HTTPS otherwise
     const healthTimeout = options.healthCheckTimeout ?? this.config.healthCheckTimeout;
@@ -208,7 +204,7 @@ export class DockerManager {
       await container.stop({ t: DEFAULTS.STOP_TIMEOUT });
       await container.remove();
       this.runningContainers.delete(deploymentId);
-      this.logger.info(`Container stopped and removed: ${containerId.substring(0, 12)}`);
+      this.logger.info(`Container stopped and removed: ${containerId.slice(0, 12)}`);
     } catch (error) {
       // Container might already be stopped
       this.logger.warn(`Error stopping container ${containerId}: ${error}`);
@@ -220,7 +216,7 @@ export class DockerManager {
    * Stop all running test containers
    */
   async stopAll(): Promise<void> {
-    const deploymentIds = Array.from(this.runningContainers.keys());
+    const deploymentIds = [...this.runningContainers.keys()];
     for (const deploymentId of deploymentIds) {
       await this.stopContainer(deploymentId);
     }

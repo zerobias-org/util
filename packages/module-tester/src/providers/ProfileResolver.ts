@@ -14,9 +14,9 @@
  *   apiToken: "env.GITHUB_TOKEN"  -> resolved from env var
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import path from 'node:path';
+import * as os from 'node:os';
 import * as yaml from 'js-yaml';
 import type { Logger } from '../types.js';
 
@@ -108,12 +108,15 @@ export class ProfileResolver {
     const [driver, ...rest] = parts;
 
     switch (driver.toLowerCase()) {
-      case 'file':
+      case 'file': {
         return this.getFileValue(rest);
-      case 'env':
+      }
+      case 'env': {
         return this.getEnvValue(rest);
-      default:
+      }
+      default: {
         throw new Error(`Unknown secret driver: ${driver}`);
+      }
     }
   }
 
@@ -219,13 +222,9 @@ export class ProfileResolver {
    * Load and parse a secret file
    */
   private async loadSecretFile(filePath: string): Promise<Record<string, unknown>> {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(filePath, 'utf8');
 
-    if (filePath.endsWith('.json')) {
-      return JSON.parse(content);
-    } else {
-      return yaml.load(content) as Record<string, unknown>;
-    }
+    return filePath.endsWith('.json') ? JSON.parse(content) : yaml.load(content) as Record<string, unknown>;
   }
 
   /**

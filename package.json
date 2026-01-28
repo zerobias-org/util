@@ -9,8 +9,8 @@
     "packages/invoker/*"
   ],
   "scripts": {
-    "build": "nx affected -t build",
-    "build:full": "nx run-many -t build",
+    "build": "nx affected -t nx:build",
+    "build:full": "nx run-many -t nx:build",
     "clean": "nx affected -t clean && nx reset && find . -name tsconfig.tsbuildinfo -delete || echo \"\"",
     "clean:full": "nx run-many -t clean && nx reset && find . -name tsconfig.tsbuildinfo -delete || echo \"\"",
     "docs": "nx run-many -t docs",

@@ -43,8 +43,8 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@zerobias-org/logger": "^2.0.4",
-    "@zerobias-org/util-connector": "^1.0.2"
+    "@zerobias-org/logger": "^2.0.16",
+    "@zerobias-org/util-connector": "^1.0.14"
   },
   "engines": {
     "node": ">=22.0.0",

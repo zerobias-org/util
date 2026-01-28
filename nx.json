@@ -23,6 +23,7 @@
       "cache": true
     },
     "generate": {
+      "dependsOn": ["^nx:build"],
       "cache": true
     },
     "nx:build": {

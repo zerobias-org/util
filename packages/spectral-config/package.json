@@ -21,7 +21,7 @@
     "registry": "https://pkg.zerobias.org/"
   },
   "dependencies": {
-    "@zerobias-org/eslint-config": "^1.0.9"
+    "@zerobias-org/eslint-config": "^1.0.21"
   },
   "files": [
     "index.js",
