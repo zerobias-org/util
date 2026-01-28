@@ -8,14 +8,6 @@
   "browser": {
     "./dist/src/index.js": "./dist/src/browser.js"
   },
-  "exports": {
-    ".": {
-      "types": "./dist/src/index.d.ts",
-      "browser": "./dist/src/browser.js",
-      "import": "./dist/src/index.js",
-      "default": "./dist/src/index.js"
-    }
-  },
   "scripts": {
     "clean": "rm -rf dist/",
     "transpile": "tsc -b",
