@@ -81,7 +81,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.0.0",
     "@types/request": "latest",
-    "@zerobias-org/devops-tools": "^1.0.37",
+    "@zerobias-org/devops-tools": "^1.0.38",
     "@zerobias-org/eslint-config": "^1.0.22",
     "chai": "^6.0.0",
     "husky": "^9.1.7",
