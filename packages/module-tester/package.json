@@ -15,12 +15,11 @@
     "clean": "rm -rf dist/",
     "transpile": "tsc -b",
     "build": "npm run transpile",
+    "nx:build": "npm run transpile",
     "test": "mocha --inline-diffs --reporter=list 'test/unit/**/*.ts'",
     "test:watch": "npm run test -- --watch --reporter=min",
     "lint": "eslint src/",
-    "lint:fix": "eslint --fix src/",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "lint:fix": "eslint --fix src/"
   },
   "repository": {
     "type": "git",

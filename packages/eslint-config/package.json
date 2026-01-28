@@ -22,10 +22,6 @@
     "eslint",
     "eslintconfig"
   ],
-  "scripts": {
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
-  },
   "files": [
     "eslint.config.js"
   ]

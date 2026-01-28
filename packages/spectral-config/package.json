@@ -20,10 +20,6 @@
   "publishConfig": {
     "registry": "https://pkg.zerobias.org/"
   },
-  "scripts": {
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
-  },
   "dependencies": {
     "@zerobias-org/eslint-config": "^1.0.9"
   },

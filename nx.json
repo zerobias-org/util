@@ -15,95 +15,22 @@
     "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
   },
   "targetDefaults": {
-    "build": {
-      "dependsOn": ["^build"],
-      "inputs": ["production", "^production"],
-      "outputs": ["{projectRoot}/dist", "{projectRoot}/build", "{projectRoot}/docs"],
-      "cache": true
-    },
     "clean": {
       "cache": false
-    },
-    "transpile": {
-      "dependsOn": ["^transpile", "generate"],
-      "inputs": ["production", "^production"],
-      "outputs": ["{projectRoot}/dist", "{projectRoot}/build"],
-      "cache": true
-    },
-    "compile": {
-      "dependsOn": ["^compile", "generate"],
-      "inputs": ["production", "^production"],
-      "outputs": ["{projectRoot}/dist", "{projectRoot}/build"],
-      "cache": true
-    },
-    "sql:copy": {
-      "dependsOn": ["transpile"],
-      "cache": true
-    },
-    "templates:copy": {
-      "dependsOn": ["transpile"],
-      "cache": true
     },
     "lint": {
       "inputs": ["default", "{workspaceRoot}/.eslintrc.json"],
       "cache": true
     },
-    "lint:fix": {
-      "cache": false
-    },
     "generate": {
-      "dependsOn": ["^transpile"],
       "cache": true
     },
-    "generate:full": {
-      "dependsOn": ["^transpile"],
-      "cache": true
-    },
-    "generate:post": {
-      "dependsOn": ["^transpile"],
-      "cache": true
-    },
-    "generate:models": {
-      "dependsOn": ["^transpile"],
-      "cache": true
-    },
-    "generate:bom": {
-      "cache": false
-    },
-    "docs": {
-      "dependsOn": ["transpile"],
-      "cache": true
-    },
-    "dumpSchema": {
-      "dependsOn": ["transpile"],
-      "cache": true
-    },
-    "test": {
-      "dependsOn": ["transpile"],
-      "inputs": ["default", "^production"],
-      "cache": true
-    },
-    "test:unit": {
-      "dependsOn": ["transpile"],
-      "inputs": ["default", "^production"],
-      "cache": true
-    },
-    "test:integration": {
-      "dependsOn": ["transpile"],
-      "inputs": ["default", "^production"],
-      "cache": true
-    },
-    "shrinkwrap": {
-      "dependsOn": ["transpile"],
-      "cache": false
-    },
-    "nx:prepublish": {
-      "dependsOn": ["^nx:prepublish", "transpile"],
-      "cache": false
-    },
-    "nx:publish": {
-      "dependsOn": ["^nx:publish"],
-      "cache": false
+    "nx:build": {
+      "dependsOn": [
+        "^nx:build",
+        "lint",
+        "generate"
+      ]
     }
   }
 }
