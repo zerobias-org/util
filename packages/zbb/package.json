@@ -1,0 +1,25 @@
+{
+  "name": "@zerobias-org/zbb",
+  "description": "ZeroBias Build — run Gradle tasks from any subdirectory",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "zbb": "bin/zbb.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zerobias-org/util.git",
+    "directory": "packages/zbb"
+  },
+  "author": "team@zerobias.com",
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
