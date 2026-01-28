@@ -1,6 +1,6 @@
-import com.zerobias.buildtools.ZbExtension
-import com.zerobias.buildtools.PropertyResolver
-import com.zerobias.buildtools.VaultSecretsService
+import com.zerobias.buildtools.module.ZbExtension
+import com.zerobias.buildtools.core.PropertyResolver
+import com.zerobias.buildtools.core.VaultSecretsService
 
 // ────────────────────────────────────────────────────────────
 // Extension: project-level configuration
@@ -16,6 +16,8 @@ val zb = extensions.create<ZbExtension>("zb").apply {
     dockerImageName.convention(
         vendor.zip(product) { v, p -> "${v}-${p}" }
     )
+    includeConnectionProfileInDist.convention(false)
+    generatorArgs.convention(emptyList())
 }
 
 // ────────────────────────────────────────────────────────────
@@ -70,7 +72,7 @@ val npmDistTag: String = when (branch) {
 extra["npmDistTag"] = npmDistTag
 
 // ────────────────────────────────────────────────────────────
-// Utility task: print resolved version
+// Utility tasks
 // ────────────────────────────────────────────────────────────
 val printVersion by tasks.registering {
     group = "lifecycle"
@@ -80,22 +82,23 @@ val printVersion by tasks.registering {
 
 // ────────────────────────────────────────────────────────────
 // Lifecycle phases — ordered via dependsOn
+// Flavor plugins fill in the implementations.
 // ────────────────────────────────────────────────────────────
 
-// Phase 1: VALIDATE
+// Phase 1: VALIDATE — filled by flavor plugins
 val validate by tasks.registering {
     group = "lifecycle"
     description = "Run all validation checks"
 }
 
-// Phase 2: GENERATE — filled in by flavor plugins
+// Phase 2: GENERATE — filled by flavor plugins
 val generate by tasks.registering {
     group = "lifecycle"
     description = "Generate code from OpenAPI specification"
     dependsOn(validate)
 }
 
-// Phase 3: COMPILE — filled in by flavor plugins
+// Phase 3: COMPILE — filled by flavor plugins
 val compile by tasks.registering {
     group = "lifecycle"
     description = "Compile source code"
@@ -103,22 +106,28 @@ val compile by tasks.registering {
 }
 
 // Phase 4: TEST
-val unitTest by tasks.registering {
+val testUnit by tasks.registering {
     group = "lifecycle"
-    description = "Run unit tests"
+    description = "Run unit tests (in-process, fast)"
+    dependsOn(compile)
+}
+
+val testIntegration by tasks.registering {
+    group = "lifecycle"
+    description = "Run integration tests (in-process, may need external deps)"
     dependsOn(compile)
 }
 
 val testDocker by tasks.registering {
     group = "lifecycle"
-    description = "Run Docker-based integration tests"
+    description = "Run Docker-based tests via module-tester REST interface"
     dependsOn(compile)
 }
 
 val test by tasks.registering {
     group = "lifecycle"
-    description = "Run unit tests (integration tests are opt-in)"
-    dependsOn(unitTest)
+    description = "Run all in-process tests (unit + integration)"
+    dependsOn(testUnit, testIntegration)
 }
 
 // Phase 5: BUILD ARTIFACTS
@@ -147,6 +156,13 @@ val buildArtifacts by tasks.registering {
     dependsOn(buildHubSdk, buildOpenApiSdk, buildImage)
 }
 
+// Alias: build → buildArtifacts (standard Gradle convention)
+val build by tasks.registering {
+    group = "lifecycle"
+    description = "Build all artifacts (alias for buildArtifacts)"
+    dependsOn(buildArtifacts)
+}
+
 // Phase 6: GATE — full CI validation
 val gate by tasks.registering {
     group = "lifecycle"
@@ -171,6 +187,19 @@ val publishAll by tasks.registering {
     group = "publish"
     description = "Publish all artifacts"
     dependsOn(publishNpm, publishImage)
+}
+
+// ────────────────────────────────────────────────────────────
+// Metadata sync — utility task (not in default build chain)
+// Syncs package.json version/name/desc into api.yml.
+// Run manually or add to publish chain.
+// ────────────────────────────────────────────────────────────
+val syncMeta by tasks.registering {
+    group = "lifecycle"
+    description = "Sync package.json metadata into api.yml info block"
+    doLast {
+        com.zerobias.buildtools.module.MetadataSyncer.sync(project.projectDir)
+    }
 }
 
 // ────────────────────────────────────────────────────────────

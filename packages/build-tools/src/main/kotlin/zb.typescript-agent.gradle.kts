@@ -1,4 +1,4 @@
-import com.zerobias.buildtools.ZbExtension
+import com.zerobias.buildtools.module.ZbExtension
 
 plugins {
     id("zb.typescript")

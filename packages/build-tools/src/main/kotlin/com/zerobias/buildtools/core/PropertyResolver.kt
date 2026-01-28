@@ -1,4 +1,4 @@
-package com.zerobias.buildtools
+package com.zerobias.buildtools.core
 
 import org.gradle.api.GradleException
 import org.gradle.api.provider.Provider

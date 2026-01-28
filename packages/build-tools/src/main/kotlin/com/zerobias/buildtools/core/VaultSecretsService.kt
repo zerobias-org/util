@@ -1,4 +1,4 @@
-package com.zerobias.buildtools
+package com.zerobias.buildtools.core
 
 import io.github.jopenlibs.vault.Vault
 import io.github.jopenlibs.vault.VaultConfig
