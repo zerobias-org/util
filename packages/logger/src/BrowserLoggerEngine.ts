@@ -225,24 +225,27 @@ export class LoggerEngine {
     // Route to appropriate console method
     switch (levelName) {
       case 'crit':
-      case 'error':
+      case 'error': {
         if (error) {
           console.error(formatted, error);
         } else {
           console.error(formatted);
         }
         break;
-      case 'warn':
+      }
+      case 'warn': {
         if (error) {
           console.warn(formatted, error);
         } else {
           console.warn(formatted);
         }
         break;
-      case 'info':
+      }
+      case 'info': {
         console.info(formatted);
         break;
-      default:
+      }
+      default: {
         // verbose, debug, trace
         if (error) {
           console.log(formatted, error);
@@ -250,6 +253,7 @@ export class LoggerEngine {
           console.log(formatted);
         }
         break;
+      }
     }
   }
 
