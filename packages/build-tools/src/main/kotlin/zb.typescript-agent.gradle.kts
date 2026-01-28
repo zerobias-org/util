@@ -1,12 +1,12 @@
-import com.zerobias.buildtools.HubModuleExtension
+import com.zerobias.buildtools.ZbExtension
 
 plugins {
-    id("hub.module-typescript")
+    id("zb.typescript")
 }
 
-val hubModule = extensions.getByType<HubModuleExtension>()
+val zb = extensions.getByType<ZbExtension>()
 
-hubModule.hasConnectionProfile.convention(false)
+zb.hasConnectionProfile.convention(false)
 
 val validateAgent by tasks.registering {
     group = "lifecycle"

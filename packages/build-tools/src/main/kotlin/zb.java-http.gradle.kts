@@ -1,10 +1,10 @@
-import com.zerobias.buildtools.HubModuleExtension
+import com.zerobias.buildtools.ZbExtension
 
 plugins {
-    id("hub.module-base")
+    id("zb.base")
 }
 
-val hubModule = extensions.getByType<HubModuleExtension>()
+val zb = extensions.getByType<ZbExtension>()
 
 // ── VALIDATE ──
 
@@ -73,7 +73,7 @@ val buildJavaImage by tasks.registering(Exec::class) {
     dependsOn(tasks.named("compile"))
     workingDir(project.projectDir)
     val registry = project.property("dockerRegistry") as String
-    val imageName = hubModule.dockerImageName.get()
+    val imageName = zb.dockerImageName.get()
     val ver = project.version.toString()
     commandLine("docker", "build",
         "-t", "${imageName}:local",
@@ -93,7 +93,7 @@ val publishJavaImage by tasks.registering(Exec::class) {
     dependsOn(tasks.named("buildImage"))
     workingDir(project.projectDir)
     val registry = project.property("dockerRegistry") as String
-    val imageName = hubModule.dockerImageName.get()
+    val imageName = zb.dockerImageName.get()
     val ver = project.version.toString()
     commandLine("docker", "push", "${registry}/${imageName}:${ver}")
 }

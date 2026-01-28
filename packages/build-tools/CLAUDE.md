@@ -14,18 +14,18 @@ This package provides Gradle convention plugins that orchestrate the full Hub Mo
 ## Plugin Hierarchy
 
 ```
-hub.module-base                          ← Lifecycle skeleton, versioning, env bridge
-├── hub.module-typescript                ← npm, tsc, hub-generator, mocha, Docker
-│   ├── hub.module-typescript-connector  ← Requires connectionProfile.yml
-│   └── hub.module-typescript-agent      ← Forbids connectionProfile.yml
-└── hub.module-java-http                 ← Maven, hub-generator java-http, Docker
+zb.base                          ← Lifecycle skeleton, versioning, env bridge
+├── zb.typescript                ← npm, tsc, hub-generator, mocha, Docker
+│   ├── zb.typescript-connector  ← Requires connectionProfile.yml
+│   └── zb.typescript-agent      ← Forbids connectionProfile.yml
+└── zb.java-http                 ← Maven, hub-generator java-http, Docker
 ```
 
 A standard module's `build.gradle.kts` is 3 lines:
 
 ```kotlin
 plugins {
-    id("hub.module-typescript-connector")
+    id("zb.typescript-connector")
 }
 ```
 
@@ -38,14 +38,14 @@ build-tools/
 ├── CLAUDE.md                           # This file
 └── src/main/kotlin/
     ├── com/zerobias/buildtools/
-    │   ├── HubModuleExtension.kt       # Shared extension interface
+    │   ├── ZbExtension.kt       # Shared extension interface
     │   ├── PropertyResolver.kt         # {{driver.path}} value resolution
     │   └── VaultSecretsService.kt      # Gradle BuildService for Vault
-    ├── hub.module-base.gradle.kts      # Base lifecycle + env bridge
-    ├── hub.module-typescript.gradle.kts # TypeScript lifecycle
-    ├── hub.module-typescript-connector.gradle.kts
-    ├── hub.module-typescript-agent.gradle.kts
-    └── hub.module-java-http.gradle.kts # Java HTTP lifecycle
+    ├── zb.base.gradle.kts      # Base lifecycle + env bridge
+    ├── zb.typescript.gradle.kts # TypeScript lifecycle
+    ├── zb.typescript-connector.gradle.kts
+    ├── zb.typescript-agent.gradle.kts
+    └── zb.java-http.gradle.kts # Java HTTP lifecycle
 ```
 
 ## Key Components
@@ -72,9 +72,9 @@ Gradle `BuildService` for Vault secret resolution.
 - **KV v2:** Engine version 2 configured, handles `/data/` prefix automatically
 - **AutoCloseable:** Cache cleared on build completion
 
-### HubModuleExtension
+### ZbExtension
 
-Extension registered as `hubModule` on every module project:
+Extension registered as `zb` on every module project:
 
 | Property | Type | Convention |
 |----------|------|-----------|
@@ -82,9 +82,9 @@ Extension registered as `hubModule` on every module project:
 | `product` | `Property<String>` | Auto-detected from directory name |
 | `hasConnectionProfile` | `Property<Boolean>` | `connectionProfile.yml` exists |
 | `hasOpenApiSdk` | `Property<Boolean>` | `false` |
-| `dockerImageName` | `Property<String>` | `auditlogic-module-{vendor}-{product}` |
+| `dockerImageName` | `Property<String>` | `{vendor}-{product}` |
 
-### hub.module-base (Convention Plugin)
+### zb.base (Convention Plugin)
 
 Base plugin applied by all module types. Provides:
 
@@ -118,7 +118,7 @@ validate → generate → compile → test → buildArtifacts → gate → publi
 | `dockerRegistry` | `DOCKER_REGISTRY` |
 | ... (14 total) | ... |
 
-### hub.module-typescript
+### zb.typescript
 
 Extends base with Node.js/TypeScript lifecycle:
 
@@ -133,13 +133,13 @@ Extends base with Node.js/TypeScript lifecycle:
 
 Node.js version managed by `gradle-node-plugin` (reads `nodeVersion` from `gradle.properties`).
 
-### hub.module-typescript-connector / hub.module-typescript-agent
+### zb.typescript-connector / zb.typescript-agent
 
-Thin wrappers over `hub.module-typescript`:
+Thin wrappers over `zb.typescript`:
 - **Connector:** Sets `hasConnectionProfile=true`, adds `validateConnector` requiring `connectionProfile.yml`
 - **Agent:** Sets `hasConnectionProfile=false`, adds `validateAgent` forbidding `connectionProfile.yml`
 
-### hub.module-java-http
+### zb.java-http
 
 Extends base with Maven/Java lifecycle:
 
@@ -172,17 +172,17 @@ dependencies {
 
 ## Adding a New Convention Plugin
 
-1. Create `hub.module-{name}.gradle.kts` in `src/main/kotlin/`
-2. Apply parent plugin: `id("hub.module-base")` or `id("hub.module-typescript")`
+1. Create `zb.{name}.gradle.kts` in `src/main/kotlin/`
+2. Apply parent plugin: `id("zb.base")` or `id("zb.typescript")`
 3. Register phase-specific tasks and wire into lifecycle tasks via `dependsOn`
-4. Access extension: `val hubModule = extensions.getByType<HubModuleExtension>()`
+4. Access extension: `val zb = extensions.getByType<ZbExtension>()`
 5. Access shared values: `val npmDistTag: String = extra["npmDistTag"] as String`
 6. Rebuild: `./gradlew build` from module-gradle
 
 ## Adding a New Property to Environment Bridge
 
 1. Add the property to `gradle.properties` in module-gradle
-2. Add the mapping in `hub.module-base.gradle.kts` → `envExports` map
+2. Add the mapping in `zb.base.gradle.kts` → `envExports` map
 3. For vault-resolved values, use `{{vault.mount/path.field}}` syntax in `gradle-ci.properties`
 
 ## Related Documentation

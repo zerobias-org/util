@@ -2,7 +2,7 @@ package com.zerobias.buildtools
 
 import org.gradle.api.provider.Property
 
-interface HubModuleExtension {
+interface ZbExtension {
     val vendor: Property<String>
     val product: Property<String>
     val hasConnectionProfile: Property<Boolean>

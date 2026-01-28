@@ -1,11 +1,11 @@
-import com.zerobias.buildtools.HubModuleExtension
+import com.zerobias.buildtools.ZbExtension
 import com.zerobias.buildtools.PropertyResolver
 import com.zerobias.buildtools.VaultSecretsService
 
 // ────────────────────────────────────────────────────────────
-// Extension: module-specific configuration
+// Extension: project-level configuration
 // ────────────────────────────────────────────────────────────
-val hubModule = extensions.create<HubModuleExtension>("hubModule").apply {
+val zb = extensions.create<ZbExtension>("zb").apply {
     // Auto-detect vendor from parent directory name
     vendor.convention(project.projectDir.parentFile.name)
     product.convention(project.projectDir.name)
@@ -14,7 +14,7 @@ val hubModule = extensions.create<HubModuleExtension>("hubModule").apply {
     )
     hasOpenApiSdk.convention(false)
     dockerImageName.convention(
-        vendor.zip(product) { v, p -> "auditlogic-module-${v}-${p}" }
+        vendor.zip(product) { v, p -> "${v}-${p}" }
     )
 }
 
@@ -74,7 +74,7 @@ extra["npmDistTag"] = npmDistTag
 // ────────────────────────────────────────────────────────────
 val printVersion by tasks.registering {
     group = "lifecycle"
-    description = "Print resolved module version"
+    description = "Print resolved version"
     doLast { println(project.version) }
 }
 
@@ -132,7 +132,7 @@ val buildOpenApiSdk by tasks.registering {
     group = "lifecycle"
     description = "Generate standalone OpenAPI SDK"
     dependsOn(compile)
-    onlyIf { hubModule.hasOpenApiSdk.get() }
+    onlyIf { zb.hasOpenApiSdk.get() }
 }
 
 val buildImage by tasks.registering {
