@@ -1,5 +1,8 @@
 import { LogLevel, LOG_LEVEL_METADATA } from './LogLevel.js';
 
+/** Symbol used to store root logger on globalThis for cross-package singleton */
+const GLOBAL_ROOT_KEY = Symbol.for('@zerobias-org/logger:root');
+
 /**
  * Browser-compatible logger options (no winston transports)
  */
@@ -19,10 +22,11 @@ export interface BrowserLoggerOptions {
  * Provides the same public API (root(), get(), destroy(), log methods, hierarchy)
  * without any Node.js dependencies.
  *
+ *
+ * Uses globalThis to ensure a single root logger instance across all copies
+ * of the package, so libraries sharing the logger get unified configuration.
  */
 export class LoggerEngine {
-  private static _root: LoggerEngine | undefined;
-
   private readonly _name: string;
   private _parent: LoggerEngine | undefined;
   private readonly _children: Map<string, LoggerEngine>;
@@ -43,14 +47,16 @@ export class LoggerEngine {
 
   /**
    * Get the singleton root logger
+   * Uses globalThis to ensure a single root instance across all copies of the package
    */
   static root(): LoggerEngine {
-    if (!LoggerEngine._root) {
-      LoggerEngine._root = new LoggerEngine('', undefined, {
+    const g = globalThis as any;
+    if (!g[GLOBAL_ROOT_KEY]) {
+      g[GLOBAL_ROOT_KEY] = new LoggerEngine('', undefined, {
         level: LogLevel.INFO,
       });
     }
-    return LoggerEngine._root;
+    return g[GLOBAL_ROOT_KEY];
   }
 
   /**
