@@ -20,7 +20,8 @@
     "nx:build": "npm run transpile",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
-    "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts"
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts"
   },
   "files": [
     "dist/src",
