@@ -82,7 +82,7 @@
     "@types/node": "^22.0.0",
     "@types/qs": "^6.9.18",
     "@types/request": "latest",
-    "@zerobias-org/devops-tools": "^1.0.38",
+    "@zerobias-org/devops-tools": "^1.0.44",
     "@zerobias-org/eslint-config": "^1.0.22",
     "chai": "^6.0.0",
     "husky": "^9.1.7",
