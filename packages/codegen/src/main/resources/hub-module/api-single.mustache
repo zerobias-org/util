@@ -423,11 +423,18 @@ export class {{classname}}HubImpl implements {{producerName}} {
   {{/vendorExtensions.x-is-binary-body}}
   {{/vendorExtensions.x-returns-paged-results}}
   {{#vendorExtensions.x-returns-paged-results}}
-  {{! For paged results, keep _body for results.body assignment }}
+  {{! For paged results, define query params, body params, and _body for results.body assignment }}
+  const _queryParams = {
+      {{#queryParams}}{{paramName}},{{/queryParams}}
+  };
   {{#vendorExtensions.x-is-binary-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
   const _body = {{#bodyParams}}{{paramName}}{{/bodyParams}};
   {{/vendorExtensions.x-is-binary-body}}
   {{^vendorExtensions.x-is-binary-body}}
+  const _bodyParams = {
+      {{#vendorExtensions.x-single-body-param}}...({{#bodyParams}}{{paramName}}{{/bodyParams}} ?? {}),{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#bodyParams}}{{paramName}},{{/bodyParams}}{{/vendorExtensions.x-single-body-param}}
+  };
   const _body = {
       {{#vendorExtensions.x-single-body-param}}...({{#bodyParams}}{{paramName}}{{/bodyParams}} ?? {}),{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
   };
@@ -466,11 +473,15 @@ export class {{classname}}HubImpl implements {{producerName}} {
   {{^vendorExtensions.x-is-delete-method}}
   return this.client.{{vendorExtensions.x-lower-http-method}}(
     _path,
-    {{#vendorExtensions.x-returns-paged-results}}{
-      ..._body,
-      {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
-      pageSize: results.pageSize,
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}_bodyParams{{/vendorExtensions.x-returns-paged-results}})
+    {{#vendorExtensions.x-returns-paged-results}}_bodyParams,
+    {
+      params: {
+        {{#queryParams}}{{paramName}},{{/queryParams}}
+        {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
+        pageSize: results.pageSize,
+      },
+      paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}_bodyParams, { params: _queryParams, paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-delete-method}}
   {{/vendorExtensions.x-is-get-method}}
   {{/vendorExtensions.x-use-spec-http-methods}}
