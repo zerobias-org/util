@@ -4,6 +4,7 @@
 // ===============================================
 {{^skipHubImpl}}
 import { AxiosInstance } from 'axios';
+import qs from 'qs';
 {{/skipHubImpl}}
 {{#imports}}
 import { {{classname}} } from '../{{filename}}/index.js';
@@ -445,8 +446,9 @@ export class {{classname}}HubImpl implements {{producerName}} {
         ..._body,
         {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
         pageSize: results.pageSize,
-      }
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams }{{/vendorExtensions.x-returns-paged-results}})
+      },
+      paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams, paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-get-method}}
   {{#vendorExtensions.x-is-delete-method}}
   return this.client.{{vendorExtensions.x-lower-http-method}}(
@@ -456,8 +458,9 @@ export class {{classname}}HubImpl implements {{producerName}} {
         ..._body,
         {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
         pageSize: results.pageSize,
-      }
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams }{{/vendorExtensions.x-returns-paged-results}})
+      },
+      paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams, paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-delete-method}}
   {{^vendorExtensions.x-is-get-method}}
   {{^vendorExtensions.x-is-delete-method}}
