@@ -237,8 +237,9 @@ export class {{classname}}HttpImpl implements {{producerName}} {
   {{/vendorExtensions.x-is-binary-body}}
   {{/vendorExtensions.x-returns-paged-results}}
   {{#vendorExtensions.x-returns-paged-results}}
+  {{! For paged results, exclude producer-omit params (pageNumber, pageSize, pageToken) from _queryParams }}
   const _queryParams = {
-      {{#queryParams}}{{paramName}},{{/queryParams}}
+      {{#queryParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/queryParams}}
   };
   {{#vendorExtensions.x-is-binary-body}}
   const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
@@ -289,7 +290,7 @@ export class {{classname}}HttpImpl implements {{producerName}} {
     {{#vendorExtensions.x-returns-paged-results}}_bodyParams,
     {
       params: {
-        {{#queryParams}}{{paramName}},{{/queryParams}}
+        {{#queryParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/queryParams}}
         {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
         pageSize: results.pageSize,
       },
