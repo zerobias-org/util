@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/collector-utils",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "Common utilities for collector bots - HTTP fetching, data chunking, CSV/YAML parsing",
   "type": "module",
   "main": "dist/src/index.js",
@@ -44,8 +44,8 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@zerobias-org/logger": "^2.0.21",
-    "@zerobias-org/util-connector": "^1.0.18"
+    "@zerobias-org/logger": "^2.0.22",
+    "@zerobias-org/util-connector": "^1.0.19"
   },
   "engines": {
     "node": ">=22.0.0",
