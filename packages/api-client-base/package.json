@@ -45,6 +45,7 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
+    "@zerobias-org/util-api-invoker-api": "^1.0.23",
     "@zerobias-org/util-api-invoker-isomorphic": "^1.0.24"
   }
 }
