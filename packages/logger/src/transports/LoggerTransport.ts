@@ -156,7 +156,11 @@ export abstract class LoggerTransport extends Transport {
     const name = this.formatLoggerName(info.name, info.path);
     output = output.replace(this.placeholderRegexes.get('name')!, name);
 
-    // Format message
+    // Remove empty brackets from template structure BEFORE inserting user content
+    // This prevents stripping valid [] from JSON in message/metadata/exception
+    output = output.replaceAll(/\[\s*]/g, '');
+
+    // Format message (after bracket cleanup to preserve JSON arrays)
     output = output.replace(this.placeholderRegexes.get('message')!, info.message || '');
 
     // Format metadata (exclude standard fields)
@@ -167,11 +171,8 @@ export abstract class LoggerTransport extends Transport {
     const exception = this.formatException(info.error);
     output = output.replace(this.placeholderRegexes.get('exception')!, exception);
 
-    // Remove empty brackets (simplified - done after all replacements)
-    output = output.replaceAll(/\[\s*]/g, '');
-
-    // Clean up multiple spaces
-    output = output.replaceAll(/\s+/g, ' ').trim();
+    // Clean up multiple spaces (use [^\S\n]+ to match spaces/tabs but NOT newlines)
+    output = output.replaceAll(/[^\S\n]+/g, ' ').trim();
 
     // Clean up extra newlines
     output = output.replaceAll(/\n+/g, '\n').replace(/\n$/, '');

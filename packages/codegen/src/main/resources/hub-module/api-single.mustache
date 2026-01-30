@@ -14,6 +14,23 @@ import { {{classname}} } from '{{filename}}';
 {{/tsImports}}
 import { {{coreTypes}}CoreError, ParameterRequiredError, UnexpectedError, HttpMethod } from '{{#isCore}}../../src{{/isCore}}{{^isCore}}@zerobias-org/types-core-js{{/isCore}}';
 import { RequestFile, ObjectSerializer } from '../model/index.js';
+
+{{^skipHubImpl}}
+// Helper to convert EnumValue objects to their string value for query params
+function flattenEnumValues(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(flattenEnumValues);
+  // Check if it's an EnumValue-like object (has 'value' and 'key' properties)
+  if ('value' in obj && 'key' in obj) return String(obj.value);
+  // Recursively process object properties
+  const result: any = {};
+  for (const key of Object.keys(obj)) {
+    result[key] = flattenEnumValues(obj[key]);
+  }
+  return result;
+}
+{{/skipHubImpl}}
 {{#isConnector}}
 import { ConnectionWrapper } from './index.js';
 {{/isConnector}}
@@ -454,8 +471,8 @@ export class {{classname}}HubImpl implements {{producerName}} {
         {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
         pageSize: results.pageSize,
       },
-      paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }),
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams, paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
+      paramsSerializer: (params) => qs.stringify(flattenEnumValues(params), { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams, paramsSerializer: (params) => qs.stringify(flattenEnumValues(params), { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-get-method}}
   {{#vendorExtensions.x-is-delete-method}}
   return this.client.{{vendorExtensions.x-lower-http-method}}(
@@ -466,8 +483,8 @@ export class {{classname}}HubImpl implements {{producerName}} {
         {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
         pageSize: results.pageSize,
       },
-      paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }),
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams, paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
+      paramsSerializer: (params) => qs.stringify(flattenEnumValues(params), { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams, paramsSerializer: (params) => qs.stringify(flattenEnumValues(params), { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-delete-method}}
   {{^vendorExtensions.x-is-get-method}}
   {{^vendorExtensions.x-is-delete-method}}
@@ -480,8 +497,8 @@ export class {{classname}}HubImpl implements {{producerName}} {
         {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
         pageSize: results.pageSize,
       },
-      paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }),
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}_bodyParams, { params: _queryParams, paramsSerializer: (params) => qs.stringify(params, { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
+      paramsSerializer: (params) => qs.stringify(flattenEnumValues(params), { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}_bodyParams, { params: _queryParams, paramsSerializer: (params) => qs.stringify(flattenEnumValues(params), { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-delete-method}}
   {{/vendorExtensions.x-is-get-method}}
   {{/vendorExtensions.x-use-spec-http-methods}}
