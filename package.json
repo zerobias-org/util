@@ -43,11 +43,11 @@
       "diff": "^8.0.3"
     },
     "lodash": "^4.17.23",
-    "tar": "^7.5.6",
+    "tar": "^7.5.7",
     "@stoplight/spectral-cli": {
-      "glob": "^10.0.0",
       "magic-string": "^0.30.0"
     },
+    "glob": ">=13.0.0",
     "fast-xml-parser": ">=5.3.4"
   },
   "dependencies": {
@@ -87,8 +87,8 @@
     "@types/node": "^22.0.0",
     "@types/qs": "^6.9.18",
     "@types/request": "latest",
-    "@zerobias-org/devops-tools": "^1.0.48",
-    "@zerobias-org/eslint-config": "^1.0.29",
+    "@zerobias-org/devops-tools": "^1.0.50",
+    "@zerobias-org/eslint-config": "^1.0.30",
     "chai": "^6.0.0",
     "husky": "^9.1.7",
     "lerna": "^9.0.0",

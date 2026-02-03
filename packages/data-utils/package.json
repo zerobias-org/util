@@ -26,7 +26,7 @@
     "clean": "rimraf dist/ .docs/",
     "transpile": "tsc -b",
     "build": "npm run lint && npm run transpile",
-    "nx:build": "npm run transpile",
+    "nx:build": "npm run lint && npm run transpile",
     "test": "npm run test:unit",
     "test:unit": "node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test -- --watch --reporter=min",

@@ -20,7 +20,7 @@
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
     "build": "npm run lint && npm run transpile",
-    "nx:build": "npm run transpile"
+    "nx:build": "npm run lint && npm run transpile"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",

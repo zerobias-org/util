@@ -14,7 +14,7 @@
     "clean": "rm -rf dist/ generated/",
     "transpile": "tsc -b",
     "build": "npm run lint && npm run generate && npm run transpile",
-    "nx:build": "npm run transpile",
+    "nx:build": "npm run lint && npm run generate && npm run transpile",
     "generate": "hub-generator generate -g hub-module -i test/unit/enum.yml -o generated/",
     "test": "npm run test:unit",
     "test:unit": "node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts",

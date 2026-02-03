@@ -27,9 +27,7 @@
     },
     "nx:build": {
       "dependsOn": [
-        "^nx:build",
-        "lint",
-        "generate"
+        "^nx:build"
       ],
       "cache": true
     }
