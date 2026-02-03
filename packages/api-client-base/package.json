@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-api-client-base",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "description": "Base classes and utilities for platform API clients",
   "type": "module",
   "main": "dist/src/index.js",
@@ -45,7 +45,7 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@zerobias-org/util-api-invoker-api": "^1.0.25",
-    "@zerobias-org/util-api-invoker-isomorphic": "^1.0.26"
+    "@zerobias-org/util-api-invoker-api": "^1.0.26",
+    "@zerobias-org/util-api-invoker-isomorphic": "^1.0.27"
   }
 }
