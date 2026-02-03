@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-codegen",
   "description": "OpenAPI Generator for models and server apis",
-  "version": "2.0.30",
+  "version": "2.0.31",
   "type": "module",
   "author": "team@zerobias.com",
   "license": "ISC",
@@ -49,6 +49,6 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
-    "@zerobias-org/util-connector": "^1.0.25"
+    "@zerobias-org/util-connector": "^1.0.26"
   }
 }

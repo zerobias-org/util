@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-api-invoker-isomorphic",
-  "version": "1.0.27",
+  "version": "1.0.28",
   "description": "Isomorphic Api Invoker",
   "type": "module",
   "main": "dist/src/index.js",
@@ -37,6 +37,6 @@
     "bom.json"
   ],
   "dependencies": {
-    "@zerobias-org/util-api-invoker-api": "^1.0.26"
+    "@zerobias-org/util-api-invoker-api": "^1.0.27"
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-spectral-config",
   "description": "Zerobias spectral configuration options",
-  "version": "1.0.25",
+  "version": "1.0.26",
   "type": "module",
   "author": "team@zerobias.com",
   "license": "ISC",
@@ -21,7 +21,7 @@
     "registry": "https://pkg.zerobias.org/"
   },
   "dependencies": {
-    "@zerobias-org/eslint-config": "^1.0.29"
+    "@zerobias-org/eslint-config": "^1.0.30"
   },
   "files": [
     "index.js",
