@@ -1,0 +1,24 @@
+{
+  "name": "@zerobias-org/util-content-dev-schema",
+  "version": "0.0.1",
+  "description": "Content development database schema for third-party catalog content development",
+  "type": "module",
+  "author": "Zerobias Team <team@zerobias.com>",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/content-schema"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "sql/*.sql",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  }
+}

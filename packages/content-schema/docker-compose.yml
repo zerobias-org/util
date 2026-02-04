@@ -1,0 +1,13 @@
+services:
+  supabase-pg:
+    image: supabase/postgres:17.6.1.081
+    container_name: supabase-pg
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: welcome
+    volumes:
+      - ~/.docker/volumes/supabase17:/home/postgres/pgdata/data
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    restart: unless-stopped
