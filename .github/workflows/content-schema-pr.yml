@@ -1,0 +1,48 @@
+name: Content Schema PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/content-schema/**'
+
+jobs:
+  test-schema:
+    name: Test Schema Load
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: supabase/postgres:17.6.1.081
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: welcome
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Create database
+        run: |
+          psql -c "CREATE DATABASE content_schema_test;"
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: welcome
+          PGDATABASE: postgres
+
+      - name: Load schema
+        run: |
+          psql -f packages/content-schema/sql/content-schema.sql
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: welcome
+          PGDATABASE: content_schema_test
