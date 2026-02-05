@@ -537,7 +537,7 @@ export class {{classname}}HubImpl implements {{producerName}} {
       results.count = response.headers.count ? Number(response.headers.count) : -1;
       results.pageToken = response.headers.pagetoken ?? response.headers.pageToken;
       results.headers = this.headers;
-      {{#vendorExtensions.x-use-spec-http-methods}}results.baseUrl = new URL(`${this.client.getUri()}{{path}}`);{{/vendorExtensions.x-use-spec-http-methods}}{{^vendorExtensions.x-use-spec-http-methods}}results.baseUrl = new URL(`${this.client.getUri()}/{{operationId}}`);{{/vendorExtensions.x-use-spec-http-methods}}
+      {{#vendorExtensions.x-use-spec-http-methods}}results.baseUrl = new URL(`${this.client.getUri()}${_path}`);{{/vendorExtensions.x-use-spec-http-methods}}{{^vendorExtensions.x-use-spec-http-methods}}results.baseUrl = new URL(`${this.client.getUri()}/{{operationId}}`);{{/vendorExtensions.x-use-spec-http-methods}}
       {{#vendorExtensions.x-use-spec-http-methods}}results.httpMethod = HttpMethod.{{vendorExtensions.x-titlecase-http-method}};{{/vendorExtensions.x-use-spec-http-methods}}{{^vendorExtensions.x-use-spec-http-methods}}results.httpMethod = HttpMethod.Put;{{/vendorExtensions.x-use-spec-http-methods}}
       results.body = _body;
       results.mapper = (obj) => ObjectSerializer.deserialize(obj, '{{{returnBaseType}}}');
