@@ -2,7 +2,10 @@ package com.zerobias.buildtools.module
 
 import org.gradle.api.GradleException
 import org.yaml.snakeyaml.DumperOptions
+import org.yaml.snakeyaml.LoaderOptions
 import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.constructor.Constructor
+import org.yaml.snakeyaml.representer.Representer
 import java.io.File
 
 /**
@@ -51,12 +54,15 @@ object MetadataSyncer {
     }
 
     internal fun createYaml(): Yaml {
-        val options = DumperOptions().apply {
+        val loaderOptions = LoaderOptions().apply {
+            codePointLimit = 64 * 1024 * 1024 // 64 MB — bundled OpenAPI specs can be large
+        }
+        val dumperOptions = DumperOptions().apply {
             defaultFlowStyle = DumperOptions.FlowStyle.BLOCK
             isPrettyFlow = true
             width = 120
             indent = 2
         }
-        return Yaml(options)
+        return Yaml(Constructor(loaderOptions), Representer(dumperOptions), dumperOptions, loaderOptions)
     }
 }

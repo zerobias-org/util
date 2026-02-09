@@ -289,6 +289,7 @@ val buildImageExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Build Docker image"
     dependsOn(tasks.named("compile"))
+    onlyIf { project.file("Dockerfile").exists() }
     workingDir(project.projectDir)
     val registry = project.findProperty("dockerRegistry")?.toString() ?: "localhost"
     val imageName = zb.dockerImageName.get()
@@ -297,7 +298,7 @@ val buildImageExec by tasks.registering(Exec::class) {
         "-t", "${imageName}:local",
         "-t", "${registry}/${imageName}:${ver}",
         ".")
-    inputs.file("Dockerfile")
+    inputs.file("Dockerfile").optional()
     inputs.dir("dist")
     inputs.file("package.json")
 }
