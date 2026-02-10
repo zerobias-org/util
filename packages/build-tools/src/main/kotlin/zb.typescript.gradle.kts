@@ -4,6 +4,7 @@ import com.zerobias.buildtools.module.ZbExtension
 import com.zerobias.buildtools.module.OpenApiSpecAssembler
 import com.zerobias.buildtools.module.ProductInfoDereferencer
 import com.zerobias.buildtools.module.ServerEntryPointGenerator
+import com.zerobias.buildtools.module.DockerRunner
 
 plugins {
     id("zb.base")
@@ -520,6 +521,66 @@ val buildImageExec by tasks.registering(Exec::class) {
 tasks.named("buildImage") {
     dependsOn(buildImageExec)
 }
+
+// ════════════════════════════════════════════════════════════
+// DOCKER RUNTIME — start/stop module container for local dev
+// ════════════════════════════════════════════════════════════
+
+val startModuleExec by tasks.registering {
+    group = "docker"
+    description = "Start module container and write connection details"
+    dependsOn(buildImageExec)
+    outputs.file(layout.buildDirectory.file("module-container.json"))
+    doLast {
+        val imageName = "${zb.dockerImageName.get()}:local"
+        val containerName = "module-${zb.vendor.get()}-${zb.product.get()}"
+        val hostPort = if (project.hasProperty("port"))
+            project.property("port").toString().toInt()
+        else DockerRunner.findFreePort()
+        val insecure = project.findProperty("insecure")?.toString()?.toBoolean() ?: true
+
+        val info = DockerRunner.start(imageName, containerName, hostPort, insecure)
+
+        try {
+            DockerRunner.waitForHealthy(info.port)
+        } catch (e: Exception) {
+            // Print container logs for diagnostics before failing
+            val logs = DockerRunner.getLogs(info.containerId)
+            logger.error("Container logs:\n$logs")
+            throw e
+        }
+
+        val jsonFile = layout.buildDirectory.file("module-container.json").get().asFile
+        jsonFile.parentFile.mkdirs()
+        jsonFile.writeText(info.toJson())
+
+        logger.lifecycle("Module running at ${info.baseUrl} (container: ${info.containerId.take(12)})")
+    }
+}
+
+tasks.named("startModule") { dependsOn(startModuleExec) }
+
+val stopModuleExec by tasks.registering {
+    group = "docker"
+    description = "Stop and remove module container"
+    doLast {
+        val jsonFile = layout.buildDirectory.file("module-container.json").get().asFile
+        val containerName = "module-${zb.vendor.get()}-${zb.product.get()}"
+
+        if (jsonFile.exists()) {
+            val info = DockerRunner.ContainerInfo.fromJson(jsonFile.readText())
+            DockerRunner.stop(info.containerId, containerName)
+            jsonFile.delete()
+            logger.lifecycle("Module stopped (container: ${info.containerId.take(12)})")
+        } else {
+            // Fallback: stop by name if JSON file missing
+            DockerRunner.stopByName(containerName)
+            logger.lifecycle("Module stopped (container: $containerName)")
+        }
+    }
+}
+
+tasks.named("stopModule") { dependsOn(stopModuleExec) }
 
 // ════════════════════════════════════════════════════════════
 // PUBLISH

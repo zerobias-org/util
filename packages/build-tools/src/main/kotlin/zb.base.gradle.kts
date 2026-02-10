@@ -150,6 +150,18 @@ val buildImage by tasks.registering {
     dependsOn(compile)
 }
 
+// ── Docker runtime — start/stop module container for local dev ──
+val startModule by tasks.registering {
+    group = "docker"
+    description = "Start module Docker container (use -Pport=N to set port)"
+    dependsOn(buildImage)
+}
+
+val stopModule by tasks.registering {
+    group = "docker"
+    description = "Stop module Docker container"
+}
+
 val buildArtifacts by tasks.registering {
     group = "lifecycle"
     description = "Build all artifacts"
