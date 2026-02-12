@@ -436,10 +436,20 @@ export class {{classname}}HubImpl implements {{producerName}} {
   {{#vendorExtensions.x-is-binary-body}}
   const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
   {{/vendorExtensions.x-is-binary-body}}
+  {{#vendorExtensions.x-is-array-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}} ?? [];
+  {{/vendorExtensions.x-is-array-body}}
+  {{#vendorExtensions.x-is-primitive-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
+  {{/vendorExtensions.x-is-primitive-body}}
   {{^vendorExtensions.x-is-binary-body}}
+  {{^vendorExtensions.x-is-array-body}}
+  {{^vendorExtensions.x-is-primitive-body}}
   const _bodyParams = {
       {{#vendorExtensions.x-single-body-param}}...({{#bodyParams}}{{paramName}}{{/bodyParams}} ?? {}),{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#bodyParams}}{{paramName}},{{/bodyParams}}{{/vendorExtensions.x-single-body-param}}
   };
+  {{/vendorExtensions.x-is-primitive-body}}
+  {{/vendorExtensions.x-is-array-body}}
   {{/vendorExtensions.x-is-binary-body}}
   {{/vendorExtensions.x-returns-paged-results}}
   {{#vendorExtensions.x-returns-paged-results}}
@@ -451,13 +461,25 @@ export class {{classname}}HubImpl implements {{producerName}} {
   const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
   const _body = {{#bodyParams}}{{paramName}}{{/bodyParams}};
   {{/vendorExtensions.x-is-binary-body}}
+  {{#vendorExtensions.x-is-array-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}} ?? [];
+  const _body = {{#bodyParams}}{{paramName}}{{/bodyParams}} ?? [];
+  {{/vendorExtensions.x-is-array-body}}
+  {{#vendorExtensions.x-is-primitive-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
+  const _body = {{#bodyParams}}{{paramName}}{{/bodyParams}};
+  {{/vendorExtensions.x-is-primitive-body}}
   {{^vendorExtensions.x-is-binary-body}}
+  {{^vendorExtensions.x-is-array-body}}
+  {{^vendorExtensions.x-is-primitive-body}}
   const _bodyParams = {
       {{#vendorExtensions.x-single-body-param}}...({{#bodyParams}}{{paramName}}{{/bodyParams}} ?? {}),{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#bodyParams}}{{paramName}},{{/bodyParams}}{{/vendorExtensions.x-single-body-param}}
   };
   const _body = {
       {{#vendorExtensions.x-single-body-param}}...({{#bodyParams}}{{paramName}}{{/bodyParams}} ?? {}),{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
   };
+  {{/vendorExtensions.x-is-primitive-body}}
+  {{/vendorExtensions.x-is-array-body}}
   {{/vendorExtensions.x-is-binary-body}}
   {{/vendorExtensions.x-returns-paged-results}}
   {{! Build path with path params substituted }}
