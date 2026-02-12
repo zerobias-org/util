@@ -1,6 +1,10 @@
 plugins {
     `kotlin-dsl`
+    `maven-publish`
 }
+
+group = "com.zerobias"
+version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
