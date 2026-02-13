@@ -80,7 +80,7 @@ tasks.register<NpmTask>("npmLint") {
     group = "verification"
     description = "Run ESLint"
 
-    dependsOn("npmInstall")
+    dependsOn("npmInstall", "npmGenerate")  // Explicit dependency on npmGenerate
 
     npmCommand.set(listOf("run", "lint"))
 
