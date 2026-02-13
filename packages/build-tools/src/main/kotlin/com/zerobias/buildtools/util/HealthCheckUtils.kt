@@ -34,15 +34,20 @@ object HealthCheckUtils {
         println("Waiting for $serviceName to be healthy...")
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < maxWaitSeconds * 1000) {
-            val output = ByteArrayOutputStream()
-            project.exec {
-                this.workingDir = workingDir
-                commandLine("docker", "compose", "-p", slotName, "--env-file", envFile.absolutePath, "ps", "--format", "json", serviceName)
-                standardOutput = output
-                isIgnoreExitValue = true
+            val status = try {
+                val process = ProcessBuilder(
+                    "docker", "compose", "-p", slotName, "--env-file", envFile.absolutePath,
+                    "ps", "--format", "json", serviceName
+                )
+                    .directory(workingDir)
+                    .redirectErrorStream(false)
+                    .start()
+                val stdout = process.inputStream.bufferedReader().readText()
+                process.waitFor()
+                stdout
+            } catch (e: Exception) {
+                ""
             }
-
-            val status = output.toString()
             if (status.contains(""""Health":"healthy"""") ||
                 (status.contains(""""State":"running"""") && !status.contains(""""Health":""""))) {
                 println("✓ $serviceName is healthy")
@@ -74,7 +79,7 @@ object HealthCheckUtils {
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < maxWaitSeconds * 1000) {
             try {
-                URL(url).readText()
+                java.net.URI(url).toURL().readText()
                 println("✓ $serviceName is healthy")
                 return
             } catch (e: Exception) {
@@ -101,15 +106,23 @@ object HealthCheckUtils {
         envFile: File,
         expectedServices: List<String>
     ): Boolean {
-        val statusOutput = ByteArrayOutputStream()
-        project.exec {
-            this.workingDir = workingDir
-            commandLine("docker", "compose", "-p", slotName, "--env-file", envFile.absolutePath, "ps", "--format", "json")
-            standardOutput = statusOutput
-            isIgnoreExitValue = true
+        val statusOutput = try {
+            val process = ProcessBuilder(
+                "docker", "compose", "-p", slotName, "--env-file", envFile.absolutePath,
+                "ps", "--format", "json"
+            )
+                .directory(workingDir)
+                .redirectErrorStream(false)
+                .start()
+            val stdout = process.inputStream.bufferedReader().readText()
+            process.waitFor()
+            stdout
+        } catch (e: Exception) {
+            project.logger.warn("Failed to check service health: ${e.message}")
+            return false
         }
 
-        val containerStatuses = statusOutput.toString().lines()
+        val containerStatuses = statusOutput.lines()
             .filter { it.trim().startsWith("{") }
             .mapNotNull { line ->
                 val service = Regex(""""Service":"([^"]+)"""").find(line)?.groupValues?.get(1)

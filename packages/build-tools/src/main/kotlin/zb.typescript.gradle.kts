@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalStdlibApi::class)
+
 import com.github.gradle.node.npm.task.NpmTask
 import com.github.gradle.node.npm.task.NpxTask
 import com.zerobias.buildtools.module.ZbExtension
@@ -204,10 +206,18 @@ val postGenerate by tasks.registering {
     dependsOn(generateApi)
     onlyIf { zb.postGenerateScript.isPresent }
     doLast {
-        project.exec {
-            workingDir(project.projectDir)
-            commandLine("bash", "-c", zb.postGenerateScript.get())
+        val process = ProcessBuilder("bash", "-c", zb.postGenerateScript.get())
+            .directory(project.projectDir)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.waitFor()
+        if (exitCode != 0) {
+            throw org.gradle.api.GradleException(
+                "Post-generate script failed (exit $exitCode):\n$output"
+            )
         }
+        println(output)
     }
 }
 

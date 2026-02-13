@@ -12,6 +12,7 @@ import java.net.URI
  * Provides start/stop/health-check operations used by the
  * `startModule` and `stopModule` Gradle tasks.
  */
+@OptIn(ExperimentalStdlibApi::class)
 object DockerRunner {
 
     data class ContainerInfo(
