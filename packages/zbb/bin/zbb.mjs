@@ -20,6 +20,33 @@ import { join, resolve, relative, sep } from "node:path";
 import { execFileSync, execSync } from "node:child_process";
 import { platform } from "node:os";
 
+// ── Environment Setup ────────────────────────────────────────────────
+
+/**
+ * Prepare environment for Gradle execution.
+ * - Sets JAVA_HOME to Java 21 (works around Java 25 issues with Gradle 8.10.2)
+ * - Adds JVM args to suppress native access warnings (no debug output)
+ */
+function prepareEnv() {
+  const env = { ...process.env };
+
+  // Force Java 21 to avoid Gradle 8.10.2 issues with Java 25
+  env.JAVA_HOME = "/usr/lib/jvm/java-21-openjdk-amd64";
+
+  // Suppress Java 21 native access warnings (Gradle 9.3.1+)
+  // Use GRADLE_OPTS to avoid "Picked up JAVA_TOOL_OPTIONS" message
+  const jvmArgs = "--enable-native-access=ALL-UNNAMED";
+  env.GRADLE_OPTS = env.GRADLE_OPTS
+    ? `${env.GRADLE_OPTS} ${jvmArgs}`
+    : jvmArgs;
+
+  // Also set for Gradle daemon JVM
+  const daemonArgs = `-Dorg.gradle.jvmargs=${jvmArgs}`;
+  env.GRADLE_OPTS = `${env.GRADLE_OPTS} ${daemonArgs}`;
+
+  return env;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function die(msg) {
@@ -94,6 +121,7 @@ function buildCache(root, wrapper) {
       cwd: root,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      env: prepareEnv(),
       timeout: 120_000,
     });
   } catch (err) {
@@ -181,31 +209,38 @@ function prefixArgs(args, projectPath) {
 function main() {
   const args = process.argv.slice(2);
 
+  // Find repo root first
+  const found = findRepoRoot(process.cwd());
+
+  // Handle --help: context-aware help
   if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
-    console.log(`zbb — ZeroBias Build
+    if (!found) {
+      // Not in a Gradle project
+      console.error(`zbb: requires a Gradle project
 
-Usage: zbb [gradle-args...] <task> [task...]
+Please run zbb from a directory containing build.gradle.kts or gradlew.
+To see available tasks in a Gradle project, use: zbb --help`);
+      process.exit(1);
+    }
 
-Detects which Gradle subproject you're in and qualifies task names
-automatically. Flags and already-qualified tasks pass through unchanged.
-
-Examples:
-  zbb compile              Run :project:compile
-  zbb test gate            Run :project:test :project:gate
-  zbb --info compile       Run :project:compile with --info flag
-  zbb :other:task          Already qualified — passed through as-is
-  zbb projects             From repo root — runs ./gradlew projects
-
-Options:
-  --refresh-cache          Force rebuild of project mappings cache
-  --help, -h               Show this help message`);
-    process.exit(0);
+    // Inside Gradle project: show tasks
+    const { root, wrapper } = found;
+    try {
+      execFileSync(wrapper, ["-q", "tasks"], {
+        cwd: root,
+        stdio: "inherit",
+        env: prepareEnv(),
+        timeout: 120_000,
+      });
+      process.exit(0);
+    } catch (err) {
+      process.exit(err.status ?? 1);
+    }
   }
 
-  // Find repo root
-  const found = findRepoRoot(process.cwd());
+  // Ensure we're in a Gradle project for normal operations
   if (!found) {
-    die("no gradlew found in any parent directory");
+    die("requires a Gradle project. Run from a directory with build.gradle.kts or gradlew");
   }
   const { root, wrapper } = found;
 
@@ -232,11 +267,12 @@ Options:
   // Build final args
   const gradleArgs = projectPath ? prefixArgs(args, projectPath) : args;
 
-  // Exec gradlew (replaces this process)
+  // Exec gradlew with prepared environment (Java 21, native access flags)
   try {
     const result = execFileSync(wrapper, gradleArgs, {
       cwd: root,
       stdio: "inherit",
+      env: prepareEnv(),
       timeout: 600_000,
     });
     process.exit(0);
