@@ -1,7 +1,5 @@
 package com.zerobias.buildtools.util
 
-import org.gradle.api.Project
-import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -31,13 +29,11 @@ object ContainerTrackingUtils {
     /**
      * List all containers with zerobias labels.
      *
-     * @param project Gradle project (for exec)
      * @param slot Optional slot name filter
      * @param module Optional module name filter
      * @return List of container info
      */
     fun listContainers(
-        project: Project,
         slot: String? = null,
         module: String? = null
     ): List<ContainerInfo> {
@@ -59,14 +55,12 @@ object ContainerTrackingUtils {
         ) + filterArgs
 
         val output = try {
-            val process = ProcessBuilder(command)
-                .redirectErrorStream(false)
-                .start()
-            val stdout = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            stdout
+            ExecUtils.execCapture(
+                command = command,
+                throwOnError = false
+            )
         } catch (e: Exception) {
-            project.logger.warn("Failed to list containers: ${e.message}")
+            println("WARN: Failed to list containers: ${e.message}")
             return emptyList()
         }
 
@@ -101,22 +95,20 @@ object ContainerTrackingUtils {
     /**
      * Get containers for a specific slot.
      *
-     * @param project Gradle project
      * @param slotName Slot name
      * @return List of containers for this slot
      */
-    fun getSlotContainers(project: Project, slotName: String): List<ContainerInfo> {
-        return listContainers(project, slot = slotName)
+    fun getSlotContainers(slotName: String): List<ContainerInfo> {
+        return listContainers(slot = slotName)
     }
 
     /**
      * Get orphaned containers (slot label exists but slot directory doesn't).
      *
-     * @param project Gradle project
      * @return List of orphaned containers
      */
-    fun getOrphanedContainers(project: Project): List<ContainerInfo> {
-        return listContainers(project).filter { it.isOrphaned }
+    fun getOrphanedContainers(): List<ContainerInfo> {
+        return listContainers().filter { it.isOrphaned }
     }
 
     /**

@@ -29,7 +29,7 @@ abstract class ListContainersTask @Inject constructor(
     fun execute() {
         val slot = projectInstance.findProperty("slot") as String?
         val module = projectInstance.findProperty("module") as String?
-        val containers = ContainerTrackingUtils.listContainers(projectInstance, slot, module)
+        val containers = ContainerTrackingUtils.listContainers(slot, module)
 
         if (containers.isEmpty()) {
             println("No containers found")

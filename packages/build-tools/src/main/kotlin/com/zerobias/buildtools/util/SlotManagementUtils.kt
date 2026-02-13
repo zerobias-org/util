@@ -1,7 +1,6 @@
 package com.zerobias.buildtools.util
 
 import org.gradle.api.Project
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -53,7 +52,7 @@ object SlotManagementUtils {
 
                     val slotName = slotDir.name
                     val envVars = SlotUtils.loadSlotEnv(slotName)
-                    val containers = ContainerTrackingUtils.getSlotContainers(project, slotName)
+                    val containers = ContainerTrackingUtils.getSlotContainers(slotName)
 
                     SlotInfo(
                         name = slotName,
@@ -66,7 +65,7 @@ object SlotManagementUtils {
                         isRunning = containers.any { it.status == "running" }
                     )
                 } catch (e: Exception) {
-                    project.logger.warn("Failed to load slot ${slotDir.name}: ${e.message}")
+                    println("WARN: Failed to load slot ${slotDir.name}: ${e.message}")
                     null
                 }
             }
@@ -90,7 +89,7 @@ object SlotManagementUtils {
         }
 
         val envVars = SlotUtils.loadSlotEnv(slotName)
-        val containers = ContainerTrackingUtils.getSlotContainers(project, slotName)
+        val containers = ContainerTrackingUtils.getSlotContainers(slotName)
 
         return SlotInfo(
             name = slotName,

@@ -1,5 +1,6 @@
 package com.zerobias.buildtools.module
 
+import com.zerobias.buildtools.util.ExecUtils
 import org.gradle.api.GradleException
 import java.io.File
 import java.net.HttpURLConnection
@@ -58,7 +59,7 @@ object DockerRunner {
      */
     fun start(imageName: String, containerName: String, hostPort: Int, insecure: Boolean): ContainerInfo {
         // Remove any existing container with this name (idempotent restart)
-        exec(listOf("docker", "rm", "-f", containerName), throwOnError = false)
+        ExecUtils.execIgnoreErrors(listOf("docker", "rm", "-f", containerName))
 
         val cmd = buildList {
             add("docker"); add("run"); add("-d")
@@ -70,7 +71,7 @@ object DockerRunner {
             add(imageName)
         }
 
-        val containerId = exec(cmd).trim()
+        val containerId = ExecUtils.execCapture(cmd).trim()
         return ContainerInfo(
             containerId = containerId,
             port = hostPort,
@@ -123,23 +124,23 @@ object DockerRunner {
      * Stop and remove a container by ID and name.
      */
     fun stop(containerId: String, @Suppress("UNUSED_PARAMETER") containerName: String) {
-        exec(listOf("docker", "stop", "-t", "10", containerId), throwOnError = false)
-        exec(listOf("docker", "rm", "-f", containerId), throwOnError = false)
+        ExecUtils.execIgnoreErrors(listOf("docker", "stop", "-t", "10", containerId))
+        ExecUtils.execIgnoreErrors(listOf("docker", "rm", "-f", containerId))
     }
 
     /**
      * Stop and remove a container by name only (fallback when JSON file is missing).
      */
     fun stopByName(containerName: String) {
-        exec(listOf("docker", "stop", "-t", "10", containerName), throwOnError = false)
-        exec(listOf("docker", "rm", "-f", containerName), throwOnError = false)
+        ExecUtils.execIgnoreErrors(listOf("docker", "stop", "-t", "10", containerName))
+        ExecUtils.execIgnoreErrors(listOf("docker", "rm", "-f", containerName))
     }
 
     /**
      * Get container logs for diagnostics.
      */
     fun getLogs(containerId: String): String {
-        return exec(listOf("docker", "logs", containerId), throwOnError = false)
+        return ExecUtils.execCapture(listOf("docker", "logs", containerId), throwOnError = false)
     }
 
     /**
@@ -147,25 +148,5 @@ object DockerRunner {
      */
     fun findFreePort(): Int {
         return ServerSocket(0).use { it.localPort }
-    }
-
-    /**
-     * Execute a command and return stdout. Throws on non-zero exit unless throwOnError=false.
-     */
-    private fun exec(command: List<String>, throwOnError: Boolean = true): String {
-        val process = ProcessBuilder(command)
-            .redirectErrorStream(false)
-            .start()
-
-        val stdout = process.inputStream.bufferedReader().readText()
-        val stderr = process.errorStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-
-        if (exitCode != 0 && throwOnError) {
-            throw GradleException(
-                "Command failed (exit $exitCode): ${command.joinToString(" ")}\n$stderr"
-            )
-        }
-        return stdout
     }
 }

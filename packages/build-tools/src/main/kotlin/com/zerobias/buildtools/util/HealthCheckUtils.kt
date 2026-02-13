@@ -1,10 +1,7 @@
 package com.zerobias.buildtools.util
 
 import org.gradle.api.GradleException
-import org.gradle.api.Project
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.net.URL
 
 /**
  * Utilities for health checking Docker containers and HTTP services.
@@ -15,7 +12,6 @@ object HealthCheckUtils {
      *
      * Uses `docker compose ps --format json` to check container health status.
      *
-     * @param project Gradle project (for exec)
      * @param workingDir Directory containing docker-compose.yml
      * @param slotName Stack/project name for docker compose (-p flag)
      * @param serviceName Name of the service to check
@@ -24,7 +20,6 @@ object HealthCheckUtils {
      * @throws GradleException if service doesn't become healthy within maxWait
      */
     fun waitForDockerHealth(
-        project: Project,
         workingDir: File,
         slotName: String,
         serviceName: String,
@@ -35,16 +30,14 @@ object HealthCheckUtils {
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < maxWaitSeconds * 1000) {
             val status = try {
-                val process = ProcessBuilder(
-                    "docker", "compose", "-p", slotName, "--env-file", envFile.absolutePath,
-                    "ps", "--format", "json", serviceName
+                ExecUtils.execCapture(
+                    command = listOf(
+                        "docker", "compose", "-p", slotName, "--env-file", envFile.absolutePath,
+                        "ps", "--format", "json", serviceName
+                    ),
+                    workingDir = workingDir,
+                    throwOnError = false
                 )
-                    .directory(workingDir)
-                    .redirectErrorStream(false)
-                    .start()
-                val stdout = process.inputStream.bufferedReader().readText()
-                process.waitFor()
-                stdout
             } catch (e: Exception) {
                 ""
             }
@@ -92,7 +85,6 @@ object HealthCheckUtils {
     /**
      * Check if a list of Docker services are all running and healthy.
      *
-     * @param project Gradle project (for exec)
      * @param workingDir Directory containing docker-compose.yml
      * @param slotName Stack/project name for docker compose (-p flag)
      * @param envFile .env file for docker compose (--env-file flag)
@@ -100,25 +92,22 @@ object HealthCheckUtils {
      * @return true if all services are running and healthy, false otherwise
      */
     fun checkServicesHealthy(
-        project: Project,
         workingDir: File,
         slotName: String,
         envFile: File,
         expectedServices: List<String>
     ): Boolean {
         val statusOutput = try {
-            val process = ProcessBuilder(
-                "docker", "compose", "-p", slotName, "--env-file", envFile.absolutePath,
-                "ps", "--format", "json"
+            ExecUtils.execCapture(
+                command = listOf(
+                    "docker", "compose", "-p", slotName, "--env-file", envFile.absolutePath,
+                    "ps", "--format", "json"
+                ),
+                workingDir = workingDir,
+                throwOnError = false
             )
-                .directory(workingDir)
-                .redirectErrorStream(false)
-                .start()
-            val stdout = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            stdout
         } catch (e: Exception) {
-            project.logger.warn("Failed to check service health: ${e.message}")
+            println("WARN: Failed to check service health: ${e.message}")
             return false
         }
 
