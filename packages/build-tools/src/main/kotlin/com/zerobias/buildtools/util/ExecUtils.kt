@@ -2,6 +2,7 @@ package com.zerobias.buildtools.util
 
 import org.gradle.api.GradleException
 import java.io.File
+import java.util.concurrent.CompletableFuture
 
 /**
  * Gradle 9 compatible command execution utilities.
@@ -38,8 +39,19 @@ object ExecUtils {
         processBuilder.redirectErrorStream(false)
 
         val process = processBuilder.start()
-        val stdout = process.inputStream.bufferedReader().readText()
-        val stderr = process.errorStream.bufferedReader().readText()
+
+        // Read stdout and stderr concurrently to avoid deadlock when either
+        // pipe buffer fills up (typically 64KB on Linux). Sequential reads
+        // deadlock when the unread pipe fills before the read pipe closes.
+        val stdoutFuture = CompletableFuture.supplyAsync {
+            process.inputStream.bufferedReader().readText()
+        }
+        val stderrFuture = CompletableFuture.supplyAsync {
+            process.errorStream.bufferedReader().readText()
+        }
+
+        val stdout = stdoutFuture.join()
+        val stderr = stderrFuture.join()
         val exitCode = process.waitFor()
 
         if (exitCode != 0 && throwOnError) {
