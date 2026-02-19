@@ -10,9 +10,12 @@ permissions:
 
 env:
   ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
-  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NPM_TOKEN: ${{ secrets.READ_TOKEN }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   READ_TOKEN: ${{ secrets.READ_TOKEN }}
+  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+  SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
 
 jobs:
   test:
@@ -20,68 +23,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Acquire cache v4
-        uses: actions/cache@v4
+      - name: Import Secrets
+        uses: hashicorp/vault-action@v2.4.3
         with:
-          path: .git
-          key: repo-git-folder
+          method: jwt
+          url: ${{ secrets.VAULT_ADDR }}
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github platformUrl | PLATFORM_URL;
+            operations-kv/data/ci/github platformApiKey | PLATFORM_API_KEY;
 
-      - name: Check out code v4
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup node v4
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-
-      - name: Setup java v3
-        uses: actions/setup-java@v3
-        with:
-          java-version: '8'
-          distribution: 'zulu'
-      
-      - name: Configure git user
-        run: |
-          git config --global user.email "ci@neverfail.com"
-          git config --global user.name "@$GITHUB_ACTOR"
-
-      - name: Install nx
-        run: |
-          npm install -g nx@20.5.0
-        env:
-          NPM_TOKEN: ${{ env.NPM_TOKEN }}
-          ZB_TOKEN: ${{ env.ZB_TOKEN }}
-
-      - name: Determine base ref for nx affected
-        id: base_ref
-        run: |
-          # Get the last publish tag for nx affected base reference
-          LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "")
-          if [ -z "$LAST_PUBLISH_TAG" ]; then
-            echo "No publish tag found, using origin/main~1 as base"
-            echo "BASE_REF=origin/main~1" >> $GITHUB_OUTPUT
-          else
-            echo "Using last publish tag as base: $LAST_PUBLISH_TAG"
-            echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
-          fi
-        env:
-          NPM_TOKEN: ${{ env.NPM_TOKEN }}
-          ZB_TOKEN: ${{ env.ZB_TOKEN }}
-
-      - name: Install and build
-        run: |
-          npm ci
-          nx affected -t build --base=${{ steps.base_ref.outputs.BASE_REF }}
-        env:
-          NPM_TOKEN: ${{ env.NPM_TOKEN }}
-          ZB_TOKEN: ${{ env.ZB_TOKEN }}
-
-      - name: Run tests
-        run: |
-          nx affected -t test --base=${{ steps.base_ref.outputs.BASE_REF }}
-        env:
-          NPM_TOKEN: ${{ env.NPM_TOKEN }}
-          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+      - name: Pull Request Hoisted
+        uses: zerobias-org/devops/nx-actions/pull-request-hoisted@main

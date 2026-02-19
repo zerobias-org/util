@@ -713,7 +713,31 @@ public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
             // We need to spread it: { ...param } instead of { param }
             // This applies regardless of path params count (e.g., PUT /resource/{id} with body)
             if (useSpecHttpMethods && op.bodyParams.size() == 1) {
-                op.vendorExtensions.put("x-single-body-param", true);
+                CodegenParameter bodyParam = op.bodyParams.get(0);
+                // Check if body param is a binary/file type that cannot be spread
+                boolean isBinaryBody = isDataTypeFile(bodyParam.dataType)
+                    || "Buffer".equals(bodyParam.dataType)
+                    || bodyParam.isBinary
+                    || bodyParam.isFile;
+                // Check if body param is an array type that cannot be spread into an object
+                boolean isArrayBody = bodyParam.isArray;
+                // Check if body param is a primitive type that cannot be spread
+                boolean isPrimitiveBody = bodyParam.isString
+                    || bodyParam.isInteger
+                    || bodyParam.isLong
+                    || bodyParam.isNumber
+                    || bodyParam.isFloat
+                    || bodyParam.isDouble
+                    || bodyParam.isBoolean;
+                if (isBinaryBody) {
+                    op.vendorExtensions.put("x-is-binary-body", true);
+                } else if (isArrayBody) {
+                    op.vendorExtensions.put("x-is-array-body", true);
+                } else if (isPrimitiveBody) {
+                    op.vendorExtensions.put("x-is-primitive-body", true);
+                } else {
+                    op.vendorExtensions.put("x-single-body-param", true);
+                }
             }
 
             if (op.vendorExtensions.containsKey("x-method-name")) {

@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-api-invoker-isomorphic",
-  "version": "1.0.19",
+  "version": "1.0.32",
   "description": "Isomorphic Api Invoker",
   "type": "module",
   "main": "dist/src/index.js",
@@ -14,13 +14,13 @@
   "scripts": {
     "clean": "rm -rf dist/",
     "transpile": "tsc -b",
-    "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx/esm ../../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test -- --watch --reporter=min",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
     "build": "npm run lint && npm run transpile",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "nx:build": "npm run lint && npm run transpile"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",
@@ -37,6 +37,6 @@
     "bom.json"
   ],
   "dependencies": {
-    "@zerobias-org/util-api-invoker-api": "^1.0.7"
+    "@zerobias-org/util-api-invoker-api": "^1.0.31"
   }
 }

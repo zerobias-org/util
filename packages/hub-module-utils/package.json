@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-hub-module-utils",
   "description": "Hub Module utils",
-  "version": "2.0.13",
+  "version": "2.0.30",
   "type": "module",
   "main": "dist/src/index.js",
   "exports": {
@@ -14,13 +14,13 @@
     "clean": "rm -rf dist/ generated/",
     "transpile": "tsc -b",
     "build": "npm run lint && npm run generate && npm run transpile",
+    "nx:build": "npm run lint && npm run generate && npm run transpile",
     "generate": "hub-generator generate -g hub-module -i test/unit/enum.yml -o generated/",
-    "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test:generate && npm run test -- --watch --reporter=min",
     "lint": "eslint src/",
-    "lint:fix": "eslint --fix src/",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "lint:fix": "eslint --fix src/"
   },
   "repository": {
     "type": "git",
@@ -36,8 +36,7 @@
     "dist",
     "bom.json"
   ],
-  "dependencies": {},
-  "devDependencies": {
-    "@zerobias-org/util-codegen": "^2.0.5"
+  "dependencies": {
+    "@zerobias-org/util-codegen": "^2.0.35"
   }
 }

@@ -554,8 +554,22 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
                     || "Buffer".equals(bodyParam.dataType)
                     || bodyParam.isBinary
                     || bodyParam.isFile;
+                // Check if body param is an array type that cannot be spread into an object
+                boolean isArrayBody = bodyParam.isArray;
+                // Check if body param is a primitive type that cannot be spread
+                boolean isPrimitiveBody = bodyParam.isString
+                    || bodyParam.isInteger
+                    || bodyParam.isLong
+                    || bodyParam.isNumber
+                    || bodyParam.isFloat
+                    || bodyParam.isDouble
+                    || bodyParam.isBoolean;
                 if (isBinaryBody) {
                     op.vendorExtensions.put("x-is-binary-body", true);
+                } else if (isArrayBody) {
+                    op.vendorExtensions.put("x-is-array-body", true);
+                } else if (isPrimitiveBody) {
+                    op.vendorExtensions.put("x-is-primitive-body", true);
                 } else {
                     op.vendorExtensions.put("x-single-body-param", true);
                 }

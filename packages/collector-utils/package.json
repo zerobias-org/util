@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/collector-utils",
-  "version": "1.0.13",
+  "version": "1.0.29",
   "description": "Common utilities for collector bots - HTTP fetching, data chunking, CSV/YAML parsing",
   "type": "module",
   "main": "dist/src/index.js",
@@ -16,12 +16,12 @@
     "clean": "rm -rf dist/",
     "transpile": "tsc -b",
     "build": "npm run lint && npm run transpile",
+    "nx:build": "npm run lint && npm run transpile",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
-    "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
-    "test:watch": "npm run test -- --watch --reporter=min",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts",
+    "test:watch": "npm run test -- --watch --reporter=min"
   },
   "files": [
     "dist/src",
@@ -44,8 +44,8 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@zerobias-org/logger": "^2.0.4",
-    "@zerobias-org/util-connector": "^1.0.2"
+    "@zerobias-org/logger": "^2.0.34",
+    "@zerobias-org/util-connector": "^1.0.30"
   },
   "engines": {
     "node": ">=22.0.0",

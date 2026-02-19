@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-api-invoker-api",
-  "version": "1.0.18",
+  "version": "1.0.31",
   "description": "Api Invoker API",
   "type": "module",
   "main": "dist/index.js",
@@ -21,8 +21,7 @@
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "build": "npm run lint && npm run transpile",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "nx:build": "npm run lint && npm run transpile"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",

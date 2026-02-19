@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/eslint-config",
-  "version": "1.0.20",
+  "version": "1.0.33",
   "description": "Zerobias organization eslint configuration",
   "type": "module",
   "main": "eslint.config.js",
@@ -22,10 +22,6 @@
     "eslint",
     "eslintconfig"
   ],
-  "scripts": {
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
-  },
   "files": [
     "eslint.config.js"
   ]

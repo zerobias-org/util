@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-codegen",
   "description": "OpenAPI Generator for models and server apis",
-  "version": "2.0.16",
+  "version": "2.0.35",
   "type": "module",
   "author": "team@zerobias.com",
   "license": "ISC",
@@ -27,12 +27,11 @@
     "copyDeps": "cp build/libs/hub-module-codegen-*.jar bin/hub-module-codegen.jar && cp build/dependencies/openapi-generator-cli-*.jar bin/openapi-generator-cli.jar",
     "compile": "./gradlew :build",
     "build": "npm run compile && npm run copyDeps",
+    "nx:build": "npm run compile && npm run copyDeps",
     "generate:test": "./bin/hub-generator.js generate -g hub-module -i ./api.yml -o generated -p modulePackage=../../src",
     "generate:server:test": "./bin/hub-generator.js generate -g hub-module-server -i ./api.yml -o generated/ -p modulePackage=../../src",
     "test:regression": "npm run build && mocha --inline-diffs --reporter=list test/unit/**/*.ts",
-    "test": "npm run generate:test",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "test": "npm run generate:test"
   },
   "files": [
     "bin/",
@@ -50,6 +49,6 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
-    "@zerobias-org/util-connector": "^1.0.2"
+    "@zerobias-org/util-connector": "^1.0.30"
   }
 }

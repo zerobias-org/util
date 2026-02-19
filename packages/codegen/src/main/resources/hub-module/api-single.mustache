@@ -4,6 +4,7 @@
 // ===============================================
 {{^skipHubImpl}}
 import { AxiosInstance } from 'axios';
+import qs from 'qs';
 {{/skipHubImpl}}
 {{#imports}}
 import { {{classname}} } from '../{{filename}}/index.js';
@@ -13,6 +14,26 @@ import { {{classname}} } from '{{filename}}';
 {{/tsImports}}
 import { {{coreTypes}}CoreError, ParameterRequiredError, UnexpectedError, HttpMethod } from '{{#isCore}}../../src{{/isCore}}{{^isCore}}@zerobias-org/types-core-js{{/isCore}}';
 import { RequestFile, ObjectSerializer } from '../model/index.js';
+
+{{^skipHubImpl}}
+// Helper to serialize core types (UUID, Nmtoken, URL, etc.) and EnumValues for query params
+// All @zerobias-org/types-core-js types implement toJSON() for proper serialization
+function serializeQueryParams(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(serializeQueryParams);
+  // Core types and EnumValues all have toJSON() - use it for serialization
+  if (typeof obj.toJSON === 'function') {
+    return obj.toJSON();
+  }
+  // Recursively process plain object properties
+  const result: any = {};
+  for (const key of Object.keys(obj)) {
+    result[key] = serializeQueryParams(obj[key]);
+  }
+  return result;
+}
+{{/skipHubImpl}}
 {{#isConnector}}
 import { ConnectionWrapper } from './index.js';
 {{/isConnector}}
@@ -415,21 +436,50 @@ export class {{classname}}HubImpl implements {{producerName}} {
   {{#vendorExtensions.x-is-binary-body}}
   const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
   {{/vendorExtensions.x-is-binary-body}}
+  {{#vendorExtensions.x-is-array-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}} ?? [];
+  {{/vendorExtensions.x-is-array-body}}
+  {{#vendorExtensions.x-is-primitive-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
+  {{/vendorExtensions.x-is-primitive-body}}
   {{^vendorExtensions.x-is-binary-body}}
+  {{^vendorExtensions.x-is-array-body}}
+  {{^vendorExtensions.x-is-primitive-body}}
   const _bodyParams = {
       {{#vendorExtensions.x-single-body-param}}...({{#bodyParams}}{{paramName}}{{/bodyParams}} ?? {}),{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#bodyParams}}{{paramName}},{{/bodyParams}}{{/vendorExtensions.x-single-body-param}}
   };
+  {{/vendorExtensions.x-is-primitive-body}}
+  {{/vendorExtensions.x-is-array-body}}
   {{/vendorExtensions.x-is-binary-body}}
   {{/vendorExtensions.x-returns-paged-results}}
   {{#vendorExtensions.x-returns-paged-results}}
-  {{! For paged results, keep _body for results.body assignment }}
+  {{! For paged results, define query params (excluding producer-omit params), body params, and _body for results.body assignment }}
+  const _queryParams = {
+      {{#queryParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/queryParams}}
+  };
   {{#vendorExtensions.x-is-binary-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
   const _body = {{#bodyParams}}{{paramName}}{{/bodyParams}};
   {{/vendorExtensions.x-is-binary-body}}
+  {{#vendorExtensions.x-is-array-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}} ?? [];
+  const _body = {{#bodyParams}}{{paramName}}{{/bodyParams}} ?? [];
+  {{/vendorExtensions.x-is-array-body}}
+  {{#vendorExtensions.x-is-primitive-body}}
+  const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
+  const _body = {{#bodyParams}}{{paramName}}{{/bodyParams}};
+  {{/vendorExtensions.x-is-primitive-body}}
   {{^vendorExtensions.x-is-binary-body}}
+  {{^vendorExtensions.x-is-array-body}}
+  {{^vendorExtensions.x-is-primitive-body}}
+  const _bodyParams = {
+      {{#vendorExtensions.x-single-body-param}}...({{#bodyParams}}{{paramName}}{{/bodyParams}} ?? {}),{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#bodyParams}}{{paramName}},{{/bodyParams}}{{/vendorExtensions.x-single-body-param}}
+  };
   const _body = {
       {{#vendorExtensions.x-single-body-param}}...({{#bodyParams}}{{paramName}}{{/bodyParams}} ?? {}),{{/vendorExtensions.x-single-body-param}}{{^vendorExtensions.x-single-body-param}}{{#allParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/allParams}}{{/vendorExtensions.x-single-body-param}}
   };
+  {{/vendorExtensions.x-is-primitive-body}}
+  {{/vendorExtensions.x-is-array-body}}
   {{/vendorExtensions.x-is-binary-body}}
   {{/vendorExtensions.x-returns-paged-results}}
   {{! Build path with path params substituted }}
@@ -445,8 +495,9 @@ export class {{classname}}HubImpl implements {{producerName}} {
         ..._body,
         {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
         pageSize: results.pageSize,
-      }
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams }{{/vendorExtensions.x-returns-paged-results}})
+      },
+      paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams, paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-get-method}}
   {{#vendorExtensions.x-is-delete-method}}
   return this.client.{{vendorExtensions.x-lower-http-method}}(
@@ -456,18 +507,23 @@ export class {{classname}}HubImpl implements {{producerName}} {
         ..._body,
         {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
         pageSize: results.pageSize,
-      }
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams }{{/vendorExtensions.x-returns-paged-results}})
+      },
+      paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}{ params: _queryParams, paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-delete-method}}
   {{^vendorExtensions.x-is-get-method}}
   {{^vendorExtensions.x-is-delete-method}}
   return this.client.{{vendorExtensions.x-lower-http-method}}(
     _path,
-    {{#vendorExtensions.x-returns-paged-results}}{
-      ..._body,
-      {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
-      pageSize: results.pageSize,
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}_bodyParams{{/vendorExtensions.x-returns-paged-results}})
+    {{#vendorExtensions.x-returns-paged-results}}_bodyParams,
+    {
+      params: {
+        {{#queryParams}}{{^vendorExtensions.x-producer-omit}}{{paramName}},{{/vendorExtensions.x-producer-omit}}{{/queryParams}}
+        {{#vendorExtensions.x-pagination-include-page-number}}pageNumber: results.pageNumber,{{/vendorExtensions.x-pagination-include-page-number}}{{#vendorExtensions.x-pagination-include-page-token}}pageToken: results.pageToken,{{/vendorExtensions.x-pagination-include-page-token}}
+        pageSize: results.pageSize,
+      },
+      paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }),
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}_bodyParams, { params: _queryParams, paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-delete-method}}
   {{/vendorExtensions.x-is-get-method}}
   {{/vendorExtensions.x-use-spec-http-methods}}
@@ -503,7 +559,7 @@ export class {{classname}}HubImpl implements {{producerName}} {
       results.count = response.headers.count ? Number(response.headers.count) : -1;
       results.pageToken = response.headers.pagetoken ?? response.headers.pageToken;
       results.headers = this.headers;
-      {{#vendorExtensions.x-use-spec-http-methods}}results.baseUrl = new URL(`${this.client.getUri()}{{path}}`);{{/vendorExtensions.x-use-spec-http-methods}}{{^vendorExtensions.x-use-spec-http-methods}}results.baseUrl = new URL(`${this.client.getUri()}/{{operationId}}`);{{/vendorExtensions.x-use-spec-http-methods}}
+      {{#vendorExtensions.x-use-spec-http-methods}}results.baseUrl = new URL(`${this.client.getUri()}${_path}`);{{/vendorExtensions.x-use-spec-http-methods}}{{^vendorExtensions.x-use-spec-http-methods}}results.baseUrl = new URL(`${this.client.getUri()}/{{operationId}}`);{{/vendorExtensions.x-use-spec-http-methods}}
       {{#vendorExtensions.x-use-spec-http-methods}}results.httpMethod = HttpMethod.{{vendorExtensions.x-titlecase-http-method}};{{/vendorExtensions.x-use-spec-http-methods}}{{^vendorExtensions.x-use-spec-http-methods}}results.httpMethod = HttpMethod.Put;{{/vendorExtensions.x-use-spec-http-methods}}
       results.body = _body;
       results.mapper = (obj) => ObjectSerializer.deserialize(obj, '{{{returnBaseType}}}');

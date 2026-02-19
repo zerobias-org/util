@@ -1,26 +1,22 @@
 {
   "name": "@zerobias-org/logger",
-  "version": "2.0.15",
-  "description": "ZeroBias Logger - standard logging for all services",
+  "version": "2.0.34",
+  "description": "ZeroBias Logger - standard logging for all services.",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js",
-      "default": "./dist/src/index.js"
-    }
+  "browser": {
+    "./dist/src/index.js": "./dist/src/browser.js"
   },
   "scripts": {
     "clean": "rm -rf dist/",
     "transpile": "tsc -b",
     "build": "npm run lint && npm run transpile",
+    "nx:build": "npm run lint && npm run transpile",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
-    "test": "mocha --inline-diffs --reporter=list test/unit/**/*.ts",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts"
   },
   "files": [
     "dist/src",
@@ -40,7 +36,6 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
-  "dependencies": {},
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"

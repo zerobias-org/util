@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/data-utils",
-  "version": "1.0.1",
+  "version": "1.0.22",
   "description": "Utility library for DataProducer implementations and data mapping - schema generation, validation, type mapping, field transformations, and DataProducer client",
   "keywords": [
     "DataProducer",
@@ -26,27 +26,26 @@
     "clean": "rimraf dist/ .docs/",
     "transpile": "tsc -b",
     "build": "npm run lint && npm run transpile",
-    "test": "mocha --inline-diffs --reporter=list 'test/unit/**/*.ts'",
-    "test:unit": "mocha --inline-diffs --reporter=list test/unit/*.ts",
+    "nx:build": "npm run lint && npm run transpile",
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test -- --watch --reporter=min",
     "lint": "eslint 'src/**/*.ts'",
-    "lint:fix": "eslint --fix 'src/**/*.ts'",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "lint:fix": "eslint --fix 'src/**/*.ts'"
   },
   "sideEffects": false,
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "files": [
     "./dist/**/*",
     "package.json",
     "README.md"
   ],
   "dependencies": {
-    "@zerobias-org/util-connector": "^1.0.12"
+    "@zerobias-org/util-connector": "^1.0.30"
   }
 }

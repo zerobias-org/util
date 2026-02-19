@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-api-client-base",
-  "version": "1.0.22",
+  "version": "1.0.38",
   "description": "Base classes and utilities for platform API clients",
   "type": "module",
   "main": "dist/src/index.js",
@@ -18,11 +18,10 @@
     "docs:typedoc": "typedoc --out docs/api src/index.ts",
     "docs": "npm run docs:typedoc",
     "build": "npm run lint && npm run transpile && npm run docs",
+    "nx:build": "npm run transpile && npm run docs",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
-    "test": "echo 'No tests defined'",
-    "nx:prepublish": "prepublish-standalone",
-    "nx:publish": "publish"
+    "test": "echo 'No tests defined'"
   },
   "files": [
     "dist/src",
@@ -46,6 +45,7 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "dependencies": {
-    "@zerobias-org/util-api-invoker-isomorphic": "^1.0.8"
+    "@zerobias-org/util-api-invoker-api": "^1.0.31",
+    "@zerobias-org/util-api-invoker-isomorphic": "^1.0.32"
   }
 }

@@ -49,7 +49,7 @@ export interface AuthManagerConfig {
  * Default configuration values
  */
 const DEFAULTS = {
-  TIMEOUT: 30000 // 30 seconds
+  TIMEOUT: 30_000 // 30 seconds
 } as const;
 
 /**
@@ -131,16 +131,12 @@ export class AuthManager {
       throw new Error(`No auth session found for deployment: ${deploymentId}`);
     }
 
-    if (this.config.authVersion === 'v1') {
-      return {
+    return this.config.authVersion === 'v1' ? {
         [AUTH_HEADERS.V1_AUTH]: session.authKey
-      };
-    } else {
-      return {
+      } : {
         [AUTH_HEADERS.V2_DEPLOYMENT_ID]: session.deploymentId,
         [AUTH_HEADERS.V2_MODULE_AUTH]: session.authKey
       };
-    }
   }
 
   /**
