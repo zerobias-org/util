@@ -11,8 +11,10 @@ group = 'com.zerobias.hub'
 version = '1.0.0'
 description = 'OpenAPI Generator for creating Hub Modules'
 
-sourceCompatibility = 8
-targetCompatibility = 8
+java {
+  sourceCompatibility = JavaVersion.VERSION_1_8
+  targetCompatibility = JavaVersion.VERSION_1_8
+}
 
 tasks.withType(JavaCompile) {
   options.fork = true
@@ -32,7 +34,7 @@ dependencies {
 
 task copyDependencies(type: Copy) {
    from configurations.compileClasspath
-   into "${project.buildDir}/dependencies"
+   into "${project.layout.buildDirectory.get().asFile}/dependencies"
 }
 build.dependsOn += copyDependencies
 
