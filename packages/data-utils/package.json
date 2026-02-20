@@ -46,6 +46,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@zerobias-org/util-connector": "^1.0.30"
+    "@zerobias-org/util-connector": "^1.0.30",
+    "yaml": "^2.8.2"
   }
 }
