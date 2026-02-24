@@ -303,15 +303,16 @@ export class BatchManager {
    * Creates a new batch for the given class, initializes it, and tracks it.
    * @param classType - The class constructor (e.g., ElementType, MitreFolder)
    */
-  async initBatch<T extends object>(classType: new (...args: any[]) => T): Promise<Batch<T>>;
+  async initBatch<T extends object>(classType: new (...args: any[]) => T, groupId?: string): Promise<Batch<T>>;
   /**
    * Creates a new batch for the given class name, initializes it, and tracks it.
    * @param className - The class name string
+   * @param groupId - Optional group ID for this batch
    */
-  async initBatch(className: string): Promise<Batch<object>>;
-  async initBatch<T extends object>(classOrName: (new (...args: any[]) => T) | string): Promise<Batch<T>> {
+  async initBatch(className: string, groupId?: string): Promise<Batch<object>>;
+  async initBatch<T extends object>(classOrName: (new (...args: any[]) => T) | string, groupId?: string): Promise<Batch<T>> {
     const className = typeof classOrName === 'string' ? classOrName : classOrName.name;
-    const batch = new Batch<T>(className, this.platform, this.logger, this.jobId, this.tags);
+    const batch = new Batch<T>(className, this.platform, this.logger, this.jobId, this.tags, groupId);
     await batch.getId();
     this.batches.push(batch);
     return batch;

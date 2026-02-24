@@ -1,5 +1,5 @@
 {
-  "name": "@zerobias-org/collector-utils",
+  "name": "@zerobias-org/util-collector",
   "version": "1.0.29",
   "description": "Common utilities for collector bots - HTTP fetching, data chunking, CSV/YAML parsing",
   "type": "module",
@@ -38,7 +38,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/zerobias-org/util",
-    "directory": "packages/collector-utils"
+    "directory": "packages/collector"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
