@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-content-dev-schema",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Content development database schema for third-party catalog content development",
   "type": "module",
   "author": "Zerobias Team <team@zerobias.com>",
