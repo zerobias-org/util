@@ -13,12 +13,20 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
+  "bin": {
+    "content-dev-setup": "./setup.sh"
+  },
   "files": [
     "sql/*.sql",
     "docker-compose.yml",
     "postgresql.conf",
+    "setup.sh",
     "README.md"
   ],
+  "scripts": {
+    "setup": "./setup.sh",
+    "teardown": "docker compose down -v"
+  },
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"

@@ -1,95 +1,96 @@
 # @zerobias-org/util-content-dev-schema
 
-Content development database schema for third-party catalog content development.
-
-This package provides a self-contained PostgreSQL schema dump that includes the core Hydra tables needed for developing and testing catalog content locally.
-
-## Included Schemas
-
-- **hydra** - Core resource and principal tables
-- **store** - Resource property extensions
-- **catalog** - Content catalog (frameworks, standards, controls, etc.)
-- **portal** - Portal configuration and navigation
+Local database + dataloader for testing ZeroBias content packages (frameworks, standards, products, etc.).
 
 ## Prerequisites
 
-- PostgreSQL 17 with the following extensions available:
-  - `uuid-ossp`
-  - `btree_gist`
-  - `citext`
-  - `pgcrypto`
+- **Node.js** >= 22 / **npm** >= 10
+- **Docker** (running)
+- **psql** (`brew install libpq && brew link --force libpq` on macOS)
+- **ZB_TOKEN** from [app.zerobias.com](https://app.zerobias.com) > Settings > API Keys
 
-**Start PostgreSQL using docker-compose:**
-
-```bash
-docker compose up -d
-```
-
-This starts a Supabase PostgreSQL 17 container with:
-- Port 5432 exposed
-- Data persisted to `~/.docker/volumes/supabase17`
-
-## Installation
+## Quick Start
 
 ```bash
-npm install @zerobias-org/util-content-dev-schema
+# 1. Set your token
+export ZB_TOKEN="your-token-here"
+
+# 2. Run setup
+./setup.sh
+
+# 3. Load content
+npx dataloader @zerobias-org/framework-nist-csf-v2
 ```
 
-## Loading the Schema
-
-Set libpq environment variables for your PostgreSQL connection, or pass a connection URL directly.
-
-**Environment variables:**
+Or via npx (no clone needed):
 
 ```bash
-export PGHOST=localhost
-export PGPORT=5432
-export PGUSER=postgres
-export PGPASSWORD=welcome
-export PGDATABASE=content_dev
+export ZB_TOKEN="your-token-here"
+npx @zerobias-org/util-content-dev-schema
 ```
 
-**Or use a connection URL:**
+### What `setup.sh` Does
+
+1. Validates prerequisites (Node, Docker, psql, ZB_TOKEN, port availability)
+2. Starts PostgreSQL 17 via Docker Compose (port 15432)
+3. Creates the `content_dev` database
+4. Loads the platform schema (hydra, catalog, store, portal — 300+ tables)
+5. Creates the RLS role the dataloader needs
+6. Installs `@zerobias-com/platform-dataloader`
+
+### Using direnv (optional)
+
+If you use [direnv](https://direnv.net/), edit `.envrc` with your `ZB_TOKEN` and run `direnv allow`. The `.npmrc` and all PG connection vars are set automatically when you enter the directory.
+
+## Loading Content
 
 ```bash
-psql "postgresql://postgres:welcome@localhost:5432/content_dev" -f content-schema.sql
+# Load a package
+npx dataloader @zerobias-org/framework-nist-csf-v2
+
+# Dry run (validate without committing)
+npx dataloader -t @zerobias-org/framework-nist-csf-v2
+
+# Load from a local directory
+npx dataloader -d ./my-package
+
+# Force reinstall
+npx dataloader -f @zerobias-org/framework-nist-csf-v2
+
+# List installed packages
+npx dataloader -l packages
+
+# Check for updates
+npx dataloader -l updates
+
+# Update a package
+npx dataloader -u @zerobias-org/framework-nist-csf-v2
 ```
 
-### Option 1: Create a new database and load
+## Verify Data
 
 ```bash
-# Create a fresh database
-createdb content_dev
-
-# Load the schema (extensions require superuser or appropriate privileges)
-psql -f node_modules/@zerobias-org/util-content-dev-schema/sql/content-schema.sql
+psql -d content_dev -c "SELECT count(*) FROM catalog.framework_element_new;"
+psql -d content_dev -c "SELECT package_code, package_type FROM catalog.package ORDER BY package_code;"
 ```
 
-### Option 2: Using psql with explicit connection
+## Cleanup
 
 ```bash
-createdb -h localhost -U postgres content_dev
-psql -h localhost -U postgres -d content_dev -f node_modules/@zerobias-org/util-content-dev-schema/sql/content-schema.sql
+docker compose down -v   # stop PostgreSQL and delete data
 ```
 
-### Option 3: From within psql
+## Troubleshooting
 
-```sql
-CREATE DATABASE content_dev;
-\c content_dev
-\i node_modules/@zerobias-org/util-content-dev-schema/sql/content-schema.sql
-```
+The setup script validates everything upfront before making changes. If it fails, you'll see a clear message:
 
-## Verification
-
-After loading, verify the schema is working:
-
-```sql
--- Check schemas exist
-SELECT schema_name FROM information_schema.schemata
-WHERE schema_name IN ('hydra', 'store', 'catalog', 'portal');
-
--- Check core tables
-SELECT count(*) FROM hydra.resource;
-SELECT count(*) FROM catalog.framework;
-```
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `ZB_TOKEN is not set` | Token not exported | `export ZB_TOKEN="your-token"` |
+| `Docker daemon is not running` | Docker not started | Start Docker Desktop / `dockerd` |
+| `Port 15432 is already in use` | Another service on that port | Stop it, or `export PGPORT=25432` |
+| `Node.js >= 22 required` | Older Node version | Update Node.js |
+| `psql is required but not installed` | Missing PG client | `brew install libpq && brew link --force libpq` |
+| `401 Unauthorized` on npm install | Invalid or expired token | Get a new token from app.zerobias.com |
+| `404 Not Found` on a package | Wrong package name | `npm view @zerobias-org/framework-nist-csf-v2` |
+| `permission denied to set role` | RLS role missing | Re-run `./setup.sh` |
