@@ -56,7 +56,8 @@ object PortUtils {
         portVarNames: List<String>,
         slotEnvFile: File,
         connectEnvFile: File? = null,
-        portMappings: Map<String, (Int) -> String> = emptyMap()
+        portMappings: Map<String, (Int) -> String> = emptyMap(),
+        portAliases: Map<String, String> = emptyMap()
     ): Boolean {
         var updated = false
 
@@ -66,13 +67,23 @@ object PortUtils {
                 val newPort = findAvailablePort(currentPort + 1)
                 println("  $varName: $currentPort → $newPort (port conflict resolved)")
                 envVars[varName] = newPort.toString()
+                // Also update any alias (e.g., PGPORT → POSTGRES_PORT)
+                portAliases[varName]?.let { alias ->
+                    envVars[alias] = newPort.toString()
+                }
                 updated = true
             }
         }
 
         if (updated) {
-            // Update .env file (preserve all variables, just update ports)
-            updateEnvFile(slotEnvFile, envVars, portVarNames)
+            // Build full list of vars to persist: ports + their aliases
+            val allVarNames = portVarNames.toMutableList()
+            portAliases.forEach { (portVar, alias) ->
+                if (portVar in portVarNames) allVarNames.add(alias)
+            }
+
+            // Update .env file (preserve all variables, just update ports + aliases)
+            updateEnvFile(slotEnvFile, envVars, allVarNames)
 
             // Update connect.env if provided
             if (connectEnvFile != null && connectEnvFile.exists()) {

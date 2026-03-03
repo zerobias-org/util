@@ -36,9 +36,15 @@ open class StackTestingExtension {
     var healthCheckTimeout: Int = 60
     var defaultSlotPrefix: String = "test"
     var defaultPortStart: Int = 8000
+
+    /** Extra -P property names this project accepts beyond the standard "slot" and "preserve". */
+    var extraProperties: Set<String> = emptySet()
 }
 
 val extension = extensions.create<StackTestingExtension>("zbStack")
+
+// Validate -P properties before any task executes (fail fast before builds)
+SlotUtils.validateOnStackTasks(gradle, project, setOf("slot", "preserve") + extension.extraProperties)
 
 // Shared slot name resolution
 val slotName: String by lazy {
