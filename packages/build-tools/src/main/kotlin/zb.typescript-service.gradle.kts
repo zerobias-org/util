@@ -184,14 +184,23 @@ tasks.register("dockerBuild") {
             println("WARNING: NPM_TOKEN or ZB_TOKEN not set - Docker build may fail")
         }
 
+        // Prefer GradleDockerfile if present, fall back to Dockerfile
+        val gradleDockerfile = dockerContextDir.resolve("GradleDockerfile")
+        val dockerfileArgs = if (gradleDockerfile.exists()) {
+            println("Using GradleDockerfile")
+            listOf("-f", "GradleDockerfile")
+        } else {
+            println("Using default Dockerfile")
+            emptyList()
+        }
+
         ExecUtils.exec(
             command = listOf(
                 "docker", "build",
                 "-t", image,
                 "--build-arg", "npm_token=${npmToken}",
-                "--build-arg", "zb_token=${zbToken}",
-                "."
-            ),
+                "--build-arg", "zb_token=${zbToken}"
+            ) + dockerfileArgs + listOf("."),
             workingDir = dockerContextDir
         )
 
