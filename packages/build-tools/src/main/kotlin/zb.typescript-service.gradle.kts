@@ -36,6 +36,15 @@ open class TypeScriptServiceExtension {
     var enableLint: Boolean = true
     var enableGenerate: Boolean = true
     var dockerContext: String = "../image"  // Relative to project dir
+    var npmInstallDeps: List<String> = emptyList()  // Additional task dependencies for npmInstall
+
+    // Cross-project build ordering for monorepos with workspace dependencies
+    // Maps workspace package dir name to Gradle project name (e.g., "core" to "core")
+    var workspaceDeps: Map<String, String> = emptyMap()
+    // Additional task dependencies for npmGenerate (e.g., listOf(":core:npmGenerate"))
+    var npmGenerateDeps: List<String> = emptyList()
+    // Additional task dependencies for npmTranspile (e.g., listOf(":core:npmTranspile"))
+    var npmTranspileDeps: List<String> = emptyList()
 }
 
 val extension = extensions.create<TypeScriptServiceExtension>("zbTypeScript")
@@ -80,7 +89,7 @@ tasks.register<NpmTask>("npmLint") {
     group = "verification"
     description = "Run ESLint"
 
-    dependsOn("npmInstall", "npmGenerate")  // Explicit dependency on npmGenerate
+    dependsOn("npmInstall", "npmGenerate")
 
     npmCommand.set(listOf("run", "lint"))
 
@@ -88,9 +97,19 @@ tasks.register<NpmTask>("npmLint") {
 
     inputs.files(fileTree("src") { include("**/*.ts") })
     inputs.files(fileTree("generated") { include("**/*.ts") })
-    outputs.upToDateWhen { false }  // Lint check, always run
+
+    // Stamp file so Gradle can track up-to-date state
+    val lintStamp = layout.buildDirectory.file("lint.stamp")
+    outputs.file(lintStamp)
 
     onlyIf { extension.enableLint }
+
+    doLast {
+        lintStamp.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText("lint passed at ${java.time.Instant.now()}")
+        }
+    }
 }
 
 tasks.register<NpmTask>("npmTranspile") {
@@ -115,9 +134,19 @@ val npmBuild by tasks.registering {
         dependsOn("npmLint")
     }
     dependsOn("npmTranspile")
+}
 
-    doLast {
-        println("✓ TypeScript build complete")
+// Wire up cross-project build ordering after extension is configured
+afterEvaluate {
+    if (extension.npmGenerateDeps.isNotEmpty()) {
+        tasks.named("npmGenerate") {
+            dependsOn(extension.npmGenerateDeps)
+        }
+    }
+    if (extension.npmTranspileDeps.isNotEmpty()) {
+        tasks.named("npmTranspile") {
+            dependsOn(extension.npmTranspileDeps)
+        }
     }
 }
 
@@ -125,40 +154,105 @@ val npmBuild by tasks.registering {
 // Docker Tasks
 // ============================================================
 
-tasks.register("prepareDockerContext") {
+// Build service to serialize prepublish-standalone across parallel subprojects
+// (it temporarily mutates package.json in-place)
+abstract class PrepublishLockService : BuildService<BuildServiceParameters.None>
+val prepublishLock = gradle.sharedServices.registerIfAbsent("prepublishLock", PrepublishLockService::class.java) {}
+
+// npmPack holds the prepublish lock only for the duration of:
+//   prepublish-standalone → npm pack → restore
+// This allows other subprojects' docker builds to run concurrently.
+tasks.register("npmPack") {
     group = "docker"
-    description = "Prepare Docker build context using npm pack"
+    description = "Run prepublish-standalone and npm pack (serialized across subprojects)"
 
     dependsOn(npmBuild)
+    usesService(prepublishLock)
 
-    val dockerContextDir = projectDir.resolve(extension.dockerContext).resolve("package")
+    val imageDir = projectDir.resolve(extension.dockerContext)
+
+    inputs.files(fileTree("src") { include("**/*.ts") })
+    inputs.files(fileTree("generated") { include("**/*.ts") })
+    inputs.file("package.json")
+    inputs.file(projectDir.resolve("../package.json"))
+
+    // Stamp file as durable output (the .tgz is consumed by prepareDockerContext)
+    val packStamp = layout.buildDirectory.file("npm-pack.stamp")
+    outputs.file(packStamp)
 
     doFirst {
-        println("Preparing Docker context...")
+        // Clean any leftover tarballs
+        imageDir.listFiles { f -> f.name.endsWith(".tgz") }?.forEach { delete(it) }
 
+        val packageJson = projectDir.resolve("package.json")
+        val packageJsonBackup = projectDir.resolve("package.json.gradle-bak")
+        val prepublishScript = projectDir.resolve("../node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.sh")
+
+        try {
+            if (prepublishScript.exists()) {
+                // Back up package.json preserving timestamps so Gradle caching isn't invalidated
+                ExecUtils.exec(
+                    command = listOf("cp", "-a", packageJson.absolutePath, packageJsonBackup.absolutePath),
+                    workingDir = projectDir
+                )
+
+                println("Running prepublish-standalone...")
+                ExecUtils.exec(
+                    command = listOf("bash", prepublishScript.absolutePath),
+                    workingDir = projectDir
+                )
+            } else {
+                println("WARNING: prepublish-standalone.sh not found — Docker image may be missing dependencies")
+            }
+
+            println("Running npm pack...")
+            ExecUtils.exec(
+                command = listOf("npm", "pack", "--pack-destination", imageDir.absolutePath),
+                workingDir = projectDir
+            )
+        } finally {
+            // Restore original package.json with preserved timestamps
+            if (packageJsonBackup.exists()) {
+                ExecUtils.exec(
+                    command = listOf("mv", packageJsonBackup.absolutePath, packageJson.absolutePath),
+                    workingDir = projectDir
+                )
+            }
+        }
+
+        packStamp.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText("packed at ${java.time.Instant.now()}")
+        }
+    }
+}
+
+tasks.register("prepareDockerContext") {
+    group = "docker"
+    description = "Extract npm pack tarball into Docker build context"
+
+    dependsOn("npmPack")
+
+    val imageDir = projectDir.resolve(extension.dockerContext)
+    val dockerContextDir = imageDir.resolve("package")
+
+    inputs.file(layout.buildDirectory.file("npm-pack.stamp"))
+    outputs.dir(dockerContextDir)
+
+    doFirst {
         // Clean previous context
         delete(dockerContextDir)
 
-        // Run npm pack
-        println("Running npm pack...")
-        ExecUtils.exec(
-            command = listOf("npm", "pack", "--pack-destination", dockerContextDir.parentFile.absolutePath),
-            workingDir = projectDir
-        )
-
-        // Find and extract tarball
-        val tarball = dockerContextDir.parentFile.listFiles { f -> f.name.endsWith(".tgz") }?.firstOrNull()
-            ?: throw GradleException("No tarball found after npm pack")
+        val tarball = imageDir.listFiles { f -> f.name.endsWith(".tgz") }?.firstOrNull()
+            ?: throw GradleException("No tarball found — npmPack may have failed")
 
         println("Extracting ${tarball.name}...")
         ExecUtils.exec(
             command = listOf("tar", "-xzf", tarball.name),
-            workingDir = dockerContextDir.parentFile
+            workingDir = imageDir
         )
 
-        // Clean up tarball
         delete(tarball)
-
         println("✓ Docker context prepared at: $dockerContextDir")
     }
 }
@@ -171,6 +265,16 @@ tasks.register("dockerBuild") {
 
     val imageName = provider { "${extension.imageName}:${extension.imageTag}" }
     val dockerContextDir = projectDir.resolve(extension.dockerContext)
+
+    // Inputs: the prepared context (output of prepareDockerContext) + Dockerfile
+    inputs.dir(dockerContextDir.resolve("package"))
+    inputs.files(fileTree(dockerContextDir) {
+        include("Dockerfile", "GradleDockerfile", "start.sh", ".npmrc")
+    })
+
+    // Docker image tag as output marker — use a stamp file since docker images aren't files
+    val imageStamp = layout.buildDirectory.file("docker-image.stamp")
+    outputs.file(imageStamp)
 
     doFirst {
         val image = imageName.get()
@@ -203,6 +307,12 @@ tasks.register("dockerBuild") {
             ) + dockerfileArgs + listOf("."),
             workingDir = dockerContextDir
         )
+
+        // Write stamp file so Gradle can track up-to-date state
+        imageStamp.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText("$image built at ${java.time.Instant.now()}")
+        }
 
         println("✓ Docker image built: $image")
     }
