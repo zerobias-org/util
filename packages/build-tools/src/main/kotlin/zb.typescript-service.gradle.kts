@@ -253,6 +253,89 @@ tasks.register("prepareDockerContext") {
         )
 
         delete(tarball)
+
+        // Bundle local workspace dependencies into Docker context
+        if (extension.workspaceDeps.isNotEmpty()) {
+            val localDepsDir = dockerContextDir.resolve("local_deps")
+            localDepsDir.mkdirs()
+
+            val packageJsonFile = dockerContextDir.resolve("package.json")
+            var packageJsonText = packageJsonFile.readText()
+
+            for ((_, wsPath) in extension.workspaceDeps) {
+                val wsProjectDir = projectDir.resolve("../$wsPath")
+                val wsPackageJson = wsProjectDir.resolve("package.json")
+                if (!wsPackageJson.exists()) continue
+
+                val wsPackageJsonObj = groovy.json.JsonSlurper().parseText(wsPackageJson.readText()) as Map<*, *>
+                val wsName = wsPackageJsonObj["name"] as? String ?: continue
+                val wsVersion = wsPackageJsonObj["version"] as? String ?: continue
+
+                // Only bundle if this is actually a dependency in the packed package.json
+                if (!packageJsonText.contains("\"$wsName\"")) continue
+
+                // Run prepublish-standalone on workspace dep to resolve its dependencies
+                val wsPrepublishScript = projectDir.resolve("../node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.sh")
+                val wsPackageJsonBackup = wsProjectDir.resolve("package.json.gradle-bak")
+                val wsRootDir = projectDir.resolve("..")
+
+                if (wsPrepublishScript.exists()) {
+                    ExecUtils.exec(
+                        command = listOf("cp", "-a", wsPackageJson.absolutePath, wsPackageJsonBackup.absolutePath),
+                        workingDir = wsProjectDir
+                    )
+                    try {
+                        ExecUtils.exec(
+                            command = listOf("bash", wsPrepublishScript.absolutePath, wsRootDir.absolutePath, "--library"),
+                            workingDir = wsProjectDir
+                        )
+                    } catch (e: Exception) {
+                        // Restore on failure and continue
+                        if (wsPackageJsonBackup.exists()) {
+                            ExecUtils.exec(
+                                command = listOf("mv", wsPackageJsonBackup.absolutePath, wsPackageJson.absolutePath),
+                                workingDir = wsProjectDir
+                            )
+                        }
+                        println("  ⚠ prepublish-standalone failed for $wsName, using as-is")
+                    }
+                }
+
+                // npm pack the workspace package into local_deps as a tarball
+                println("Packing local workspace dep: $wsName")
+                try {
+                    ExecUtils.exec(
+                        command = listOf("npm", "pack", "--pack-destination", localDepsDir.absolutePath),
+                        workingDir = wsProjectDir
+                    )
+                } finally {
+                    // Always restore original package.json
+                    if (wsPackageJsonBackup.exists()) {
+                        ExecUtils.exec(
+                            command = listOf("mv", wsPackageJsonBackup.absolutePath, wsPackageJson.absolutePath),
+                            workingDir = wsProjectDir
+                        )
+                    }
+                }
+
+                // Find the tarball that was just created
+                val wsTarball = localDepsDir.listFiles { f ->
+                    f.name.endsWith(".tgz") && !f.name.startsWith(".")
+                }?.sortedByDescending { it.lastModified() }?.firstOrNull()
+
+                if (wsTarball != null) {
+                    // Patch package.json to use file: reference to the tarball
+                    packageJsonText = packageJsonText.replace(
+                        "\"$wsName\": \"$wsVersion\"",
+                        "\"$wsName\": \"file:./local_deps/${wsTarball.name}\""
+                    )
+                    println("  ✓ Bundled $wsName → local_deps/${wsTarball.name}")
+                }
+            }
+
+            packageJsonFile.writeText(packageJsonText)
+        }
+
         println("✓ Docker context prepared at: $dockerContextDir")
     }
 }
