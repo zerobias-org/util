@@ -248,6 +248,20 @@ export class SlotManager {
       throw new Error(`Slot '${name}' does not exist.`);
     }
 
+    // Stop containers using this slot before removing
+    const { execSync } = await import('node:child_process');
+    try {
+      const containers = execSync(
+        `docker ps -aq --filter "label=zerobias.slot=${name}"`,
+        { encoding: 'utf-8' },
+      ).trim();
+      if (containers) {
+        execSync(`docker rm -f ${containers.split('\n').join(' ')}`, { stdio: 'pipe' });
+      }
+    } catch {
+      // docker not available or no containers — continue with delete
+    }
+
     await rm(slotDir, { recursive: true, force: true });
   }
 
