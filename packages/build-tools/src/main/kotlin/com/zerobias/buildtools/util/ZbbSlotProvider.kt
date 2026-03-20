@@ -70,7 +70,13 @@ object ZbbSlotProvider {
                 "Create a slot with: zbb slot create ${slotName ?: "<name>"}"
             )
         }
-        return readEnvFile(envFile)
+        val env = readEnvFile(envFile).toMutableMap()
+        // Merge overrides.env on top (user overrides via zbb env set)
+        val overridesFile = File(envFile.parentFile, "overrides.env")
+        if (overridesFile.exists()) {
+            env.putAll(readEnvFile(overridesFile))
+        }
+        return env
     }
 
     /**
