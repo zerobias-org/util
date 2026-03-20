@@ -442,32 +442,77 @@ async function handleLogs(args: string[]): Promise<void> {
     case 'show': {
       const logName = args[1];
       if (!logName) {
-        console.error('Usage: zbb logs show <name> [--tail N] [--follow]');
-        process.exit(1);
-      }
-
-      const { join } = await import('node:path');
-      const { existsSync } = await import('node:fs');
-      const logPath = join(slot.logsDir, `${logName}.log`);
-
-      if (!existsSync(logPath)) {
-        console.error(`Log file not found: ${logPath}`);
+        console.error('Usage: zbb logs show <name> [--source local|docker|aws] [--tail N] [--follow]');
         process.exit(1);
       }
 
       const follow = args.includes('--follow') || args.includes('-f');
       const tailIdx = args.indexOf('--tail');
       const tailN = tailIdx !== -1 ? args[tailIdx + 1] : '50';
-
-      const tailArgs = ['-n', tailN];
-      if (follow) tailArgs.push('-f');
-      tailArgs.push(logPath);
+      const sourceIdx = args.indexOf('--source');
+      const source = sourceIdx !== -1 ? args[sourceIdx + 1] : 'local';
 
       const { execFileSync } = await import('node:child_process');
-      try {
-        execFileSync('tail', tailArgs, { stdio: 'inherit' });
-      } catch {
-        // tail exits non-zero on signal (Ctrl+C for follow mode)
+
+      switch (source) {
+        case 'local': {
+          const { join } = await import('node:path');
+          const { existsSync } = await import('node:fs');
+          const logPath = join(slot.logsDir, `${logName}.log`);
+
+          if (!existsSync(logPath)) {
+            console.error(`Log file not found: ${logPath}`);
+            process.exit(1);
+          }
+
+          const tailArgs = ['-n', tailN];
+          if (follow) tailArgs.push('-f');
+          tailArgs.push(logPath);
+
+          try {
+            execFileSync('tail', tailArgs, { stdio: 'inherit' });
+          } catch {
+            // tail exits non-zero on signal (Ctrl+C for follow mode)
+          }
+          break;
+        }
+
+        case 'docker': {
+          const stackName = slot.env.get('STACK_NAME') ?? slot.name;
+          const containerName = `${stackName}-${logName}`;
+          const dockerArgs = ['logs', '--tail', tailN, containerName];
+          if (follow) dockerArgs.push('-f');
+
+          try {
+            execFileSync('docker', dockerArgs, { stdio: 'inherit' });
+          } catch {
+            console.error(`Docker container not found or docker not available: ${containerName}`);
+          }
+          break;
+        }
+
+        case 'aws': {
+          const envKey = `HUB_AWS_LOG_GROUP_${logName.toUpperCase().replace(/-/g, '_')}`;
+          const logGroup = slot.env.get(envKey) ?? slot.env.get('HUB_AWS_LOG_GROUP');
+          if (!logGroup) {
+            console.error(`No log group configured. Set ${envKey} or HUB_AWS_LOG_GROUP in slot env.`);
+            process.exit(1);
+          }
+
+          const awsArgs = ['logs', 'tail', logGroup];
+          if (follow) awsArgs.push('--follow');
+
+          try {
+            execFileSync('aws', awsArgs, { stdio: 'inherit' });
+          } catch {
+            console.error('AWS CLI not found or not configured. Install aws-cli and run: aws configure');
+          }
+          break;
+        }
+
+        default:
+          console.error(`Unknown source: ${source}. Use: local, docker, aws`);
+          process.exit(1);
       }
       break;
     }
@@ -487,7 +532,7 @@ function printUsage(): void {
 Usage:
   zbb slot <create|load|list|info|delete|gc>   Slot management
   zbb env <list|get|set|unset|reset|diff>       Environment variables
-  zbb logs <list|show>                           Log viewer
+  zbb logs <list|show>                           Log viewer (local/docker/aws)
   zbb up|down|destroy|info                       Stack aliases (Gradle)
   zbb <gradle-task> [args...]                    Run Gradle task
   zbb --version                                  Show version
