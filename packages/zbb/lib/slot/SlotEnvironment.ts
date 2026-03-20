@@ -141,6 +141,49 @@ export class SlotEnvironment {
     await saveYaml(manifestPath, Object.fromEntries(manifest));
   }
 
+  // ── Static: append new vars to existing slot env ──────────────────
+
+  /**
+   * Merge new env vars and manifest entries into an existing slot.
+   * Never overwrites existing keys — only adds new ones.
+   */
+  static async appendDeclaredEnv(
+    slotDir: string,
+    newEnv: Map<string, string>,
+    newManifest: Map<string, ManifestEntry>,
+  ): Promise<void> {
+    const envPath = join(slotDir, '.env');
+    const manifestPath = join(slotDir, 'manifest.yaml');
+
+    // Read existing .env
+    const existingEnv = existsSync(envPath)
+      ? parseEnvFile(await readFile(envPath, 'utf-8'))
+      : new Map<string, string>();
+
+    // Merge: existing wins (never overwrite)
+    const merged = new Map<string, string>(existingEnv);
+    for (const [k, v] of newEnv) {
+      if (!merged.has(k)) {
+        merged.set(k, v);
+      }
+    }
+
+    await writeFile(envPath, serializeEnv(merged), 'utf-8');
+
+    // Read existing manifest
+    const { loadYamlOrDefault, saveYaml } = await import('../yaml.ts');
+    const existingManifest = await loadYamlOrDefault<Record<string, ManifestEntry>>(manifestPath, {});
+
+    // Merge manifest: existing wins
+    for (const [k, v] of newManifest) {
+      if (!(k in existingManifest)) {
+        existingManifest[k] = v;
+      }
+    }
+
+    await saveYaml(manifestPath, existingManifest);
+  }
+
   private async writeOverrides(): Promise<void> {
     await writeFile(this.overridesPath, serializeEnv(this.overrides), 'utf-8');
   }

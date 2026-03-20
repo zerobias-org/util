@@ -55,6 +55,25 @@ export async function main(argv: string[]): Promise<void> {
   // Stack aliases → gradle
   const alias = resolveStackAlias(command);
   if (alias) {
+    // Lazy extension before stack commands
+    if (process.env.ZB_SLOT) {
+      const repoRoot = findRepoRoot(process.cwd());
+      if (repoRoot) {
+        const { extendSlot } = await import('./slot/extend.ts');
+        const slotName = process.env.ZB_SLOT;
+        const { SlotManager: SM } = await import('./slot/SlotManager.ts');
+        const slot = await SM.load(slotName);
+        const result = await extendSlot(slot, repoRoot);
+        if (result.extended) {
+          console.log(`Extended slot with ${result.addedVars.length} new var(s): ${result.addedVars.join(', ')}`);
+          // Re-export new vars to current process env so Gradle sees them
+          const newEnv = slot.env.getAll();
+          for (const varName of result.addedVars) {
+            if (newEnv[varName]) process.env[varName] = newEnv[varName];
+          }
+        }
+      }
+    }
     runGradle([alias, ...args.slice(1)]);
     return;
   }
@@ -119,8 +138,17 @@ async function handleSlot(args: string[]): Promise<void> {
 
       const slot = await SlotManager.load(slotName);
 
-      // Run preflight checks
+      // Lazy slot extension: add missing vars from current project's zbb.yaml
       const repoRoot = findRepoRoot(process.cwd());
+      if (repoRoot) {
+        const { extendSlot } = await import('./slot/extend.ts');
+        const extResult = await extendSlot(slot, repoRoot);
+        if (extResult.extended) {
+          console.log(`Extended slot with ${extResult.addedVars.length} new var(s): ${extResult.addedVars.join(', ')}`);
+        }
+      }
+
+      // Run preflight checks
       if (repoRoot) {
         const repoConfig = await loadRepoConfig(repoRoot);
         const scanned = await scanEnvDeclarations(repoRoot);
