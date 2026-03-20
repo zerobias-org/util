@@ -1,10 +1,15 @@
 {
   "name": "@zerobias-org/zbb",
-  "description": "ZeroBias Build — run Gradle tasks from any subdirectory",
-  "version": "0.1.1",
+  "description": "ZeroBias Build — Gradle wrapper + slot-based environment management",
+  "version": "0.2.0",
   "type": "module",
   "bin": {
     "zbb": "bin/zbb.mjs"
+  },
+  "exports": {
+    ".": "./lib/index.ts",
+    "./slot": "./lib/slot/index.ts",
+    "./env": "./lib/env/index.ts"
   },
   "repository": {
     "type": "git",
@@ -13,13 +18,18 @@
   },
   "author": "team@zerobias.com",
   "license": "UNLICENSED",
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "semver": "^7.6.0"
+  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
   "files": [
-    "bin"
+    "bin",
+    "lib"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }
