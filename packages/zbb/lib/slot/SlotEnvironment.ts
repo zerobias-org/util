@@ -30,6 +30,32 @@ export class SlotEnvironment {
   private overrides: Map<string, string> = new Map();
   private manifest: Map<string, ManifestEntry> = new Map();
 
+  /**
+   * Global resolver map. Resolvers are registered once at process startup
+   * and apply to all SlotEnvironment instances. They provide computed values
+   * for env vars that cannot be expressed as simple ${VAR} references
+   * (e.g., HUB_SERVER_URL derived from HUB_SERVER_PORT).
+   */
+  private static resolvers: Map<string, (env: SlotEnvironment) => string | undefined> = new Map();
+
+  /**
+   * Register a global resolver function for an environment variable key.
+   * The resolver is called by get() when the key is not found in declared
+   * or override values. Resolvers are static and global -- called once at
+   * process startup, not per-slot.
+   *
+   * @param key - The environment variable name to resolve
+   * @param fn - Resolver function receiving the SlotEnvironment instance
+   */
+  static registerResolver(key: string, fn: (env: SlotEnvironment) => string | undefined): void {
+    SlotEnvironment.resolvers.set(key, fn);
+  }
+
+  /** Clear all registered resolvers. Used for test isolation. */
+  static clearResolvers(): void {
+    SlotEnvironment.resolvers.clear();
+  }
+
   readonly slotDir: string;
 
   constructor(slotDir: string) {
@@ -55,9 +81,9 @@ export class SlotEnvironment {
     }
   }
 
-  /** Get var value. Overrides take priority over declared. */
+  /** Get var value. Overrides take priority over declared, with resolver fallback. */
   get(key: string): string | undefined {
-    return this.overrides.get(key) ?? this.declared.get(key);
+    return this.overrides.get(key) ?? this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
   }
 
   /** Get all vars (overrides merged over declared). */
