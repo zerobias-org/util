@@ -45,9 +45,8 @@ export async function extendSlot(slot: Slot, repoRoot: string): Promise<ExtendRe
     }
   }
 
-  // 5. Load repo config for port range
-  const repoConfig = await loadRepoConfig(repoRoot);
-  const portRange: [number, number] = repoConfig.ports?.range ?? [15000, 16000];
+  // 5. Use slot's own port range (assigned at create time)
+  const portRange: [number, number] = slot.meta.portRange ?? [15000, 16000];
 
   // 6. Separate missing vars by type
   const missingPortVars = missingVars.filter(v => v.declaration.type === 'port');
