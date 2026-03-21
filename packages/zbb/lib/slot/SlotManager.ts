@@ -257,6 +257,7 @@ export class SlotManager {
     // Stop containers using this slot before removing
     const { execSync } = await import('node:child_process');
     try {
+      // Stop and remove containers
       const containers = execSync(
         `docker ps -aq --filter "label=zerobias.slot=${name}"`,
         { encoding: 'utf-8' },
@@ -264,8 +265,16 @@ export class SlotManager {
       if (containers) {
         execSync(`docker rm -f ${containers.split('\n').join(' ')}`, { stdio: 'pipe' });
       }
+      // Remove volumes owned by this slot's compose project
+      const volumes = execSync(
+        `docker volume ls -q --filter "name=${name}_"`,
+        { encoding: 'utf-8' },
+      ).trim();
+      if (volumes) {
+        execSync(`docker volume rm ${volumes.split('\n').join(' ')}`, { stdio: 'pipe' });
+      }
     } catch {
-      // docker not available or no containers — continue with delete
+      // docker not available or no containers/volumes — continue with delete
     }
 
     await rm(slotDir, { recursive: true, force: true });
