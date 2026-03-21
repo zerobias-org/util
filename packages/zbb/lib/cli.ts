@@ -148,6 +148,13 @@ async function handleSlot(args: string[]): Promise<void> {
         }
       }
 
+      // Apply slot env to process.env BEFORE preflight so checks like
+      // JAVA_HOME-dependent java version work correctly
+      const slotEnvForPreflight = slot.env.getAll();
+      for (const [k, v] of Object.entries(slotEnvForPreflight)) {
+        if (v && !process.env[k]) process.env[k] = v;
+      }
+
       // Run preflight checks
       if (repoRoot) {
         const repoConfig = await loadRepoConfig(repoRoot);
