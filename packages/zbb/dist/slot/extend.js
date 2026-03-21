@@ -38,6 +38,7 @@ export async function extendSlot(slot, repoRoot) {
     const missingPortVars = missingVars.filter(v => v.declaration.type === 'port');
     const missingSecretVars = missingVars.filter(v => v.declaration.type === 'secret' && v.declaration.generate);
     const missingInheritedVars = missingVars.filter(v => v.declaration.source === 'env');
+    const missingCwdVars = missingVars.filter(v => v.declaration.source === 'cwd');
     // 7. Allocate ports for missing port vars
     //    Pass ALL port vars (existing + missing) so allocatePorts can skip existing
     const allPortVars = scanned.filter(v => v.declaration.type === 'port');
@@ -63,6 +64,12 @@ export async function extendSlot(slot, repoRoot) {
         if (value)
             newInherited.set(v.name, value);
     }
+    // 9b. Resolve cwd vars — value is the absolute path of the project that declared them
+    const { dirname, resolve } = await import('node:path');
+    const newCwdVars = new Map();
+    for (const v of missingCwdVars) {
+        newCwdVars.set(v.name, resolve(repoRoot, dirname(v.source)));
+    }
     // 10. Build pre-resolved map: existing env + new ports + new secrets + new inherited
     const preResolved = new Map();
     for (const [k, v] of Object.entries(currentEnv))
@@ -75,6 +82,8 @@ export async function extendSlot(slot, repoRoot) {
     for (const [k, v] of newSecrets)
         preResolved.set(k, v);
     for (const [k, v] of newInherited)
+        preResolved.set(k, v);
+    for (const [k, v] of newCwdVars)
         preResolved.set(k, v);
     // 11. Collect missing derived/string vars (those not yet in preResolved)
     const derivedVars = new Map();
@@ -126,6 +135,19 @@ export async function extendSlot(slot, repoRoot) {
                 source: v.source,
                 type: 'inherited',
                 mask: v.declaration.mask ?? false,
+            });
+            addedVars.push(v.name);
+        }
+    }
+    // New cwd vars (resolved to project directory path)
+    for (const v of missingCwdVars) {
+        const value = newCwdVars.get(v.name);
+        if (value) {
+            newEnv.set(v.name, value);
+            newManifest.set(v.name, {
+                source: v.source,
+                type: 'string',
+                mask: false,
             });
             addedVars.push(v.name);
         }

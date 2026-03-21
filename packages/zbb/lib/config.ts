@@ -19,7 +19,7 @@ export interface EnvVarDeclaration {
   description?: string;
   mask?: boolean;
   generate?: string;
-  source?: 'env';
+  source?: 'env' | 'cwd';
   required?: boolean;
   deprecated?: boolean;
   replacedBy?: string;

@@ -75,7 +75,13 @@ export class SlotManager {
             if (value)
                 inherited.set(v.name, value);
         }
-        // 7. Build pre-resolved map (ports + secrets + inherited + slot vars)
+        // 6b. Resolve cwd vars (source: cwd → absolute path of declaring project)
+        const { dirname, resolve } = await import('node:path');
+        const cwdVars = new Map();
+        for (const v of scanned.filter(v => v.declaration.source === 'cwd')) {
+            cwdVars.set(v.name, resolve(repoRoot, dirname(v.source)));
+        }
+        // 7. Build pre-resolved map (ports + secrets + inherited + cwd + slot vars)
         const preResolved = new Map();
         for (const [k, v] of Object.entries(slotVars))
             preResolved.set(k, v);
@@ -84,6 +90,8 @@ export class SlotManager {
         for (const [k, v] of secrets)
             preResolved.set(k, v);
         for (const [k, v] of inherited)
+            preResolved.set(k, v);
+        for (const [k, v] of cwdVars)
             preResolved.set(k, v);
         // 8. Collect derived vars (string type with ${VAR} refs in default)
         const derivedVars = new Map();
