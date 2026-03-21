@@ -137,6 +137,7 @@ export class SlotEnvironment extends EventEmitter {
   async unset(key: string): Promise<void> {
     this.overrides.delete(key);
     await this.writeOverrides();
+    this.emit('change', { key, value: undefined });
   }
 
   /** Clear all overrides back to declared defaults. */
