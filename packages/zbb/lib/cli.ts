@@ -278,8 +278,12 @@ async function handleSlot(args: string[]): Promise<void> {
         console.error('Usage: zbb slot delete <name>');
         process.exit(1);
       }
-      await SlotManager.delete(slotName);
-      console.log(`Slot '${slotName}' deleted.`);
+      const result = await SlotManager.delete(slotName);
+      const parts = [`Slot '${slotName}' deleted.`];
+      if (result.containers > 0) parts.push(`Removed ${result.containers} container(s).`);
+      if (result.volumes > 0) parts.push(`Removed ${result.volumes} volume(s).`);
+      if (result.containers === 0 && result.volumes === 0) parts.push('No docker resources to clean up.');
+      console.log(parts.join(' '));
       break;
     }
 

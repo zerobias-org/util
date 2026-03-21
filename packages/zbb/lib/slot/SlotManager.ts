@@ -244,8 +244,8 @@ export class SlotManager {
     return slot;
   }
 
-  /** Delete a slot. */
-  static async delete(name: string): Promise<void> {
+  /** Delete a slot. Returns summary of what was cleaned up. */
+  static async delete(name: string): Promise<{ containers: number; volumes: number }> {
     const userConfig = await loadUserConfig();
     const slotsDir = getSlotsDir(userConfig);
     const slotDir = join(slotsDir, name);
@@ -254,30 +254,36 @@ export class SlotManager {
       throw new Error(`Slot '${name}' does not exist.`);
     }
 
-    // Stop containers using this slot before removing
+    let containerCount = 0;
+    let volumeCount = 0;
+
+    // Stop containers and remove volumes for this slot
     const { execSync } = await import('node:child_process');
     try {
-      // Stop and remove containers
       const containers = execSync(
         `docker ps -aq --filter "label=zerobias.slot=${name}"`,
         { encoding: 'utf-8' },
       ).trim();
       if (containers) {
-        execSync(`docker rm -f ${containers.split('\n').join(' ')}`, { stdio: 'pipe' });
+        const ids = containers.split('\n').filter(Boolean);
+        containerCount = ids.length;
+        execSync(`docker rm -f ${ids.join(' ')}`, { stdio: 'pipe' });
       }
-      // Remove volumes owned by this slot's compose project
       const volumes = execSync(
         `docker volume ls -q --filter "name=${name}_"`,
         { encoding: 'utf-8' },
       ).trim();
       if (volumes) {
-        execSync(`docker volume rm ${volumes.split('\n').join(' ')}`, { stdio: 'pipe' });
+        const vols = volumes.split('\n').filter(Boolean);
+        volumeCount = vols.length;
+        execSync(`docker volume rm ${vols.join(' ')}`, { stdio: 'pipe' });
       }
     } catch {
       // docker not available or no containers/volumes — continue with delete
     }
 
     await rm(slotDir, { recursive: true, force: true });
+    return { containers: containerCount, volumes: volumeCount };
   }
 
   /** Garbage collect expired ephemeral slots. Returns names of deleted slots. */
