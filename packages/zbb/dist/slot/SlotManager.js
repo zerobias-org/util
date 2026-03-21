@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { Slot } from './Slot.js';
 import { SlotEnvironment } from './SlotEnvironment.js';
-import { allocatePorts } from './PortAllocator.js';
+import { allocatePorts, allocateSlotPortRange, validatePortRange } from './PortAllocator.js';
 import { scanEnvDeclarations } from '../env/Scanner.js';
 import { resolveAll } from '../env/Resolver.js';
 import { generateSecret } from '../env/SecretGen.js';
@@ -38,19 +38,23 @@ export class SlotManager {
             throw new Error('Cannot find repo root (.zbb.yaml or gradlew). Run from inside a project.');
         }
         const repoConfig = await loadRepoConfig(repoRoot);
-        const portRange = repoConfig.ports?.range ?? [15000, 16000];
         // 1. Scan all zbb.yaml files
         const scanned = await scanEnvDeclarations(repoRoot);
-        // 2. Create slot directories
+        // 2. Allocate a non-overlapping port range for this slot
+        //    Scans existing slots and picks the next available block
+        const existingSlots = await SlotManager.list();
+        const portRange = options.portRange ?? allocateSlotPortRange(existingSlots);
+        validatePortRange(portRange, existingSlots);
+        // 3. Create slot directories
         await mkdir(slotDir, { recursive: true });
         await mkdir(join(slotDir, 'config'), { recursive: true });
         await mkdir(join(slotDir, 'logs'), { recursive: true });
         await mkdir(join(slotDir, 'state'), { recursive: true });
         await mkdir(join(slotDir, 'state', 'tmp'), { recursive: true });
-        // 3. Build slot env vars (available for ${VAR} resolution)
+        // 4. Build slot env vars (available for ${VAR} resolution)
         const slot = new Slot(name, slotsDir);
         const slotVars = slot.getSlotEnvVars();
-        // 4. Allocate ports
+        // 5. Allocate ports within this slot's range
         const portAllocations = allocatePorts(scanned, portRange);
         // 5. Generate secrets
         const secrets = new Map();
@@ -198,7 +202,7 @@ export class SlotManager {
         await slot.load();
         return slot;
     }
-    /** Delete a slot. */
+    /** Delete a slot. Returns summary of what was cleaned up. */
     static async delete(name) {
         const userConfig = await loadUserConfig();
         const slotsDir = getSlotsDir(userConfig);
@@ -206,18 +210,29 @@ export class SlotManager {
         if (!existsSync(slotDir)) {
             throw new Error(`Slot '${name}' does not exist.`);
         }
-        // Stop containers using this slot before removing
+        let containerCount = 0;
+        let volumeCount = 0;
+        // Stop containers and remove volumes for this slot
         const { execSync } = await import('node:child_process');
         try {
             const containers = execSync(`docker ps -aq --filter "label=zerobias.slot=${name}"`, { encoding: 'utf-8' }).trim();
             if (containers) {
-                execSync(`docker rm -f ${containers.split('\n').join(' ')}`, { stdio: 'pipe' });
+                const ids = containers.split('\n').filter(Boolean);
+                containerCount = ids.length;
+                execSync(`docker rm -f ${ids.join(' ')}`, { stdio: 'pipe' });
+            }
+            const volumes = execSync(`docker volume ls -q --filter "name=${name}_"`, { encoding: 'utf-8' }).trim();
+            if (volumes) {
+                const vols = volumes.split('\n').filter(Boolean);
+                volumeCount = vols.length;
+                execSync(`docker volume rm ${vols.join(' ')}`, { stdio: 'pipe' });
             }
         }
         catch {
-            // docker not available or no containers — continue with delete
+            // docker not available or no containers/volumes — continue with delete
         }
         await rm(slotDir, { recursive: true, force: true });
+        return { containers: containerCount, volumes: volumeCount };
     }
     /** Garbage collect expired ephemeral slots. Returns names of deleted slots. */
     static async gc() {

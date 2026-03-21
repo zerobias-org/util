@@ -41,14 +41,14 @@ export declare class SlotEnvironment extends EventEmitter {
     private get overridesPath();
     private get manifestPath();
     load(): Promise<void>;
-    /** Get var value. Overrides > declared > resolver. Masking applied unless unmask=true. */
-    get(key: string, unmask?: boolean): string | undefined;
-    /** Get all vars. Masking applied unless unmask=true. */
-    getAll(unmask?: boolean): Record<string, string>;
-    /** Get all vars with masking applied. */
+    /** Get var value. Overrides > declared > resolver. Returns real value. */
+    get(key: string): string | undefined;
+    /** Get var value masked for display. */
+    getMasked(key: string): string | undefined;
+    /** Get all vars. Returns real values. */
+    getAll(): Record<string, string>;
+    /** Get all vars masked for display. */
     getAllMasked(): Record<string, string>;
-    /** Get all vars unmasked. */
-    getAllUnmasked(): Record<string, string>;
     /** Set a user override (persisted to overrides.env). Optional mask flag. */
     set(key: string, value: string, mask?: boolean): Promise<void>;
     /** Alias for getManifestEntry — backward compat. */

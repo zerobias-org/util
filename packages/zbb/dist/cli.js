@@ -237,8 +237,15 @@ async function handleSlot(args) {
                 console.error('Usage: zbb slot delete <name>');
                 process.exit(1);
             }
-            await SlotManager.delete(slotName);
-            console.log(`Slot '${slotName}' deleted.`);
+            const result = await SlotManager.delete(slotName);
+            const parts = [`Slot '${slotName}' deleted.`];
+            if (result.containers > 0)
+                parts.push(`Removed ${result.containers} container(s).`);
+            if (result.volumes > 0)
+                parts.push(`Removed ${result.volumes} volume(s).`);
+            if (result.containers === 0 && result.volumes === 0)
+                parts.push('No docker resources to clean up.');
+            console.log(parts.join(' '));
             break;
         }
         case 'gc': {
@@ -271,7 +278,7 @@ async function handleEnv(args) {
             const unmask = args.includes('--unmask');
             const manifest = slot.env.getManifest();
             for (const key of slot.env.list()) {
-                const value = unmask ? slot.env.get(key) : (slot.env.shouldMask(key) ? '***' : slot.env.get(key));
+                const value = unmask ? slot.env.get(key) : (slot.env.shouldMask(key) ? '***' : slot.env.getMasked(key));
                 const entry = manifest[key];
                 const source = entry?.source ?? '';
                 const typeInfo = entry?.derived ? 'derived' : (entry?.type ?? '');

@@ -3,7 +3,6 @@ import { scanEnvDeclarations } from '../env/Scanner.js';
 import { allocatePorts } from './PortAllocator.js';
 import { resolveAll } from '../env/Resolver.js';
 import { generateSecret } from '../env/SecretGen.js';
-import { loadRepoConfig } from '../config.js';
 /**
  * Lazy slot extension: scans the given repoRoot for env declarations,
  * finds vars missing from the slot, and appends them.
@@ -33,9 +32,8 @@ export async function extendSlot(slot, repoRoot) {
             existingPortAllocations.set(name, entry.allocated);
         }
     }
-    // 5. Load repo config for port range
-    const repoConfig = await loadRepoConfig(repoRoot);
-    const portRange = repoConfig.ports?.range ?? [15000, 16000];
+    // 5. Use slot's own port range (assigned at create time)
+    const portRange = slot.meta.portRange ?? [15000, 16000];
     // 6. Separate missing vars by type
     const missingPortVars = missingVars.filter(v => v.declaration.type === 'port');
     const missingSecretVars = missingVars.filter(v => v.declaration.type === 'secret' && v.declaration.generate);

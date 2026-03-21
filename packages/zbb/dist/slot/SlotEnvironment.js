@@ -9,6 +9,7 @@ const SENSITIVE_PATTERNS = [
     /password$/i,
     /pass$/i,
     /credential/i,
+    /jwt$/i,
 ];
 /**
  * Manages a slot's environment variables.
@@ -62,31 +63,36 @@ export class SlotEnvironment extends EventEmitter {
             this.manifest = new Map(Object.entries(await loadYaml(this.manifestPath)));
         }
     }
-    /** Get var value. Overrides > declared > resolver. Masking applied unless unmask=true. */
-    get(key, unmask = false) {
-        const value = this.overrides.get(key) ?? this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
+    /** Get var value. Overrides > declared > resolver. Returns real value. */
+    get(key) {
+        return this.overrides.get(key) ?? this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
+    }
+    /** Get var value masked for display. */
+    getMasked(key) {
+        const value = this.get(key);
         if (value === undefined)
             return undefined;
-        if (!unmask && this.shouldMask(key))
+        if (this.shouldMask(key))
             return '***MASKED***';
         return value;
     }
-    /** Get all vars. Masking applied unless unmask=true. */
-    getAll(unmask = false) {
+    /** Get all vars. Returns real values. */
+    getAll() {
         const result = {};
         for (const [k, v] of this.declared)
-            result[k] = unmask ? v : (this.shouldMask(k) ? '***MASKED***' : v);
+            result[k] = v;
         for (const [k, v] of this.overrides)
-            result[k] = unmask ? v : (this.shouldMask(k) ? '***MASKED***' : v);
+            result[k] = v;
         return result;
     }
-    /** Get all vars with masking applied. */
+    /** Get all vars masked for display. */
     getAllMasked() {
-        return this.getAll(false);
-    }
-    /** Get all vars unmasked. */
-    getAllUnmasked() {
-        return this.getAll(true);
+        const result = {};
+        for (const [k, v] of this.declared)
+            result[k] = this.shouldMask(k) ? '***MASKED***' : v;
+        for (const [k, v] of this.overrides)
+            result[k] = this.shouldMask(k) ? '***MASKED***' : v;
+        return result;
     }
     /** Set a user override (persisted to overrides.env). Optional mask flag. */
     async set(key, value, mask) {
