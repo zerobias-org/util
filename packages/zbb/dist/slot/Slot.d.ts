@@ -29,10 +29,7 @@ export declare class Slot extends EventEmitter {
     private _meta;
     private _watcher;
     private _initialized;
-    constructor(nameOrConfig: string | {
-        name: string;
-        [key: string]: any;
-    }, slotsDir: string);
+    constructor(name: string, slotsDir: string);
     /** Load slot metadata and environment from disk. */
     load(): Promise<void>;
     /** Slot config/metadata */

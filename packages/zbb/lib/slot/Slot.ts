@@ -36,15 +36,11 @@ export class Slot extends EventEmitter {
   private _watcher: SlotWatcher | null = null;
   private _initialized = false;
 
-  constructor(nameOrConfig: string | { name: string; [key: string]: any }, slotsDir: string) {
+  constructor(name: string, slotsDir: string) {
     super();
-    const name = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
     this.name = name;
     this.path = join(slotsDir, name);
     this.env = new SlotEnvironment(this.path);
-    if (typeof nameOrConfig !== 'string') {
-      this._meta = nameOrConfig as SlotMeta;
-    }
   }
 
   /** Load slot metadata and environment from disk. */
@@ -126,10 +122,10 @@ export class Slot extends EventEmitter {
   private _wireWatcherEvents(): void {
     if (!this._watcher) return;
 
-    // Propagate all watcher events through the Slot
+    // Propagate watcher events through the Slot with absolute paths
     for (const event of ['env:change', 'state:change', 'deployment:change', 'command:change']) {
-      this._watcher.on(event, (...args: any[]) => {
-        this.emit(event, ...args);
+      this._watcher.on(event, (relPath: string) => {
+        this.emit(event, join(this.path, relPath));
       });
     }
 
