@@ -144,3 +144,4 @@ build/
 
 # Nx cache
 .nx/
+!packages/zbb/dist/

@@ -7,9 +7,23 @@
     "zbb": "bin/zbb.mjs"
   },
   "exports": {
-    ".": "./lib/index.ts",
-    "./slot": "./lib/slot/index.ts",
-    "./env": "./lib/env/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./lib/index.ts"
+    },
+    "./slot": {
+      "types": "./dist/slot/index.d.ts",
+      "default": "./lib/slot/index.ts"
+    },
+    "./env": {
+      "types": "./dist/env/index.d.ts",
+      "default": "./lib/env/index.ts"
+    }
+  },
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --experimental-strip-types --test lib/**/*.test.ts"
   },
   "repository": {
     "type": "git",
@@ -22,12 +36,16 @@
     "js-yaml": "^4.1.0",
     "semver": "^7.6.0"
   },
+  "devDependencies": {
+    "@types/semver": "^7.7.1"
+  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
   "files": [
     "bin",
-    "lib"
+    "lib",
+    "dist"
   ],
   "engines": {
     "node": ">=22.0.0"
