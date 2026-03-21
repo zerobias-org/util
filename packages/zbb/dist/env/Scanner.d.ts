@@ -1,4 +1,4 @@
-import type { EnvVarDeclaration } from '../config.ts';
+import type { EnvVarDeclaration } from '../config.js';
 export interface ScannedVar {
     name: string;
     declaration: EnvVarDeclaration;

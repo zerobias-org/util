@@ -1,9 +1,9 @@
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { SlotEnvironment } from './SlotEnvironment.ts';
-import { SlotWatcher } from './SlotWatcher.ts';
-import { loadYamlOrDefault } from '../yaml.ts';
+import { SlotEnvironment } from './SlotEnvironment.js';
+import { SlotWatcher } from './SlotWatcher.js';
+import { loadYamlOrDefault } from '../yaml.js';
 
 export interface SlotMeta {
   name: string;

@@ -1,4 +1,4 @@
-import { Slot } from './Slot.ts';
+import { Slot } from './Slot.js';
 export interface CreateOptions {
     ephemeral?: boolean;
     ttl?: number;

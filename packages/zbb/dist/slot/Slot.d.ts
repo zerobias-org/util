@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
-import { SlotEnvironment } from './SlotEnvironment.ts';
-import { SlotWatcher } from './SlotWatcher.ts';
+import { SlotEnvironment } from './SlotEnvironment.js';
+import { SlotWatcher } from './SlotWatcher.js';
 export interface SlotMeta {
     name: string;
     created: string;

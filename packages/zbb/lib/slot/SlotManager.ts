@@ -2,13 +2,13 @@ import { mkdir, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { Slot, type SlotMeta } from './Slot.ts';
-import { SlotEnvironment, type ManifestEntry } from './SlotEnvironment.ts';
-import { allocatePorts } from './PortAllocator.ts';
-import { scanEnvDeclarations } from '../env/Scanner.ts';
-import { resolveAll } from '../env/Resolver.ts';
-import { generateSecret } from '../env/SecretGen.ts';
-import { saveYaml, loadYamlOrDefault } from '../yaml.ts';
+import { Slot, type SlotMeta } from './Slot.js';
+import { SlotEnvironment, type ManifestEntry } from './SlotEnvironment.js';
+import { allocatePorts } from './PortAllocator.js';
+import { scanEnvDeclarations } from '../env/Scanner.js';
+import { resolveAll } from '../env/Resolver.js';
+import { generateSecret } from '../env/SecretGen.js';
+import { saveYaml, loadYamlOrDefault } from '../yaml.js';
 import {
   findRepoRoot,
   getSlotsDir,
@@ -16,7 +16,7 @@ import {
   loadRepoConfig,
   type RepoConfig,
   type UserConfig,
-} from '../config.ts';
+} from '../config.js';
 
 export interface CreateOptions {
   ephemeral?: boolean;

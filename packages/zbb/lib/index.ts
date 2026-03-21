@@ -1,12 +1,12 @@
 // Primary API
-export { SlotManager, type CreateOptions } from './slot/SlotManager.ts';
-export { Slot, type SlotMeta } from './slot/Slot.ts';
-export { SlotEnvironment, type ManifestEntry } from './slot/SlotEnvironment.ts';
+export { SlotManager, type CreateOptions } from './slot/SlotManager.js';
+export { Slot, type SlotMeta } from './slot/Slot.js';
+export { SlotEnvironment, type ManifestEntry } from './slot/SlotEnvironment.js';
 
 // Env utilities
-export { scanEnvDeclarations, type ScannedVar } from './env/Scanner.ts';
-export { resolveAll, extractRefs, interpolate, type ResolvedVar } from './env/Resolver.ts';
-export { generateSecret } from './env/SecretGen.ts';
+export { scanEnvDeclarations, type ScannedVar } from './env/Scanner.js';
+export { resolveAll, extractRefs, interpolate, type ResolvedVar } from './env/Resolver.js';
+export { generateSecret } from './env/SecretGen.js';
 
 // Config
 export {
@@ -21,10 +21,10 @@ export {
   type ProjectConfig,
   type EnvVarDeclaration,
   type ToolRequirement,
-} from './config.ts';
+} from './config.js';
 
 // Preflight
-export { runPreflightChecks, formatPreflightResults, type CheckResult } from './preflight.ts';
+export { runPreflightChecks, formatPreflightResults, type CheckResult } from './preflight.js';
 
 // Gradle
-export { findGradleRoot, resolveStackAlias } from './gradle.ts';
+export { findGradleRoot, resolveStackAlias } from './gradle.js';

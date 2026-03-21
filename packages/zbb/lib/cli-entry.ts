@@ -1,2 +1,1 @@
-import { main } from './cli.ts';
-main(process.argv);
+export { main } from './cli.js';

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { loadYamlOrDefault } from './yaml.ts';
+import { loadYamlOrDefault } from './yaml.js';
 
 // ── Types ────────────────────────────────────────────────────────────
 

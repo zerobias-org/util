@@ -1,10 +1,10 @@
-import type { Slot } from './Slot.ts';
-import { SlotEnvironment, type ManifestEntry } from './SlotEnvironment.ts';
-import { scanEnvDeclarations, type ScannedVar } from '../env/Scanner.ts';
-import { allocatePorts } from './PortAllocator.ts';
-import { resolveAll } from '../env/Resolver.ts';
-import { generateSecret } from '../env/SecretGen.ts';
-import { loadRepoConfig } from '../config.ts';
+import type { Slot } from './Slot.js';
+import { SlotEnvironment, type ManifestEntry } from './SlotEnvironment.js';
+import { scanEnvDeclarations, type ScannedVar } from '../env/Scanner.js';
+import { allocatePorts } from './PortAllocator.js';
+import { resolveAll } from '../env/Resolver.js';
+import { generateSecret } from '../env/SecretGen.js';
+import { loadRepoConfig } from '../config.js';
 
 export interface ExtendResult {
   extended: boolean;

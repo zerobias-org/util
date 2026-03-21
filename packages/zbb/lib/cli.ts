@@ -10,16 +10,16 @@
  *   zbb <anything else>                           → gradle wrapper
  */
 
-import { SlotManager } from './slot/SlotManager.ts';
-import { runPreflightChecks, formatPreflightResults } from './preflight.ts';
-import { resolveStackAlias, runGradle } from './gradle.ts';
+import { SlotManager } from './slot/SlotManager.js';
+import { runPreflightChecks, formatPreflightResults } from './preflight.js';
+import { resolveStackAlias, runGradle } from './gradle.js';
 import {
   findRepoRoot,
   loadRepoConfig,
   loadUserConfig,
   type ToolRequirement,
-} from './config.ts';
-import { scanEnvDeclarations } from './env/Scanner.ts';
+} from './config.js';
+import { scanEnvDeclarations } from './env/Scanner.js';
 import { spawn } from 'node:child_process';
 
 export async function main(argv: string[]): Promise<void> {
@@ -59,9 +59,9 @@ export async function main(argv: string[]): Promise<void> {
     if (process.env.ZB_SLOT) {
       const repoRoot = findRepoRoot(process.cwd());
       if (repoRoot) {
-        const { extendSlot } = await import('./slot/extend.ts');
+        const { extendSlot } = await import('./slot/extend.js');
         const slotName = process.env.ZB_SLOT;
-        const { SlotManager: SM } = await import('./slot/SlotManager.ts');
+        const { SlotManager: SM } = await import('./slot/SlotManager.js');
         const slot = await SM.load(slotName);
         const result = await extendSlot(slot, repoRoot);
         if (result.extended) {
@@ -141,7 +141,7 @@ async function handleSlot(args: string[]): Promise<void> {
       // Lazy slot extension: add missing vars from current project's zbb.yaml
       const repoRoot = findRepoRoot(process.cwd());
       if (repoRoot) {
-        const { extendSlot } = await import('./slot/extend.ts');
+        const { extendSlot } = await import('./slot/extend.js');
         const extResult = await extendSlot(slot, repoRoot);
         if (extResult.extended) {
           console.log(`Extended slot with ${extResult.addedVars.length} new var(s): ${extResult.addedVars.join(', ')}`);

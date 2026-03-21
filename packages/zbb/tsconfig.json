@@ -4,12 +4,10 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "declaration": true,
-    "emitDeclarationOnly": true,
-    "declarationDir": "dist",
+    "outDir": "dist",
     "rootDir": "lib",
     "strict": true,
-    "skipLibCheck": true,
-    "allowImportingTsExtensions": true
+    "skipLibCheck": true
   },
   "include": ["lib/**/*.ts"],
   "exclude": ["lib/**/*.test.ts"]

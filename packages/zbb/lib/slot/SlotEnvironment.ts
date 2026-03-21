@@ -76,7 +76,7 @@ export class SlotEnvironment extends EventEmitter {
       this.overrides = parseEnvFile(await readFile(this.overridesPath, 'utf-8'));
     }
     if (existsSync(this.manifestPath)) {
-      const { loadYaml } = await import('../yaml.ts');
+      const { loadYaml } = await import('../yaml.js');
       this.manifest = new Map(
         Object.entries(await loadYaml<Record<string, ManifestEntry>>(this.manifestPath))
       );
@@ -187,7 +187,7 @@ export class SlotEnvironment extends EventEmitter {
 
     await writeFile(envPath, serializeEnv(env), 'utf-8');
 
-    const { saveYaml } = await import('../yaml.ts');
+    const { saveYaml } = await import('../yaml.js');
     await saveYaml(manifestPath, Object.fromEntries(manifest));
   }
 
@@ -221,7 +221,7 @@ export class SlotEnvironment extends EventEmitter {
     await writeFile(envPath, serializeEnv(merged), 'utf-8');
 
     // Read existing manifest
-    const { loadYamlOrDefault, saveYaml } = await import('../yaml.ts');
+    const { loadYamlOrDefault, saveYaml } = await import('../yaml.js');
     const existingManifest = await loadYamlOrDefault<Record<string, ManifestEntry>>(manifestPath, {});
 
     // Merge manifest: existing wins

@@ -1,4 +1,4 @@
-import type { Slot } from './Slot.ts';
+import type { Slot } from './Slot.js';
 export interface ExtendResult {
     extended: boolean;
     addedVars: string[];

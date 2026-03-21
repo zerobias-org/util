@@ -1,4 +1,4 @@
-import type { ToolRequirement } from './config.ts';
+import type { ToolRequirement } from './config.js';
 export interface CheckResult {
     tool: string;
     ok: boolean;

@@ -1,4 +1,4 @@
-import type { ScannedVar } from '../env/Scanner.ts';
+import type { ScannedVar } from '../env/Scanner.js';
 export interface PortAllocation {
     name: string;
     port: number;

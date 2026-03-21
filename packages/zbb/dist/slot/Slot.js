@@ -1,0 +1,125 @@
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
+import { SlotEnvironment } from './SlotEnvironment.js';
+import { SlotWatcher } from './SlotWatcher.js';
+import { loadYamlOrDefault } from '../yaml.js';
+/**
+ * A loaded slot instance. Provides access to env, manifest, slot metadata,
+ * file watching, and event propagation.
+ *
+ * Extends EventEmitter — emits:
+ *   'env:change'        — env file modified
+ *   'state:change'      — state file modified
+ *   'deployment:change'  — deployment file modified (with filePath)
+ *   'command:change'     — command file modified (with filePath)
+ *   'ready'             — slot fully initialized
+ *   'error'             — watcher error
+ */
+export class Slot extends EventEmitter {
+    name;
+    path;
+    env;
+    _meta = null;
+    _watcher = null;
+    _initialized = false;
+    constructor(name, slotsDir) {
+        super();
+        this.name = name;
+        this.path = join(slotsDir, name);
+        this.env = new SlotEnvironment(this.path);
+    }
+    /** Load slot metadata and environment from disk. */
+    async load() {
+        this._meta = await loadYamlOrDefault(join(this.path, 'slot.yaml'), { name: this.name, created: new Date().toISOString() });
+        await this.env.load();
+        this._initialized = true;
+        this.emit('ready');
+    }
+    /** Slot config/metadata */
+    get meta() {
+        if (!this._meta)
+            throw new Error(`Slot '${this.name}' not loaded. Call load() first.`);
+        return this._meta;
+    }
+    /** Alias for meta — backward compat */
+    get config() {
+        return this.meta;
+    }
+    /** Check if slot has been loaded */
+    isInitialized() {
+        return this._initialized;
+    }
+    exists() {
+        return existsSync(this.path);
+    }
+    isEphemeral() {
+        return this._meta?.ephemeral ?? false;
+    }
+    isExpired() {
+        if (!this._meta?.expires)
+            return false;
+        return new Date(this._meta.expires) < new Date();
+    }
+    // ── Directory paths ────────────────────────────────────────
+    get configDir() { return join(this.path, 'config'); }
+    get logsDir() { return join(this.path, 'logs'); }
+    get stateDir() { return join(this.path, 'state'); }
+    get tmpDir() { return join(this.path, 'state', 'tmp'); }
+    /** Env vars that expose slot directories */
+    getSlotEnvVars() {
+        return {
+            ZB_SLOT: this.name,
+            ZB_SLOT_DIR: this.path,
+            ZB_SLOT_CONFIG: this.configDir,
+            ZB_SLOT_LOGS: this.logsDir,
+            ZB_SLOT_STATE: this.stateDir,
+            ZB_SLOT_TMP: this.tmpDir,
+            STACK_NAME: this.name,
+        };
+    }
+    // ── Watchers ───────────────────────────────────────────────
+    /** Start file watching on the slot directory */
+    enableWatchers() {
+        if (this._watcher)
+            return;
+        this._watcher = new SlotWatcher(this.path, this.name);
+        this._wireWatcherEvents();
+        this._watcher.start();
+    }
+    /** Get the watcher (if enabled) */
+    get watcher() {
+        return this._watcher;
+    }
+    /** Wire watcher events through the Slot EventEmitter */
+    _wireWatcherEvents() {
+        if (!this._watcher)
+            return;
+        // Propagate watcher events through the Slot with absolute paths
+        for (const event of ['env:change', 'state:change', 'deployment:change', 'command:change']) {
+            this._watcher.on(event, (relPath) => {
+                this.emit(event, join(this.path, relPath));
+            });
+        }
+        this._watcher.on('error', (error) => {
+            this.emit('error', error);
+        });
+        this._watcher.on('ready', () => {
+            this.emit('watcher:ready');
+        });
+    }
+    // ── Lifecycle ──────────────────────────────────────────────
+    /** Close slot — stop watchers, remove listeners */
+    async close() {
+        if (this._watcher) {
+            await this._watcher.close();
+            this._watcher = null;
+        }
+        this.removeAllListeners();
+        this._initialized = false;
+    }
+    /** Alias for close */
+    async shutdown() {
+        return this.close();
+    }
+}

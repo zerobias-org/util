@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { loadYamlOrDefault } from '../yaml.ts';
-import type { EnvVarDeclaration, ProjectConfig, RepoConfig } from '../config.ts';
+import { loadYamlOrDefault } from '../yaml.js';
+import type { EnvVarDeclaration, ProjectConfig, RepoConfig } from '../config.js';
 
 export interface ScannedVar {
   name: string;

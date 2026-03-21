@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import semver from 'semver';
-import type { ToolRequirement } from './config.ts';
+import type { ToolRequirement } from './config.js';
 
 export interface CheckResult {
   tool: string;
