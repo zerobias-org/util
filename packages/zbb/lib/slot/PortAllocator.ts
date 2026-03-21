@@ -1,5 +1,8 @@
-import { createServer } from 'node:net';
 import type { ScannedVar } from '../env/Scanner.js';
+import type { Slot } from './Slot.js';
+
+const DEFAULT_RANGE_SIZE = 100;
+const FIRST_SLOT_START = 15000;
 
 export interface PortAllocation {
   name: string;
@@ -8,67 +11,108 @@ export interface PortAllocation {
 }
 
 /**
- * Check if a port is free by attempting to bind to it.
+ * Check if two port ranges overlap.
  */
-function isPortFree(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = createServer();
-    server.once('error', () => resolve(false));
-    server.once('listening', () => {
-      server.close(() => resolve(true));
-    });
-    server.listen(port, '0.0.0.0');
-  });
+function portRangesOverlap(a: [number, number], b: [number, number]): boolean {
+  return !(a[1] < b[0] || a[0] > b[1]);
 }
 
 /**
- * Pick a random free port from the range.
+ * Allocate a non-overlapping port range for a new slot.
+ *
+ * Scans existing slots' portRange metadata and picks the next block
+ * after the highest used port. Each slot gets its own contiguous range.
  */
-async function findFreePort(range: [number, number], used: Set<number>): Promise<number> {
-  const [start, end] = range;
-  const size = end - start + 1;
+export function allocateSlotPortRange(
+  existingSlots: Slot[],
+  rangeSize: number = DEFAULT_RANGE_SIZE,
+): [number, number] {
+  let highestPort = FIRST_SLOT_START - 1;
 
-  // Try random ports up to 100 times
-  for (let i = 0; i < 100; i++) {
-    const port = start + Math.floor(Math.random() * size);
-    if (used.has(port)) continue;
-    if (await isPortFree(port)) return port;
+  for (const slot of existingSlots) {
+    const range = slot.meta?.portRange;
+    if (range) {
+      if (range[1] > highestPort) {
+        highestPort = range[1];
+      }
+    }
   }
 
-  // Fallback: sequential scan
-  for (let port = start; port <= end; port++) {
-    if (used.has(port)) continue;
-    if (await isPortFree(port)) return port;
-  }
-
-  throw new Error(`No free port in range [${start}-${end}]`);
+  const start = highestPort + 1;
+  return [start, start + rangeSize - 1];
 }
 
 /**
- * Allocate ports for all port-type vars.
- * Reuses existing allocations for the same slot (re-extend scenario).
- * New ports are picked randomly from the range and verified free.
+ * Validate a port range doesn't overlap with any existing slot.
  */
-export async function allocatePorts(
+export function validatePortRange(
+  portRange: [number, number],
+  existingSlots: Slot[],
+): void {
+  const [start, end] = portRange;
+
+  if (start < 1024) {
+    throw new Error(`Port range start ${start} is below 1024 (reserved)`);
+  }
+  if (end > 65_535) {
+    throw new Error(`Port range end ${end} exceeds 65535`);
+  }
+  if (start >= end) {
+    throw new Error(`Invalid port range [${start}, ${end}]`);
+  }
+
+  for (const slot of existingSlots) {
+    const existing = slot.meta?.portRange;
+    if (existing && portRangesOverlap(portRange, existing)) {
+      throw new Error(
+        `Port range ${start}-${end} overlaps with slot '${slot.name}' (${existing[0]}-${existing[1]})`
+      );
+    }
+  }
+}
+
+/**
+ * Allocate ports for all port-type vars from a contiguous range.
+ * Returns allocations in declaration order.
+ */
+export function allocatePorts(
   vars: ScannedVar[],
   range: [number, number],
   existingAllocations?: Map<string, number>,
-): Promise<PortAllocation[]> {
+): PortAllocation[] {
+  const [rangeStart, rangeEnd] = range;
   const portVars = vars.filter(v => v.declaration.type === 'port');
   const used = new Set<number>(existingAllocations?.values() ?? []);
   const allocations: PortAllocation[] = [];
 
+  let nextPort = rangeStart;
+
   for (const v of portVars) {
-    // If already allocated (re-extend), reuse if still free
+    // If already allocated (re-extend scenario), reuse
     if (existingAllocations?.has(v.name)) {
-      const existing = existingAllocations.get(v.name)!;
-      allocations.push({ name: v.name, port: existing, source: v.source });
+      allocations.push({
+        name: v.name,
+        port: existingAllocations.get(v.name)!,
+        source: v.source,
+      });
       continue;
     }
 
-    const port = await findFreePort(range, used);
-    allocations.push({ name: v.name, port, source: v.source });
-    used.add(port);
+    // Find next available port in range
+    while (used.has(nextPort) && nextPort <= rangeEnd) {
+      nextPort++;
+    }
+
+    if (nextPort > rangeEnd) {
+      throw new Error(
+        `Port range exhausted [${rangeStart}-${rangeEnd}]. ` +
+        `Need port for ${v.name} but all ${rangeEnd - rangeStart + 1} ports are allocated.`
+      );
+    }
+
+    allocations.push({ name: v.name, port: nextPort, source: v.source });
+    used.add(nextPort);
+    nextPort++;
   }
 
   return allocations;

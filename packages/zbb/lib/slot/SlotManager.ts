@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { Slot, type SlotMeta } from './Slot.js';
 import { SlotEnvironment, type ManifestEntry } from './SlotEnvironment.js';
-import { allocatePorts } from './PortAllocator.js';
+import { allocatePorts, allocateSlotPortRange, validatePortRange } from './PortAllocator.js';
 import { scanEnvDeclarations } from '../env/Scanner.js';
 import { resolveAll } from '../env/Resolver.js';
 import { generateSecret } from '../env/SecretGen.js';
@@ -22,6 +22,7 @@ export interface CreateOptions {
   ephemeral?: boolean;
   ttl?: number;
   repoRoot?: string;
+  portRange?: [number, number];
 }
 
 export class SlotManager {
@@ -56,24 +57,29 @@ export class SlotManager {
     }
 
     const repoConfig = await loadRepoConfig(repoRoot);
-    const portRange: [number, number] = repoConfig.ports?.range ?? [15000, 16000];
 
     // 1. Scan all zbb.yaml files
     const scanned = await scanEnvDeclarations(repoRoot);
 
-    // 2. Create slot directories
+    // 2. Allocate a non-overlapping port range for this slot
+    //    Scans existing slots and picks the next available block
+    const existingSlots = await SlotManager.list();
+    const portRange = options.portRange ?? allocateSlotPortRange(existingSlots);
+    validatePortRange(portRange, existingSlots);
+
+    // 3. Create slot directories
     await mkdir(slotDir, { recursive: true });
     await mkdir(join(slotDir, 'config'), { recursive: true });
     await mkdir(join(slotDir, 'logs'), { recursive: true });
     await mkdir(join(slotDir, 'state'), { recursive: true });
     await mkdir(join(slotDir, 'state', 'tmp'), { recursive: true });
 
-    // 3. Build slot env vars (available for ${VAR} resolution)
+    // 4. Build slot env vars (available for ${VAR} resolution)
     const slot = new Slot(name, slotsDir);
     const slotVars = slot.getSlotEnvVars();
 
-    // 4. Allocate ports
-    const portAllocations = await allocatePorts(scanned, portRange);
+    // 5. Allocate ports within this slot's range
+    const portAllocations = allocatePorts(scanned, portRange);
 
     // 5. Generate secrets
     const secrets = new Map<string, string>();
