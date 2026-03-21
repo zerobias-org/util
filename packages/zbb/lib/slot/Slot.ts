@@ -36,11 +36,15 @@ export class Slot extends EventEmitter {
   private _watcher: SlotWatcher | null = null;
   private _initialized = false;
 
-  constructor(name: string, slotsDir: string) {
+  constructor(nameOrConfig: string | { name: string; [key: string]: any }, slotsDir: string) {
     super();
+    const name = typeof nameOrConfig === 'string' ? nameOrConfig : nameOrConfig.name;
     this.name = name;
     this.path = join(slotsDir, name);
     this.env = new SlotEnvironment(this.path);
+    if (typeof nameOrConfig !== 'string') {
+      this._meta = nameOrConfig as SlotMeta;
+    }
   }
 
   /** Load slot metadata and environment from disk. */
