@@ -318,7 +318,7 @@ async function handleEnv(args: string[]): Promise<void> {
       const manifest = slot.env.getManifest();
 
       for (const key of slot.env.list()) {
-        const value = unmask ? slot.env.get(key)! : (slot.env.shouldMask(key) ? '***' : slot.env.get(key)!);
+        const value = unmask ? slot.env.get(key)! : (slot.env.shouldMask(key) ? '***' : slot.env.getMasked(key)!);
         const entry = manifest[key];
         const source = entry?.source ?? '';
         const typeInfo = entry?.derived ? 'derived' : (entry?.type ?? '');

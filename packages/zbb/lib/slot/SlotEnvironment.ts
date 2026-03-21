@@ -84,30 +84,33 @@ export class SlotEnvironment extends EventEmitter {
     }
   }
 
-  /** Get var value. Overrides > declared > resolver. Masking applied unless unmask=true. */
-  get(key: string, unmask = false): string | undefined {
-    const value = this.overrides.get(key) ?? this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
+  /** Get var value. Overrides > declared > resolver. Returns real value. */
+  get(key: string): string | undefined {
+    return this.overrides.get(key) ?? this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
+  }
+
+  /** Get var value masked for display. */
+  getMasked(key: string): string | undefined {
+    const value = this.get(key);
     if (value === undefined) return undefined;
-    if (!unmask && this.shouldMask(key)) return '***MASKED***';
+    if (this.shouldMask(key)) return '***MASKED***';
     return value;
   }
 
-  /** Get all vars. Masking applied unless unmask=true. */
-  getAll(unmask = false): Record<string, string> {
+  /** Get all vars. Returns real values. */
+  getAll(): Record<string, string> {
     const result: Record<string, string> = {};
-    for (const [k, v] of this.declared) result[k] = unmask ? v : (this.shouldMask(k) ? '***MASKED***' : v);
-    for (const [k, v] of this.overrides) result[k] = unmask ? v : (this.shouldMask(k) ? '***MASKED***' : v);
+    for (const [k, v] of this.declared) result[k] = v;
+    for (const [k, v] of this.overrides) result[k] = v;
     return result;
   }
 
-  /** Get all vars with masking applied. */
+  /** Get all vars masked for display. */
   getAllMasked(): Record<string, string> {
-    return this.getAll(false);
-  }
-
-  /** Get all vars unmasked. */
-  getAllUnmasked(): Record<string, string> {
-    return this.getAll(true);
+    const result: Record<string, string> = {};
+    for (const [k, v] of this.declared) result[k] = this.shouldMask(k) ? '***MASKED***' : v;
+    for (const [k, v] of this.overrides) result[k] = this.shouldMask(k) ? '***MASKED***' : v;
+    return result;
   }
 
   /** Set a user override (persisted to overrides.env). Optional mask flag. */
