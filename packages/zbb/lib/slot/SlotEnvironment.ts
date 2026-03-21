@@ -94,8 +94,8 @@ export class SlotEnvironment extends EventEmitter {
   /** Get all vars. Masking applied unless unmask=true. */
   getAll(unmask = false): Record<string, string> {
     const result: Record<string, string> = {};
-    for (const [k, v] of this.declared) result[k] = unmask ? v : (this.shouldMask(k) ? '***' : v);
-    for (const [k, v] of this.overrides) result[k] = unmask ? v : (this.shouldMask(k) ? '***' : v);
+    for (const [k, v] of this.declared) result[k] = unmask ? v : (this.shouldMask(k) ? '***MASKED***' : v);
+    for (const [k, v] of this.overrides) result[k] = unmask ? v : (this.shouldMask(k) ? '***MASKED***' : v);
     return result;
   }
 
