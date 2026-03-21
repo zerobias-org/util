@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { EventEmitter } from 'node:events';
 
 const SENSITIVE_PATTERNS = [
   /key$/i,
@@ -25,7 +26,7 @@ export interface ManifestEntry {
  * Reads from .env (declared) and overrides.env (user overrides).
  * Writes are only to overrides.env.
  */
-export class SlotEnvironment {
+export class SlotEnvironment extends EventEmitter {
   private declared: Map<string, string> = new Map();
   private overrides: Map<string, string> = new Map();
   private manifest: Map<string, ManifestEntry> = new Map();
@@ -59,6 +60,7 @@ export class SlotEnvironment {
   readonly slotDir: string;
 
   constructor(slotDir: string) {
+    super();
     this.slotDir = slotDir;
   }
 
@@ -81,33 +83,54 @@ export class SlotEnvironment {
     }
   }
 
-  /** Get var value. Overrides take priority over declared, with resolver fallback. */
-  get(key: string): string | undefined {
-    return this.overrides.get(key) ?? this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
+  /** Get var value. Overrides > declared > resolver. Masking applied unless unmask=true. */
+  get(key: string, unmask = false): string | undefined {
+    const value = this.overrides.get(key) ?? this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
+    if (value === undefined) return undefined;
+    if (!unmask && this.shouldMask(key)) return '***MASKED***';
+    return value;
   }
 
-  /** Get all vars (overrides merged over declared). */
-  getAll(): Record<string, string> {
+  /** Get all vars. Masking applied unless unmask=true. */
+  getAll(unmask = false): Record<string, string> {
     const result: Record<string, string> = {};
-    for (const [k, v] of this.declared) result[k] = v;
-    for (const [k, v] of this.overrides) result[k] = v;
+    for (const [k, v] of this.declared) result[k] = unmask ? v : (this.shouldMask(k) ? '***' : v);
+    for (const [k, v] of this.overrides) result[k] = unmask ? v : (this.shouldMask(k) ? '***' : v);
     return result;
   }
 
   /** Get all vars with masking applied. */
   getAllMasked(): Record<string, string> {
-    const all = this.getAll();
-    const result: Record<string, string> = {};
-    for (const [k, v] of Object.entries(all)) {
-      result[k] = this.shouldMask(k) ? '***' : v;
-    }
-    return result;
+    return this.getAll(false);
   }
 
-  /** Set a user override (persisted to overrides.env). */
-  async set(key: string, value: string): Promise<void> {
+  /** Get all vars unmasked. */
+  getAllUnmasked(): Record<string, string> {
+    return this.getAll(true);
+  }
+
+  /** Set a user override (persisted to overrides.env). Optional mask flag. */
+  async set(key: string, value: string, mask?: boolean): Promise<void> {
     this.overrides.set(key, value);
+    if (mask !== undefined) {
+      this.manifest.set(key, {
+        ...(this.manifest.get(key) ?? { source: 'override', type: 'string' }),
+        mask,
+      });
+    }
     await this.writeOverrides();
+    this.emit('change', { key, value });
+  }
+
+  /** Alias for getManifestEntry — backward compat. */
+  getMetadata(key: string): ManifestEntry | undefined {
+    return this.manifest.get(key);
+  }
+
+  /** Reload env from disk (alias for load when already initialized). */
+  async reload(): Promise<void> {
+    await this.load();
+    this.emit('change', {});
   }
 
   /** Remove a user override. */

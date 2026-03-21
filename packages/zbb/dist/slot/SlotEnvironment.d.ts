@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 export interface ManifestEntry {
     source: string;
     type: string;
@@ -11,7 +12,7 @@ export interface ManifestEntry {
  * Reads from .env (declared) and overrides.env (user overrides).
  * Writes are only to overrides.env.
  */
-export declare class SlotEnvironment {
+export declare class SlotEnvironment extends EventEmitter {
     private declared;
     private overrides;
     private manifest;
@@ -40,14 +41,20 @@ export declare class SlotEnvironment {
     private get overridesPath();
     private get manifestPath();
     load(): Promise<void>;
-    /** Get var value. Overrides take priority over declared, with resolver fallback. */
-    get(key: string): string | undefined;
-    /** Get all vars (overrides merged over declared). */
-    getAll(): Record<string, string>;
+    /** Get var value. Overrides > declared > resolver. Masking applied unless unmask=true. */
+    get(key: string, unmask?: boolean): string | undefined;
+    /** Get all vars. Masking applied unless unmask=true. */
+    getAll(unmask?: boolean): Record<string, string>;
     /** Get all vars with masking applied. */
     getAllMasked(): Record<string, string>;
-    /** Set a user override (persisted to overrides.env). */
-    set(key: string, value: string): Promise<void>;
+    /** Get all vars unmasked. */
+    getAllUnmasked(): Record<string, string>;
+    /** Set a user override (persisted to overrides.env). Optional mask flag. */
+    set(key: string, value: string, mask?: boolean): Promise<void>;
+    /** Alias for getManifestEntry — backward compat. */
+    getMetadata(key: string): ManifestEntry | undefined;
+    /** Reload env from disk (alias for load when already initialized). */
+    reload(): Promise<void>;
     /** Remove a user override. */
     unset(key: string): Promise<void>;
     /** Clear all overrides back to declared defaults. */
