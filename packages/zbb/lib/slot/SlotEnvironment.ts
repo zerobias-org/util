@@ -10,6 +10,7 @@ const SENSITIVE_PATTERNS = [
   /password$/i,
   /pass$/i,
   /credential/i,
+  /jwt$/i,
 ];
 
 export interface ManifestEntry {
