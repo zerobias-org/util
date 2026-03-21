@@ -57,7 +57,7 @@ export async function extendSlot(slot: Slot, repoRoot: string): Promise<ExtendRe
   // 7. Allocate ports for missing port vars
   //    Pass ALL port vars (existing + missing) so allocatePorts can skip existing
   const allPortVars = scanned.filter(v => v.declaration.type === 'port');
-  const portAllocations = allocatePorts(allPortVars, portRange, existingPortAllocations);
+  const portAllocations = await allocatePorts(allPortVars, portRange, existingPortAllocations);
 
   // 8. Generate secrets for missing secret vars
   //    Build existing secrets map from current env

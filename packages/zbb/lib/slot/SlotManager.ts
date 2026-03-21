@@ -73,7 +73,7 @@ export class SlotManager {
     const slotVars = slot.getSlotEnvVars();
 
     // 4. Allocate ports
-    const portAllocations = allocatePorts(scanned, portRange);
+    const portAllocations = await allocatePorts(scanned, portRange);
 
     // 5. Generate secrets
     const secrets = new Map<string, string>();
