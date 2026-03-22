@@ -475,25 +475,114 @@ val compileServer by tasks.registering(NpxTask::class) {
     }
 }
 
-// Generate a default Dockerfile if one doesn't exist
+// Generate Dockerfile, nginx.conf, and startup.sh for module container
+// nginx handles SSL termination + auth, proxies to Node on internal port
 val generateDockerfile by tasks.registering {
     group = "lifecycle"
-    description = "Generate default Dockerfile for module"
+    description = "Generate Dockerfile with nginx SSL termination"
     dependsOn(compileServer)
-    outputs.file("Dockerfile")
-    onlyIf { isDockerBuild() && !project.file("Dockerfile").exists() }
+    outputs.files("Dockerfile", "docker-nginx.conf", "docker-startup.sh")
+    onlyIf { isDockerBuild() }
     doLast {
+        // nginx.conf — SSL termination, auth header check, proxy to Node
+        val nginxConf = """
+            |worker_processes 1;
+            |daemon off;
+            |error_log /var/log/nginx/error.log warn;
+            |pid /var/run/nginx.pid;
+            |
+            |events {
+            |    worker_connections 1024;
+            |}
+            |
+            |http {
+            |    default_type application/json;
+            |    access_log off;
+            |
+            |    upstream node_app {
+            |        server 127.0.0.1:8889;
+            |        keepalive 32;
+            |    }
+            |
+            |    server {
+            |        listen 8888 ssl http2 default_server;
+            |        server_name localhost;
+            |
+            |        ssl_certificate /opt/module/ssl/cert.pem;
+            |        ssl_certificate_key /opt/module/ssl/key.pem;
+            |        ssl_protocols TLSv1.2 TLSv1.3;
+            |        ssl_ciphers HIGH:!aNULL:!MD5;
+            |
+            |        proxy_http_version 1.1;
+            |        proxy_set_header Connection "";
+            |        proxy_set_header Host ${'$'}host;
+            |        proxy_set_header X-Real-IP ${'$'}remote_addr;
+            |        proxy_set_header X-Forwarded-For ${'$'}proxy_add_x_forwarded_for;
+            |        proxy_set_header X-Forwarded-Proto ${'$'}scheme;
+            |        proxy_buffering off;
+            |        proxy_connect_timeout 60s;
+            |        proxy_send_timeout 300s;
+            |        proxy_read_timeout 300s;
+            |
+            |        location / {
+            |            proxy_pass http://node_app;
+            |        }
+            |    }
+            |}
+        """.trimMargin() + "\n"
+        project.file("docker-nginx.conf").writeText(nginxConf)
+
+        // startup.sh — generate cert, start nginx, start node
+        val startupSh = """
+            |#!/bin/sh
+            |set -e
+            |
+            |# Generate self-signed SSL certificate
+            |mkdir -p /opt/module/ssl
+            |openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            |  -keyout /opt/module/ssl/key.pem \
+            |  -out /opt/module/ssl/cert.pem \
+            |  -subj "/CN=localhost/O=ZeroBias/OU=Module" 2>/dev/null
+            |
+            |# Start nginx (SSL termination)
+            |mkdir -p /var/log/nginx /var/run
+            |nginx -c /opt/module/docker-nginx.conf &
+            |NGINX_PID=${'$'}!
+            |sleep 1
+            |if ! kill -0 ${'$'}NGINX_PID 2>/dev/null; then
+            |  echo "ERROR: nginx failed to start"
+            |  cat /var/log/nginx/error.log 2>/dev/null
+            |  exit 1
+            |fi
+            |
+            |# Start Node app on internal port
+            |PORT=8889 node dist/generated/server-entry.js &
+            |NODE_PID=${'$'}!
+            |
+            |# Shutdown handler
+            |trap "kill ${'$'}NODE_PID ${'$'}NGINX_PID 2>/dev/null; exit 0" TERM INT
+            |
+            |echo "Module ready on https://localhost:8888"
+            |wait ${'$'}NODE_PID
+        """.trimMargin() + "\n"
+        project.file("docker-startup.sh").writeText(startupSh)
+
+        // Dockerfile
         val dockerfile = """
             |FROM node:22-alpine
             |LABEL org.opencontainers.image.source https://github.com/auditlogic/module
-            |RUN apk update && apk add ca-certificates openssl && rm -rf /var/cache/apk/*
+            |RUN apk update && apk add ca-certificates openssl nginx && rm -rf /var/cache/apk/*
             |WORKDIR /opt/module
             |COPY dist ./dist
             |COPY node_modules ./node_modules
             |COPY package.json .
             |COPY *.yml .
+            |COPY docker-nginx.conf /opt/module/docker-nginx.conf
+            |COPY docker-startup.sh /opt/module/docker-startup.sh
+            |RUN chmod +x /opt/module/docker-startup.sh
+            |RUN mkdir -p /var/log/nginx /var/run
             |EXPOSE 8888
-            |CMD ["node", "dist/generated/server-entry.js"]
+            |CMD ["/opt/module/docker-startup.sh"]
         """.trimMargin() + "\n"
         project.file("Dockerfile").writeText(dockerfile)
     }
