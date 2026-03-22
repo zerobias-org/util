@@ -315,7 +315,7 @@ export function moduleTest<T extends TestClient = TestClient>(
       state.harness = createTestHarness({
         debug: options.debug,
         cleanup: true,
-        insecure: false,  // Always use HTTPS in production
+        insecure: true,  // Use HTTP for local Docker tests (matches HUB_NODE_INSECURE=true)
         profilesDir: options.profilesDir
       });
 
