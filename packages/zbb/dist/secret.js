@@ -228,7 +228,6 @@ async function secretGet(args, slot) {
     const raw = readSecret(filePath);
     const resolved = resolveRefs(raw, dir);
     const key = args[1] && !args[1].startsWith('-') ? args[1] : null;
-    const json = args.includes('--json');
     if (key) {
         const value = resolved[key];
         if (value === undefined) {
@@ -237,13 +236,8 @@ async function secretGet(args, slot) {
         }
         console.log(typeof value === 'string' ? value : JSON.stringify(value));
     }
-    else if (json) {
-        console.log(JSON.stringify(resolved, null, 2));
-    }
     else {
-        for (const [k, v] of Object.entries(resolved)) {
-            console.log(`${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`);
-        }
+        console.log(JSON.stringify(resolved, null, 2));
     }
 }
 /**
