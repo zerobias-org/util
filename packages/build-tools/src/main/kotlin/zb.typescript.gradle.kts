@@ -287,23 +287,34 @@ tasks.named("testIntegration") {
     dependsOn(testIntegrationExec)
 }
 
-val testDockerExec by tasks.registering(NpxTask::class) {
+val testDockerExec by tasks.registering(Exec::class) {
     group = "lifecycle"
-    description = "Run e2e tests in Docker mode (module in container, same test file)"
-    dependsOn(tasks.named("compile"), tasks.named("buildImage"))
-    workingDir.set(project.projectDir)
-    command.set("mocha")
-    args.set(listOf(
-        "--config", ".mocharc.json",
-        "--inline-diffs",
-        "--reporter=list",
-        "--timeout", "180000",
-        "test/e2e/**/*.test.ts"
-    ))
-    environment.put("TEST_MODE", "docker")
-    if (project.hasProperty("profile")) {
-        environment.put("npm_config_profile", project.property("profile") as String)
+    description = "Run e2e tests in Docker mode (Gradle manages container lifecycle)"
+    dependsOn(tasks.named("compile"), startModuleExec)
+    workingDir(project.projectDir)
+    doFirst {
+        // Read container URL from startModuleExec output
+        val jsonFile = layout.buildDirectory.file("module-container.json").get().asFile
+        val containerUrl = if (jsonFile.exists()) {
+            DockerRunner.ContainerInfo.fromJson(jsonFile.readText()).baseUrl
+        } else {
+            throw GradleException("module-container.json not found — startModuleExec did not run")
+        }
+
+        environment("TEST_MODE", "docker")
+        environment("CONTAINER_URL", containerUrl)
+
+        val npxPath = if (nvmNodeBinDir != null) "$nvmNodeBinDir/npx" else "npx"
+        commandLine(npxPath, "mocha",
+            "--config", ".mocharc.json",
+            "--inline-diffs",
+            "--reporter=list",
+            "--timeout", "180000",
+            "test/e2e/**/*.test.ts"
+        )
     }
+    // Stop container after tests (pass or fail)
+    finalizedBy(stopModuleExec)
     onlyIf { project.file("test/e2e").exists() }
 }
 

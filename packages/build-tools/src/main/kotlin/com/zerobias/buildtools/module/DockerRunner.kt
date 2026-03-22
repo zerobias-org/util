@@ -65,6 +65,12 @@ object DockerRunner {
             add("docker"); add("run"); add("-d")
             add("-p"); add("$hostPort:8888")
             add("--name"); add(containerName)
+            // Tag with slot for cleanup by zbb destroy
+            val slotName = System.getenv("ZB_SLOT")
+            if (slotName != null) {
+                add("--label"); add("zerobias.slot=$slotName")
+            }
+            add("--label"); add("hub.test=true")
             if (insecure) {
                 add("-e"); add("HUB_NODE_INSECURE=true")
             }
