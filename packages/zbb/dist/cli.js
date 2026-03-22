@@ -134,8 +134,13 @@ async function handleSlot(args) {
             // Extend slot from cwd context (walk up to nearest zbb.yaml)
             const repoRoot = await extendSlotFromCwd(slot);
             if (!repoRoot) {
-                console.error('No zbb.yaml or .zbb.yaml found. Run from inside a project directory.');
-                process.exit(1);
+                if (isReload) {
+                    // No-args reload requires project context
+                    console.error('No zbb.yaml or .zbb.yaml found. Run from inside a project directory.');
+                    process.exit(1);
+                }
+                // Named load from non-project dir — warn but allow (user may cd into project after)
+                console.warn('Warning: No zbb.yaml or .zbb.yaml found in directory tree. Slot extension skipped.');
             }
             // Re-eval mode: already inside a slot, just re-export env to current shell
             if (isReload) {
@@ -155,8 +160,8 @@ async function handleSlot(args) {
                 if (v)
                     process.env[k] = v;
             }
-            // Run preflight checks
-            {
+            // Run preflight checks and apply cleanse (only if in a project)
+            if (repoRoot) {
                 const repoConfig = await loadRepoConfig(repoRoot);
                 const requirements = [...(repoConfig.require ?? [])];
                 const userConfig = await loadUserConfig();
@@ -174,7 +179,7 @@ async function handleSlot(args) {
             const slotEnv = slot.env.getAll();
             const shellEnv = { ...process.env };
             // Apply cleanse list
-            {
+            if (repoRoot) {
                 const repoConfig = await loadRepoConfig(repoRoot);
                 for (const varName of repoConfig.cleanse ?? []) {
                     delete shellEnv[varName];
