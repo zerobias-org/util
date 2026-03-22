@@ -289,21 +289,22 @@ tasks.named("testIntegration") {
 
 val testDockerExec by tasks.registering(NpxTask::class) {
     group = "lifecycle"
-    description = "Run Docker integration tests with module-tester"
-    dependsOn(tasks.named("compile"))
+    description = "Run e2e tests in Docker mode (module in container, same test file)"
+    dependsOn(tasks.named("compile"), tasks.named("buildImage"))
     workingDir.set(project.projectDir)
     command.set("mocha")
     args.set(listOf(
-        "--config", ".mocharc.docker.json",
+        "--config", ".mocharc.json",
         "--inline-diffs",
         "--reporter=list",
         "--timeout", "180000",
-        "test/docker/**/*.ts"
+        "test/e2e/**/*.test.ts"
     ))
+    environment.put("TEST_MODE", "docker")
     if (project.hasProperty("profile")) {
         environment.put("npm_config_profile", project.property("profile") as String)
     }
-    onlyIf { project.file("test/docker").exists() }
+    onlyIf { project.file("test/e2e").exists() }
 }
 
 tasks.named("testDocker") {
