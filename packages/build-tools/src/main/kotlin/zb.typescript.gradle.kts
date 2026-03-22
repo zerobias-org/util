@@ -612,6 +612,170 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
     workingDir.set(project.projectDir)
 }
 
+// ════════════════════════════════════════════════════════════
+// HUB E2E — fixture setup + Hub Client test execution
+//
+// setupFixtures: CLI-only fixture chain (no SQL)
+//   1. zbb dataloader -d .                    (load module artifacts)
+//   2. hub-node server node list --json        (get registered node ID)
+//   3. hub-node deployments create --module    (create deployment)
+//   4. hub-node server boundaries list --json  (get boundary ID)
+//   5. hub-node connections create             (create connection)
+//
+// testHub: depends on setupFixtures, runs mocha with TEST_MODE=hub
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Read module name and version from package.json using regex.
+ * Returns (name, version) or throws if not found.
+ */
+fun readPackageNameVersion(): Pair<String, String> {
+    val pkgJson = project.file("package.json")
+    require(pkgJson.exists()) { "package.json not found in ${project.projectDir}" }
+    val content = pkgJson.readText()
+    val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+        ?: throw org.gradle.api.GradleException("Cannot find 'name' in package.json")
+    val version = Regex(""""version"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+        ?: throw org.gradle.api.GradleException("Cannot find 'version' in package.json")
+    return name to version
+}
+
+/**
+ * Run a CLI command, capture stdout, and parse it as JSON array or object.
+ * Returns the raw JSON string for caller to parse.
+ * Uses slot env (already in process.env via ZbbSlotProvider).
+ */
+fun runCliJson(vararg command: String): String {
+    return com.zerobias.buildtools.util.ExecUtils.execCapture(
+        command = command.toList(),
+        workingDir = project.projectDir,
+        environment = emptyMap(), // inherits Gradle process env (slot vars already set)
+        throwOnError = true
+    ).trim()
+}
+
+val setupFixtures by tasks.registering {
+    group = "lifecycle"
+    description = "Set up Hub e2e test fixtures: dataloader, deployment, connection"
+    dependsOn(tasks.named("compile"))
+    onlyIf { project.file("test/e2e").exists() }
+    doLast {
+        // Resolve slot env (needed for CLI commands that read SERVER_URL, API_KEY, etc.)
+        com.zerobias.buildtools.util.ZbbSlotProvider.requireActiveSlot()
+
+        val (moduleKey, moduleVersion) = readPackageNameVersion()
+        logger.lifecycle("setupFixtures: $moduleKey@$moduleVersion")
+
+        // ── Step 1: Load module artifacts via dataloader ───────────────────
+        logger.lifecycle("setupFixtures: Step 1 — loading module artifacts via zbb dataloader")
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("zbb", "dataloader", "-d", "."),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+
+        // ── Step 2: Get registered node ID ─────────────────────────────────
+        logger.lifecycle("setupFixtures: Step 2 — getting registered node ID")
+        val nodeListJson = runCliJson("hub-node", "--json", "server", "node", "list")
+        // Parse: [{id: "...", ...}]
+        val nodeId = run {
+            val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(nodeListJson)
+                ?: throw org.gradle.api.GradleException(
+                    "setupFixtures: No node ID found in `hub-node server node list` output.\n" +
+                    "Ensure a hub-node is registered and paired. Output:\n$nodeListJson"
+                )
+            idMatch.groupValues[1]
+        }
+        logger.lifecycle("setupFixtures: Node ID = $nodeId")
+
+        // ── Step 3: Create deployment ───────────────────────────────────────
+        logger.lifecycle("setupFixtures: Step 3 — creating deployment for $moduleKey@$moduleVersion on node $nodeId")
+        val deployJson = runCliJson(
+            "hub-node", "--json", "deployments", "create",
+            "--module", "$moduleKey@$moduleVersion",
+            "--node-id", nodeId
+        )
+        // Parse deployment ID from JSON response
+        val deploymentId = run {
+            val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(deployJson)
+                ?: throw org.gradle.api.GradleException(
+                    "setupFixtures: No deployment ID in `hub-node deployments create` output.\n$deployJson"
+                )
+            idMatch.groupValues[1]
+        }
+        logger.lifecycle("setupFixtures: Deployment ID = $deploymentId")
+
+        // ── Step 4: Get boundary ID ─────────────────────────────────────────
+        logger.lifecycle("setupFixtures: Step 4 — getting boundary ID")
+        val boundaryListJson = runCliJson("hub-node", "--json", "server", "boundaries", "list")
+        val boundaryId = run {
+            val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(boundaryListJson)
+                ?: throw org.gradle.api.GradleException(
+                    "setupFixtures: No boundary ID in `hub-node server boundaries list` output.\n$boundaryListJson"
+                )
+            idMatch.groupValues[1]
+        }
+        logger.lifecycle("setupFixtures: Boundary ID = $boundaryId")
+
+        // ── Step 5: Create connection ────────────────────────────────────────
+        // Connection name: first capitalized word of module key + " E2E"
+        val moduleName = moduleKey.substringAfterLast('/').split('-').last().replaceFirstChar { it.uppercase() }
+        val connectionName = "$moduleName E2E"
+        logger.lifecycle("setupFixtures: Step 5 — creating connection '$connectionName'")
+        val connJson = runCliJson(
+            "hub-node", "--json", "connections", "create",
+            "--deployment-id", deploymentId,
+            "--boundary-id", boundaryId,
+            "--name", connectionName,
+            "--mode", "auto"
+        )
+        val targetId = run {
+            val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(connJson)
+                ?: throw org.gradle.api.GradleException(
+                    "setupFixtures: No connection ID in `hub-node connections create` output.\n$connJson"
+                )
+            idMatch.groupValues[1]
+        }
+        logger.lifecycle("setupFixtures: Connection (TARGET_ID) = $targetId")
+
+        // Export fixture IDs for testHub task
+        project.ext.set("SETUP_FIXTURES_TARGET_ID", targetId)
+        project.ext.set("SETUP_FIXTURES_DEPLOYMENT_ID", deploymentId)
+        logger.lifecycle("setupFixtures: complete. TARGET_ID=$targetId DEPLOYMENT_ID=$deploymentId")
+    }
+}
+
+val testHubExec by tasks.registering(NpxTask::class) {
+    group = "lifecycle"
+    description = "Run Hub Client e2e tests (TEST_MODE=hub) via mocha"
+    dependsOn(setupFixtures)
+    workingDir.set(project.projectDir)
+    command.set("mocha")
+    args.set(listOf(
+        "--config", ".mocharc.json",
+        "--inline-diffs",
+        "--reporter=list",
+        "--timeout", "120000",
+        "test/e2e/github.test.ts"
+    ))
+    onlyIf { project.file("test/e2e").exists() }
+    doFirst {
+        val targetId = project.ext.get("SETUP_FIXTURES_TARGET_ID") as? String
+            ?: throw org.gradle.api.GradleException(
+                "testHub: SETUP_FIXTURES_TARGET_ID not set — did setupFixtures fail?"
+            )
+        environment.put("TEST_MODE", "hub")
+        environment.put("TARGET_ID", targetId)
+        logger.lifecycle("testHubExec: TEST_MODE=hub TARGET_ID=$targetId")
+    }
+}
+
+val testHub by tasks.registering {
+    group = "lifecycle"
+    description = "Run Hub Client e2e tests (full stack through Hub Server)"
+    dependsOn(testHubExec)
+}
+
 tasks.named("publishNpm") {
     dependsOn(publishNpmExec)
 }
