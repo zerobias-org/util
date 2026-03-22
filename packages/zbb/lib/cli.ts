@@ -52,6 +52,12 @@ export async function main(argv: string[]): Promise<void> {
   // Log subcommands
   if (command === 'logs') return handleLogs(args.slice(1));
 
+  // Dataloader — spawn platform dataloader with slot PG env injection
+  if (command === 'dataloader') {
+    const { handleDataloader } = await import('./dataloader.js');
+    return handleDataloader(args.slice(1));
+  }
+
   // Stack aliases → gradle
   const alias = resolveStackAlias(command);
   if (alias) {
@@ -545,6 +551,7 @@ Usage:
   zbb slot <create|load|list|info|delete|gc>   Slot management
   zbb env <list|get|set|unset|reset|diff>       Environment variables
   zbb logs <list|show>                           Log viewer (local/docker/aws)
+  zbb dataloader [args...]                       Run dataloader with slot SQL env
   zbb up|down|destroy|info                       Stack aliases (Gradle)
   zbb <gradle-task> [args...]                    Run Gradle task
   zbb --version                                  Show version
