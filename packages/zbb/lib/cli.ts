@@ -11,6 +11,7 @@
  */
 
 import { SlotManager } from './slot/SlotManager.js';
+import type { Slot } from './slot/Slot.js';
 import { runPreflightChecks, formatPreflightResults } from './preflight.js';
 import { resolveStackAlias, runGradle } from './gradle.js';
 import {
@@ -21,6 +22,28 @@ import {
 } from './config.js';
 import { scanEnvDeclarations } from './env/Scanner.js';
 import { spawn } from 'node:child_process';
+
+/**
+ * Extend slot from cwd context: walk up to find repo root (.zbb.yaml/gradlew),
+ * scan zbb.yaml declarations, add missing vars to slot, re-export to process.env.
+ * Shared by: slot load, zbb up/down/destroy, zbb dataloader.
+ * Returns the repo root path, or null if no project context found.
+ */
+async function extendSlotFromCwd(slot: Slot): Promise<string | null> {
+  const repoRoot = findRepoRoot(process.cwd());
+  if (!repoRoot) return null;
+
+  const { extendSlot } = await import('./slot/extend.js');
+  const result = await extendSlot(slot, repoRoot);
+  if (result.extended) {
+    console.log(`Extended slot with ${result.addedVars.length} new var(s): ${result.addedVars.join(', ')}`);
+    const newEnv = slot.env.getAll();
+    for (const varName of result.addedVars) {
+      if (newEnv[varName]) process.env[varName] = newEnv[varName];
+    }
+  }
+  return repoRoot;
+}
 
 export async function main(argv: string[]): Promise<void> {
   const args = argv.slice(2);
@@ -61,24 +84,9 @@ export async function main(argv: string[]): Promise<void> {
   // Stack aliases → gradle
   const alias = resolveStackAlias(command);
   if (alias) {
-    // Lazy extension before stack commands
     if (process.env.ZB_SLOT) {
-      const repoRoot = findRepoRoot(process.cwd());
-      if (repoRoot) {
-        const { extendSlot } = await import('./slot/extend.js');
-        const slotName = process.env.ZB_SLOT;
-        const { SlotManager: SM } = await import('./slot/SlotManager.js');
-        const slot = await SM.load(slotName);
-        const result = await extendSlot(slot, repoRoot);
-        if (result.extended) {
-          console.log(`Extended slot with ${result.addedVars.length} new var(s): ${result.addedVars.join(', ')}`);
-          // Re-export new vars to current process env so Gradle sees them
-          const newEnv = slot.env.getAll();
-          for (const varName of result.addedVars) {
-            if (newEnv[varName]) process.env[varName] = newEnv[varName];
-          }
-        }
-      }
+      const slot = await SlotManager.load(process.env.ZB_SLOT);
+      await extendSlotFromCwd(slot);
     }
     runGradle([alias, ...args.slice(1)]);
     return;
@@ -130,10 +138,15 @@ async function handleSlot(args: string[]): Promise<void> {
     }
 
     case 'load': {
-      const slotName = args[1];
+      let slotName = args[1];
+      const isReload = !slotName && !!process.env.ZB_SLOT;
+
       if (!slotName) {
-        console.error('Usage: zbb slot load <name>');
-        process.exit(1);
+        slotName = process.env.ZB_SLOT ?? '';
+        if (!slotName) {
+          console.error('Not inside a slot. Usage: zbb slot load <name>');
+          process.exit(1);
+        }
       }
 
       // GC expired ephemeral slots first
@@ -144,33 +157,38 @@ async function handleSlot(args: string[]): Promise<void> {
 
       const slot = await SlotManager.load(slotName);
 
-      // Lazy slot extension: add missing vars from current project's zbb.yaml
-      const repoRoot = findRepoRoot(process.cwd());
-      if (repoRoot) {
-        const { extendSlot } = await import('./slot/extend.js');
-        const extResult = await extendSlot(slot, repoRoot);
-        if (extResult.extended) {
-          console.log(`Extended slot with ${extResult.addedVars.length} new var(s): ${extResult.addedVars.join(', ')}`);
-        }
+      // Extend slot from cwd context (walk up to nearest zbb.yaml)
+      const repoRoot = await extendSlotFromCwd(slot);
+      if (!repoRoot) {
+        console.error('No zbb.yaml or .zbb.yaml found. Run from inside a project directory.');
+        process.exit(1);
       }
+
+      // Re-eval mode: already inside a slot, just re-export env to current shell
+      if (isReload) {
+        const slotEnv = slot.env.getAll();
+        // Write updated env to a sourceable file so the parent shell can pick it up
+        // For now, print export statements that the user can eval, or just confirm
+        // Actually: zbb runs as a child process, can't modify parent shell env.
+        // But we CAN update the slot's .env so next command in this shell sees changes.
+        console.log(`Slot '${slotName}' re-evaluated from ${process.cwd()}`);
+        break;
+      }
+
+      // First load: apply slot env, run preflight, spawn subshell
 
       // Apply slot env to process.env BEFORE preflight so checks like
       // JAVA_HOME-dependent java version work correctly.
-      // Override existing values — slot env takes precedence.
       const slotEnvForPreflight = slot.env.getAll();
       for (const [k, v] of Object.entries(slotEnvForPreflight)) {
         if (v) process.env[k] = v;
       }
 
       // Run preflight checks
-      if (repoRoot) {
+      {
         const repoConfig = await loadRepoConfig(repoRoot);
-        const scanned = await scanEnvDeclarations(repoRoot);
 
-        // Collect requirements from repo and project configs
         const requirements: ToolRequirement[] = [...(repoConfig.require ?? [])];
-        // Project-level requirements would be in zbb.yaml — scanner doesn't collect them yet
-        // For now, repo-level is sufficient
 
         const userConfig = await loadUserConfig();
         if (requirements.length > 0) {
@@ -189,7 +207,7 @@ async function handleSlot(args: string[]): Promise<void> {
       const shellEnv: Record<string, string> = { ...process.env as Record<string, string> };
 
       // Apply cleanse list
-      if (repoRoot) {
+      {
         const repoConfig = await loadRepoConfig(repoRoot);
         for (const varName of repoConfig.cleanse ?? []) {
           delete shellEnv[varName];
@@ -198,6 +216,16 @@ async function handleSlot(args: string[]): Promise<void> {
 
       // Merge slot env
       Object.assign(shellEnv, slotEnv);
+
+      // Ensure JAVA_HOME is set and on PATH if not already correct
+      if (!shellEnv.JAVA_HOME || !shellEnv.JAVA_HOME.includes('21')) {
+        const java21Home = '/usr/lib/jvm/java-21-openjdk-amd64';
+        const { existsSync } = await import('node:fs');
+        if (existsSync(`${java21Home}/bin/java`)) {
+          shellEnv.JAVA_HOME = java21Home;
+          shellEnv.PATH = `${java21Home}/bin:${shellEnv.PATH ?? ''}`;
+        }
+      }
 
       // Set prompt
       const userConfig = await loadUserConfig();
@@ -559,7 +587,7 @@ Usage:
 
 Slot commands:
   zbb slot create <name> [--ephemeral] [--ttl <duration>]
-  zbb slot load <name>          Enter slot (spawns subshell)
+  zbb slot load [name]          Enter slot (spawns subshell, reloads current if no name)
   zbb slot list                 List all slots
   zbb slot info <name>          Show slot details
   zbb slot delete <name>        Remove slot

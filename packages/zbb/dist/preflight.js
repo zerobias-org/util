@@ -1,5 +1,48 @@
 import { execSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import semver from 'semver';
+const JAVA_VERSION_PARSE = /version "(\S+)"/;
+const KNOWN_JAVA_PATHS = [
+    '/usr/lib/jvm/java-21-openjdk-amd64/bin/java',
+    '/usr/lib/jvm/java-21-openjdk/bin/java',
+    '/usr/lib/jvm/java-21/bin/java',
+];
+/**
+ * Multi-path Java version detection.
+ * Tries candidates in order, returns first version satisfying the constraint.
+ * If none satisfy, returns the first version found (so the error message is useful).
+ */
+function checkJavaVersion(constraint) {
+    const candidates = ['java'];
+    if (process.env.JAVA_HOME) {
+        candidates.push(`${process.env.JAVA_HOME}/bin/java`);
+    }
+    for (const p of KNOWN_JAVA_PATHS) {
+        if (existsSync(p))
+            candidates.push(p);
+    }
+    let firstFound = null;
+    for (const bin of candidates) {
+        try {
+            const output = execSync(`${bin} -version 2>&1`, {
+                encoding: 'utf-8',
+                stdio: ['pipe', 'pipe', 'pipe'],
+                timeout: 10_000,
+            }).trim();
+            const match = output.match(JAVA_VERSION_PARSE);
+            if (!match?.[1])
+                continue;
+            const version = match[1];
+            if (!firstFound)
+                firstFound = version;
+            const coerced = semver.coerce(version);
+            if (coerced && semver.satisfies(coerced, constraint))
+                return version;
+        }
+        catch { /* try next */ }
+    }
+    return firstFound;
+}
 /**
  * Run preflight checks for all tool requirements.
  * Merges repo-level and project-level requirements (deduplicated by tool name).
@@ -27,6 +70,31 @@ export function runPreflightChecks(requirements, skipTools) {
                 ok: !!value,
                 required: 'set',
                 error: value ? undefined : `${req.tool} not set in environment`,
+            });
+            continue;
+        }
+        // Built-in Java detection: try PATH, $JAVA_HOME, and known install paths
+        if (req.tool === 'java') {
+            const version = checkJavaVersion(req.version);
+            if (!version) {
+                results.push({
+                    tool: req.tool,
+                    ok: false,
+                    required: req.version,
+                    error: 'Java not found on PATH, $JAVA_HOME, or known install paths',
+                    install: req.install,
+                });
+                continue;
+            }
+            const coerced = semver.coerce(version);
+            const ok = coerced ? semver.satisfies(coerced, req.version) : false;
+            results.push({
+                tool: req.tool,
+                ok,
+                version,
+                required: req.version,
+                error: ok ? undefined : `No Java ${req.version} found (PATH has ${version})`,
+                install: req.install,
             });
             continue;
         }
