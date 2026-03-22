@@ -303,6 +303,8 @@ val testDockerExec by tasks.registering(Exec::class) {
 
         environment("TEST_MODE", "docker")
         environment("CONTAINER_URL", containerUrl)
+        // Self-signed certs: tell Node.js to accept them
+        environment("NODE_TLS_REJECT_UNAUTHORIZED", "0")
 
         val npxPath = if (nvmNodeBinDir != null) "$nvmNodeBinDir/npx" else "npx"
         commandLine(npxPath, "mocha",
@@ -566,9 +568,8 @@ val startModuleExec by tasks.registering {
         val hostPort = if (project.hasProperty("port"))
             project.property("port").toString().toInt()
         else DockerRunner.findFreePort()
-        val insecure = project.findProperty("insecure")?.toString()?.toBoolean() ?: true
 
-        val info = DockerRunner.start(imageName, containerName, hostPort, insecure)
+        val info = DockerRunner.start(imageName, containerName, hostPort)
 
         try {
             DockerRunner.waitForHealthy(info.port)
