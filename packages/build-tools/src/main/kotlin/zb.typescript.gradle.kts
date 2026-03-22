@@ -330,49 +330,56 @@ fun isDockerBuild(): Boolean {
 }
 
 // Install server runtime dependencies (Express, OpenAPI validator, etc.)
+// Install all server dependencies in a single npm install --no-save call.
+// Multiple sequential --no-save installs cause npm to prune previous --no-save
+// packages (they're not in package.json/lockfile), so all server deps must be
+// installed together in one invocation.
+// Must run after compile (which depends on npmInstallModule) to avoid race
+// condition where the module npm install removes server deps from node_modules.
 val installServerDeps by tasks.registering(NpmTask::class) {
     group = "lifecycle"
-    description = "Install server runtime dependencies for Docker image"
-    dependsOn(npmInstallModule)
+    description = "Install server runtime and dev dependencies for Docker image (--no-save)"
+    dependsOn(tasks.named("compile"))
     workingDir.set(project.projectDir)
     npmCommand.set(listOf("install"))
-    args.set(listOf(
-        "-E",
-        "express@4.18.1",
-        "express-async-errors@3.1.1",
-        "express-openapi-validator@4.13.6",
-        "esprima@4.0.1",
-        "pem@1.14.6"
-    ))
+    // All server deps installed together: runtime, dev types, and platform packages.
+    // Sequential --no-save installs cause npm to prune "extraneous" packages from
+    // the previous call (they're not in package.json), so all must go in one call.
+    args.set(project.provider {
+        buildList {
+            add("--no-save")
+            // Server runtime (Docker container)
+            add("express@4.18.1")
+            add("express-async-errors@3.1.1")
+            add("express-openapi-validator@4.13.6")
+            add("esprima@4.0.1")
+            add("pem@1.14.6")
+            // Dev types for tsc
+            add("@types/express@4.17.13")
+            // Platform packages (latest from registry)
+            add("@zerobias-org/types-core-js@latest")
+            add("@zerobias-org/logger@latest")
+            add("@zerobias-org/util-hub-module-utils@latest")
+            add("@zerobias-com/hub-core@latest")
+        }
+    })
     onlyIf { isDockerBuild() }
 }
 
-val installServerDevDeps by tasks.registering(NpmTask::class) {
+// Stub tasks that previously did separate npm install calls.
+// Now collapsed into installServerDeps to prevent npm pruning between calls.
+val installServerDevDeps by tasks.registering {
     group = "lifecycle"
-    description = "Install server dev dependencies for Docker image"
+    description = "Stub: merged into installServerDeps"
     dependsOn(installServerDeps)
-    workingDir.set(project.projectDir)
-    npmCommand.set(listOf("install"))
-    args.set(listOf(
-        "-D", "-E",
-        "@types/express@4.17.13"
-    ))
     onlyIf { isDockerBuild() }
 }
 
-val installServerPlatformDeps by tasks.registering(NpmTask::class) {
+// Stub: platform deps merged into installServerDeps to prevent npm pruning.
+val installServerPlatformDeps by tasks.registering {
     group = "lifecycle"
-    description = "Install server platform dependencies for Docker image"
+    description = "Stub: platform deps merged into installServerDeps"
     dependsOn(installServerDevDeps)
-    workingDir.set(project.projectDir)
-    npmCommand.set(listOf("install"))
-    args.set(listOf(
-        "-E",
-        "@zerobias-org/types-core-js@latest",
-        "@zerobias-org/logger@latest",
-        "@zerobias-org/util-hub-module-utils@latest",
-        "@zerobias-com/hub-core@latest"
-    ))
     onlyIf { isDockerBuild() }
 }
 
