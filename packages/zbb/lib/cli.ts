@@ -69,6 +69,9 @@ export async function main(argv: string[]): Promise<void> {
   // Slot subcommands
   if (command === 'slot') return handleSlot(args.slice(1));
 
+  // Secret subcommands
+  if (command === 'secret') return handleSecretCmd(args.slice(1));
+
   // Env subcommands
   if (command === 'env') return handleEnv(args.slice(1));
 
@@ -411,6 +414,25 @@ async function handleSlot(args: string[]): Promise<void> {
   }
 }
 
+// ── Secret Commands ──────────────────────────────────────────────────
+
+async function handleSecretCmd(args: string[]): Promise<void> {
+  const slotName = process.env.ZB_SLOT;
+  if (!slotName) {
+    console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+    process.exit(1);
+  }
+
+  if (!args[0]) {
+    console.error('Usage: zbb secret <create|get|list|update|delete>');
+    process.exit(1);
+  }
+
+  const slot = await SlotManager.load(slotName);
+  const { handleSecret } = await import('./secret.js');
+  return handleSecret(args, slot);
+}
+
 // ── Env Commands ─────────────────────────────────────────────────────
 
 async function handleEnv(args: string[]): Promise<void> {
@@ -643,6 +665,7 @@ function printUsage(): void {
 Usage:
   zbb slot <create|load|list|info|delete|gc>   Slot management
   zbb env <list|get|set|unset|reset|diff>       Environment variables
+  zbb secret <create|get|list|update|delete>    Secret management
   zbb logs <list|show>                           Log viewer (local/docker/aws)
   zbb dataloader [args...]                       Run dataloader with slot SQL env
   zbb up|down|destroy|info                       Stack aliases (Gradle)
@@ -650,13 +673,12 @@ Usage:
   zbb --version                                  Show version
   zbb --help                                     Show this help
 
-Slot commands:
-  zbb slot create <name> [--ephemeral] [--ttl <duration>]
-  zbb slot load [name]          Enter slot (spawns subshell, reloads current if no name)
-  zbb slot list                 List all slots
-  zbb slot info <name>          Show slot details
-  zbb slot delete <name>        Remove slot
-  zbb slot gc                   Clean expired ephemeral slots`);
+Secret commands:
+  zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]
+  zbb secret get <name> [key] [--json]    Read secret (resolves {{env.X}} refs)
+  zbb secret list [--module <key>]        List secrets in slot
+  zbb secret update <name> [key=value ...]  Update secret values
+  zbb secret delete <name>                Delete secret`);
 }
 
 function parseTtl(value: string): number {
