@@ -83,9 +83,9 @@ export async function main(argv: string[]): Promise<void> {
 
   // Destroy — slot-level: tear down ALL containers for this slot
   if (command === 'destroy') {
-    const slotName = process.env.ZB_SLOT;
+    const slotName = args[1] ?? process.env.ZB_SLOT;
     if (!slotName) {
-      console.error('Not inside a slot. Run: zbb slot load <name>');
+      console.error('Usage: zbb destroy [slot-name]  (or run from inside a slot)');
       process.exit(1);
     }
     const slot = await SlotManager.load(slotName);

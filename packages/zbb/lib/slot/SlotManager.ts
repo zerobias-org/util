@@ -266,17 +266,27 @@ export class SlotManager {
     let volumeCount = 0;
 
     // Stop containers and remove volumes for this slot
+    // Match by label OR by name prefix (STACK_NAME = slot name)
     const { execSync } = await import('node:child_process');
     try {
-      const containers = execSync(
-        `docker ps -aq --filter "label=zerobias.slot=${name}"`,
+      // Find containers by label or name prefix
+      const byLabel = execSync(
+        `docker ps -a --filter "label=zerobias.slot=${name}" --format "{{.Names}}"`,
         { encoding: 'utf-8' },
       ).trim();
-      if (containers) {
-        const ids = containers.split('\n').filter(Boolean);
-        containerCount = ids.length;
-        execSync(`docker rm -f ${ids.join(' ')}`, { stdio: 'pipe' });
+      const byName = execSync(
+        `docker ps -a --filter "name=${name}-" --format "{{.Names}}"`,
+        { encoding: 'utf-8' },
+      ).trim();
+      const allNames = new Set([
+        ...byLabel.split('\n').filter(Boolean),
+        ...byName.split('\n').filter(Boolean),
+      ]);
+      if (allNames.size > 0) {
+        containerCount = allNames.size;
+        execSync(`docker rm -f ${[...allNames].join(' ')}`, { stdio: 'pipe' });
       }
+
       const volumes = execSync(
         `docker volume ls -q --filter "name=${name}_"`,
         { encoding: 'utf-8' },
@@ -285,6 +295,17 @@ export class SlotManager {
         const vols = volumes.split('\n').filter(Boolean);
         volumeCount = vols.length;
         execSync(`docker volume rm ${vols.join(' ')}`, { stdio: 'pipe' });
+      }
+
+      // Clean up networks
+      const networks = execSync(
+        `docker network ls --filter "name=${name}_" --format "{{.Name}}"`,
+        { encoding: 'utf-8' },
+      ).trim();
+      if (networks) {
+        for (const net of networks.split('\n').filter(Boolean)) {
+          try { execSync(`docker network rm ${net}`, { stdio: 'pipe' }); } catch { /* may be in use */ }
+        }
       }
     } catch {
       // docker not available or no containers/volumes — continue with delete
