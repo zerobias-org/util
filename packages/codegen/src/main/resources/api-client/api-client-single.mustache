@@ -279,7 +279,7 @@ export class {{classname}}HttpImpl implements {{producerName}} {
   {{/vendorExtensions.x-is-array-body}}
   {{#vendorExtensions.x-is-primitive-body}}
   const _bodyParams = {{#bodyParams}}{{paramName}}{{/bodyParams}};
-  const _body = {{#bodyParams}}{{paramName}}{{/bodyParams}};
+  const _body = JSON.stringify({{#bodyParams}}{{paramName}}{{/bodyParams}});
   {{/vendorExtensions.x-is-primitive-body}}
   {{^vendorExtensions.x-is-binary-body}}
   {{^vendorExtensions.x-is-array-body}}
@@ -335,7 +335,7 @@ export class {{classname}}HttpImpl implements {{producerName}} {
         pageSize: results.pageSize,
       },
       paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }),
-    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}_bodyParams, { params: _queryParams, paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }) }{{/vendorExtensions.x-returns-paged-results}})
+    }{{/vendorExtensions.x-returns-paged-results}}{{^vendorExtensions.x-returns-paged-results}}_bodyParams, { params: _queryParams, paramsSerializer: (params) => qs.stringify(serializeQueryParams(params), { skipNulls: true }), {{#vendorExtensions.x-is-primitive-body}}headers: { 'Content-Type': 'application/json' }, transformRequest: [(data: any) => JSON.stringify(data)], {{/vendorExtensions.x-is-primitive-body}} }{{/vendorExtensions.x-returns-paged-results}})
   {{/vendorExtensions.x-is-delete-method}}
   {{/vendorExtensions.x-is-get-method}}
     .then((response) => {
