@@ -321,7 +321,11 @@ async function secretUpdate(args: string[], slot: Slot): Promise<void> {
     if (eqIdx === -1) continue;
     const key = arg.slice(0, eqIdx);
     const value = arg.slice(eqIdx + 1);
-    data[key] = value;
+    if (value === '') {
+      delete data[key];
+    } else {
+      data[key] = value;
+    }
     changed++;
   }
 
