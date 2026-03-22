@@ -1,5 +1,7 @@
 {
   "codegenVersion": "{{codegenVersion}}",
+  "connector": {{isConnector}},
+  "connectionProfileId": "{{#isConnector}}{{packageNameKebab}}{{/isConnector}}",
   "operations": {
 {{#apiInfo}}
 {{#apis}}
