@@ -67,6 +67,55 @@ export async function main(argv) {
         const { handleDataloader } = await import('./dataloader.js');
         return handleDataloader(args.slice(1));
     }
+    // Destroy — slot-level: tear down ALL containers for this slot
+    if (command === 'destroy') {
+        const slotName = process.env.ZB_SLOT;
+        if (!slotName) {
+            console.error('Not inside a slot. Run: zbb slot load <name>');
+            process.exit(1);
+        }
+        const slot = await SlotManager.load(slotName);
+        const stackName = slot.env.get('STACK_NAME') ?? slotName;
+        const { execSync } = await import('node:child_process');
+        console.log(`Destroying all containers for stack: ${stackName}`);
+        try {
+            // Stop and remove all containers with the stack name prefix
+            const containers = execSync(`docker ps -a --filter "name=${stackName}-" --format "{{.Names}}"`, { encoding: 'utf-8' }).trim();
+            if (containers) {
+                const names = containers.split('\n').filter(Boolean);
+                console.log(`  Stopping ${names.length} container(s): ${names.join(', ')}`);
+                execSync(`docker stop ${names.join(' ')}`, { stdio: 'inherit' });
+                execSync(`docker rm ${names.join(' ')}`, { stdio: 'inherit' });
+            }
+            else {
+                console.log('  No containers found');
+            }
+            // Remove volumes with stack name prefix
+            const volumes = execSync(`docker volume ls --filter "name=${stackName}_" --format "{{.Name}}"`, { encoding: 'utf-8' }).trim();
+            if (volumes) {
+                const volNames = volumes.split('\n').filter(Boolean);
+                console.log(`  Removing ${volNames.length} volume(s): ${volNames.join(', ')}`);
+                execSync(`docker volume rm ${volNames.join(' ')}`, { stdio: 'inherit' });
+            }
+            // Remove networks with stack name prefix
+            const networks = execSync(`docker network ls --filter "name=${stackName}_" --format "{{.Name}}"`, { encoding: 'utf-8' }).trim();
+            if (networks) {
+                const netNames = networks.split('\n').filter(Boolean);
+                for (const net of netNames) {
+                    try {
+                        execSync(`docker network rm ${net}`, { stdio: 'inherit' });
+                    }
+                    catch { /* network may still be in use briefly */ }
+                }
+            }
+            console.log(`✓ Stack destroyed: ${stackName}`);
+        }
+        catch (error) {
+            console.error(`Failed to destroy stack: ${error.message}`);
+            process.exit(1);
+        }
+        return;
+    }
     // Stack aliases → gradle
     const alias = resolveStackAlias(command);
     if (alias) {
