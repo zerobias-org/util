@@ -228,12 +228,14 @@ val copyDistributionSpec by tasks.registering {
     inputs.property("includeConnectionProfile", zb.includeConnectionProfileInDist)
     outputs.file(project.provider {
         val moduleName = OpenApiSpecAssembler.resolveModuleName(project.projectDir)
-        project.file("generated/${moduleName}.yml")
+        project.file("dist/${moduleName}.yml")
     })
     doLast {
         val moduleName = OpenApiSpecAssembler.resolveModuleName(project.projectDir)
         val fullYml = fullSpec
-        val distYml = project.file("generated/${moduleName}.yml")
+        val distDir = project.file("dist")
+        distDir.mkdirs()
+        val distYml = project.file("dist/${moduleName}.yml")
 
         if (zb.includeConnectionProfileInDist.get()) {
             fullYml.copyTo(distYml, overwrite = true)
@@ -977,6 +979,14 @@ val setupFixtures by tasks.registering {
         logger.lifecycle("setupFixtures: $moduleKey@$moduleVersion")
 
         // ── Step 1: Load module artifacts via dataloader ───────────────────
+        // Dataloader expects module-{name}.yml in module root; we generate it to generated/.
+        // Symlink so dataloader finds it without duplicating the file.
+        val noScope = moduleKey.split("/").last()
+        val distSpec = project.file("generated/${noScope}.yml")
+        val rootLink = project.file("${noScope}.yml")
+        if (distSpec.exists() && !rootLink.exists()) {
+            java.nio.file.Files.createSymbolicLink(rootLink.toPath(), distSpec.toPath())
+        }
         logger.lifecycle("setupFixtures: Step 1 — loading module artifacts via zbb dataloader")
         com.zerobias.buildtools.util.ExecUtils.exec(
             command = listOf("zbb", "dataloader", "-d", "."),

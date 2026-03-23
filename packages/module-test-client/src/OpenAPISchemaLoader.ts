@@ -76,9 +76,11 @@ export class OpenAPISchemaLoader {
   private constructor() {
     const specName = deriveSpecName();
 
-    // Search paths: generated/ (dev build), package root (published npm package)
+    // Search paths: dist/ (build output), generated/ (intermediate), root (published npm)
     const searchPaths = [
-      path.join(__dirname, '../generated', specName),      // src/ → generated/
+      path.join(__dirname, '../dist', specName),            // src/ → dist/
+      path.join(__dirname, '../../dist', specName),         // dist/src/ → dist/
+      path.join(__dirname, '../generated', specName),       // src/ → generated/
       path.join(__dirname, '../../generated', specName),    // dist/src/ → generated/
       path.join(__dirname, '..', specName),                 // src/ → root (published)
       path.join(__dirname, '../..', specName),              // dist/src/ → root (published)
