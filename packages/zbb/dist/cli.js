@@ -37,13 +37,38 @@ async function extendSlotFromCwd(slot) {
     return repoRoot;
 }
 export async function main(argv) {
-    const args = argv.slice(2);
+    let args = argv.slice(2);
+    // Global --slot flag: load slot env before running any command
+    // Usage: zbb --slot local build, zbb --slot local testDocker
+    const slotIdx = args.indexOf('--slot');
+    if (slotIdx !== -1 && args[slotIdx + 1]) {
+        const slotName = args[slotIdx + 1];
+        args = [...args.slice(0, slotIdx), ...args.slice(slotIdx + 2)];
+        // Load slot env into process.env
+        const slot = await SlotManager.load(slotName);
+        process.env.ZB_SLOT = slotName;
+        const slotEnv = slot.env.getAll();
+        for (const [k, v] of Object.entries(slotEnv)) {
+            if (v)
+                process.env[k] = v;
+        }
+        // Set JAVA_HOME if not already correct
+        if (!process.env.JAVA_HOME || !process.env.JAVA_HOME.includes('21')) {
+            const java21Home = '/usr/lib/jvm/java-21-openjdk-amd64';
+            const { existsSync } = await import('node:fs');
+            if (existsSync(`${java21Home}/bin/java`)) {
+                process.env.JAVA_HOME = java21Home;
+                process.env.PATH = `${java21Home}/bin:${process.env.PATH ?? ''}`;
+            }
+        }
+        // Extend from cwd context
+        await extendSlotFromCwd(slot);
+    }
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
         printUsage();
         return;
     }
     if (args[0] === '--version') {
-        // Read version from package.json relative to this file
         const { readFileSync } = await import('node:fs');
         const { join, dirname } = await import('node:path');
         const { fileURLToPath } = await import('node:url');
