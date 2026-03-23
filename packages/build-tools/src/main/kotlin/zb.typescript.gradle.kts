@@ -355,9 +355,7 @@ val testDirectExec by tasks.registering(Exec::class) {
     onlyIf { project.file("test/e2e").exists() }
 }
 
-val testDirect by tasks.registering {
-    group = "lifecycle"
-    description = "Run e2e tests in Direct mode"
+tasks.named("testDirect") {
     dependsOn(testDirectExec)
 }
 
@@ -744,6 +742,7 @@ val startModuleExec by tasks.registering {
     description = "Start module container and write connection details"
     dependsOn(buildImageExec)
     outputs.file(layout.buildDirectory.file("module-container.json"))
+    outputs.upToDateWhen { false } // Always start fresh container
     doLast {
         val imageName = "${zb.dockerImageName.get()}:local"
         val containerName = "module-${zb.vendor.get()}-${zb.product.get()}"

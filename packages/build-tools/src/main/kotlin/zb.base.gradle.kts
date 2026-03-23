@@ -134,9 +134,15 @@ val testIntegration by tasks.registering {
     dependsOn(compile)
 }
 
+val testDirect by tasks.registering {
+    group = "lifecycle"
+    description = "Run e2e tests in Direct mode (in-process, live API)"
+    dependsOn(compile)
+}
+
 val testDocker by tasks.registering {
     group = "lifecycle"
-    description = "Run Docker-based tests via module-tester REST interface"
+    description = "Run e2e tests in Docker mode (container, wire protocol)"
     dependsOn(compile)
 }
 
@@ -195,7 +201,7 @@ val build by tasks.registering {
 val gate by tasks.registering {
     group = "lifecycle"
     description = "Full CI gate — all checks must pass"
-    dependsOn(validate, lint, compile, test, buildArtifacts)
+    dependsOn(validate, lint, compile, test, testDirect, testDocker, buildArtifacts)
 }
 
 // Phase 7: PUBLISH
