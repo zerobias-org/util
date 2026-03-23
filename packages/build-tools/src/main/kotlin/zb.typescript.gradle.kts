@@ -146,7 +146,6 @@ val npmInstallModule by tasks.registering(NpmTask::class) {
     npmCommand.set(listOf("install"))
     workingDir.set(project.projectDir)
     inputs.file("package.json")
-    inputs.file("package-lock.json").optional()
     outputs.dir("node_modules")
 }
 
