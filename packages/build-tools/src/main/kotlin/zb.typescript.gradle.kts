@@ -343,6 +343,12 @@ fun isDockerBuild(): Boolean {
     }
 }
 
+// True when Docker build needed AND module doesn't provide its own Dockerfile
+// Java HTTP modules provide their own Dockerfile/nginx/startup — skip TS server generation
+fun needsGeneratedServer(): Boolean {
+    return isDockerBuild() && !project.file("Dockerfile").exists()
+}
+
 // Install server runtime dependencies (Express, OpenAPI validator, etc.)
 // Install all server dependencies in a single npm install --no-save call.
 // Multiple sequential --no-save installs cause npm to prune previous --no-save
@@ -377,7 +383,7 @@ val installServerDeps by tasks.registering(NpmTask::class) {
             add("@zerobias-com/hub-core@latest")
         }
     })
-    onlyIf { isDockerBuild() }
+    onlyIf { needsGeneratedServer() }
 }
 
 // Stub tasks that previously did separate npm install calls.
@@ -386,7 +392,7 @@ val installServerDevDeps by tasks.registering {
     group = "lifecycle"
     description = "Stub: merged into installServerDeps"
     dependsOn(installServerDeps)
-    onlyIf { isDockerBuild() }
+    onlyIf { needsGeneratedServer() }
 }
 
 // Stub: platform deps merged into installServerDeps to prevent npm pruning.
@@ -394,7 +400,7 @@ val installServerPlatformDeps by tasks.registering {
     group = "lifecycle"
     description = "Stub: platform deps merged into installServerDeps"
     dependsOn(installServerDevDeps)
-    onlyIf { isDockerBuild() }
+    onlyIf { needsGeneratedServer() }
 }
 
 // Generate REST server controllers from OpenAPI spec
@@ -414,7 +420,7 @@ val generateServerApi by tasks.registering(NpxTask::class) {
     ))
     inputs.file("full.yml")
     outputs.file(layout.buildDirectory.file("server-api-generated.marker"))
-    onlyIf { isDockerBuild() }
+    onlyIf { needsGeneratedServer() }
     doLast {
         val serverDir = project.file("generated/server")
         if (serverDir.exists()) {
@@ -444,7 +450,7 @@ val generateServerEntry by tasks.registering {
     mustRunAfter(transpile)  // Avoid output overlap with generated/ directory
     inputs.file("full.yml")
     outputs.file(layout.buildDirectory.file("server-entry-generated.marker"))
-    onlyIf { isDockerBuild() }
+    onlyIf { needsGeneratedServer() }
     doLast {
         val pascal = ServerEntryPointGenerator.resolveModulePascalName(project.projectDir)
         val content = ServerEntryPointGenerator.generate(pascal)
@@ -466,7 +472,7 @@ val compileServer by tasks.registering(NpxTask::class) {
     inputs.file(layout.buildDirectory.file("server-api-generated.marker"))
     inputs.file(layout.buildDirectory.file("server-entry-generated.marker"))
     outputs.file(layout.buildDirectory.file("server-compiled.marker"))
-    onlyIf { isDockerBuild() }
+    onlyIf { needsGeneratedServer() }
     doLast {
         layout.buildDirectory.file("server-compiled.marker").get().asFile.apply {
             parentFile.mkdirs()
@@ -482,7 +488,8 @@ val generateDockerfile by tasks.registering {
     description = "Generate Dockerfile with nginx SSL termination"
     dependsOn(compileServer)
     outputs.files("Dockerfile", "docker-nginx.conf", "docker-startup.sh")
-    onlyIf { isDockerBuild() }
+    // Skip if module provides its own Dockerfile (e.g., Java HTTP modules)
+    onlyIf { isDockerBuild() && !project.file("Dockerfile").exists() }
     doLast {
         // nginx.conf — SSL termination, auth header check, proxy to Node
         val nginxConf = """
