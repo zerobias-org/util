@@ -287,6 +287,49 @@ tasks.named("testIntegration") {
     dependsOn(testIntegrationExec)
 }
 
+// ── E2E Direct Mode ─────────────────────────────────────────────
+// Runs e2e tests with TEST_MODE=direct (in-process, no Docker)
+// For TypeScript modules: calls GithubImpl/SqlImpl directly
+
+val testDirectExec by tasks.registering(Exec::class) {
+    group = "lifecycle"
+    description = "Run e2e tests in Direct mode (in-process, no container)"
+    dependsOn(tasks.named("compile"))
+    workingDir(project.projectDir)
+    doFirst {
+        environment("TEST_MODE", "direct")
+        environment("MODULE_DIR", project.projectDir.absolutePath)
+        // Pass SECRET_NAME only if explicitly set
+        val secretName = System.getenv("SECRET_NAME")
+            ?: project.findProperty("secretName")?.toString()
+        if (secretName != null) {
+            environment("SECRET_NAME", secretName)
+        }
+        // For direct mode: dynamic import of module impl
+        val pascal = ServerEntryPointGenerator.resolveModulePascalName(project.projectDir)
+        environment("DIRECT_PASCAL", pascal)
+        environment("DIRECT_IMPL", "src/${pascal}Impl.js")
+
+        val npxPath = if (nvmNodeBinDir != null) "$nvmNodeBinDir/npx" else "npx"
+        commandLine(npxPath, "mocha",
+            "--config", ".mocharc.json",
+            "--inline-diffs",
+            "--reporter=list",
+            "--timeout", "120000",
+            "test/e2e/**/*.test.ts"
+        )
+    }
+    onlyIf { project.file("test/e2e").exists() }
+}
+
+val testDirect by tasks.registering {
+    group = "lifecycle"
+    description = "Run e2e tests in Direct mode"
+    dependsOn(testDirectExec)
+}
+
+// ── E2E Docker Mode ─────────────────────────────────────────────
+
 val testDockerExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Run e2e tests in Docker mode (Gradle manages container lifecycle)"
