@@ -304,10 +304,13 @@ val testDockerExec by tasks.registering(Exec::class) {
         environment("TEST_MODE", "docker")
         environment("CONTAINER_URL", containerUrl)
         environment("MODULE_DIR", project.projectDir.absolutePath)
-        // Pass SECRET_NAME from Gradle property, env var, or default to module product name
-        environment("SECRET_NAME", System.getenv("SECRET_NAME")
+        // Pass SECRET_NAME only if explicitly set (Gradle property or env var)
+        // If not set, module-test-client discovers secrets via zbb secret list --module
+        val secretName = System.getenv("SECRET_NAME")
             ?: project.findProperty("secretName")?.toString()
-            ?: zb.product.get())
+        if (secretName != null) {
+            environment("SECRET_NAME", secretName)
+        }
         // Self-signed certs: tell Node.js to accept them
         environment("NODE_TLS_REJECT_UNAUTHORIZED", "0")
 

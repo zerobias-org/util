@@ -207,8 +207,12 @@ async function secretCreate(args: string[], slot: Slot): Promise<void> {
     }
   }
 
-  // Auto-detect module from cwd
-  if (!data._module) {
+  // --module flag overrides auto-detection
+  const moduleIdx = remaining.indexOf('--module');
+  if (moduleIdx !== -1 && remaining[moduleIdx + 1]) {
+    data._module = remaining[moduleIdx + 1];
+  } else if (!data._module) {
+    // Auto-detect module from cwd
     const moduleKey = detectModuleKey();
     if (moduleKey) data._module = moduleKey;
   }
@@ -264,7 +268,11 @@ async function secretGet(args: string[], slot: Slot): Promise<void> {
 async function secretList(args: string[], slot: Slot): Promise<void> {
   const dir = secretsDir(slot);
   if (!existsSync(dir)) {
-    console.log('No secrets.');
+    if (args.includes('--json')) {
+      console.log('[]');
+    } else {
+      console.log('No secrets.');
+    }
     return;
   }
 
@@ -272,16 +280,22 @@ async function secretList(args: string[], slot: Slot): Promise<void> {
     ? args[args.indexOf('--module') + 1]
     : null;
 
+  const jsonMode = args.includes('--json');
+
   const files = readdirSync(dir).filter(f =>
     SUPPORTED_EXTENSIONS.some(ext => f.endsWith(`.${ext}`))
   );
 
   if (files.length === 0) {
-    console.log('No secrets.');
+    if (jsonMode) {
+      console.log('[]');
+    } else {
+      console.log('No secrets.');
+    }
     return;
   }
 
-  console.log('  NAME              MODULE');
+  const results: { name: string; module: string }[] = [];
   for (const f of files) {
     const name = f.replace(/\.(yml|yaml|json)$/, '');
     const filePath = join(dir, f);
@@ -289,7 +303,16 @@ async function secretList(args: string[], slot: Slot): Promise<void> {
     const module = (data._module as string) ?? '';
 
     if (moduleFilter && module !== moduleFilter) continue;
+    results.push({ name, module });
+  }
 
+  if (jsonMode) {
+    console.log(JSON.stringify(results.map(r => r.name)));
+    return;
+  }
+
+  console.log('  NAME              MODULE');
+  for (const { name, module } of results) {
     console.log(`  ${name.padEnd(18)}${module}`);
   }
 }

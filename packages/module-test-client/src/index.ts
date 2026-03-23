@@ -214,7 +214,22 @@ export async function getClient<T = any>(
 
   const mode = process.env.TEST_MODE || 'direct';
   const moduleDir = process.env.MODULE_DIR || process.cwd();
-  const secretName = process.env.SECRET_NAME || 'default';
+
+  // Secret name: explicit env var, or discover first matching secret
+  let secretName = process.env.SECRET_NAME;
+  if (!secretName) {
+    const moduleKey = readModuleKey(moduleDir);
+    if (moduleKey) {
+      const secrets = discoverSecrets(moduleKey);
+      secretName = secrets[0]; // Use first matching secret
+    }
+  }
+  if (!secretName) {
+    throw new Error(
+      'No SECRET_NAME set and no secrets found for this module.\n' +
+      'Create one with: zbb secret create <name> --module <key> key=value'
+    );
+  }
 
   switch (mode) {
     case 'direct':
@@ -250,6 +265,108 @@ export async function teardown(): Promise<void> {
   if (_ctx) {
     await _ctx.teardown();
     _ctx = null;
+  }
+}
+
+/**
+ * Discover secrets for a module via `zbb secret list --module <key> --json`.
+ * Returns array of secret names.
+ */
+function discoverSecrets(moduleKey: string): string[] {
+  try {
+    const json = execSync(`zbb secret list --module ${moduleKey} --json`, { encoding: 'utf-8' });
+    return JSON.parse(json);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Read module key from package.json in moduleDir.
+ */
+function readModuleKey(moduleDir: string): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(moduleDir, 'package.json'), 'utf-8'));
+    return pkg.name || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Describe a module test suite — auto-discovers secrets and runs once per secret.
+ *
+ * Usage:
+ *   import { describeModule } from '@zerobias-org/module-test-client';
+ *
+ *   describeModule('SQL Module', (client) => {
+ *     it('should get root', async () => {
+ *       const root = await client.getObjectsApi().getObject('/');
+ *       expect(root).to.be.ok;
+ *     });
+ *   });
+ *
+ * If SECRET_NAME env is set, runs only that secret.
+ * Otherwise discovers all secrets matching the module's _module key.
+ *
+ * @param name — describe block name (secret name appended)
+ * @param fn — test function receiving the connected client
+ * @param errorDeserializer — CoreError.deserialize from consumer
+ */
+export function describeModule<T = any>(
+  name: string,
+  fn: (client: T) => void,
+  errorDeserializer?: (data: unknown) => Error
+): void {
+  const mode = process.env.TEST_MODE || 'direct';
+  const moduleDir = process.env.MODULE_DIR || process.cwd();
+  const explicitSecret = process.env.SECRET_NAME;
+
+  let secretNames: string[];
+
+  if (explicitSecret) {
+    secretNames = [explicitSecret];
+  } else {
+    const moduleKey = readModuleKey(moduleDir);
+    secretNames = moduleKey ? discoverSecrets(moduleKey) : [];
+    if (secretNames.length === 0) {
+      // Fallback: no secrets found, fail loudly
+      describe(`${name} [${mode}]`, function () {
+        it('should have at least one secret configured', function () {
+          throw new Error(
+            `No secrets found for module ${moduleKey}. ` +
+            `Create one with: zbb secret create <name> --module ${moduleKey} key=value`
+          );
+        });
+      });
+      return;
+    }
+  }
+
+  for (const secretName of secretNames) {
+    describe(`${name} [${mode}] (${secretName})`, function () {
+      // Deferred client — proxy that forwards to the real client after before() runs
+      const clientRef: { value: T | null } = { value: null };
+      const clientProxy = new Proxy({} as any, {
+        get(_target, prop) {
+          if (!clientRef.value) throw new Error('Client not initialized — use inside it()');
+          return (clientRef.value as any)[prop];
+        },
+      }) as T;
+
+      before(async function () {
+        // Reset singleton for each secret
+        _ctx = null;
+        process.env.SECRET_NAME = secretName;
+        clientRef.value = await getClient<T>(errorDeserializer);
+      });
+
+      after(async function () {
+        await teardown();
+      });
+
+      fn(clientProxy);
+    });
   }
 }
 
