@@ -1035,6 +1035,116 @@ tasks.named("publishNpm") {
     dependsOn(publishNpmExec)
 }
 
+// -- SDK Publish (API client SDK) ---------------------------------
+
+// Store original SDK package.json for restoration
+var originalSdkPackageJson: String? = null
+
+val restoreSdkPackageJson by tasks.registering {
+    group = "publish"
+    description = "Restore original sdk/package.json after publish"
+    doLast {
+        val sdkPkg = project.file("sdk/package.json")
+        val content = originalSdkPackageJson
+        if (content != null) {
+            sdkPkg.writeText(content)
+            logger.lifecycle("Restored original sdk/package.json")
+        }
+    }
+}
+
+val publishSdkExec by tasks.registering(NpmTask::class) {
+    group = "publish"
+    description = "Publish generated API client SDK with --tag next (staging)"
+    dependsOn(tasks.named("buildOpenApiSdk"), preflightChecks)
+    onlyIf { zb.hasOpenApiSdk.get() }
+    finalizedBy(restoreSdkPackageJson)
+
+    npmCommand.set(listOf("publish"))
+    args.set(listOf("--tag", "next"))
+    // SDK output directory -- buildOpenApiSdk generates into sdk/ subdir
+    workingDir.set(project.file("sdk"))
+
+    doFirst {
+        val sdkDir = project.file("sdk")
+        val sdkPkg = sdkDir.resolve("package.json")
+        if (!sdkPkg.exists()) {
+            logger.warn("No sdk/package.json found -- skipping publishSdk")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+        // Patch version in SDK package.json and store original for restore
+        val ver = project.version.toString()
+        originalSdkPackageJson = patchPackageJsonVersion(sdkPkg, ver)
+
+        if (isDryRun) {
+            val content = sdkPkg.readText()
+            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
+            val name = nameMatch?.groupValues?.get(1) ?: "unknown-sdk"
+            logger.lifecycle("[DRY RUN] Would publish SDK ${name}@${ver} with --tag next")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
+}
+
+tasks.named("publishSdk") {
+    dependsOn(publishSdkExec)
+}
+
+// -- Hub SDK Publish ----------------------------------------------
+
+// Store original hub-sdk package.json for restoration
+var originalHubSdkPackageJson: String? = null
+
+// MUST be declared before publishHubSdkExec so finalizedBy can reference it
+val restoreHubSdkPackageJson by tasks.registering {
+    group = "publish"
+    description = "Restore original hub-sdk/package.json after publish"
+    doLast {
+        val hubSdkPkg = project.file("hub-sdk/package.json")
+        val content = originalHubSdkPackageJson
+        if (content != null) {
+            hubSdkPkg.writeText(content)
+            logger.lifecycle("Restored original hub-sdk/package.json")
+        }
+    }
+}
+
+val publishHubSdkExec by tasks.registering(NpmTask::class) {
+    group = "publish"
+    description = "Publish generated Hub SDK with --tag next (staging)"
+    dependsOn(tasks.named("buildHubSdk"), preflightChecks)
+    finalizedBy(restoreHubSdkPackageJson)
+
+    npmCommand.set(listOf("publish"))
+    args.set(listOf("--tag", "next"))
+    workingDir.set(project.file("hub-sdk"))
+
+    doFirst {
+        val hubSdkDir = project.file("hub-sdk")
+        val hubSdkPkg = hubSdkDir.resolve("package.json")
+        if (!hubSdkPkg.exists()) {
+            logger.warn("No hub-sdk/package.json found -- skipping publishHubSdk")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+        // Patch version
+        val ver = project.version.toString()
+        originalHubSdkPackageJson = patchPackageJsonVersion(hubSdkPkg, ver)
+        logger.lifecycle("Patched hub-sdk/package.json version to $ver")
+
+        if (isDryRun) {
+            val content = hubSdkPkg.readText()
+            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
+            val name = nameMatch?.groupValues?.get(1) ?: "unknown-hub-sdk"
+            logger.lifecycle("[DRY RUN] Would publish Hub SDK ${name}@${ver} with --tag next")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
+}
+
+tasks.named("publishHubSdk") {
+    dependsOn(publishHubSdkExec)
+}
+
 val publishImageExec by tasks.registering(Exec::class) {
     group = "publish"
     description = "Push Docker image to registry"
