@@ -50,17 +50,36 @@ val vaultService = gradle.sharedServices.registerIfAbsent("vaultSecrets", VaultS
 val propertyResolver = PropertyResolver(vaultService)
 
 // ────────────────────────────────────────────────────────────
-// Versioning — reckon plugin sets project.version at root level.
-// Subprojects inherit root version. npmDistTag derived from branch.
+// Versioning — package.json is the version source of truth.
+// Branch determines pre-release suffix and npm dist-tag.
 // ────────────────────────────────────────────────────────────
 val branch: String = providers.exec {
     commandLine("git", "rev-parse", "--abbrev-ref", "HEAD")
 }.standardOutput.asText.get().trim()
 
-// If reckon is applied at root, subprojects inherit rootProject.version.
-// reckon MUST set the version. No fallbacks.
-if (project.version == Project.DEFAULT_VERSION) {
-    throw GradleException("Version is unspecified — reckon plugin not applied or no git tags. Run: git tag v0.0.0")
+val preReleaseCounter: String = try {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD", "--not", "origin/main")
+    }.standardOutput.asText.get().trim()
+} catch (e: Exception) { "0" }
+
+// Read base version from package.json
+val baseVersion: String = project.file("package.json").let { f ->
+    if (f.exists()) {
+        val match = Regex(""""version"\s*:\s*"([^"]+)"""").find(f.readText())
+        val raw = match?.groupValues?.get(1)
+            ?: throw GradleException("Cannot find 'version' in package.json at ${f.absolutePath}")
+        raw.replace(Regex("-.*"), "")  // strip existing pre-release suffix
+    } else {
+        throw GradleException("package.json not found in ${project.projectDir} — cannot determine version")
+    }
+}
+
+version = when (branch) {
+    "main"   -> baseVersion                                    // 6.8.0
+    "qa"     -> "${baseVersion}-rc.${preReleaseCounter}"       // 6.8.0-rc.4
+    "dev"    -> "${baseVersion}-alpha.${preReleaseCounter}"    // 6.8.0-alpha.12
+    else     -> "${baseVersion}-dev.${preReleaseCounter}"      // 6.8.0-dev.7
 }
 
 val npmDistTag: String = when (branch) {
