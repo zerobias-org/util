@@ -570,11 +570,13 @@ val generateDockerfile by tasks.registering {
     group = "lifecycle"
     description = "Generate Dockerfile with nginx SSL termination"
     dependsOn(compileServer)
-    outputs.files("Dockerfile", "docker-nginx.conf", "docker-startup.sh")
+    val dockerDir = project.file("generated/docker")
+    outputs.dir(dockerDir)
     // Always generate for TS modules — Dockerfile is tooling, not per-module.
     // Java HTTP modules use zb.java-module which has its own Docker setup.
     onlyIf { isDockerBuild() }
     doLast {
+        dockerDir.mkdirs()
         // nginx.conf — SSL termination, auth header check, proxy to Node
         val nginxConf = """
             |worker_processes 1;
@@ -621,7 +623,7 @@ val generateDockerfile by tasks.registering {
             |    }
             |}
         """.trimMargin() + "\n"
-        project.file("docker-nginx.conf").writeText(nginxConf)
+        project.file("generated/docker/docker-nginx.conf").writeText(nginxConf)
 
         // startup.sh — generate cert, start nginx, start node
         val startupSh = """
@@ -656,7 +658,7 @@ val generateDockerfile by tasks.registering {
             |echo "Module ready on https://localhost:8888"
             |wait ${'$'}NODE_PID
         """.trimMargin() + "\n"
-        project.file("docker-startup.sh").writeText(startupSh)
+        project.file("generated/docker/docker-startup.sh").writeText(startupSh)
 
         // Dockerfile
         val dockerfile = """
@@ -669,14 +671,14 @@ val generateDockerfile by tasks.registering {
             |COPY node_modules ./node_modules
             |COPY package.json .
             |COPY *.yml .
-            |COPY docker-nginx.conf /opt/module/docker-nginx.conf
-            |COPY docker-startup.sh /opt/module/docker-startup.sh
+            |COPY generated/docker/docker-nginx.conf /opt/module/docker-nginx.conf
+            |COPY generated/docker/docker-startup.sh /opt/module/docker-startup.sh
             |RUN chmod +x /opt/module/docker-startup.sh
             |RUN mkdir -p /var/log/nginx /var/run
             |EXPOSE 8888
             |CMD ["/opt/module/docker-startup.sh"]
         """.trimMargin() + "\n"
-        project.file("Dockerfile").writeText(dockerfile)
+        project.file("generated/docker/Dockerfile").writeText(dockerfile)
     }
 }
 
@@ -722,6 +724,7 @@ val buildImageExec by tasks.registering(Exec::class) {
     // Strip build metadata (+...) from reckon version — not valid in Docker tags
     val ver = project.version.toString().substringBefore("+")
     commandLine("docker", "build",
+        "-f", "generated/docker/Dockerfile",
         "-t", "${imageName}:local",
         "-t", "${imageName}:${ver}",
         ".")
