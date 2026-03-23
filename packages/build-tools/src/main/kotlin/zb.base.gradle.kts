@@ -13,9 +13,24 @@ val zb = extensions.create<ZbExtension>("zb").apply {
         project.file("connectionProfile.yml").exists()
     )
     hasOpenApiSdk.convention(false)
-    dockerImageName.convention(
-        vendor.zip(product) { v, p -> "${v}-${p}" }
-    )
+    // Docker image name derived from package.json NPM name — same name the Hub Node uses.
+    // @auditlogic/module-github-github → auditlogic-module-github-github
+    // One name for local, ECR, GHCR, and pkg-proxy.
+    dockerImageName.convention(provider {
+        val pkgJson = project.file("package.json")
+        if (pkgJson.exists()) {
+            val match = Regex(""""name"\s*:\s*"@([^/]+)/([^"]+)"""").find(pkgJson.readText())
+            if (match != null) {
+                val (scope, name) = match.destructured
+                "$scope-$name"
+            } else {
+                // No scoped name — fall back to vendor-product (non-module projects)
+                "${vendor.get()}-${product.get()}"
+            }
+        } else {
+            "${vendor.get()}-${product.get()}"
+        }
+    })
     includeConnectionProfileInDist.convention(false)
     generatorArgs.convention(emptyList())
 }
