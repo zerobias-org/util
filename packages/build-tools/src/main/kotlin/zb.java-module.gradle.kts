@@ -171,3 +171,23 @@ val publishJavaImageGhcr by tasks.registering(Exec::class) {
 tasks.named("publishImage") {
     dependsOn(publishJavaImageEcr, publishJavaImageGhcr)
 }
+
+// -- Changed-since-tag guard on Java exec tasks --
+// Same pattern as zb.typescript.gradle.kts -- exec tasks need the guard directly.
+// Capture at plugin config time (project.extra, not task.extra) to avoid
+// UnknownPropertyException inside task onlyIf lambdas.
+val javaChangedSinceTag: Boolean = extra["changedSinceTag"] as Boolean
+
+listOf(
+    "publishJavaImageEcr",
+    "publishJavaImageGhcr"
+).forEach { taskName ->
+    tasks.named(taskName) {
+        onlyIf {
+            if (!javaChangedSinceTag) {
+                logger.lifecycle("[$taskName] Skipping -- no changes since last tag")
+            }
+            javaChangedSinceTag
+        }
+    }
+}

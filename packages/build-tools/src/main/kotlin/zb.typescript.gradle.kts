@@ -1226,3 +1226,120 @@ val publishImageGhcr by tasks.registering(Exec::class) {
 tasks.named("publishImage") {
     dependsOn(publishImageEcr, publishImageGhcr)
 }
+
+// ════════════════════════════════════════════════════════════
+// CHANGED-SINCE-TAG guard on EXEC tasks
+// Gradle onlyIf on a lifecycle stub does NOT prevent its dependsOn exec tasks
+// from running. The guard must be on the actual execution tasks.
+// Capture at plugin config time (project.extra, not task.extra) so onlyIf lambdas
+// can reference it without triggering the task.extra "does not exist" error.
+// ════════════════════════════════════════════════════════════
+
+val changedSinceTag: Boolean = extra["changedSinceTag"] as Boolean
+
+listOf(
+    "publishNpmExec",
+    "publishSdkExec",
+    "publishHubSdkExec",
+    "publishImageEcr",
+    "publishImageGhcr"
+).forEach { taskName ->
+    tasks.named(taskName) {
+        onlyIf {
+            if (!changedSinceTag) {
+                logger.lifecycle("[$taskName] Skipping -- no changes since last tag")
+            }
+            changedSinceTag
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// PROMOTE tasks -- move npm packages from 'next' to correct dist-tag
+// Runs after ALL staging publishes succeed (wired via publish -> publishAll -> promoteAll)
+// ════════════════════════════════════════════════════════════
+
+val promoteNpm by tasks.registering(NpmTask::class) {
+    group = "publish"
+    description = "Promote module NPM package from 'next' to correct dist-tag"
+    npmCommand.set(listOf("dist-tag", "add"))
+    args.set(project.provider {
+        val (name, _) = readPackageNameVersion()
+        val ver = project.version.toString()
+        listOf("${name}@${ver}", npmDistTag)
+    })
+    workingDir.set(project.projectDir)
+
+    doFirst {
+        if (isDryRun) {
+            val (name, _) = readPackageNameVersion()
+            val ver = project.version.toString()
+            logger.lifecycle("[DRY RUN] Would promote ${name}@${ver} from 'next' to '${npmDistTag}'")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
+}
+
+val promoteHubSdk by tasks.registering(NpmTask::class) {
+    group = "publish"
+    description = "Promote Hub SDK from 'next' to correct dist-tag"
+    npmCommand.set(listOf("dist-tag", "add"))
+    workingDir.set(project.file("hub-sdk"))
+
+    args.set(project.provider {
+        val hubSdkPkg = project.file("hub-sdk/package.json")
+        val content = hubSdkPkg.readText()
+        val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
+        val name = nameMatch?.groupValues?.get(1) ?: error("No name in hub-sdk/package.json")
+        val ver = project.version.toString()
+        listOf("${name}@${ver}", npmDistTag)
+    })
+
+    doFirst {
+        val hubSdkPkg = project.file("hub-sdk/package.json")
+        if (!hubSdkPkg.exists()) {
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+        if (isDryRun) {
+            val content = hubSdkPkg.readText()
+            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
+            val name = nameMatch?.groupValues?.get(1) ?: "unknown"
+            val ver = project.version.toString()
+            logger.lifecycle("[DRY RUN] Would promote Hub SDK ${name}@${ver} from 'next' to '${npmDistTag}'")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
+}
+
+val promoteSdk by tasks.registering(NpmTask::class) {
+    group = "publish"
+    description = "Promote API client SDK from 'next' to correct dist-tag"
+    onlyIf { zb.hasOpenApiSdk.get() }
+    npmCommand.set(listOf("dist-tag", "add"))
+    workingDir.set(project.file("sdk"))
+
+    args.set(project.provider {
+        val sdkPkg = project.file("sdk/package.json")
+        val content = sdkPkg.readText()
+        val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
+        val name = nameMatch?.groupValues?.get(1) ?: error("No name in sdk/package.json")
+        val ver = project.version.toString()
+        listOf("${name}@${ver}", npmDistTag)
+    })
+
+    doFirst {
+        if (isDryRun) {
+            val sdkPkg = project.file("sdk/package.json")
+            val content = sdkPkg.readText()
+            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
+            val name = nameMatch?.groupValues?.get(1) ?: "unknown"
+            val ver = project.version.toString()
+            logger.lifecycle("[DRY RUN] Would promote SDK ${name}@${ver} from 'next' to '${npmDistTag}'")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
+}
+
+tasks.named("promoteAll") {
+    dependsOn(promoteNpm, promoteHubSdk, promoteSdk)
+}

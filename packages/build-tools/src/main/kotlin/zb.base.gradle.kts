@@ -66,6 +66,30 @@ val isDryRun: Boolean = project.findProperty("dryRun") == "true"
 extra["isDryRun"] = isDryRun
 
 // ────────────────────────────────────────────────────────────
+// Changed-since-tag detection — publish tasks skip unchanged modules
+// Uses last version tag (git describe --tags --abbrev=0), not HEAD~1
+// ────────────────────────────────────────────────────────────
+val changedSinceTag: Boolean by lazy {
+    try {
+        val lastTag = providers.exec {
+            commandLine("git", "describe", "--tags", "--abbrev=0")
+        }.standardOutput.asText.get().trim()
+
+        val changedFiles = providers.exec {
+            commandLine("git", "diff", "--name-only", lastTag, "HEAD")
+        }.standardOutput.asText.get().trim()
+
+        val projectRelativePath = project.projectDir.relativeTo(project.rootDir).path
+        changedFiles.lines().any { it.startsWith(projectRelativePath) }
+    } catch (e: Exception) {
+        // No tags exist yet (bootstrap) -> treat as changed
+        true
+    }
+}
+
+extra["changedSinceTag"] = changedSinceTag
+
+// ────────────────────────────────────────────────────────────
 // Preflight checks — validates publish readiness
 // dryRun runs these checks + logs intent (not skip-with-log)
 // Real publish also runs these as a safety gate
@@ -335,8 +359,56 @@ val publishHubSdk by tasks.registering {
 
 val publishAll by tasks.registering {
     group = "publish"
-    description = "Publish all artifacts"
+    description = "Publish all artifacts (staging -- uses --tag next)"
     dependsOn(publishNpm, publishImage, publishSdk, publishHubSdk)
+}
+
+// Guard lifecycle publish stubs: skip if module has no changes since last tag.
+// Belt-and-suspenders: exec tasks also have this guard (added in flavor plugins).
+// Capture at project config time -- inside tasks.named{} the `extra` refers to
+// task.extra (not project.extra), so capture must be done at plugin scope.
+val changedSinceTagForGuard: Boolean = extra["changedSinceTag"] as Boolean
+listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { taskName ->
+    tasks.named(taskName) {
+        onlyIf {
+            if (!changedSinceTagForGuard) {
+                logger.lifecycle("[$taskName] Skipping -- no changes since last tag")
+            }
+            changedSinceTagForGuard
+        }
+    }
+}
+
+// Shared success flag -- set by publishAll.doLast only if all dependsOn tasks succeed.
+// promoteAll uses this to ensure it only runs after successful staging publish.
+// IMPORTANT: Do NOT use finalizedBy(promoteAll) -- finalizedBy runs on failure too.
+var publishAllSucceeded = false
+
+publishAll.configure {
+    doLast {
+        // doLast only executes if publishAll and all its dependsOn succeeded
+        publishAllSucceeded = true
+        logger.lifecycle("All staging publishes succeeded -- ready to promote")
+    }
+}
+
+val promoteAll by tasks.registering {
+    group = "publish"
+    description = "Promote all NPM packages from 'next' tag to correct dist-tag (only after publishAll succeeds)"
+    mustRunAfter(publishAll)
+    onlyIf {
+        if (!publishAllSucceeded) {
+            logger.lifecycle("[promoteAll] Skipping -- publishAll did not succeed or was not run")
+        }
+        publishAllSucceeded
+    }
+}
+
+// Top-level publish task: run publishAll (staging) then promoteAll (promotion on success only)
+val publish by tasks.registering {
+    group = "publish"
+    description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
+    dependsOn(publishAll, promoteAll)
 }
 
 // ────────────────────────────────────────────────────────────
