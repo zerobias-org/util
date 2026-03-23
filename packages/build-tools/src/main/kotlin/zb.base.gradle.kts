@@ -292,8 +292,8 @@ val printVersion by tasks.registering {
 
 val clean by tasks.registering(Delete::class) {
     group = "lifecycle"
-    description = "Remove build outputs (dist/, build/)"
-    delete("dist", "build")
+    description = "Remove build outputs (dist/, generated/, build/)"
+    delete("dist", "generated", "build")
 }
 
 // ────────────────────────────────────────────────────────────
