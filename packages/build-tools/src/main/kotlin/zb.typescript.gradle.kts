@@ -80,6 +80,33 @@ tasks.named("validate") {
 }
 
 // ════════════════════════════════════════════════════════════
+// LINT — eslint on src/
+// ════════════════════════════════════════════════════════════
+
+val lintExec by tasks.registering(NpxTask::class) {
+    group = "lifecycle"
+    description = "Run eslint on source code"
+    workingDir.set(project.projectDir)
+    command.set("eslint")
+    args.set(listOf("src/"))
+    // Run only if eslint config exists (flat config or legacy)
+    onlyIf {
+        project.file("src").exists() && (
+            project.file("eslint.config.js").exists() ||
+            project.file("eslint.config.mjs").exists() ||
+            project.file("eslint.config.cjs").exists() ||
+            project.file(".eslintrc.json").exists() ||
+            project.file(".eslintrc.yml").exists() ||
+            project.file(".eslintrc.js").exists()
+        )
+    }
+}
+
+tasks.named("lint") {
+    dependsOn(lintExec)
+}
+
+// ════════════════════════════════════════════════════════════
 // GENERATE phase — stages G2 through G8
 //
 // Pipeline: assembleSpec → npmInstall → bundleSpec →

@@ -101,6 +101,12 @@ val validate by tasks.registering {
     description = "Run all validation checks"
 }
 
+// LINT — code quality checks, filled by flavor plugins
+val lint by tasks.registering {
+    group = "lifecycle"
+    description = "Run code quality checks (eslint, etc.)"
+}
+
 // Phase 2: GENERATE — filled by flavor plugins
 val generate by tasks.registering {
     group = "lifecycle"
@@ -189,7 +195,7 @@ val build by tasks.registering {
 val gate by tasks.registering {
     group = "lifecycle"
     description = "Full CI gate — all checks must pass"
-    dependsOn(validate, compile, test, buildArtifacts)
+    dependsOn(validate, lint, compile, test, buildArtifacts)
 }
 
 // Phase 7: PUBLISH
