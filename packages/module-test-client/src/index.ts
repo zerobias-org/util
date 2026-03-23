@@ -23,7 +23,12 @@
  *   });
  *
  * Gradle sets: TEST_MODE, CONTAINER_URL, TARGET_ID, SECRET_NAME, MODULE_DIR
+ *
+ * Also exports:
+ *   - OpenAPISchemaLoader — convention-based OpenAPI spec loader (derives spec name from package.json)
  */
+
+export { OpenAPISchemaLoader, type OpenAPISchema } from './OpenAPISchemaLoader.js';
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -9,6 +9,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "lib": ["ES2022"]
   },
   "include": ["src/**/*"]
