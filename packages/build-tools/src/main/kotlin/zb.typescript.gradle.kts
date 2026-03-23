@@ -772,6 +772,15 @@ val buildImageExec by tasks.registering(Exec::class) {
     inputs.file(dockerfilePath)
     inputs.dir("dist")
     inputs.file("package.json")
+    // Marker file so Gradle can track up-to-date state
+    val marker = layout.buildDirectory.file("docker-image.marker")
+    outputs.file(marker)
+    doLast {
+        marker.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText("${imageName}:${ver}")
+        }
+    }
 }
 
 tasks.named("buildImage") {
