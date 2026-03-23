@@ -571,8 +571,9 @@ val generateDockerfile by tasks.registering {
     description = "Generate Dockerfile with nginx SSL termination"
     dependsOn(compileServer)
     outputs.files("Dockerfile", "docker-nginx.conf", "docker-startup.sh")
-    // Skip if module provides its own Dockerfile (e.g., Java HTTP modules)
-    onlyIf { isDockerBuild() && !project.file("Dockerfile").exists() }
+    // Always generate for TS modules — Dockerfile is tooling, not per-module.
+    // Java HTTP modules use zb.java-module which has its own Docker setup.
+    onlyIf { isDockerBuild() }
     doLast {
         // nginx.conf — SSL termination, auth header check, proxy to Node
         val nginxConf = """
