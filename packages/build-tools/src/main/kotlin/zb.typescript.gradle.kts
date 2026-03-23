@@ -140,6 +140,12 @@ val assembleSpec by tasks.registering {
 }
 
 // G3: npmInstall — install npm dependencies (needed for bundleSpec $ref resolution)
+// gradle-node-plugin requires package-lock.json at config time.
+// New modules won't have one yet — create stub so npm install can run.
+if (!project.file("package-lock.json").exists()) {
+    project.file("package-lock.json").writeText("{}")
+}
+
 val npmInstallModule by tasks.registering(NpmTask::class) {
     group = "lifecycle"
     description = "Install npm dependencies"
