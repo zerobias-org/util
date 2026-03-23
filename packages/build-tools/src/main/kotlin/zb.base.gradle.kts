@@ -35,30 +35,17 @@ val vaultService = gradle.sharedServices.registerIfAbsent("vaultSecrets", VaultS
 val propertyResolver = PropertyResolver(vaultService)
 
 // ────────────────────────────────────────────────────────────
-// Versioning — read package.json base version, append branch suffix
+// Versioning — reckon plugin sets project.version at root level.
+// Subprojects inherit root version. npmDistTag derived from branch.
 // ────────────────────────────────────────────────────────────
-val baseVersion: String = project.file("package.json").let { f ->
-    if (f.exists()) {
-        val text = f.readText()
-        val match = Regex(""""version"\s*:\s*"([^"]+)"""").find(text)
-        val raw = match?.groupValues?.get(1) ?: "0.0.0"
-        raw.replace(Regex("-.*"), "") // strip any existing pre-release suffix
-    } else "0.0.0"
-}
-
 val branch: String = providers.exec {
     commandLine("git", "rev-parse", "--abbrev-ref", "HEAD")
 }.standardOutput.asText.get().trim()
 
-val preReleaseCounter: String = providers.exec {
-    commandLine("git", "rev-list", "--count", "HEAD", "--not", "origin/main")
-}.standardOutput.asText.get().trim()
-
-version = when (branch) {
-    "main" -> baseVersion                                 // 1.2.3
-    "qa"   -> "${baseVersion}-rc.${preReleaseCounter}"    // 1.2.3-rc.4
-    "dev"  -> "${baseVersion}-alpha.${preReleaseCounter}" // 1.2.3-alpha.12
-    else   -> "${baseVersion}-dev.${preReleaseCounter}"   // feature branches
+// If reckon is applied at root, subprojects inherit rootProject.version.
+// reckon MUST set the version. No fallbacks.
+if (project.version == Project.DEFAULT_VERSION) {
+    throw GradleException("Version is unspecified — reckon plugin not applied or no git tags. Run: git tag v0.0.0")
 }
 
 val npmDistTag: String = when (branch) {
@@ -70,6 +57,123 @@ val npmDistTag: String = when (branch) {
 
 // Store as extra property for child plugins to access
 extra["npmDistTag"] = npmDistTag
+
+// ────────────────────────────────────────────────────────────
+// Dry-run flag — publish tasks check this to skip actual push
+// Usage: ./gradlew publish -PdryRun=true
+// ────────────────────────────────────────────────────────────
+val isDryRun: Boolean = project.findProperty("dryRun") == "true"
+extra["isDryRun"] = isDryRun
+
+// ────────────────────────────────────────────────────────────
+// Preflight checks — validates publish readiness
+// dryRun runs these checks + logs intent (not skip-with-log)
+// Real publish also runs these as a safety gate
+// ────────────────────────────────────────────────────────────
+val preflightChecks by tasks.registering {
+    group = "publish"
+    description = "Validate publish readiness: registry auth, version, Docker, working tree"
+    dependsOn(gate)
+    doLast {
+        val ver = project.version.toString()
+        val (pkgName, _) = if (project.file("package.json").exists()) {
+            val text = project.file("package.json").readText()
+            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(text)
+            val name = nameMatch?.groupValues?.get(1) ?: "unknown"
+            name to ver
+        } else {
+            "unknown" to ver
+        }
+        logger.lifecycle("Preflight: version = $ver, package = $pkgName")
+
+        // 1. Registry auth — verify NPM_TOKEN is set
+        val npmToken = System.getenv("NPM_TOKEN")
+        if (npmToken.isNullOrBlank()) {
+            logger.warn("Preflight WARNING: NPM_TOKEN not set — npm publish will fail")
+        } else {
+            logger.lifecycle("Preflight: NPM_TOKEN is set")
+        }
+
+        // 2. Check version is not "unspecified"
+        if (ver == "unspecified" || ver == Project.DEFAULT_VERSION) {
+            throw GradleException("Preflight FAILED: version is '$ver' — reckon not configured or no git tags")
+        }
+        logger.lifecycle("Preflight: version '$ver' is valid")
+
+        // 3. Clean working tree (no uncommitted changes)
+        val gitStatus = providers.exec {
+            commandLine("git", "status", "--porcelain")
+        }.standardOutput.asText.get().trim()
+        if (gitStatus.isNotEmpty()) {
+            logger.warn("Preflight WARNING: working tree is dirty:\n$gitStatus")
+        } else {
+            logger.lifecycle("Preflight: working tree is clean")
+        }
+
+        // 4. Docker daemon (only if connector module)
+        val hasConnProfile = project.file("connectionProfile.yml").exists()
+        if (hasConnProfile) {
+            try {
+                val dockerCheck = providers.exec {
+                    commandLine("docker", "info")
+                    isIgnoreExitValue = true
+                }
+                if (dockerCheck.result.get().exitValue != 0) {
+                    logger.warn("Preflight WARNING: Docker daemon not running — image publish will fail")
+                } else {
+                    logger.lifecycle("Preflight: Docker daemon is running")
+                }
+            } catch (e: Exception) {
+                logger.warn("Preflight WARNING: Docker not available — ${e.message}")
+            }
+        }
+
+        // 5. AWS credentials (only if connector module — needed for ECR)
+        if (hasConnProfile) {
+            val awsKey = System.getenv("AWS_ACCESS_KEY_ID")
+            if (awsKey.isNullOrBlank()) {
+                logger.warn("Preflight WARNING: AWS_ACCESS_KEY_ID not set — ECR push will fail")
+            } else {
+                logger.lifecycle("Preflight: AWS credentials are set")
+            }
+        }
+
+        // 6. Check if version already published (npm view — non-fatal check)
+        if (!npmToken.isNullOrBlank() && pkgName != "unknown") {
+            try {
+                val npmView = providers.exec {
+                    commandLine("npm", "view", "${pkgName}@${ver}", "version")
+                    isIgnoreExitValue = true
+                }
+                val existing = npmView.standardOutput.asText.get().trim()
+                if (existing == ver) {
+                    logger.warn("Preflight WARNING: ${pkgName}@${ver} already published — publish will fail with duplicate")
+                } else {
+                    logger.lifecycle("Preflight: ${pkgName}@${ver} not yet published")
+                }
+            } catch (e: Exception) {
+                logger.lifecycle("Preflight: could not check registry (offline?) — proceeding")
+            }
+        }
+
+        // 7. Verify .npmrc exists and points to a registry
+        val npmrc = project.file(".npmrc")
+        if (!npmrc.exists()) {
+            throw GradleException("Preflight FAILED: .npmrc not found in ${project.projectDir} — npm publish requires registry config")
+        } else {
+            val npmrcContent = npmrc.readText()
+            if (!npmrcContent.contains("registry=")) {
+                logger.warn("Preflight WARNING: .npmrc exists but contains no registry= line")
+            } else {
+                logger.lifecycle("Preflight: .npmrc found with registry config")
+            }
+        }
+
+        logger.lifecycle("Preflight checks complete.")
+    }
+}
+
+extra["preflightChecks"] = preflightChecks
 
 // ────────────────────────────────────────────────────────────
 // Utility tasks
@@ -217,10 +321,22 @@ val publishImage by tasks.registering {
     dependsOn(gate, buildImage)
 }
 
+val publishSdk by tasks.registering {
+    group = "publish"
+    description = "Publish generated API client SDK"
+    dependsOn(gate)
+}
+
+val publishHubSdk by tasks.registering {
+    group = "publish"
+    description = "Publish generated Hub SDK"
+    dependsOn(gate)
+}
+
 val publishAll by tasks.registering {
     group = "publish"
     description = "Publish all artifacts"
-    dependsOn(publishNpm, publishImage)
+    dependsOn(publishNpm, publishImage, publishSdk, publishHubSdk)
 }
 
 // ────────────────────────────────────────────────────────────
