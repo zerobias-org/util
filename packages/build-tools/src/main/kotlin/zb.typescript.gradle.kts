@@ -61,12 +61,21 @@ val validateSpec by tasks.registering(NpxTask::class) {
     description = "Lint OpenAPI specification with Redocly"
     workingDir.set(project.projectDir)
     command.set("@redocly/cli")
-    // Auto-detect redocly config: redocly.yaml or .redocly.yaml
-    val configFile = if (project.file(".redocly.yaml").exists()) ".redocly.yaml" else "redocly.yaml"
-    args.set(listOf("lint", "api.yml", "--config", configFile))
+    // Generate standard redocly config — same for all modules
+    val configFile = project.file("generated/redocly.yaml")
+    args.set(listOf("lint", "api.yml", "--config", configFile.absolutePath))
     inputs.file("api.yml")
-    inputs.file(configFile).optional()
     outputs.file(layout.buildDirectory.file("validated-spec.marker"))
+    doFirst {
+        configFile.parentFile.mkdirs()
+        configFile.writeText("""
+            |extends:
+            |  - recommended
+            |rules:
+            |  no-unused-components: off
+            |  operation-4xx-response: off
+        """.trimMargin() + "\n")
+    }
     doLast {
         layout.buildDirectory.file("validated-spec.marker").get().asFile.apply {
             parentFile.mkdirs()
