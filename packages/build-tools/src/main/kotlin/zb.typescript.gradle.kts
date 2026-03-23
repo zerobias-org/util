@@ -268,7 +268,8 @@ val generateApi by tasks.registering(NpxTask::class) {
     inputs.file(fullSpec)
     inputs.property("hasConnectionProfile", zb.hasConnectionProfile)
     inputs.property("generatorArgs", zb.generatorArgs)
-    outputs.dir("generated")
+    outputs.dir("generated/api")
+    outputs.dir("generated/model")
 }
 
 // G8: postGenerate — optional escape hatch for module-specific fixes
