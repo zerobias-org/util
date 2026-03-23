@@ -81,6 +81,16 @@ val printVersion by tasks.registering {
 }
 
 // ────────────────────────────────────────────────────────────
+// CLEAN — remove build outputs
+// ────────────────────────────────────────────────────────────
+
+val clean by tasks.registering(Delete::class) {
+    group = "lifecycle"
+    description = "Remove build outputs (dist/, build/)"
+    delete("dist", "build")
+}
+
+// ────────────────────────────────────────────────────────────
 // Lifecycle phases — ordered via dependsOn
 // Flavor plugins fill in the implementations.
 // ────────────────────────────────────────────────────────────
