@@ -12,5 +12,16 @@
 {{/operations}}
 {{/apis}}
 {{/apiInfo}}
+  },
+  "operationParams": {
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+  {{#operation}}
+    "{{operationId}}": [{{#allParams}}"{{paramName}}"{{^-last}}, {{/-last}}{{/allParams}}]{{^-last}},{{/-last}}
+    {{/operation}}{{^-last}},{{/-last}}
+{{/operations}}
+{{/apis}}
+{{/apiInfo}}
   }
 }

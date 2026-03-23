@@ -134,7 +134,72 @@ async function main() {
     res.send('Disconnected');
   });
 
-  // Mount REST API routes from generated server controllers
+  // Wire protocol: POST /connections/:connectionId/:method with { argMap }
+  // This is the protocol used by Hub Node to invoke operations on the container.
+  // Parameter names are resolved from manifest.json operationParams.
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  // In Docker: /opt/module/generated/api/manifest.json (copied via COPY *.yml and generated/)
+  // Locally: relative to project dir
+  const manifestPath = path.join(process.cwd(), 'generated', 'api', 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  const opParams: Record<string, string[]> = manifest.operationParams || {};
+
+  app.post('/connections/:connectionId/:method', async (req: express.Request, res: express.Response) => {
+    const connection = connections[req.params.connectionId]
+      || connections[Object.keys(connections)[0]];
+    if (!connection) {
+      res.status(404).send({ error: 'No active connection' });
+      return;
+    }
+
+    const { method } = req.params;
+    const { argMap } = req.body;
+
+    // method = "OrganizationApi.listMyOrganizations"
+    const [apiClassName, methodName] = method.split('.');
+    const api = (connection as any)[`get${'$'}{apiClassName}`]();
+    const meth = api[methodName];
+
+    if (!meth) {
+      res.status(404).send({ error: `Method not found: ${'$'}{method}` });
+      return;
+    }
+
+    // Resolve param names from manifest and build positional args
+    // Find operationId by matching ApiClass.method in manifest.operations
+    let paramNames: string[] = [];
+    for (const [opId, opMethod] of Object.entries(manifest.operations)) {
+      if (opMethod === method) {
+        paramNames = opParams[opId] || [];
+        break;
+      }
+    }
+
+    const args = paramNames.map(name => argMap?.[name]);
+
+    try {
+      const result = await meth.call(api, ...args);
+      res.status(200).send(result);
+    } catch (e: any) {
+      const status = e.statusCode || 500;
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      try {
+        // CoreError.toString() produces deserializable JSON
+        res.end(e.toString());
+      } catch {
+        res.end(JSON.stringify({
+          key: e.key || 'err.unknown',
+          timestamp: new Date().toISOString(),
+          message: e.message || 'Unknown Error',
+          args: e.args || {},
+          statusCode: status,
+        }));
+      }
+    }
+  });
+
+  // Mount REST API routes from generated server controllers (OpenAPI paths)
   await install(factory, app, 'full.yml', '');
   const port = process.env.PORT || 8888;
   app.listen(port, () => logger.info('REST server listening on port ' + port));
