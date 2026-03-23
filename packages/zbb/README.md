@@ -1,9 +1,10 @@
 # zbb — ZeroBias Build
 
-`zbb` is the developer CLI for the ZeroBias platform. It does two things:
+`zbb` is the developer CLI for the ZeroBias platform. It does three things:
 
 1. **Gradle wrapper** — run Gradle tasks from any subdirectory with automatic project detection
 2. **Slot manager** — create isolated development environments (like Python venv for infrastructure)
+3. **Service tooling** — dataloader, secrets, logs, and stack lifecycle
 
 Works in any repository that has a `zbb.yaml` — the meta-repo, a single repo checkout, or a customer integration.
 
@@ -60,9 +61,19 @@ zbb -Pfoo=bar compile  # ./gradlew -Pfoo=bar :github:github:compile
 # Stack aliases (when inside a project with zbb.yaml)
 zbb up                 # ./gradlew stackUp
 zbb down               # ./gradlew stackDown
-zbb destroy            # ./gradlew stackDestroy
-zbb info               # ./gradlew stackInfo
 ```
+
+### `--slot` Flag
+
+Run any command with slot env loaded, without entering a subshell:
+
+```bash
+zbb --slot local compile
+zbb --slot local testDocker
+zbb --slot local dataloader -d .
+```
+
+This loads the slot env into the process before executing the command. Useful for one-off commands and scripts.
 
 ### Project Cache
 
@@ -104,7 +115,7 @@ Each slot has three subdirectories for runtime data plus root-level files manage
 
 ```
 ~/.zbb/slots/local/
-  slot.yaml              # metadata (created, ephemeral, ttl, ports)
+  slot.yaml              # metadata (created, ephemeral, ttl, portRange)
   .env                   # declared env vars (managed by zbb — do not edit)
   manifest.yaml          # var provenance (source project, type, masking)
   overrides.env          # user overrides (via zbb env set)
@@ -113,11 +124,12 @@ Each slot has three subdirectories for runtime data plus root-level files manage
     nginx.conf           # (if project generates per-slot config)
 
   logs/                  # log files — services write here via ZB_SLOT_LOGS
+    node.log
     dana.log
-    postgres.log
 
   state/                 # runtime state, pid files, app-specific data
-    dana/                # dana-specific state
+    hub/                 # hub-node state
+    secrets/             # slot-scoped secrets (connection profiles)
     tmp/                 # per-slot temp directory
 ```
 
@@ -171,17 +183,20 @@ zbb slot load local
 
 What happens:
 1. Garbage-collects expired ephemeral slots (near-zero overhead)
-2. Runs preflight checks (extensible tool validation)
-3. Loads slot `.env` and user overrides
-4. Applies env cleansing (removes vars listed in `.zbb.yaml` cleanse)
-5. Activates nvm (or configured node manager) for correct Node.js version
-6. Spawns a bash subshell with everything loaded
-7. Sets prompt to `[zb:{{slotName}}]:path$`
+2. Extends slot with any new vars from current project context
+3. Runs preflight checks (extensible tool validation)
+4. Loads slot `.env` and user overrides
+5. Applies env cleansing (removes vars listed in `.zbb.yaml` cleanse)
+6. Activates nvm (or configured node manager) for correct Node.js version
+7. Spawns a bash subshell with everything loaded
+8. Sets prompt to `[zb:{{slotName}}]:path$`
 
 Inside the subshell, all tools read from the environment:
 - `./gradlew stackUp` reads `PGPORT`, `STACK_NAME`, etc.
 - `hub-node node start` reads `SERVER_URL`, `API_KEY`, etc.
 - `docker compose up` reads `${STACK_NAME}` for container names
+
+Running `zbb slot load` with no args while already in a slot re-evaluates from the current directory (picks up new zbb.yaml vars).
 
 #### Exit
 
@@ -196,35 +211,35 @@ Returns to the original shell. No env leakage. Containers keep running. Next `zb
 ```bash
 zbb slot list
 
-  NAME        STATUS    PORTS   TTL          CREATED
-  local       loaded    7       persistent   2026-03-20
-  dev         idle      7       persistent   2026-03-18
-  e2e-a1b2c3  idle      4       37m left     2026-03-20
+  NAME            STATUS    PORTS   TTL          CREATED
+  local           idle      7       persistent   2026-03-20
+  dev             idle      7       persistent   2026-03-18
+  e2e-a1b2c3      idle      4       37m left     2026-03-20
 ```
 
 #### Info
 
 ```bash
-zbb slot info [name]
+zbb slot info local
 
 Slot: local
-Status: loaded (PID: 48291)
-Created: 2026-03-20
+Created: 2026-03-22
 Type: persistent
 
 Ports:
-  PGPORT=15432       (com/dana)
-  DANA_PORT=15080    (com/dana)
-  NGINX_PORT=15443   (com/dana)
-  HUB_PORT=15090     (com/hub)
+  PGPORT=15000  (zbb.yaml)
+  DANA_PORT=15001  (zbb.yaml)
+  NGINX_HTTP_PORT=15002  (zbb.yaml)
+  HUB_SERVER_PORT=15004  (zbb.yaml)
+  HUB_PKG_PROXY_PORT=15006  (zbb.yaml)
 
-Secrets: 3 generated
-Env vars: 24 total (18 declared, 3 inherited, 3 overrides)
+Secrets: 7 generated
+Env vars: 62 total (3 overrides)
 
 Directories:
-  config  ~/.zbb/slots/local/config/
-  logs    ~/.zbb/slots/local/logs/    (4 files)
-  state   ~/.zbb/slots/local/state/   (2 services)
+  config  ~/.zbb/slots/local/config
+  logs    ~/.zbb/slots/local/logs
+  state   ~/.zbb/slots/local/state
 ```
 
 #### Delete
@@ -232,9 +247,7 @@ Directories:
 ```bash
 zbb slot delete local
 
-Stopping containers... done
-Removing volumes... done
-Removing ~/.zbb/slots/local/... done
+Slot 'local' deleted. Removed 6 container(s). Removed 3 volume(s).
 ```
 
 ### Ephemeral Slots
@@ -244,28 +257,15 @@ For test runs, CI pipelines, and throwaway environments. Ephemeral slots have a 
 ```bash
 # Auto-named with 2-hour TTL (default)
 zbb slot create --ephemeral
-# e2e-a1b2c3 (ttl: 2h, expires: 2026-03-20T16:30:00)
 
 # Named with custom TTL
 zbb slot create --ephemeral --ttl 30m ci-run-42
 
 # Explicit garbage collection
 zbb slot gc
-# Expired:
-#   e2e-a1b2c3  expired 45m ago  (removing...)
-#   ci-run-42   18m remaining    (skipped)
 ```
 
 Ephemeral slots are **not** auto-deleted on exit. They persist until their TTL expires and a future `zbb` command triggers GC. GC runs automatically at the start of `slot create`, `slot load`, and `slot list`.
-
-Gradle creates ephemeral slots for integration tests via CLI:
-
-```kotlin
-// In Gradle test setup
-exec { commandLine("zbb", "slot", "create", "--ephemeral", "--ttl", "30m", slotName) }
-// stackUp uses this slot's env
-// stackDestroy + slot delete in cleanup
-```
 
 `slot.yaml` tracks ephemerality:
 
@@ -275,6 +275,9 @@ created: 2026-03-20T14:00:00Z
 ephemeral: true
 ttl: 7200
 expires: 2026-03-20T16:00:00Z
+portRange:
+  - 15100
+  - 15199
 ```
 
 ### Preflight Checks
@@ -309,18 +312,6 @@ require:
     parse: "Docker version (\\S+),"
     version: ">=24"
     install: "https://docs.docker.com/engine/install/"
-
-  - tool: sem
-    check: "sem-apply --version"
-    parse: "(\\S+)"
-    version: "*"
-    install: "gem install schema-evolution-manager"
-
-  - tool: jq
-    check: "jq --version"
-    parse: "jq-(\\S+)"
-    version: ">=1.6"
-    install: "apt install jq"
 ```
 
 Monorepo `.zbb.yaml` declares global tool requirements. Project `zbb.yaml` adds project-specific ones. User `~/.zbb/config.yaml` can skip checks for specific tools. Preflight runs the union.
@@ -356,14 +347,6 @@ env:
   HUB_LOG_DIR:
     type: string
     default: "${ZB_SLOT_LOGS}/hub"             # slot-relative path
-
-  NODE_BASE_DIR:
-    type: string
-    default: "${ZB_SLOT_STATE}/hub"            # state in slot dir
-
-  FILE_SECRET_ROOT:
-    type: string
-    default: "${ZB_SLOT_STATE}/hub/secrets"
 ```
 
 Resolution rules:
@@ -372,22 +355,12 @@ Resolution rules:
 3. User overrides (`zbb env set`) replace the final value — derivation is skipped
 4. `zbb env list` shows whether a value is derived or overridden
 
-```
-[zb:local]$ zbb env list
-  HUB_PORT=15090                                    (com/hub — port)
-  SERVER_URL=http://localhost:15090                  (com/hub — derived from HUB_PORT)
-  HUB_LOG_DIR=/home/kevin/.zbb/slots/local/logs/hub (com/hub — derived from ZB_SLOT_LOGS)
-
-[zb:local]$ zbb env set SERVER_URL https://ci.zerobias.com
-  SERVER_URL: http://localhost:15090 -> https://ci.zerobias.com (override, was derived)
-```
-
 For complex derivations that go beyond string interpolation (protocol transforms, conditional logic), projects can register custom resolvers via the library API:
 
 ```javascript
-import { zbb } from '@zerobias-org/zbb';
+import { SlotEnvironment } from '@zerobias-org/zbb';
 
-zbb.registerResolver('WEBSOCKET_URL', (env) => {
+SlotEnvironment.registerResolver('WEBSOCKET_URL', (env) => {
   const hubUrl = env.get('HUB_SERVER_URL');
   if (!hubUrl) return undefined;
   return hubUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
@@ -430,12 +403,11 @@ zbb env list --unmask
 
 # Get a single var (secrets shown in full)
 zbb env get PGPORT
-zbb env get JWT_PRIVATE_KEY
 
 # Set a persistent override (survives slot reload)
 zbb env set LOG_LEVEL debug
 
-# Cleanse an inherited var (prevent leakage into slot)
+# Remove a var
 zbb env unset AWS_PROFILE
 
 # Show what changed vs parent shell
@@ -449,39 +421,114 @@ zbb env reset
 
 `zbb env set` writes to `~/.zbb/slots/<name>/overrides.env`. These persist across `exit` / `zbb slot load` cycles. Use `zbb env reset` to clear them.
 
+## Secrets
+
+Slot-scoped secret management for connection profiles and credentials. Secrets are YAML files stored at `${ZB_SLOT_STATE}/secrets/<name>.yml`. Values can contain refs (`{{env.VAR}}`) resolved at read time.
+
+```bash
+# Create from key=value pairs
+zbb secret create github-token apiToken={{env.NPM_TOKEN}} tokenType=Bearer
+
+# Create from a YAML file
+zbb secret create github-profile @test-profiles/github-local.yml
+
+# Create with schema validation
+zbb secret create aws-creds @creds.yml --type @connectionProfile.yml
+
+# List secrets in slot
+zbb secret list
+zbb secret list --module @auditlogic/module-github-github
+
+# Read a secret (resolves {{env.X}} refs)
+zbb secret get github-token
+zbb secret get github-token apiToken    # single key
+zbb secret get github-token --json      # JSON output
+
+# Update values
+zbb secret update github-token apiToken=new-value
+
+# Delete
+zbb secret delete github-token
+```
+
 ## Logs
 
-Logs are a slot-level concern. Any service that writes to `$ZB_SLOT_LOGS/<name>.log` is discoverable by `zbb logs`.
+Logs are a slot-level concern. `zbb logs` supports three sources: local files, Docker containers, and AWS CloudWatch.
 
 ```bash
 # List log sources (scans ZB_SLOT_LOGS directory)
 zbb logs list
-  dana         142K   modified 2m ago
-  hub-server   89K    modified 5m ago
-  postgres     12K    modified 1h ago
+  node             37K        modified 3m ago
+  dana             142K       modified 5m ago
 
-# View last N lines
-zbb logs show dana --tail 100
+# View local log file (default source)
+zbb logs show node --tail 100
+zbb logs show node --follow
 
-# Follow in real time
-zbb logs show hub-server --follow
+# View Docker container logs
+zbb logs show dana --source docker
+zbb logs show hub-server --source docker --follow
+
+# View AWS CloudWatch logs
+zbb logs show api --source aws --follow
 ```
 
 Services route their logs via env vars declared in `zbb.yaml`:
 
 ```yaml
-# com/dana/zbb.yaml
-env:
-  DANA_LOG_FILE:
-    type: string
-    default: "${ZB_SLOT_LOGS}/dana.log"
-
 # com/hub/zbb.yaml
 env:
   HUB_LOG_FILE:
     type: string
-    default: "${ZB_SLOT_LOGS}/hub-server.log"
+    default: "${ZB_SLOT_LOGS}/node.log"
 ```
+
+For Docker source, the container name is derived from `${STACK_NAME}-${logName}` (e.g., `local-dana`).
+
+## Dataloader
+
+Wraps the platform dataloader CLI with slot PG env injection for loading module artifacts into the local database.
+
+```bash
+# Load module artifacts from current directory
+zbb dataloader
+
+# Load from specific path
+zbb dataloader -d /path/to/module-package
+
+# Pass through any dataloader flags
+zbb dataloader -f -d .
+```
+
+Requires `@zerobias-com/platform-dataloader` to be installed globally (`npm i -g @zerobias-com/platform-dataloader`). Injects `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, and `NPM_TOKEN` from the active slot.
+
+## Publish
+
+Runs the Gradle `publish` lifecycle with special handling for `--dry-run`:
+
+```bash
+# Publish all artifacts
+zbb publish
+
+# Dry run (converts to Gradle property -PdryRun=true)
+zbb publish --dry-run
+```
+
+`--dry-run` is converted to `-PdryRun=true` (a Gradle project property), not Gradle's built-in `--dry-run` flag which skips task execution entirely.
+
+## Destroy
+
+Tears down all Docker containers, volumes, and networks for a slot's stack:
+
+```bash
+# From inside a loaded slot
+zbb destroy
+
+# Or specify slot name
+zbb destroy local
+```
+
+This is a direct Docker operation (not a Gradle alias). It finds containers/volumes/networks prefixed with the slot's `STACK_NAME` and removes them.
 
 ## Project Configuration
 
@@ -498,10 +545,6 @@ env:
     type: port
     default: 5432
     description: PostgreSQL port
-
-  POSTGRES_DB:
-    type: string
-    default: dana
 
   POSTGRES_PASSWORD:
     type: string
@@ -525,16 +568,6 @@ env:
   DANA_LOG_FILE:
     type: string
     default: "${ZB_SLOT_LOGS}/dana.log"
-
-  LOCAL_MODE:
-    type: string
-    default: "true"
-
-  # Deprecated var — accessing throws error with migration hint
-  OLD_DANA_URL:
-    deprecated: true
-    replacedBy: SERVER_URL
-    message: "SERVER_URL is now the single entry point"
 
 # Tool prerequisites (merged with .zbb.yaml requirements)
 require:
@@ -646,12 +679,6 @@ require:
     version: ">=24"
     install: "https://docs.docker.com/engine/install/"
 
-  - tool: nvm
-    check: "nvm --version"
-    parse: "(\\S+)"
-    version: "*"
-    install: "https://github.com/nvm-sh/nvm#installing-and-updating"
-
 # Port allocation range
 ports:
   range: [15000, 16000]
@@ -681,7 +708,7 @@ slots:
   dir: ~/.zbb/slots
 
 # Shell customization
-prompt: "[zb:{{slot}}]:{cwd}$ "
+prompt: "[zb:{{slot}}]:\\w$ "
 
 # Skip specific tool checks (e.g., if you know your version is fine)
 skip_checks:
@@ -693,7 +720,8 @@ skip_checks:
 `zbb` is also an npm package. Other tools can import it to manage slots programmatically without shelling out.
 
 ```javascript
-import { SlotManager, SlotEnvironment } from '@zerobias-org/zbb';
+import { SlotManager, Slot } from '@zerobias-org/zbb';
+import { SlotEnvironment } from '@zerobias-org/zbb/slot';
 
 // List slots
 const slots = await SlotManager.list();
@@ -704,23 +732,30 @@ const slot = await SlotManager.create('e2e-test', {
   ttl: 1800,
 });
 
+// Load existing slot
+const slot = await SlotManager.load('local');
+
 // Read env
 const pgPort = slot.env.get('PGPORT');
 const allVars = slot.env.getAll();
 
-// Set override
-await slot.env.set('LOG_LEVEL', 'debug');
-
-// Read manifest (var provenance)
+// Read metadata
 const manifest = slot.env.getManifest();
 // { PGPORT: { source: 'com/dana', type: 'port', allocated: 15432 }, ... }
+
+// Slot metadata
+const portRange = slot.meta.portRange;  // [15000, 15099]
+const created = slot.meta.created;       // ISO 8601
+
+// Set override
+await slot.env.set('LOG_LEVEL', 'debug');
 
 // Garbage collect expired ephemeral slots
 await SlotManager.gc();
 
-// Register custom resolver
-SlotEnvironment.registerResolver('WEBSOCKET_URL', (vars) => {
-  const hubUrl = vars.get('HUB_SERVER_URL');
+// Register custom resolver (used by hub-node-lib)
+SlotEnvironment.registerResolver('WEBSOCKET_URL', (env) => {
+  const hubUrl = env.get('HUB_SERVER_URL');
   return hubUrl?.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
 });
 ```
@@ -730,9 +765,8 @@ SlotEnvironment.registerResolver('WEBSOCKET_URL', (vars) => {
 ```json
 {
   "exports": {
-    ".": "./lib/index.mjs",
-    "./slot": "./lib/slot.mjs",
-    "./env": "./lib/env.mjs"
+    ".": "./dist/index.js",
+    "./slot": "./dist/slot/index.js"
   },
   "bin": {
     "zbb": "bin/zbb.mjs"
@@ -741,8 +775,8 @@ SlotEnvironment.registerResolver('WEBSOCKET_URL', (vars) => {
 ```
 
 Consumers:
-- **hub-node-lib** — reads slot env, writes to `state/hub/` subdirectory
-- **Gradle plugins** — calls `zbb slot create --ephemeral` for test slots
+- **hub-node-lib** — extends `Slot` with hub-specific managers, reads slot env, registers resolvers
+- **Gradle plugins** — `ZbbSlotProvider` reads slot env from disk for CI (no subshell needed)
 - **CI scripts** — creates slots, runs tests, cleans up
 
 ## Gradle Integration
@@ -762,14 +796,38 @@ val slotName = System.getenv("ZB_SLOT")
 For ephemeral test slots, Gradle calls `zbb` via CLI:
 
 ```kotlin
-// Create ephemeral slot for integration tests
 val slotName = "e2e-${UUID.randomUUID().toString().take(8)}"
 exec { commandLine("zbb", "slot", "create", "--ephemeral", "--ttl", "30m", slotName) }
-// Read the generated .env for test configuration
-// Clean up: exec { commandLine("zbb", "slot", "delete", slotName) }
 ```
 
 Stack tasks (`stackUp`, `stackDown`, `stackInfo`, `stackDestroy`) use the environment directly. Port values, secrets, and config are already in the shell from the slot.
+
+## Command Reference
+
+```
+zbb — ZeroBias Build
+
+Usage:
+  zbb slot <create|load|list|info|delete|gc>   Slot management
+  zbb env <list|get|set|unset|reset|diff>       Environment variables
+  zbb secret <create|get|list|update|delete>    Secret management
+  zbb logs <list|show>                           Log viewer (local/docker/aws)
+  zbb dataloader [args...]                       Run dataloader with slot SQL env
+  zbb publish [--dry-run]                        Publish all artifacts (Gradle)
+  zbb destroy [slot-name]                        Tear down stack containers/volumes
+  zbb up|down                                    Stack aliases (Gradle)
+  zbb --slot <name> <command>                    Run command with slot env loaded
+  zbb <gradle-task> [args...]                    Run Gradle task
+  zbb --version                                  Show version
+  zbb --help                                     Show this help
+
+Secret commands:
+  zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]
+  zbb secret get <name> [key] [--json]    Read secret (resolves {{env.X}} refs)
+  zbb secret list [--module <key>]        List secrets in slot
+  zbb secret update <name> [key=value ...]  Update secret values
+  zbb secret delete <name>                Delete secret
+```
 
 ## File Layout
 
@@ -778,7 +836,7 @@ Stack tasks (`stackUp`, `stackDown`, `stackInfo`, `stackDestroy`) use the enviro
   config.yaml                       # user-level config (auto-created)
   slots/
     local/
-      slot.yaml                     # metadata (created, ephemeral, ttl)
+      slot.yaml                     # metadata (created, ephemeral, ttl, portRange)
       .env                          # declared vars (managed by zbb)
       manifest.yaml                 # var provenance (source, type, masking)
       overrides.env                 # user overrides (via zbb env set)
@@ -786,10 +844,10 @@ Stack tasks (`stackUp`, `stackDown`, `stackInfo`, `stackDestroy`) use the enviro
       logs/                         # service log files
       state/                        # runtime state per service
         hub/                        #   hub-node state
-        dana/                       #   dana state
+        secrets/                    #   connection profiles
         tmp/                        #   slot-scoped temp dir
     e2e-a1b2c3/                     # ephemeral slot (auto-cleaned)
-      slot.yaml                     # includes ttl + expires
+      slot.yaml                     # includes ttl + expires + portRange
       .env
       ...
 
@@ -814,8 +872,8 @@ Creating slot 'local'...
     com/hub/zbb.yaml: 8 vars (3 ports, 2 derived)
     auditlogic/module-gradle/zbb.yaml: 2 vars (inherited)
   Allocating ports from range 15000-16000...
-    PGPORT=15432  DANA_PORT=15080  NGINX_PORT=15443
-    HUB_PORT=15090  HUB_NODE_PORT=15091  PKG_PROXY_PORT=15873
+    PGPORT=15000  DANA_PORT=15001  NGINX_HTTP_PORT=15002
+    HUB_SERVER_PORT=15004  HUB_PKG_PROXY_PORT=15006
   Generating secrets...
     JWT_PRIVATE_KEY  ok (RSA 2048)
     JWT_PUBLIC_KEY   ok (derived)
@@ -824,9 +882,9 @@ Creating slot 'local'...
     NPM_TOKEN        ok
     ZB_TOKEN         ok
   Resolving derived vars...
-    SERVER_URL       ok (http://localhost:15090)
+    SERVER_URL       ok (http://localhost:15001)
     HUB_LOG_DIR      ok (~/.zbb/slots/local/logs/hub)
-  Writing ~/.zbb/slots/local/.env (28 vars)
+  Writing ~/.zbb/slots/local/.env (62 vars)
 
 Slot 'local' created. Load with: zbb slot load local
 ```
@@ -841,15 +899,22 @@ zbb slot load local
 cd com/dana && zbb up
 cd ../hub && zbb up
 
-# Build
+# Build and test a module
 cd ../../auditlogic/module-gradle
 zbb :github:github:build
 
 # Check logs
-zbb logs show dana --tail 50
+zbb logs show node --tail 50
 
 # End of day
 exit
+```
+
+### One-off commands without subshell
+
+```bash
+zbb --slot local dataloader -d package/github/github
+zbb --slot local :github:github:testDocker
 ```
 
 ### Parallel environments
@@ -875,17 +940,4 @@ zbb slot load $SLOT
 [zb:e2e-f7d1a3]$ exit
 
 # Slot auto-cleaned on next zbb invocation after TTL expires
-```
-
-### Debugging with env overrides
-
-```bash
-[zb:local]$ zbb env set LOG_LEVEL debug
-  LOG_LEVEL: info -> debug (saved to overrides.env)
-
-# Persists across exit/reload. Revert:
-[zb:local]$ zbb env reset
-
-# Or ad hoc (lost on exit):
-[zb:local]$ export LOG_LEVEL=debug
 ```
