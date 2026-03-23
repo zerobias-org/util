@@ -172,6 +172,22 @@ export async function main(argv: string[]): Promise<void> {
     return;
   }
 
+  // Publish — special handling for --dry-run flag conversion
+  // Converts --dry-run to -PdryRun=true (Gradle property, not Gradle --dry-run flag)
+  if (command === 'publish') {
+    const publishArgs = args.slice(1).map(arg =>
+      arg === '--dry-run' ? '-PdryRun=true' : arg
+    );
+
+    if (process.env.ZB_SLOT) {
+      const slot = await SlotManager.load(process.env.ZB_SLOT);
+      await extendSlotFromCwd(slot);
+    }
+
+    runGradle(['publish', ...publishArgs]);
+    return;
+  }
+
   // Stack aliases → gradle
   const alias = resolveStackAlias(command);
   if (alias) {
@@ -696,6 +712,7 @@ Usage:
   zbb secret <create|get|list|update|delete>    Secret management
   zbb logs <list|show>                           Log viewer (local/docker/aws)
   zbb dataloader [args...]                       Run dataloader with slot SQL env
+  zbb publish [--dry-run]                        Publish all artifacts (Gradle)
   zbb up|down|destroy|info                       Stack aliases (Gradle)
   zbb <gradle-task> [args...]                    Run Gradle task
   zbb --version                                  Show version
