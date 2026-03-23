@@ -5,20 +5,10 @@ import java.io.File
 
 /**
  * Patches generated manifest.json files.
- *
- * Replaces the java-http generate:manifest npm script:
- *   node -e "const fs=require('fs');
- *     const m=JSON.parse(fs.readFileSync('generated/api/manifest.json'));
- *     m.implementationType='java-http';
- *     fs.writeFileSync('generated/api/manifest.json', JSON.stringify(m, null, 2));"
+ * Reads JSON, adds/updates a string field, writes back.
  */
 object ManifestPatcher {
 
-    /**
-     * Add or update a field in a JSON file.
-     * Uses simple string manipulation to avoid heavy JSON library dependency.
-     * The manifest.json is a small, flat JSON object.
-     */
     fun patchField(manifestFile: File, field: String, value: String) {
         if (!manifestFile.exists()) {
             throw GradleException("Manifest file not found: ${manifestFile.absolutePath}")
@@ -31,22 +21,17 @@ object ManifestPatcher {
             // Update existing field
             fieldPattern.replace(content) { """"$field": "$value"""" }
         } else {
-            // Add field before closing brace
-            content.replaceLast("}", """  "$field": "$value"\n}""")
+            // Insert field before the final closing brace.
+            // Find the last '}' and insert before it with proper comma.
+            val lastBrace = content.lastIndexOf('}')
+            if (lastBrace < 0) throw GradleException("Invalid JSON in ${manifestFile.name}")
+
+            val before = content.substring(0, lastBrace).trimEnd()
+            // Add comma after previous content if needed
+            val comma = if (before.endsWith(",") || before.endsWith("{")) "" else ","
+            "$before$comma\n  \"$field\": \"$value\"\n}\n"
         }
 
         manifestFile.writeText(patched)
-    }
-
-    private fun String.replaceLast(old: String, new: String): String {
-        val index = lastIndexOf(old)
-        if (index < 0) return this
-        // Ensure trailing comma on previous line
-        val beforeBrace = substring(0, index).trimEnd()
-        val needsComma = beforeBrace.isNotEmpty() &&
-            !beforeBrace.endsWith(",") &&
-            !beforeBrace.endsWith("{")
-        val comma = if (needsComma) "," else ""
-        return beforeBrace + comma + "\n" + new + substring(index + old.length)
     }
 }
