@@ -598,9 +598,8 @@ val generateDockerfile by tasks.registering {
     dependsOn(compileServer)
     val dockerDir = project.file("generated/docker")
     outputs.dir(dockerDir)
-    // Always generate for TS modules — Dockerfile is tooling, not per-module.
-    // Java HTTP modules use zb.java-module which has its own Docker setup.
-    onlyIf { isDockerBuild() }
+    // Generate unless module provides its own Dockerfile (e.g., SQL module)
+    onlyIf { isDockerBuild() && !project.file("Dockerfile").exists() }
     doLast {
         dockerDir.mkdirs()
         // nginx.conf — SSL termination, auth header check, proxy to Node
@@ -749,12 +748,14 @@ val buildImageExec by tasks.registering(Exec::class) {
     val imageName = zb.dockerImageName.get()
     // Strip build metadata (+...) from reckon version — not valid in Docker tags
     val ver = project.version.toString().substringBefore("+")
+    // Module-provided Dockerfile wins, otherwise use generated
+    val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
     commandLine("docker", "build",
-        "-f", "generated/docker/Dockerfile",
+        "-f", dockerfilePath,
         "-t", "${imageName}:local",
         "-t", "${imageName}:${ver}",
         ".")
-    inputs.file("Dockerfile")
+    inputs.file(dockerfilePath)
     inputs.dir("dist")
     inputs.file("package.json")
 }
