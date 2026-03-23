@@ -1145,30 +1145,84 @@ tasks.named("publishHubSdk") {
     dependsOn(publishHubSdkExec)
 }
 
-val publishImageExec by tasks.registering(Exec::class) {
+// -- Docker Image Publish (Multi-Arch buildx -> ECR + GHCR) ------
+// All registry config from slot env. No fallbacks. No derivation.
+// zbb.yaml declares these, resolvers compute them. Fail fast if missing.
+// Resolved lazily in doFirst to avoid config-time failure when env not set.
+
+// Step 1: Ensure ECR repository exists (idempotent)
+val ensureEcrRepo by tasks.registering(Exec::class) {
     group = "publish"
-    description = "Push Docker image to registry"
-    dependsOn(tasks.named("buildImage"), preflightChecks)
+    description = "Create ECR repository if it does not exist"
+    onlyIf { zb.hasConnectionProfile.get() && !isDryRun }
+    workingDir(project.projectDir)
+    commandLine("echo", "placeholder")
+    doFirst {
+        val awsRegion = System.getenv("AWS_REGION")
+            ?: throw GradleException("AWS_REGION not set in slot env — add to zbb.yaml")
+        val ecrRepoName = System.getenv("ECR_REPO_NAME")
+            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
+        commandLine("aws", "ecr", "create-repository",
+            "--repository-name", ecrRepoName,
+            "--region", awsRegion)
+        isIgnoreExitValue = true // already exists -> non-zero is OK
+    }
+}
+
+// Step 2: Multi-arch push to ECR
+val publishImageEcr by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Build and push multi-arch Docker image to ECR"
+    dependsOn(tasks.named("buildImage"), ensureEcrRepo, preflightChecks)
     onlyIf { zb.hasConnectionProfile.get() }
     workingDir(project.projectDir)
-    // commandLine set lazily in doFirst to avoid failing at configuration time
-    // when ECR_REGISTRY is not yet available
-    commandLine("echo", "publishImageExec: not configured")
-
+    commandLine("echo", "placeholder")
     doFirst {
-        val registry = System.getenv("ECR_REGISTRY")
-            ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
-        val imageName = zb.dockerImageName.get()
-        // Strip build metadata (+...) from reckon version — not valid in Docker tags
         val ver = project.version.toString().substringBefore("+")
         if (isDryRun) {
-            logger.lifecycle("[DRY RUN] Would push ${registry}/${imageName}:${ver}")
+            // In dryRun, log intent without requiring env vars to be present
+            val ecrRepoName = System.getenv("ECR_REPO_NAME") ?: "<ECR_REPO_NAME>"
+            val ecrRegistry = System.getenv("ECR_REGISTRY") ?: "<ECR_REGISTRY>"
+            logger.lifecycle("[DRY RUN] Would push multi-arch image to ECR: ${ecrRegistry}/${ecrRepoName}:${ver}")
             throw org.gradle.api.tasks.StopExecutionException()
         }
-        commandLine("docker", "push", "${registry}/${imageName}:${ver}")
+        val ecrRegistry = System.getenv("ECR_REGISTRY")
+            ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
+        val ecrRepoName = System.getenv("ECR_REPO_NAME")
+            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
+        commandLine("docker", "buildx", "build",
+            "--platform", "linux/amd64,linux/arm64",
+            "-t", "${ecrRegistry}/${ecrRepoName}:${ver}", "--push", ".")
+    }
+}
+
+// Step 3: Multi-arch push to GHCR
+val publishImageGhcr by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Build and push multi-arch Docker image to GHCR"
+    dependsOn(tasks.named("buildImage"), publishImageEcr, preflightChecks)
+    onlyIf { zb.hasConnectionProfile.get() }
+    workingDir(project.projectDir)
+    commandLine("echo", "placeholder")
+    doFirst {
+        val ver = project.version.toString().substringBefore("+")
+        if (isDryRun) {
+            // In dryRun, log intent without requiring env vars to be present
+            val ecrRepoName = System.getenv("ECR_REPO_NAME") ?: "<ECR_REPO_NAME>"
+            val ghcrRegistry = System.getenv("GHCR_REGISTRY") ?: "<GHCR_REGISTRY>"
+            logger.lifecycle("[DRY RUN] Would push multi-arch image to GHCR: ${ghcrRegistry}/${ecrRepoName}:${ver}")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+        val ghcrRegistry = System.getenv("GHCR_REGISTRY")
+            ?: throw GradleException("GHCR_REGISTRY not set in slot env — add to zbb.yaml")
+        val ecrRepoName = System.getenv("ECR_REPO_NAME")
+            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
+        commandLine("docker", "buildx", "build",
+            "--platform", "linux/amd64,linux/arm64",
+            "-t", "${ghcrRegistry}/${ecrRepoName}:${ver}", "--push", ".")
     }
 }
 
 tasks.named("publishImage") {
-    dependsOn(publishImageExec)
+    dependsOn(publishImageEcr, publishImageGhcr)
 }
