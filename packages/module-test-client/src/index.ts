@@ -1,54 +1,61 @@
 /**
- * Wire Protocol Client — implements the generated module interface
- * by translating typed method calls to Docker or Hub wire protocol.
+ * @zerobias-org/module-test-client
  *
- * Docker: POST /connections/{connId}/{ApiClass}.{method} with { argMap }
- * Hub:    PUT  /targets/{targetId}/{operationId} with flat args
+ * Test runner and wire protocol client for Hub modules.
  *
- * Reads manifest.json for operationId → ApiClass.method + param names.
- * Module-agnostic: works for any module (Github, Sql, etc.) as long as
- * generated/api/manifest.json exists with operations + operationParams.
+ * Module developers write tests against the generated interface.
+ * This package handles everything else:
+ *   - Mode selection (direct/docker/hub) from TEST_MODE env
+ *   - Wire protocol translation (manifest-driven)
+ *   - Connection management
+ *   - Secret resolution (via zbb secret get)
  *
- * @package @zerobias-org/module-test-client
+ * Usage in test file:
+ *   import { getClient } from '@zerobias-org/module-test-client';
+ *
+ *   describe('My Module', () => {
+ *     let client;
+ *     before(async () => { client = await getClient(); });
+ *     it('works', async () => {
+ *       const result = await client.getObjectsApi().getObject('/');
+ *       expect(result).to.be.ok;
+ *     });
+ *   });
+ *
+ * Gradle sets: TEST_MODE, CONTAINER_URL, TARGET_ID, SECRET_NAME, MODULE_DIR
  */
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { execSync } from 'node:child_process';
 import axios, { type AxiosInstance } from 'axios';
 import https from 'node:https';
+
+// ═══════════════════════════════════════════════════════════════════
+// Wire Protocol Client (internal)
+// ═══════════════════════════════════════════════════════════════════
+
 export type WireProtocolMode = 'docker' | 'hub';
 
 export interface WireProtocolConfig {
   mode: WireProtocolMode;
-  /** Base URL of the container (docker) or Hub Server (hub) */
   baseUrl: string;
-  /** Connection ID for Docker mode */
   connectionId?: string;
-  /** Target ID for Hub mode */
   targetId?: string;
-  /** API key for Hub mode auth */
   apiKey?: string;
-  /** Org ID for Hub mode auth */
   orgId?: string;
-  /** Path to module directory (for manifest.json) */
   moduleDir: string;
-  /** Error deserializer — pass CoreError.deserialize to get typed errors */
   errorDeserializer?: (data: unknown) => Error;
 }
 
 interface OperationMeta {
   operationId: string;
-  apiClassMethod: string; // e.g., "OrganizationApi.listMyOrganizations"
-  apiClass: string;       // e.g., "OrganizationApi"
-  methodName: string;     // e.g., "listMyOrganizations"
-  paramNames: string[];   // e.g., ["pageNumber", "pageSize"]
+  apiClassMethod: string;
+  apiClass: string;
+  methodName: string;
+  paramNames: string[];
 }
 
-/**
- * Build operation metadata from manifest.json
- * manifest.operations: { opId: "ApiClass.method" }
- * manifest.operationParams: { opId: ["param1", "param2"] }
- */
 function loadOperationMeta(moduleDir: string): Map<string, OperationMeta> {
   const manifestPath = join(moduleDir, 'generated', 'api', 'manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
@@ -66,13 +73,9 @@ function loadOperationMeta(moduleDir: string): Map<string, OperationMeta> {
       paramNames: operationParams[opId] || [],
     });
   }
-
   return meta;
 }
 
-/**
- * Group operations by API class name
- */
 function groupByApiClass(meta: Map<string, OperationMeta>): Map<string, OperationMeta[]> {
   const groups = new Map<string, OperationMeta[]>();
   for (const op of meta.values()) {
@@ -83,23 +86,16 @@ function groupByApiClass(meta: Map<string, OperationMeta>): Map<string, Operatio
   return groups;
 }
 
-/**
- * Create a wire protocol client that implements the module's generated interface.
- *
- * Returns an object with getXxxApi() methods that return proxy objects.
- * Each proxy method call is translated to the wire protocol.
- */
 export function createWireProtocolClient<T>(config: WireProtocolConfig): T {
   const meta = loadOperationMeta(config.moduleDir);
   const byApiClass = groupByApiClass(meta);
 
-  // Create axios instance for HTTP calls
   const httpsAgent = new https.Agent({ rejectUnauthorized: false });
   const client: AxiosInstance = axios.create({
     baseURL: config.baseUrl,
     httpsAgent,
     timeout: 90000,
-    validateStatus: () => true, // Don't throw on 4xx/5xx — we handle errors
+    validateStatus: () => true,
     headers: {
       'Content-Type': 'application/json',
       ...(config.apiKey ? { 'Authorization': `APIKey ${config.apiKey}` } : {}),
@@ -107,10 +103,8 @@ export function createWireProtocolClient<T>(config: WireProtocolConfig): T {
     },
   });
 
-  // Build a method handler for a single operation
   function makeMethod(op: OperationMeta) {
     return async (...args: unknown[]) => {
-      // Map positional args to named params
       const argMap: Record<string, unknown> = {};
       for (let i = 0; i < op.paramNames.length && i < args.length; i++) {
         if (args[i] !== undefined) {
@@ -119,7 +113,6 @@ export function createWireProtocolClient<T>(config: WireProtocolConfig): T {
       }
 
       let response: any;
-
       if (config.mode === 'docker') {
         response = await client.post(
           `/connections/${config.connectionId}/${op.apiClassMethod}`,
@@ -132,7 +125,6 @@ export function createWireProtocolClient<T>(config: WireProtocolConfig): T {
         );
       }
 
-      // Check for error responses and deserialize to typed errors
       if (response.status >= 400) {
         if (config.errorDeserializer) {
           throw config.errorDeserializer(response.data);
@@ -147,11 +139,7 @@ export function createWireProtocolClient<T>(config: WireProtocolConfig): T {
     };
   }
 
-  // Build the interface proxy
-  // For each API class (OrganizationApi, RepoApi, etc.), create a getXxxApi() method
-  // that returns an object with all the operations for that class
   const apiProxies: Record<string, any> = {};
-
   for (const [apiClass, ops] of byApiClass) {
     const apiObj: Record<string, Function> = {};
     for (const op of ops) {
@@ -160,19 +148,212 @@ export function createWireProtocolClient<T>(config: WireProtocolConfig): T {
     apiProxies[apiClass] = apiObj;
   }
 
-  // Create the top-level proxy with getXxxApi() methods
   const proxy: any = {};
   for (const [apiClass] of byApiClass) {
-    // Convert "OrganizationApi" → "getOrganizationApi"
     const getterName = `get${apiClass}`;
     proxy[getterName] = () => apiProxies[apiClass];
   }
 
-  // Add connect/disconnect stubs
   proxy.connect = async () => {};
   proxy.disconnect = async () => {};
   proxy.isConnected = async () => true;
   proxy.metadata = async () => ({});
 
   return proxy as T;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Test Runner — DI-based client provider
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve secret via zbb secret get.
+ */
+function getSecret(name: string): Record<string, unknown> {
+  const json = execSync(`zbb secret get ${name}`, { encoding: 'utf-8' });
+  return JSON.parse(json);
+}
+
+/**
+ * Test context — holds the connected client and teardown function.
+ * Module tests import this and use ctx.client.
+ */
+export interface TestContext<T = any> {
+  client: T;
+  mode: string;
+  secretName: string;
+  teardown: () => Promise<void>;
+}
+
+// Singleton context — initialized by getClient(), shared across tests
+let _ctx: TestContext | null = null;
+
+/**
+ * Get or create the test client.
+ *
+ * Reads configuration from environment (set by Gradle):
+ *   TEST_MODE     — direct | docker | hub
+ *   MODULE_DIR    — path to module root (default: cwd)
+ *   SECRET_NAME   — which secret to use (default: from module name)
+ *   CONTAINER_URL — Docker container URL (docker mode)
+ *   TARGET_ID     — Hub target UUID (hub mode)
+ *   SERVER_URL    — Hub Server URL via Dana (hub mode)
+ *   API_KEY       — Hub auth (hub mode)
+ *   ORG_ID        — Org context (hub mode)
+ *
+ * For direct mode, also needs:
+ *   DIRECT_IMPL   — path to module impl (e.g., ../../src/GithubImpl.js)
+ *   DIRECT_PASCAL — pascal name of impl class (e.g., Github)
+ *
+ * @param errorDeserializer — CoreError.deserialize from consumer's types-core-js
+ */
+export async function getClient<T = any>(
+  errorDeserializer?: (data: unknown) => Error
+): Promise<T> {
+  if (_ctx) return _ctx.client as T;
+
+  const mode = process.env.TEST_MODE || 'direct';
+  const moduleDir = process.env.MODULE_DIR || process.cwd();
+  const secretName = process.env.SECRET_NAME || 'default';
+
+  switch (mode) {
+    case 'direct':
+      _ctx = await createDirectContext(moduleDir, secretName);
+      break;
+    case 'docker':
+      _ctx = await createDockerContext(moduleDir, secretName, errorDeserializer);
+      break;
+    case 'hub':
+      _ctx = await createHubContext(moduleDir, secretName, errorDeserializer);
+      break;
+    default:
+      throw new Error(`Unknown TEST_MODE: ${mode}. Use direct|docker|hub`);
+  }
+
+  return _ctx.client as T;
+}
+
+/**
+ * Get the full test context (client + metadata).
+ */
+export async function getTestContext<T = any>(
+  errorDeserializer?: (data: unknown) => Error
+): Promise<TestContext<T>> {
+  await getClient<T>(errorDeserializer);
+  return _ctx as TestContext<T>;
+}
+
+/**
+ * Teardown — call in after() hook.
+ */
+export async function teardown(): Promise<void> {
+  if (_ctx) {
+    await _ctx.teardown();
+    _ctx = null;
+  }
+}
+
+// ── Direct mode ──────────────────────────────────────────────
+
+async function createDirectContext(
+  moduleDir: string,
+  secretName: string
+): Promise<TestContext> {
+  // Dynamic import of the module's impl class
+  const pascal = process.env.DIRECT_PASCAL;
+  const implPath = process.env.DIRECT_IMPL;
+
+  if (!pascal || !implPath) {
+    throw new Error(
+      'Direct mode requires DIRECT_PASCAL and DIRECT_IMPL env vars.\n' +
+      'Example: DIRECT_PASCAL=Github DIRECT_IMPL=../../src/GithubImpl.js'
+    );
+  }
+
+  const implModule = await import(join(moduleDir, implPath));
+  const ImplClass = implModule[`${pascal}Impl`];
+  if (!ImplClass) {
+    throw new Error(`${pascal}Impl not found in ${implPath}`);
+  }
+
+  const profileModule = await import(join(moduleDir, 'generated/model/index.js'));
+  const { ConnectionProfile } = profileModule;
+
+  const impl = new ImplClass();
+  const secret = getSecret(secretName);
+  const cp = ConnectionProfile.newInstance(secret);
+  await impl.connect(cp);
+
+  return {
+    client: impl,
+    mode: 'direct',
+    secretName,
+    teardown: async () => { try { await impl.disconnect(); } catch { /* ignore */ } },
+  };
+}
+
+// ── Docker mode ──────────────────────────────────────────────
+
+async function createDockerContext(
+  moduleDir: string,
+  secretName: string,
+  errorDeserializer?: (data: unknown) => Error
+): Promise<TestContext> {
+  const containerUrl = process.env.CONTAINER_URL;
+  if (!containerUrl) throw new Error('CONTAINER_URL not set — run via zbb testDocker');
+
+  const secret = getSecret(secretName);
+
+  // Create connection via wire protocol
+  const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+  await axios.post(`${containerUrl}/connections`, {
+    connectionId: 'e2e',
+    connectionProfile: secret,
+  }, { httpsAgent });
+
+  const client = createWireProtocolClient({
+    mode: 'docker',
+    baseUrl: containerUrl,
+    connectionId: 'e2e',
+    moduleDir,
+    errorDeserializer,
+  });
+
+  return {
+    client,
+    mode: 'docker',
+    secretName,
+    teardown: async () => {},
+  };
+}
+
+// ── Hub mode ─────────────────────────────────────────────────
+
+async function createHubContext(
+  moduleDir: string,
+  secretName: string,
+  errorDeserializer?: (data: unknown) => Error
+): Promise<TestContext> {
+  const serverUrl = process.env.SERVER_URL;
+  if (!serverUrl) throw new Error('SERVER_URL not set — slot must be loaded');
+
+  const targetId = process.env.TARGET_ID;
+  if (!targetId) throw new Error('TARGET_ID not set — run via zbb testHub');
+
+  const client = createWireProtocolClient({
+    mode: 'hub',
+    baseUrl: `${serverUrl}/api/hub`,
+    targetId,
+    apiKey: process.env.API_KEY,
+    orgId: process.env.ORG_ID,
+    moduleDir,
+    errorDeserializer,
+  });
+
+  return {
+    client,
+    mode: 'hub',
+    secretName,
+    teardown: async () => {},
+  };
 }
