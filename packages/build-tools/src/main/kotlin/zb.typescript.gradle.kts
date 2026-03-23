@@ -719,7 +719,8 @@ val buildImageExec by tasks.registering(Exec::class) {
     workingDir(project.projectDir)
     val registry = project.findProperty("dockerRegistry")?.toString() ?: "localhost"
     val imageName = zb.dockerImageName.get()
-    val ver = project.version.toString()
+    // Strip build metadata (+...) from reckon version — not valid in Docker tags
+    val ver = project.version.toString().substringBefore("+")
     commandLine("docker", "build",
         "-t", "${imageName}:local",
         "-t", "${registry}/${imageName}:${ver}",
@@ -797,13 +798,73 @@ tasks.named("stopModule") { dependsOn(stopModuleExec) }
 // PUBLISH
 // ════════════════════════════════════════════════════════════
 
+// -- Package.json version patching --------------------------------
+
+/**
+ * Patch package.json version field with reckon-calculated version.
+ * Returns the original content for restoration.
+ */
+fun patchPackageJsonVersion(pkgFile: java.io.File, newVersion: String): String {
+    val originalContent = pkgFile.readText()
+    val patchedContent = originalContent.replace(
+        Regex(""""version"\s*:\s*"[^"]+""""),
+        """"version": "$newVersion""""
+    )
+    pkgFile.writeText(patchedContent)
+    return originalContent
+}
+
+// Store original package.json content for restoration
+var originalPackageJson: String? = null
+
+val patchPackageJson by tasks.registering {
+    group = "publish"
+    description = "Patch package.json with reckon-calculated version"
+    doLast {
+        val pkgFile = project.file("package.json")
+        val ver = project.version.toString()
+        originalPackageJson = patchPackageJsonVersion(pkgFile, ver)
+        logger.lifecycle("Patched package.json version to $ver")
+    }
+}
+
+val restorePackageJson by tasks.registering {
+    group = "publish"
+    description = "Restore original package.json after publish"
+    doLast {
+        val pkgFile = project.file("package.json")
+        val content = originalPackageJson
+        if (content != null) {
+            pkgFile.writeText(content)
+            logger.lifecycle("Restored original package.json")
+        }
+    }
+}
+
+// -- NPM Publish (staging with --tag next) ------------------------
+
+val isDryRun: Boolean = extra["isDryRun"] as Boolean
+@Suppress("UNCHECKED_CAST")
+val preflightChecks = extra["preflightChecks"] as TaskProvider<*>
+
 val publishNpmExec by tasks.registering(NpmTask::class) {
     group = "publish"
-    description = "Publish npm package with dist-tag"
-    dependsOn(tasks.named("gate"))
+    description = "Publish npm package to registry with --tag next (staging)"
+    dependsOn(tasks.named("gate"), patchPackageJson, preflightChecks)
+    finalizedBy(restorePackageJson)
+
     npmCommand.set(listOf("publish"))
-    args.set(listOf("--tag", npmDistTag))
+    args.set(listOf("--tag", "next"))
     workingDir.set(project.projectDir)
+
+    doFirst {
+        if (isDryRun) {
+            val (name, _) = readPackageNameVersion()
+            val ver = project.version.toString()
+            logger.lifecycle("[DRY RUN] Would publish ${name}@${ver} with --tag next")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -977,12 +1038,25 @@ tasks.named("publishNpm") {
 val publishImageExec by tasks.registering(Exec::class) {
     group = "publish"
     description = "Push Docker image to registry"
-    dependsOn(tasks.named("buildImage"))
+    dependsOn(tasks.named("buildImage"), preflightChecks)
+    onlyIf { zb.hasConnectionProfile.get() }
     workingDir(project.projectDir)
-    val registry = project.findProperty("dockerRegistry")?.toString() ?: "localhost"
-    val imageName = zb.dockerImageName.get()
-    val ver = project.version.toString()
-    commandLine("docker", "push", "${registry}/${imageName}:${ver}")
+    // commandLine set lazily in doFirst to avoid failing at configuration time
+    // when ECR_REGISTRY is not yet available
+    commandLine("echo", "publishImageExec: not configured")
+
+    doFirst {
+        val registry = System.getenv("ECR_REGISTRY")
+            ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
+        val imageName = zb.dockerImageName.get()
+        // Strip build metadata (+...) from reckon version — not valid in Docker tags
+        val ver = project.version.toString().substringBefore("+")
+        if (isDryRun) {
+            logger.lifecycle("[DRY RUN] Would push ${registry}/${imageName}:${ver}")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+        commandLine("docker", "push", "${registry}/${imageName}:${ver}")
+    }
 }
 
 tasks.named("publishImage") {
