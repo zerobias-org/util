@@ -51,6 +51,7 @@ val propertyResolver = PropertyResolver(vaultService)
 
 // ────────────────────────────────────────────────────────────
 // Versioning — package.json is the version source of truth.
+// commit-and-tag-version bumps it from conventional commits.
 // Branch determines pre-release suffix and npm dist-tag.
 // ────────────────────────────────────────────────────────────
 val branch: String = providers.exec {
@@ -63,17 +64,19 @@ val preReleaseCounter: String = try {
     }.standardOutput.asText.get().trim()
 } catch (e: Exception) { "0" }
 
-// Read base version from package.json
-val baseVersion: String = project.file("package.json").let { f ->
-    if (f.exists()) {
-        val match = Regex(""""version"\s*:\s*"([^"]+)"""").find(f.readText())
-        val raw = match?.groupValues?.get(1)
-            ?: throw GradleException("Cannot find 'version' in package.json at ${f.absolutePath}")
-        raw.replace(Regex("-.*"), "")  // strip existing pre-release suffix
-    } else {
+// Read base version from package.json (source of truth)
+fun readBaseVersion(): String {
+    val pkgJson = project.file("package.json")
+    if (!pkgJson.exists()) {
         throw GradleException("package.json not found in ${project.projectDir} — cannot determine version")
     }
+    val match = Regex(""""version"\s*:\s*"([^"]+)"""").find(pkgJson.readText())
+    val raw = match?.groupValues?.get(1)
+        ?: throw GradleException("Cannot find 'version' in package.json at ${pkgJson.absolutePath}")
+    return raw.replace(Regex("-.*"), "")  // strip existing pre-release suffix
 }
+
+val baseVersion = readBaseVersion()
 
 version = when (branch) {
     "main"   -> baseVersion                                    // 6.8.0
@@ -89,8 +92,49 @@ val npmDistTag: String = when (branch) {
     else   -> "dev"
 }
 
-// Store as extra property for child plugins to access
+// Store as extra properties for child plugins to access
 extra["npmDistTag"] = npmDistTag
+
+// ────────────────────────────────────────────────────────────
+// bumpVersion — conventional commits → package.json version bump
+// Uses commit-and-tag-version (npm), scoped to this module's path.
+// Only runs on main branch publish. Dev branches use current version + suffix.
+// ────────────────────────────────────────────────────────────
+val moduleRelativePath = project.projectDir.relativeTo(project.rootDir).path
+val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
+
+val bumpVersion by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Bump package.json version from conventional commits (main branch only)"
+    onlyIf { branch == "main" }
+    workingDir(project.rootDir)
+    commandLine("npx", "commit-and-tag-version",
+        "--path", moduleRelativePath,
+        "--tag-prefix", tagPrefix,
+        "--skip.changelog",  // changelog generation is separate concern
+        "--skip.commit",     // Gradle commits after all modules bump
+        "--skip.tag"         // Gradle tags after successful publish
+    )
+    // After bump, re-read version so project.version is current
+    doLast {
+        val newVersion = readBaseVersion()
+        project.version = newVersion
+        logger.lifecycle("Version bumped to $newVersion (from conventional commits)")
+    }
+}
+
+// Tag after successful publish (not during bump)
+val tagVersion by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Create git tag for published version"
+    onlyIf { branch == "main" && !(extra["isDryRun"] as Boolean) }
+    workingDir(project.rootDir)
+    commandLine("echo", "placeholder")
+    doFirst {
+        val ver = readBaseVersion()
+        commandLine("git", "tag", "${tagPrefix}${ver}")
+    }
+}
 
 // ────────────────────────────────────────────────────────────
 // Dry-run flag — publish tasks check this to skip actual push
@@ -394,7 +438,12 @@ val publishHubSdk by tasks.registering {
 val publishAll by tasks.registering {
     group = "publish"
     description = "Publish all artifacts (staging -- uses --tag next)"
-    dependsOn(publishNpm, publishImage, publishSdk, publishHubSdk)
+    dependsOn(bumpVersion, publishNpm, publishImage, publishSdk, publishHubSdk)
+}
+
+// Ensure bump runs before any publish task reads version
+listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { taskName ->
+    tasks.named(taskName) { mustRunAfter(bumpVersion) }
 }
 
 // Guard lifecycle publish stubs: skip if module has no changes since last tag.
@@ -438,12 +487,15 @@ val promoteAll by tasks.registering {
     }
 }
 
-// Top-level publish task: run publishAll (staging) then promoteAll (promotion on success only)
+// Top-level publish task: bump → stage → promote → tag
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
-    dependsOn(publishAll, promoteAll)
+    dependsOn(publishAll, promoteAll, tagVersion)
 }
+
+// tagVersion runs after promote succeeds
+tagVersion.configure { mustRunAfter(promoteAll) }
 
 // ────────────────────────────────────────────────────────────
 // Metadata sync — utility task (not in default build chain)
