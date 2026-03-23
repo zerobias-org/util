@@ -83,23 +83,29 @@ tasks.named("validate") {
 // LINT — eslint on src/
 // ════════════════════════════════════════════════════════════
 
-val lintExec by tasks.registering(NpxTask::class) {
+val lintExec by tasks.registering(Exec::class) {
     group = "lifecycle"
-    description = "Run eslint on source code"
-    workingDir.set(project.projectDir)
-    command.set("eslint")
-    args.set(listOf("src/"))
-    // Run only if eslint config exists (flat config or legacy)
-    onlyIf {
-        project.file("src").exists() && (
-            project.file("eslint.config.js").exists() ||
-            project.file("eslint.config.mjs").exists() ||
-            project.file("eslint.config.cjs").exists() ||
-            project.file(".eslintrc.json").exists() ||
-            project.file(".eslintrc.yml").exists() ||
-            project.file(".eslintrc.js").exists()
-        )
+    description = "Run eslint on source code using shared config from @zerobias-org/eslint-config"
+    dependsOn(tasks.named("compile"))
+    workingDir(project.projectDir)
+    doFirst {
+        // Generate ephemeral eslint.config.mjs in the module directory
+        // Must be local (not in node_modules) so eslint's base path is correct
+        val configFile = project.file("eslint.config.js")
+        val sharedConfigPath = "node_modules/@zerobias-org/eslint-config/eslint.config.js"
+        if (!configFile.exists() && project.file(sharedConfigPath).exists()) {
+            // Read shared config and write as local file
+            configFile.writeText(project.file(sharedConfigPath).readText())
+        }
+
+        val npxPath = if (nvmNodeBinDir != null) "$nvmNodeBinDir/npx" else "npx"
+        commandLine(npxPath, "eslint", "src/")
     }
+    doLast {
+        // Clean up ephemeral config
+        project.file("eslint.config.js").delete()
+    }
+    onlyIf { project.file("src").exists() }
 }
 
 tasks.named("lint") {
