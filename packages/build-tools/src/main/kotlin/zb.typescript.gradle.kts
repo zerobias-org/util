@@ -778,28 +778,7 @@ tasks.named("buildImage") {
     dependsOn(buildImageExec)
 }
 
-// pushLocal: tag + push to pkg-proxy for local Hub Node testing
-// pkg-proxy registry address comes from slot env (PKG_PROXY_REGISTRY)
-val pushLocal by tasks.registering(Exec::class) {
-    group = "docker"
-    description = "Tag and push image to local pkg-proxy registry for Hub Node"
-    dependsOn(buildImageExec)
-    onlyIf { zb.hasConnectionProfile.get() }
-    workingDir(project.projectDir)
-    commandLine("echo", "placeholder")
-    doFirst {
-        val imageName = zb.dockerImageName.get()
-        val ver = project.version.toString().substringBefore("+")
-        val pkgProxy = System.getenv("PKG_PROXY_REGISTRY")
-            ?: throw org.gradle.api.GradleException("PKG_PROXY_REGISTRY not set in slot env — add to zbb.yaml")
-        val localTag = "${pkgProxy}/${imageName}:${ver}"
-        // Tag the already-built image for pkg-proxy
-        project.exec { commandLine("docker", "tag", "${imageName}:${ver}", localTag) }
-        // Push to pkg-proxy
-        commandLine("docker", "push", localTag)
-        logger.lifecycle("Pushed ${localTag} to pkg-proxy")
-    }
-}
+
 
 // ════════════════════════════════════════════════════════════
 // DOCKER RUNTIME — start/stop module container for local dev
