@@ -166,8 +166,12 @@ async function secretCreate(args: string[], slot: Slot): Promise<void> {
   const remaining = args.slice(1);
   let data: Record<string, unknown> = {};
 
-  // Check for @file import
-  const fileArg = remaining.find(a => a.startsWith('@') && !a.startsWith('@auto'));
+  // Check for @file import — must have a file extension to distinguish
+  // from npm scoped package names like @auditlogic/module-github-github
+  const fileArg = remaining.find(a =>
+    a.startsWith('@') && !a.startsWith('@auto') &&
+    SUPPORTED_EXTENSIONS.some(ext => a.endsWith(`.${ext}`))
+  );
   if (fileArg) {
     const filePath = fileArg.slice(1);
     if (!existsSync(filePath)) {
