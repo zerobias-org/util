@@ -228,12 +228,12 @@ val copyDistributionSpec by tasks.registering {
     inputs.property("includeConnectionProfile", zb.includeConnectionProfileInDist)
     outputs.file(project.provider {
         val moduleName = OpenApiSpecAssembler.resolveModuleName(project.projectDir)
-        project.file("${moduleName}.yml")
+        project.file("generated/${moduleName}.yml")
     })
     doLast {
         val moduleName = OpenApiSpecAssembler.resolveModuleName(project.projectDir)
         val fullYml = fullSpec
-        val distYml = project.file("${moduleName}.yml")
+        val distYml = project.file("generated/${moduleName}.yml")
 
         if (zb.includeConnectionProfileInDist.get()) {
             fullYml.copyTo(distYml, overwrite = true)
