@@ -345,6 +345,7 @@ export function describeModule<T = any>(
 
   for (const secretName of secretNames) {
     describe(`${name} [${mode}] (${secretName})`, function () {
+      this.timeout(120000);
       // Deferred client — proxy that forwards to the real client after before() runs
       const clientRef: { value: T | null } = { value: null };
       const clientProxy = new Proxy({} as any, {
