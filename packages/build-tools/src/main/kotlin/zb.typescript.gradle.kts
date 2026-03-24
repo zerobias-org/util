@@ -762,14 +762,12 @@ val buildImageExec by tasks.registering(Exec::class) {
     dependsOn(compileServer, generateDockerfile)
     workingDir(project.projectDir)
     val imageName = zb.dockerImageName.get()
-    // Strip build metadata (+...) from reckon version — not valid in Docker tags
-    val ver = project.version.toString().substringBefore("+")
-    // Module-provided Dockerfile wins, otherwise use generated
+    val (_, pkgVer) = readPackageNameVersion()
     val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
     commandLine("docker", "build",
         "-f", dockerfilePath,
         "-t", "${imageName}:local",
-        "-t", "${imageName}:${ver}",
+        "-t", "${imageName}:${pkgVer}",
         ".")
     inputs.file(dockerfilePath)
     inputs.dir("dist")
@@ -780,7 +778,7 @@ val buildImageExec by tasks.registering(Exec::class) {
     doLast {
         marker.get().asFile.apply {
             parentFile.mkdirs()
-            writeText("${imageName}:${ver}")
+            writeText("${imageName}:${pkgVer}")
         }
     }
 }
