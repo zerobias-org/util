@@ -994,17 +994,59 @@ val setupFixtures by tasks.registering {
             throwOnError = true
         )
 
-        // ── Step 2: Get registered node ID ─────────────────────────────────
+        // ── Step 2: Get registered node ID (auto-register + start if needed) ─
         logger.lifecycle("setupFixtures: Step 2 — getting registered node ID")
-        val nodeListJson = runCliJson("hub-node", "--json", "server", "node", "list")
-        // Parse: [{id: "...", ...}]
-        val nodeId = run {
-            val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(nodeListJson)
+        var nodeListJson = runCliJson("hub-node", "--json", "server", "node", "list")
+        var nodeId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(nodeListJson)?.groupValues?.get(1)
+
+        if (nodeId == null) {
+            // No node registered — register via CLI, set code
+            logger.lifecycle("setupFixtures: No node found — auto-registering")
+            val registerJson = runCliJson(
+                "hub-node", "--json", "server", "register", "--max-nodes", "1"
+            )
+            val regCode = Regex(""""code"\s*:\s*"([^"]+)"""").find(registerJson)?.groupValues?.get(1)
                 ?: throw org.gradle.api.GradleException(
-                    "setupFixtures: No node ID found in `hub-node server node list` output.\n" +
-                    "Ensure a hub-node is registered and paired. Output:\n$nodeListJson"
+                    "setupFixtures: No registration code in register output.\n$registerJson"
                 )
-            idMatch.groupValues[1]
+            logger.lifecycle("setupFixtures: Registration code = $regCode")
+
+            // Set registration code in slot env so node picks it up on start
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("hub-node", "env", "set", "REGISTRATION_CODE", regCode),
+                workingDir = project.projectDir,
+                throwOnError = true
+            )
+        }
+
+        // Always ensure node is running (idempotent — returns immediately if already up)
+        logger.lifecycle("setupFixtures: Ensuring node is running")
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("hub-node", "node", "start"),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+
+        if (nodeId == null) {
+            // Wait for freshly registered node to appear in server
+            logger.lifecycle("setupFixtures: Waiting for node to register...")
+            var retries = 0
+            while (retries < 30) {
+                Thread.sleep(2000)
+                nodeListJson = runCliJson("hub-node", "--json", "server", "node", "list")
+                nodeId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(nodeListJson)?.groupValues?.get(1)
+                if (nodeId != null) break
+                retries++
+                if (retries % 5 == 0) {
+                    logger.lifecycle("setupFixtures: Still waiting for node registration... (${retries * 2}s)")
+                }
+            }
+            if (nodeId == null) {
+                throw org.gradle.api.GradleException(
+                    "setupFixtures: Node did not register after 60s.\n" +
+                    "Check hub-node logs: zbb logs show node"
+                )
+            }
         }
         logger.lifecycle("setupFixtures: Node ID = $nodeId")
 
@@ -1065,28 +1107,31 @@ val setupFixtures by tasks.registering {
     }
 }
 
-val testHubExec by tasks.registering(NpxTask::class) {
+val testHubExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Run Hub Client e2e tests (TEST_MODE=hub) via mocha"
     dependsOn(setupFixtures)
-    workingDir.set(project.projectDir)
-    command.set("mocha")
-    args.set(listOf(
-        "--config", ".mocharc.json",
-        "--inline-diffs",
-        "--reporter=list",
-        "--timeout", "120000",
-        "test/e2e/github.test.ts"
-    ))
+    workingDir(project.projectDir)
     onlyIf { project.file("test/e2e").exists() }
     doFirst {
         val targetId = project.ext.get("SETUP_FIXTURES_TARGET_ID") as? String
             ?: throw org.gradle.api.GradleException(
                 "testHub: SETUP_FIXTURES_TARGET_ID not set — did setupFixtures fail?"
             )
-        environment.put("TEST_MODE", "hub")
-        environment.put("TARGET_ID", targetId)
+        environment("TEST_MODE", "hub")
+        environment("TARGET_ID", targetId)
+        environment("MODULE_DIR", project.projectDir.absolutePath)
+        environment("NODE_TLS_REJECT_UNAUTHORIZED", "0")
         logger.lifecycle("testHubExec: TEST_MODE=hub TARGET_ID=$targetId")
+
+        val npxPath = if (nvmNodeBinDir != null) "$nvmNodeBinDir/npx" else "npx"
+        commandLine(npxPath, "mocha",
+            "--config", ".mocharc.json",
+            "--inline-diffs",
+            "--reporter=list",
+            "--timeout", "120000",
+            "test/e2e/github.test.ts"
+        )
     }
 }
 
