@@ -10,5 +10,8 @@ export { LoggerTransport } from './transports/LoggerTransport.js';
 export { ConsoleTransport } from './transports/ConsoleTransport.js';
 export { CLITransport } from './transports/CLITransport.js';
 
+// SDK request/response logging
+export { SDKLogger } from './SDKLogger.js';
+
 // Deprecated - will be removed in v3.0.0
 export { Logger } from './Logger.js';

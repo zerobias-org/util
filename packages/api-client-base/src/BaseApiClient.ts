@@ -40,6 +40,29 @@ const DEFAULT_AXIOS_CONFIG: AxiosRequestConfig = { validateStatus: () => true };
  */
 export class BaseApiClient {
   /**
+   * Static registry of all BaseApiClient instances.
+   * Used by external loggers (e.g., SDKLogger) to attach interceptors.
+   */
+  private static _instances: Set<BaseApiClient> = new Set();
+  private static _onInstanceCallbacks: Array<(client: BaseApiClient) => void> = [];
+
+  /**
+   * Register a callback for every current and future BaseApiClient instance.
+   */
+  static onInstance(callback: (client: BaseApiClient) => void): void {
+    BaseApiClient._onInstanceCallbacks.push(callback);
+    Array.from(BaseApiClient._instances).forEach(instance => callback(instance));
+  }
+
+  /**
+   * Remove a previously registered onInstance callback.
+   */
+  static removeOnInstance(callback: (client: BaseApiClient) => void): void {
+    const idx = BaseApiClient._onInstanceCallbacks.indexOf(callback);
+    if (idx !== -1) BaseApiClient._onInstanceCallbacks.splice(idx, 1);
+  }
+
+  /**
    * Current connection profile
    * @protected
    */
@@ -80,6 +103,12 @@ export class BaseApiClient {
   constructor(axiosConfig: AxiosRequestConfig = DEFAULT_AXIOS_CONFIG, basePath: string = '') {
     this.apiInvoker = new ApiInvokerImpl(axiosConfig);
     this._basePath = basePath;
+
+    // Register in static instance registry
+    BaseApiClient._instances.add(this);
+    for (const cb of BaseApiClient._onInstanceCallbacks) {
+      try { cb(this); } catch { /* ignore callback errors */ }
+    }
   }
 
   /**
@@ -187,6 +216,7 @@ export class BaseApiClient {
    */
   async disconnect(): Promise<void> {
     this._connectionProfile = undefined;
+    BaseApiClient._instances.delete(this);
     return;
   }
 

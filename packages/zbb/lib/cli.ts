@@ -592,27 +592,39 @@ async function handleLogs(args: string[]): Promise<void> {
       const { readdir, stat } = await import('node:fs/promises');
       const { existsSync } = await import('node:fs');
       const { join } = await import('node:path');
+      const { execSync } = await import('node:child_process');
 
-      if (!existsSync(slot.logsDir)) {
-        console.log('No logs directory.');
-        return;
+      // File-based logs
+      if (existsSync(slot.logsDir)) {
+        const files = await readdir(slot.logsDir);
+        const logFiles = files.filter(f => f.endsWith('.log'));
+
+        for (const f of logFiles) {
+          const s = await stat(join(slot.logsDir, f));
+          const size = formatSize(s.size);
+          const modified = formatAge(s.mtimeMs);
+          const name = f.replace('.log', '');
+          console.log(`  ${name.padEnd(16)} ${size.padEnd(10)} modified ${modified}`);
+        }
       }
 
-      const files = await readdir(slot.logsDir);
-      const logFiles = files.filter(f => f.endsWith('.log'));
+      // Docker container logs
+      const stackName = slot.env.get('STACK_NAME') ?? slot.name;
+      try {
+        const containers = execSync(
+          `docker ps --filter "name=${stackName}-" --format "{{.Names}}\t{{.Status}}"`,
+          { encoding: 'utf8' }
+        ).trim();
+        if (containers) {
+          for (const line of containers.split('\n')) {
+            const [fullName, status] = line.split('\t');
+            const name = fullName.replace(`${stackName}-`, '');
+            const statusShort = status.replace(/\s*\(.*\)/, '').toLowerCase();
+            console.log(`  ${name.padEnd(16)} (docker)   ${statusShort}`);
+          }
+        }
+      } catch { /* docker not available */ }
 
-      if (logFiles.length === 0) {
-        console.log('No log files.');
-        return;
-      }
-
-      for (const f of logFiles) {
-        const s = await stat(join(slot.logsDir, f));
-        const size = formatSize(s.size);
-        const modified = formatAge(s.mtimeMs);
-        const name = f.replace('.log', '');
-        console.log(`  ${name.padEnd(16)} ${size.padEnd(10)} modified ${modified}`);
-      }
       break;
     }
 

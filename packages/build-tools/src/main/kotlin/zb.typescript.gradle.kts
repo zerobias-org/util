@@ -1071,28 +1071,6 @@ val setupFixtures by tasks.registering {
                     "setupFixtures: No deployment ID in output.\n$deployJson"
                 )
             logger.lifecycle("setupFixtures: Created Deployment ID = $deploymentId")
-
-            // Wait for deployment to be up (node pulls image, starts container)
-            logger.lifecycle("setupFixtures: Waiting for deployment to be ready...")
-            var depRetries = 0
-            while (depRetries < 60) {
-                Thread.sleep(2000)
-                val depStatusJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-                    command = listOf("hub-node", "--json", "server", "deployments", "get", deploymentId),
-                    workingDir = project.projectDir,
-                    environment = emptyMap(),
-                    throwOnError = false
-                ).trim()
-                val status = Regex(""""status"\s*:\s*"([^"]+)"""").find(depStatusJson)?.groupValues?.get(1)
-                if (status == "up") {
-                    logger.lifecycle("setupFixtures: Deployment is up")
-                    break
-                }
-                depRetries++
-                if (depRetries % 5 == 0) {
-                    logger.lifecycle("setupFixtures: Deployment status: ${status ?: "unknown"} (${depRetries * 2}s)")
-                }
-            }
         }
 
         // ── Step 4: Get boundary ID ─────────────────────────────────────────
@@ -1204,35 +1182,14 @@ val setupFixtures by tasks.registering {
             logger.lifecycle("setupFixtures: Created Connection (TARGET_ID) = $targetId")
         }
 
-        // ── Step 6: Connect and wait for connection ready ─────────────────
-        logger.lifecycle("setupFixtures: Step 6 — connecting TARGET_ID=$targetId")
+        // ── Step 6: Ensure deployment + connect via target metadata ──────
+        // getTargetMetadata ensures deployment is running and connection is established
+        logger.lifecycle("setupFixtures: Step 6 — ensuring target ready (TARGET_ID=$targetId)")
         com.zerobias.buildtools.util.ExecUtils.exec(
-            command = listOf("hub-node", "--json", "connections", "connect", targetId),
+            command = listOf("hub-node", "--json", "server", "targets", "metadata", targetId),
             workingDir = project.projectDir,
             throwOnError = true
         )
-
-        // Wait for connection to be up/standby
-        logger.lifecycle("setupFixtures: Waiting for connection to be ready...")
-        var connRetries = 0
-        while (connRetries < 30) {
-            Thread.sleep(2000)
-            val connStatusJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-                command = listOf("hub-node", "--json", "connections", "get", targetId),
-                workingDir = project.projectDir,
-                environment = emptyMap(),
-                throwOnError = false
-            ).trim()
-            val connStatus = Regex(""""status"\s*:\s*"([^"]+)"""").find(connStatusJson)?.groupValues?.get(1)
-            if (connStatus == "up" || connStatus == "standby") {
-                logger.lifecycle("setupFixtures: Connection is $connStatus")
-                break
-            }
-            connRetries++
-            if (connRetries % 5 == 0) {
-                logger.lifecycle("setupFixtures: Connection status: ${connStatus ?: "unknown"} (${connRetries * 2}s)")
-            }
-        }
 
         // Export fixture IDs for testHub task
         project.ext.set("SETUP_FIXTURES_TARGET_ID", targetId)

@@ -507,23 +507,33 @@ async function handleLogs(args) {
             const { readdir, stat } = await import('node:fs/promises');
             const { existsSync } = await import('node:fs');
             const { join } = await import('node:path');
-            if (!existsSync(slot.logsDir)) {
-                console.log('No logs directory.');
-                return;
+            const { execSync } = await import('node:child_process');
+            // File-based logs
+            if (existsSync(slot.logsDir)) {
+                const files = await readdir(slot.logsDir);
+                const logFiles = files.filter(f => f.endsWith('.log'));
+                for (const f of logFiles) {
+                    const s = await stat(join(slot.logsDir, f));
+                    const size = formatSize(s.size);
+                    const modified = formatAge(s.mtimeMs);
+                    const name = f.replace('.log', '');
+                    console.log(`  ${name.padEnd(16)} ${size.padEnd(10)} modified ${modified}`);
+                }
             }
-            const files = await readdir(slot.logsDir);
-            const logFiles = files.filter(f => f.endsWith('.log'));
-            if (logFiles.length === 0) {
-                console.log('No log files.');
-                return;
+            // Docker container logs
+            const stackName = slot.env.get('STACK_NAME') ?? slot.name;
+            try {
+                const containers = execSync(`docker ps --filter "name=${stackName}-" --format "{{.Names}}\t{{.Status}}"`, { encoding: 'utf8' }).trim();
+                if (containers) {
+                    for (const line of containers.split('\n')) {
+                        const [fullName, status] = line.split('\t');
+                        const name = fullName.replace(`${stackName}-`, '');
+                        const statusShort = status.replace(/\s*\(.*\)/, '').toLowerCase();
+                        console.log(`  ${name.padEnd(16)} (docker)   ${statusShort}`);
+                    }
+                }
             }
-            for (const f of logFiles) {
-                const s = await stat(join(slot.logsDir, f));
-                const size = formatSize(s.size);
-                const modified = formatAge(s.mtimeMs);
-                const name = f.replace('.log', '');
-                console.log(`  ${name.padEnd(16)} ${size.padEnd(10)} modified ${modified}`);
-            }
+            catch { /* docker not available */ }
             break;
         }
         case 'show': {
