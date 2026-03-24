@@ -639,7 +639,19 @@ async function handleLogs(args: string[]): Promise<void> {
       const tailIdx = args.indexOf('--tail');
       const tailN = tailIdx !== -1 ? args[tailIdx + 1] : '50';
       const sourceIdx = args.indexOf('--source');
-      const source = sourceIdx !== -1 ? args[sourceIdx + 1] : 'local';
+      let source = sourceIdx !== -1 ? args[sourceIdx + 1] : 'auto';
+
+      // Auto-detect source: try local file, fall back to docker
+      if (source === 'auto') {
+        const { join } = await import('node:path');
+        const { existsSync } = await import('node:fs');
+        const logPath = join(slot.logsDir, `${logName}.log`);
+        if (existsSync(logPath)) {
+          source = 'local';
+        } else {
+          source = 'docker';
+        }
+      }
 
       const { execFileSync } = await import('node:child_process');
 
