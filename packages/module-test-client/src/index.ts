@@ -280,7 +280,12 @@ export async function teardown(): Promise<void> {
 function discoverSecrets(moduleKey: string): string[] {
   try {
     const json = execSync(`zbb secret list --module ${moduleKey} --json`, { encoding: 'utf-8' });
-    return JSON.parse(json);
+    const parsed = JSON.parse(json);
+    // Handle both formats: ["name"] or [{name:"name", ...}]
+    if (parsed.length > 0 && typeof parsed[0] === 'object') {
+      return parsed.map((s: any) => s.name);
+    }
+    return parsed;
   } catch {
     return [];
   }

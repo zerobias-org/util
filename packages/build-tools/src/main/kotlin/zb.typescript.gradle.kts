@@ -1048,22 +1048,52 @@ val setupFixtures by tasks.registering {
         }
         logger.lifecycle("setupFixtures: Node ID = $nodeId")
 
-        // ── Step 3: Create deployment ───────────────────────────────────────
-        logger.lifecycle("setupFixtures: Step 3 — creating deployment for $moduleKey@$moduleVersion on node $nodeId")
-        val deployJson = runCliJson(
-            "hub-node", "--json", "deployments", "create",
-            "--module", "$moduleKey@$moduleVersion",
-            "--node-id", nodeId
-        )
-        // Parse deployment ID from JSON response
-        val deploymentId = run {
-            val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(deployJson)
+        // ── Step 3: Find or create deployment ─────────────────────────────
+        logger.lifecycle("setupFixtures: Step 3 — deployment for $moduleKey@$moduleVersion on node $nodeId")
+        val existingDeployJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf("hub-node", "--json", "server", "deployments", "list"),
+            workingDir = project.projectDir,
+            environment = emptyMap(),
+            throwOnError = false
+        ).trim()
+        var deploymentId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(existingDeployJson)?.groupValues?.get(1)
+        if (deploymentId != null) {
+            logger.lifecycle("setupFixtures: Reusing Deployment ID = $deploymentId")
+        } else {
+            logger.lifecycle("setupFixtures: Creating deployment")
+            val deployJson = runCliJson(
+                "hub-node", "--json", "deployments", "create",
+                "--module", "$moduleKey@$moduleVersion",
+                "--node-id", nodeId
+            )
+            deploymentId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(deployJson)?.groupValues?.get(1)
                 ?: throw org.gradle.api.GradleException(
-                    "setupFixtures: No deployment ID in `hub-node deployments create` output.\n$deployJson"
+                    "setupFixtures: No deployment ID in output.\n$deployJson"
                 )
-            idMatch.groupValues[1]
+            logger.lifecycle("setupFixtures: Created Deployment ID = $deploymentId")
+
+            // Wait for deployment to be up (node pulls image, starts container)
+            logger.lifecycle("setupFixtures: Waiting for deployment to be ready...")
+            var depRetries = 0
+            while (depRetries < 60) {
+                Thread.sleep(2000)
+                val depStatusJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                    command = listOf("hub-node", "--json", "server", "deployments", "get", deploymentId),
+                    workingDir = project.projectDir,
+                    environment = emptyMap(),
+                    throwOnError = false
+                ).trim()
+                val status = Regex(""""status"\s*:\s*"([^"]+)"""").find(depStatusJson)?.groupValues?.get(1)
+                if (status == "up") {
+                    logger.lifecycle("setupFixtures: Deployment is up")
+                    break
+                }
+                depRetries++
+                if (depRetries % 5 == 0) {
+                    logger.lifecycle("setupFixtures: Deployment status: ${status ?: "unknown"} (${depRetries * 2}s)")
+                }
+            }
         }
-        logger.lifecycle("setupFixtures: Deployment ID = $deploymentId")
 
         // ── Step 4: Get boundary ID ─────────────────────────────────────────
         logger.lifecycle("setupFixtures: Step 4 — getting boundary ID")
@@ -1071,32 +1101,138 @@ val setupFixtures by tasks.registering {
         val boundaryId = run {
             val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(boundaryListJson)
                 ?: throw org.gradle.api.GradleException(
-                    "setupFixtures: No boundary ID in `hub-node server boundaries list` output.\n$boundaryListJson"
+                    "setupFixtures: No boundary ID in output.\n$boundaryListJson"
                 )
             idMatch.groupValues[1]
         }
         logger.lifecycle("setupFixtures: Boundary ID = $boundaryId")
 
-        // ── Step 5: Create connection ────────────────────────────────────────
-        // Connection name: first capitalized word of module key + " E2E"
-        val moduleName = moduleKey.substringAfterLast('/').split('-').last().replaceFirstChar { it.uppercase() }
-        val connectionName = "$moduleName E2E"
-        logger.lifecycle("setupFixtures: Step 5 — creating connection '$connectionName'")
-        val connJson = runCliJson(
-            "hub-node", "--json", "connections", "create",
-            "--deployment-id", deploymentId,
-            "--boundary-id", boundaryId,
-            "--name", connectionName,
-            "--mode", "auto"
-        )
-        val targetId = run {
-            val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(connJson)
-                ?: throw org.gradle.api.GradleException(
-                    "setupFixtures: No connection ID in `hub-node connections create` output.\n$connJson"
+        // ── Step 5: Find or create connection ────────────────────────────────
+        logger.lifecycle("setupFixtures: Step 5 — connection for deployment $deploymentId")
+
+        // Check for existing connection on this deployment
+        val existingConnJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf("hub-node", "--json", "connections", "list", "--deployment", deploymentId),
+            workingDir = project.projectDir,
+            environment = emptyMap(),
+            throwOnError = false
+        ).trim()
+        var targetId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(existingConnJson)?.groupValues?.get(1)
+
+        if (targetId != null) {
+            logger.lifecycle("setupFixtures: Reusing Connection (TARGET_ID) = $targetId")
+        } else {
+            // Find zbb secret name for this module
+            val secretListJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                command = listOf("zbb", "secret", "list", "--module", moduleKey, "--json"),
+                workingDir = project.projectDir,
+                environment = emptyMap(),
+                throwOnError = false
+            ).trim()
+
+            // Parse secret name and _id from JSON array: [{"name":"github","module":"...","_id":"uuid"}]
+            val secretName = Regex(""""name"\s*:\s*"([^"]+)"""").find(secretListJson)?.groupValues?.get(1)
+            var secretHubId = Regex(""""_id"\s*:\s*"([0-9a-f-]{36})"""").find(secretListJson)?.groupValues?.get(1)
+
+            // If we have a zbb secret but no Hub server ID, create the Hub secret
+            if (secretName != null && secretHubId == null) {
+                logger.lifecycle("setupFixtures: Creating Hub secret for zbb secret '$secretName'")
+
+                // Read zbb secret keys to build file-ref profile
+                val secretGetJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                    command = listOf("zbb", "secret", "get", secretName, "--json"),
+                    workingDir = project.projectDir,
+                    environment = emptyMap(),
+                    throwOnError = true
+                ).trim()
+                // Extract keys from JSON object (skip metadata)
+                val profileKeys = Regex(""""([^"_][^"]*?)"\s*:""").findAll(secretGetJson)
+                    .map { it.groupValues[1] }.toList()
+                val profileJson = profileKeys.joinToString(",") { """"$it":"file.$secretName.$it"""" }
+
+                // Get connectionProfileId from deployment
+                val deployGetJson = runCliJson("hub-node", "--json", "server", "deployments", "get", deploymentId)
+                val connProfileId = Regex(""""connectionProfileId"\s*:\s*"([0-9a-f-]{36})"""")
+                    .find(deployGetJson)?.groupValues?.get(1)
+                    ?: throw org.gradle.api.GradleException(
+                        "setupFixtures: No connectionProfileId on deployment.\n$deployGetJson"
+                    )
+
+                // Create Hub secret with file refs
+                val createSecretJson = runCliJson(
+                    "hub-node", "--json", "server", "secrets", "create",
+                    "--name", "$secretName (file)",
+                    "--connection-profile-id", connProfileId,
+                    "--boundary-id", boundaryId,
+                    "--profile", "{$profileJson}"
                 )
-            idMatch.groupValues[1]
+                secretHubId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(createSecretJson)?.groupValues?.get(1)
+                    ?: throw org.gradle.api.GradleException(
+                        "setupFixtures: No secret ID in create output.\n$createSecretJson"
+                    )
+                logger.lifecycle("setupFixtures: Created Hub secret $secretHubId")
+
+                // Save _id back to zbb secret file for next run
+                com.zerobias.buildtools.util.ExecUtils.exec(
+                    command = listOf("zbb", "secret", "update", secretName, "_id=$secretHubId"),
+                    workingDir = project.projectDir,
+                    throwOnError = true
+                )
+                logger.lifecycle("setupFixtures: Saved Hub secret ID to zbb secret '$secretName'")
+            }
+
+            val moduleName = moduleKey.substringAfterLast('/').split('-').last().replaceFirstChar { it.uppercase() }
+            val connectionName = "$moduleName E2E"
+
+            val connArgs = mutableListOf(
+                "hub-node", "--json", "connections", "create",
+                "--deployment-id", deploymentId,
+                "--boundary-id", boundaryId,
+                "--name", connectionName,
+                "--mode", "auto"
+            )
+            if (secretHubId != null) {
+                logger.lifecycle("setupFixtures: Using Hub secret $secretHubId")
+                connArgs.addAll(listOf("--secret-id", secretHubId))
+            }
+
+            val connJson = runCliJson(*connArgs.toTypedArray())
+            targetId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(connJson)?.groupValues?.get(1)
+                ?: throw org.gradle.api.GradleException(
+                    "setupFixtures: No connection ID in output.\n$connJson"
+                )
+            logger.lifecycle("setupFixtures: Created Connection (TARGET_ID) = $targetId")
         }
-        logger.lifecycle("setupFixtures: Connection (TARGET_ID) = $targetId")
+
+        // ── Step 6: Connect and wait for connection ready ─────────────────
+        logger.lifecycle("setupFixtures: Step 6 — connecting TARGET_ID=$targetId")
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("hub-node", "--json", "connections", "connect", targetId),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+
+        // Wait for connection to be up/standby
+        logger.lifecycle("setupFixtures: Waiting for connection to be ready...")
+        var connRetries = 0
+        while (connRetries < 30) {
+            Thread.sleep(2000)
+            val connStatusJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                command = listOf("hub-node", "--json", "connections", "get", targetId),
+                workingDir = project.projectDir,
+                environment = emptyMap(),
+                throwOnError = false
+            ).trim()
+            val connStatus = Regex(""""status"\s*:\s*"([^"]+)"""").find(connStatusJson)?.groupValues?.get(1)
+            if (connStatus == "up" || connStatus == "standby") {
+                logger.lifecycle("setupFixtures: Connection is $connStatus")
+                break
+            }
+            connRetries++
+            if (connRetries % 5 == 0) {
+                logger.lifecycle("setupFixtures: Connection status: ${connStatus ?: "unknown"} (${connRetries * 2}s)")
+            }
+        }
 
         // Export fixture IDs for testHub task
         project.ext.set("SETUP_FIXTURES_TARGET_ID", targetId)

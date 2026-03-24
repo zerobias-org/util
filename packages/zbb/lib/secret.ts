@@ -14,7 +14,7 @@ import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
 import type { Slot } from './slot/Slot.js';
 
 const SUPPORTED_EXTENSIONS = ['yml', 'yaml', 'json'];
-const METADATA_KEYS = ['_module', '_schema'];
+const METADATA_KEYS = ['_module', '_schema', '_id'];
 
 /**
  * Get secrets directory for a slot
@@ -238,7 +238,7 @@ async function secretCreate(args: string[], slot: Slot): Promise<void> {
 async function secretGet(args: string[], slot: Slot): Promise<void> {
   const name = args[0];
   if (!name) {
-    console.error('Usage: zbb secret get <name> [key] [--json]');
+    console.error('Usage: zbb secret get <name> [key] [--json] [--id]');
     process.exit(1);
   }
 
@@ -250,6 +250,18 @@ async function secretGet(args: string[], slot: Slot): Promise<void> {
   }
 
   const raw = readSecret(filePath);
+
+  // --id: return Hub server secret UUID (stored as _id metadata)
+  if (args.includes('--id')) {
+    const hubId = raw._id as string | undefined;
+    if (!hubId) {
+      console.error(`Secret '${name}' has no Hub server ID (_id). Create one with: hub-node server secrets create`);
+      process.exit(1);
+    }
+    console.log(hubId);
+    return;
+  }
+
   const resolved = resolveRefs(raw, dir);
 
   const key = args[1] && !args[1].startsWith('-') ? args[1] : null;
@@ -299,19 +311,20 @@ async function secretList(args: string[], slot: Slot): Promise<void> {
     return;
   }
 
-  const results: { name: string; module: string }[] = [];
+  const results: { name: string; module: string; _id?: string }[] = [];
   for (const f of files) {
     const name = f.replace(/\.(yml|yaml|json)$/, '');
     const filePath = join(dir, f);
     const data = readSecret(filePath);
     const module = (data._module as string) ?? '';
+    const _id = (data._id as string) ?? undefined;
 
     if (moduleFilter && module !== moduleFilter) continue;
-    results.push({ name, module });
+    results.push({ name, module, _id });
   }
 
   if (jsonMode) {
-    console.log(JSON.stringify(results.map(r => r.name)));
+    console.log(JSON.stringify(results));
     return;
   }
 
