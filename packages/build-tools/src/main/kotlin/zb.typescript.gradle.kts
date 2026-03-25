@@ -730,26 +730,16 @@ val generateDockerfile by tasks.registering {
 // A1: Hub SDK — generate api-client SDK for hub-server callers
 val buildHubSdkExec by tasks.registering(NpxTask::class) {
     group = "lifecycle"
-    description = "Generate hub-server caller SDK"
+    description = "Generate hub-server caller SDK (hub-module generator = HubImpl + manifest)"
     dependsOn(dereferenceProductInfos, npmInstallModule)
     workingDir.set(project.projectDir)
     command.set("hub-generator")
-    args.set(listOf("generate", "-g", "api-client", "-i", fullSpec.absolutePath, "-o", "hub-sdk/generated/"))
+    // hub-module generator produces HubImpl classes that use manifest.json
+    // to route operations through Hub Server target execute protocol.
+    // This matches what publish-api-client-module CI action produces.
+    args.set(listOf("generate", "-g", "hub-module", "-i", fullSpec.absolutePath, "-o", "hub-sdk/generated/"))
     inputs.file(fullSpec)
     outputs.dir("hub-sdk/generated")
-    doLast {
-        // Fix: ConnectionProfile is a type-only export from util-api-client-base.
-        // The generator emits a value re-export which fails at runtime in ESM.
-        val sdkIndex = project.file("hub-sdk/generated/api/index.ts")
-        if (sdkIndex.exists()) {
-            var content = sdkIndex.readText()
-            content = content.replace(
-                "export { ConnectionProfile } from '@zerobias-org/util-api-client-base'",
-                "export type { ConnectionProfile } from '@zerobias-org/util-api-client-base'"
-            )
-            sdkIndex.writeText(content)
-        }
-    }
 }
 
 tasks.named("buildHubSdk") {
