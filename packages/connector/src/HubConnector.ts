@@ -104,6 +104,10 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
       } else if (response.data) {
         this._metadata.bytesIn += JSON.stringify(response.data).length;
       }
+      if (response.headers['hub-error'] === 'true') {
+        this._metadata.status = ConnectionStatus.Error;
+        return Promise.reject(response);
+      }
       this._metadata.status = ConnectionStatus.On;
       return response;
     }, (error) => {
