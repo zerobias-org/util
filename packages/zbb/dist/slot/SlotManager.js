@@ -32,14 +32,14 @@ export class SlotManager {
         if (existsSync(slotDir)) {
             throw new Error(`Slot '${name}' already exists at ${slotDir}`);
         }
-        // Find repo root
+        // Find repo root (optional — slot can be created outside a project)
         const repoRoot = options.repoRoot ?? findRepoRoot(process.cwd());
-        if (!repoRoot) {
-            throw new Error('Cannot find repo root (.zbb.yaml or gradlew). Run from inside a project.');
+        let scanned = [];
+        if (repoRoot) {
+            const repoConfig = await loadRepoConfig(repoRoot);
+            // 1. Scan all zbb.yaml files
+            scanned = await scanEnvDeclarations(repoRoot);
         }
-        const repoConfig = await loadRepoConfig(repoRoot);
-        // 1. Scan all zbb.yaml files
-        const scanned = await scanEnvDeclarations(repoRoot);
         // 2. Allocate a non-overlapping port range for this slot
         //    Scans existing slots and picks the next available block
         const existingSlots = await SlotManager.list();
@@ -78,8 +78,10 @@ export class SlotManager {
         // 6b. Resolve cwd vars (source: cwd → absolute path of declaring project)
         const { dirname, resolve } = await import('node:path');
         const cwdVars = new Map();
-        for (const v of scanned.filter(v => v.declaration.source === 'cwd')) {
-            cwdVars.set(v.name, resolve(repoRoot, dirname(v.source)));
+        if (repoRoot) {
+            for (const v of scanned.filter(v => v.declaration.source === 'cwd')) {
+                cwdVars.set(v.name, resolve(repoRoot, dirname(v.source)));
+            }
         }
         // 7. Build pre-resolved map (ports + secrets + inherited + cwd + slot vars)
         const preResolved = new Map();
