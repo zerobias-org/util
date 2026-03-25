@@ -10,7 +10,7 @@
 
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, unlinkSync, readFileSync, writeFileSync } from 'node:fs';
-import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
+import { parse as yamlParse, stringify } from 'yaml';
 import type { Slot } from './slot/Slot.js';
 
 const SUPPORTED_EXTENSIONS = ['yml', 'yaml', 'json'];
@@ -53,7 +53,7 @@ function readSecret(filePath: string): Record<string, unknown> {
   if (filePath.endsWith('.json')) {
     return JSON.parse(content);
   }
-  return loadYaml(content) as Record<string, unknown>;
+  return yamlParse(content) as Record<string, unknown>;
 }
 
 /**
@@ -226,7 +226,7 @@ async function secretCreate(args: string[], slot: Slot): Promise<void> {
     process.exit(1);
   }
 
-  writeFileSync(targetPath, dumpYaml(data, { lineWidth: -1 }));
+  writeFileSync(targetPath, stringify(data, { lineWidth: -1 }));
   const keyCount = Object.keys(data).filter(k => !METADATA_KEYS.includes(k)).length;
   console.log(`✓ Secret '${name}' created (${keyCount} keys)`);
   console.log(`  ${targetPath}`);
@@ -366,7 +366,7 @@ async function secretUpdate(args: string[], slot: Slot): Promise<void> {
     } else {
       data[key] = value;
     }
-    changed++;
+    changed += 1;
   }
 
   if (changed === 0) {
@@ -374,7 +374,7 @@ async function secretUpdate(args: string[], slot: Slot): Promise<void> {
     process.exit(1);
   }
 
-  writeFileSync(filePath, dumpYaml(data, { lineWidth: -1 }));
+  writeFileSync(filePath, stringify(data, { lineWidth: -1 }));
   console.log(`✓ Secret '${name}' updated (${changed} key(s))`);
 }
 
@@ -443,7 +443,7 @@ async function promptForSchema(
 ): Promise<void> {
   try {
     const content = readFileSync(schemaPath, 'utf-8');
-    const schema = loadYaml(content) as Record<string, unknown>;
+    const schema = yamlParse(content) as Record<string, unknown>;
 
     // Walk properties and add missing keys
     const properties = (schema as any).properties ?? schema;

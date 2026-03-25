@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { extendSlot } from './extend.ts';
-import { Slot } from './Slot.ts';
-import { saveYaml } from '../yaml.ts';
+import { extendSlot } from './extend.js';
+import { Slot } from './Slot.js';
+import { saveYaml } from '../yaml.js';
 
 // Helper: create a fake slot directory with Dana-like env vars already present
 async function createFakeSlot(slotsDir: string, name: string, env: Record<string, string>, manifest: Record<string, any>): Promise<Slot> {

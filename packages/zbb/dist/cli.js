@@ -179,10 +179,10 @@ async function handleSlot(args) {
             const ttl = ttlIdx !== -1 ? parseTtl(args[ttlIdx + 1]) : undefined;
             // Find the slot name — it's the positional arg after 'create' that isn't a flag
             let slotName = '';
-            for (let i = 1; i < args.length; i++) {
+            for (let i = 1; i < args.length; i += 1) {
                 if (args[i].startsWith('--')) {
                     if (args[i] === '--ttl')
-                        i++; // skip ttl value
+                        i += 1; // skip ttl value
                     continue;
                 }
                 slotName = args[i];

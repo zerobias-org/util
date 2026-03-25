@@ -1,4 +1,4 @@
-import * as yaml from 'js-yaml';
+import { parse as yamlParse } from 'yaml';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -97,7 +97,7 @@ export class OpenAPISchemaLoader {
 
     try {
       const specContent = fs.readFileSync(this.specPath, 'utf8');
-      const spec = yaml.load(specContent) as OpenAPISpec;
+      const spec = yamlParse(specContent) as OpenAPISpec;
 
       if (!spec.components?.schemas) {
         throw new Error('Invalid OpenAPI spec: missing components.schemas');

@@ -22,8 +22,12 @@
   },
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "test": "node --experimental-strip-types --test lib/**/*.test.ts"
+    "transpile": "tsc -b",
+    "build": "npm run lint && npm run transpile",
+    "nx:build": "npm run lint && npm run transpile",
+    "lint": "eslint 'lib/**/*.ts'",
+    "lint:fix": "eslint --fix 'lib/**/*.ts'",
+    "test": "node --import tsx/esm --test lib/**/*.test.ts"
   },
   "repository": {
     "type": "git",
@@ -32,13 +36,6 @@
   },
   "author": "team@zerobias.com",
   "license": "UNLICENSED",
-  "dependencies": {
-    "js-yaml": "^4.1.0",
-    "semver": "^7.6.0"
-  },
-  "devDependencies": {
-    "@types/semver": "^7.7.1"
-  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },

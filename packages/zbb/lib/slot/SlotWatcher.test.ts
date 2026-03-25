@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { SlotWatcher } from './SlotWatcher.ts';
+import { SlotWatcher } from './SlotWatcher.js';
 
 /** Helper: wait for a specific event with timeout */
 function waitForEvent(emitter: SlotWatcher, event: string, timeoutMs: number = 2000): Promise<string> {
@@ -121,7 +121,7 @@ describe('SlotWatcher', () => {
     await delay(100);
 
     let eventCount = 0;
-    watcher.on('env:change', () => { eventCount++; });
+    watcher.on('env:change', () => { eventCount += 1; });
 
     // Rapid writes within 100ms
     await writeFile(join(slotPath, '.env'), 'A=1\n', 'utf-8');

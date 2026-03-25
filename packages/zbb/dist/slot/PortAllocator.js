@@ -68,7 +68,7 @@ export function allocatePorts(vars, range, existingAllocations) {
         }
         // Find next available port in range
         while (used.has(nextPort) && nextPort <= rangeEnd) {
-            nextPort++;
+            nextPort += 1;
         }
         if (nextPort > rangeEnd) {
             throw new Error(`Port range exhausted [${rangeStart}-${rangeEnd}]. ` +
@@ -76,7 +76,7 @@ export function allocatePorts(vars, range, existingAllocations) {
         }
         allocations.push({ name: v.name, port: nextPort, source: v.source });
         used.add(nextPort);
-        nextPort++;
+        nextPort += 1;
     }
     return allocations;
 }

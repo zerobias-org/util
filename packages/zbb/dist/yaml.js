@@ -1,10 +1,10 @@
-import yaml from 'js-yaml';
+import { parse as yamlParse, stringify as yamlStringify } from 'yaml';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 export async function loadYaml(filePath) {
     const content = await readFile(filePath, 'utf-8');
-    return yaml.load(content);
+    return yamlParse(content);
 }
 export async function loadYamlOrDefault(filePath, defaultValue) {
     if (!existsSync(filePath))
@@ -20,12 +20,12 @@ export async function saveYaml(filePath, data) {
     const dir = dirname(filePath);
     if (!existsSync(dir))
         await mkdir(dir, { recursive: true });
-    const content = yaml.dump(data, { indent: 2, lineWidth: 120, noRefs: true });
+    const content = yamlStringify(data, { indent: 2, lineWidth: 120 });
     await writeFile(filePath, content, 'utf-8');
 }
 export function parseYaml(content) {
-    return yaml.load(content);
+    return yamlParse(content);
 }
 export function stringifyYaml(data) {
-    return yaml.dump(data, { indent: 2, lineWidth: 120, noRefs: true });
+    return yamlStringify(data, { indent: 2, lineWidth: 120 });
 }

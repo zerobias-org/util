@@ -32,7 +32,6 @@ function debounce(fn, delayMs) {
  * Uses 100ms debounce per-filename to coalesce rapid writes.
  * No external dependencies -- uses only node:fs.watch (inotify on Linux).
  */
-/* eslint-disable-next-line unicorn/prefer-event-target */
 export class SlotWatcher extends EventEmitter {
     watcher = null;
     slotPath;

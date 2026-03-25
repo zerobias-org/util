@@ -7,9 +7,7 @@
  * - Query schema definitions
  * - Extract required fields and descriptions
  */
-// eslint-disable-next-line unicorn/prefer-node-protocol -- node: prefix breaks webpack bundling
 import * as fs from 'fs';
-// eslint-disable-next-line unicorn/prefer-node-protocol -- node: prefix breaks webpack bundling
 import { promises as fsPromises } from 'fs';
 import { parse as parseYaml } from 'yaml';
 import { UrlLoadOptions } from '../types/SchemaConfig';

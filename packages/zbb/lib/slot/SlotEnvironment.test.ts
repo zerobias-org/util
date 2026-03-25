@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { SlotEnvironment } from './SlotEnvironment.ts';
+import { SlotEnvironment } from './SlotEnvironment.js';
 
 describe('SlotEnvironment.registerResolver', () => {
   let tmpDir: string;

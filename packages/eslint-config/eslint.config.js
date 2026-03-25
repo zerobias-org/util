@@ -27,6 +27,26 @@ export default [
         ecmaVersion: 2022,
         sourceType: 'module',
       },
+      globals: {
+        // Node.js globals
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+        exports: 'readonly',
+        global: 'readonly',
+        module: 'readonly',
+        process: 'readonly',
+        require: 'readonly',
+        // Mocha globals
+        after: 'readonly',
+        afterEach: 'readonly',
+        before: 'readonly',
+        beforeEach: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        xit: 'readonly',
+      },
     },
     plugins: {
       '@typescript-eslint': tseslint,
@@ -38,10 +58,17 @@ export default [
       '@typescript-eslint/no-empty-function': 'off',
 
       // Code quality
+      'class-methods-use-this': 'off',
+      'no-await-in-loop': 'off',
+      'no-template-curly-in-string': 'off',
+      'object-curly-newline': 'off',
       'no-console': 'off',
       'no-param-reassign': 'off',
+      'no-return-await': 'off',
+      'function-paren-newline': 'off',
+      'function-call-argument-newline': 'off',
       'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
-      'max-len': ['warn', { code: 140, ignoreComments: true, ignoreStrings: true }],
+      'max-len': ['warn', { code: 150, ignoreComments: true, ignoreStrings: true }],
     },
   },
 ];

@@ -9,7 +9,7 @@
  */
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, unlinkSync, readFileSync, writeFileSync } from 'node:fs';
-import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
+import { parse as yamlParse, stringify } from 'yaml';
 const SUPPORTED_EXTENSIONS = ['yml', 'yaml', 'json'];
 const METADATA_KEYS = ['_module', '_schema', '_id'];
 /**
@@ -47,7 +47,7 @@ function readSecret(filePath) {
     if (filePath.endsWith('.json')) {
         return JSON.parse(content);
     }
-    return loadYaml(content);
+    return yamlParse(content);
 }
 /**
  * Resolve {{env.VAR}} and {{file.name.key}} refs in secret values
@@ -212,7 +212,7 @@ async function secretCreate(args, slot) {
         console.error('No secret data provided. Use key=value pairs, @file.yml, or --type @schema.yml');
         process.exit(1);
     }
-    writeFileSync(targetPath, dumpYaml(data, { lineWidth: -1 }));
+    writeFileSync(targetPath, stringify(data, { lineWidth: -1 }));
     const keyCount = Object.keys(data).filter(k => !METADATA_KEYS.includes(k)).length;
     console.log(`✓ Secret '${name}' created (${keyCount} keys)`);
     console.log(`  ${targetPath}`);
@@ -337,13 +337,13 @@ async function secretUpdate(args, slot) {
         else {
             data[key] = value;
         }
-        changed++;
+        changed += 1;
     }
     if (changed === 0) {
         console.error('No key=value pairs provided.');
         process.exit(1);
     }
-    writeFileSync(filePath, dumpYaml(data, { lineWidth: -1 }));
+    writeFileSync(filePath, stringify(data, { lineWidth: -1 }));
     console.log(`✓ Secret '${name}' updated (${changed} key(s))`);
 }
 /**
@@ -404,7 +404,7 @@ function detectModuleKey() {
 async function promptForSchema(schemaPath, data) {
     try {
         const content = readFileSync(schemaPath, 'utf-8');
-        const schema = loadYaml(content);
+        const schema = yamlParse(content);
         // Walk properties and add missing keys
         const properties = schema.properties ?? schema;
         for (const key of Object.keys(properties)) {

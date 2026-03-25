@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { _deps, getSearchDomain, lookupDnsTxt, resolveDnsEnv } from './DnsTxtResolver.ts';
+import { _deps, getSearchDomain, lookupDnsTxt, resolveDnsEnv } from './DnsTxtResolver.js';
 
 describe('DnsTxtResolver', () => {
 

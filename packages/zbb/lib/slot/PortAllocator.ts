@@ -100,7 +100,7 @@ export function allocatePorts(
 
     // Find next available port in range
     while (used.has(nextPort) && nextPort <= rangeEnd) {
-      nextPort++;
+      nextPort += 1;
     }
 
     if (nextPort > rangeEnd) {
@@ -112,7 +112,7 @@ export function allocatePorts(
 
     allocations.push({ name: v.name, port: nextPort, source: v.source });
     used.add(nextPort);
-    nextPort++;
+    nextPort += 1;
   }
 
   return allocations;
