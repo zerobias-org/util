@@ -202,7 +202,7 @@ export class Batch<T extends object = Record<string, unknown>> {
     if (this.batchId) {
       const item = new BatchImportItem(batchItem as any, rawData);
       await this.platform.getBatchApi().addBatchItem(this.batchId, item);
-      this.itemCount++;
+      this.itemCount += 1;
     }
   }
 
@@ -359,7 +359,6 @@ export class BatchManager {
 export async function withTempDir<T>(fn: (tempDir: string) => Promise<T>): Promise<T> {
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
-  // eslint-disable-next-line unicorn/import-style
   const { join } = await import('node:path');
 
   const tempDir = await mkdtemp(join(tmpdir(), 'collector-'));

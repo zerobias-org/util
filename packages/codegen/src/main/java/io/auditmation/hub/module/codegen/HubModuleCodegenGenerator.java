@@ -1367,7 +1367,12 @@ public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
         
         // Add variables for USAGE.md generation
         processed.put("generatedDate", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(new java.util.Date()));
-        String packageName = (String) additionalProperties.getOrDefault("packageName", "module");
+        // Derive packageName from spec title when not explicitly provided
+        String defaultPackageName = (this.openAPI != null && this.openAPI.getInfo() != null
+                && this.openAPI.getInfo().getTitle() != null)
+                ? this.openAPI.getInfo().getTitle()
+                : "module";
+        String packageName = (String) additionalProperties.getOrDefault("packageName", defaultPackageName);
         processed.put("packageName", packageName);
         processed.put("packageNameKebab", packageName.replaceAll("@[^/]+/", "").replace("module-", ""));
         

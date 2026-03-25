@@ -349,18 +349,18 @@ export class RequestInspector {
         stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
 
         if (status >= 200 && status < 400) {
-          stats.successful++;
+          stats.successful += 1;
         } else {
-          stats.failed++;
+          stats.failed += 1;
         }
 
         // Sum duration
         if (record.response.duration) {
           totalDuration += record.response.duration;
-          durationCount++;
+          durationCount += 1;
         }
       } else if (record.error) {
-        stats.failed++;
+        stats.failed += 1;
       }
     }
 

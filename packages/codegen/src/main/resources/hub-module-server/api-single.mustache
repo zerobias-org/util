@@ -112,8 +112,8 @@ export class {{classname}}Controller {
           }
           results = results.items;
         }
-        if (results) {
-          res.send(results);
+        if (results !== undefined && results !== null) {
+          res.json(results);
         } else {
           res.status(200).end();
         }

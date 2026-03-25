@@ -156,7 +156,8 @@ export class DockerManager {
         'hub.module': moduleName,
         'hub.version': version,
         'hub.test': 'true',
-        'hub.insecure': insecure ? 'true' : 'false'
+        'hub.insecure': insecure ? 'true' : 'false',
+        ...(process.env.ZB_SLOT ? { 'zerobias.slot': process.env.ZB_SLOT } : {}),
       },
       ExposedPorts: {
         [`${DEFAULTS.CONTAINER_PORT}/tcp`]: {}

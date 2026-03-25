@@ -1,0 +1,29 @@
+{
+  "name": "@zerobias-org/module-test-client",
+  "version": "1.0.0",
+  "description": "Wire protocol client for testing Hub modules — implements any module's generated interface via manifest-driven dynamic invocation",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "transpile": "tsc -b",
+    "build": "npm run lint && npm run transpile",
+    "nx:build": "npm run lint && npm run transpile",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.ts'",
+    "clean": "rm -rf dist"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  }
+}

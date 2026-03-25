@@ -19,7 +19,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import yaml from 'js-yaml';
+import { parse as yamlParse } from 'yaml';
 import type { Logger } from '../types.js';
 import type { SecretsProvider } from './SecretsProvider.js';
 
@@ -79,7 +79,7 @@ export class FileSecretsProvider implements SecretsProvider {
     if (ext === '.json') {
       parsed = JSON.parse(content);
     } else if (ext === '.yml' || ext === '.yaml') {
-      parsed = yaml.load(content);
+      parsed = yamlParse(content);
     } else {
       // Treat as plain text
       parsed = { value: content.trim() };

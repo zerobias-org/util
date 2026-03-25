@@ -38,17 +38,19 @@
     "npm": ">=10.0.0"
   },
   "overrides": {
-    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
-    "mocha": {
-      "diff": "^8.0.3"
-    },
-    "lodash": "^4.17.23",
-    "tar": "^7.5.7",
+    "@rollup/plugin-commonjs": "^28.0.0",
     "@stoplight/spectral-cli": {
       "magic-string": "^0.30.0"
     },
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.3",
+    "fast-xml-parser": "^5.5.7",
     "glob": ">=13.0.0",
-    "fast-xml-parser": ">=5.3.4"
+    "lodash": "^4.17.23",
+    "minimatch": ">=3.1.4",
+    "rollup": ">=2.80.1",
+    "serialize-javascript": "^7.0.3",
+    "tar": "7.5.11"
   },
   "dependencies": {
     "@stoplight/json-ref-resolver": "^3.1.6",
@@ -66,16 +68,16 @@
     "change-case": "^5.0.0",
     "csv-parse": "^6.0.0",
     "dockerode": "^4.0.0",
-    "eslint": "^9.39.2",
-    "eslint-plugin-unicorn": "^62.0.0",
+    "eslint": "^10.1.0",
     "form-data": "^4.0.0",
     "get-port": "^7.1.0",
-    "js-yaml": "^4.0.0",
     "jsonata": "^2.0.0",
     "qs": "^6.14.0",
+    "semver": "^7.6.0",
     "uuid": "^13.0.0",
     "winston": "^3.2.0",
-    "winston-transport": "^4.9.0"
+    "winston-transport": "^4.9.0",
+    "yaml": "2.2.2"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.1",
@@ -87,6 +89,7 @@
     "@types/node": "^22.0.0",
     "@types/qs": "^6.9.18",
     "@types/request": "latest",
+    "@types/semver": "^7.7.1",
     "@zerobias-org/devops-tools": "^1.0.52",
     "@zerobias-org/eslint-config": "^1.0.31",
     "chai": "^6.0.0",

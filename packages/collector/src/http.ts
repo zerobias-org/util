@@ -6,7 +6,7 @@
 import axiosLib from 'axios';
 import type { AxiosRequestConfig } from 'axios';
 import * as fs from 'node:fs';
-import * as yaml from 'js-yaml';
+import { parse as yamlParse } from 'yaml';
 
 const axios = (axiosLib as any).default || axiosLib;
 
@@ -151,7 +151,7 @@ export async function fetchYaml<T = Record<string, unknown>>(
     };
 
     const response = await axios(config);
-    return yaml.load(response.data) as T;
+    return yamlParse(response.data) as T;
   }, retries, retryDelay);
 }
 

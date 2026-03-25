@@ -17,7 +17,7 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
 import * as os from 'node:os';
-import * as yaml from 'js-yaml';
+import { parse as yamlParse } from 'yaml';
 import type { Logger } from '../types.js';
 
 const DELIMITER = '.';
@@ -224,7 +224,7 @@ export class ProfileResolver {
   private async loadSecretFile(filePath: string): Promise<Record<string, unknown>> {
     const content = fs.readFileSync(filePath, 'utf8');
 
-    return filePath.endsWith('.json') ? JSON.parse(content) : yaml.load(content) as Record<string, unknown>;
+    return filePath.endsWith('.json') ? JSON.parse(content) : yamlParse(content) as Record<string, unknown>;
   }
 
   /**

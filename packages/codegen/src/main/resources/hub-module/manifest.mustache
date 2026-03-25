@@ -1,11 +1,24 @@
 {
   "codegenVersion": "{{codegenVersion}}",
+  "connector": {{isConnector}},
+  "connectionProfileId": "{{#isConnector}}{{packageNameKebab}}{{/isConnector}}",
   "operations": {
 {{#apiInfo}}
 {{#apis}}
 {{#operations}}
   {{#operation}}
     "{{operationId}}": "{{classname}}.{{nickname}}"{{^-last}},{{/-last}}
+    {{/operation}}{{^-last}},{{/-last}}
+{{/operations}}
+{{/apis}}
+{{/apiInfo}}
+  },
+  "operationParams": {
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+  {{#operation}}
+    "{{operationId}}": [{{#allParams}}"{{paramName}}"{{^-last}}, {{/-last}}{{/allParams}}]{{^-last}},{{/-last}}
     {{/operation}}{{^-last}},{{/-last}}
 {{/operations}}
 {{/apis}}

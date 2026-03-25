@@ -1,12 +1,14 @@
 /**
  * Shared stack testing plugin.
  *
- * Provides standard tasks for slot-based Docker Compose stack management:
- * - stackUp: Start service stack in a slot
+ * Provides standard tasks for zbb slot-based Docker Compose stack management:
+ * - stackUp: Start service stack using active zbb slot
  * - stackDown: Stop service
- * - stackDestroy: Destroy service and optionally slot
+ * - stackDestroy: Destroy service stack
+ * - stackInfo: Show stack connection info
  *
- * Uses shared utilities for slot management, port allocation, and health checks.
+ * Requires an active zbb slot (ZB_SLOT env var set via `zbb slot load`).
+ * All env resolution (ports, secrets, derived vars) is handled by zbb.
  *
  * Usage:
  *   plugins {
@@ -17,16 +19,14 @@
  *       serviceName = "hub-server"
  *       composeFile = file("../test/docker-compose.yml")
  *       healthCheckServices = listOf("hub-server")
- *       defaultSlotPrefix = "hub-test"
  *   }
  */
 
-import com.zerobias.buildtools.util.SlotUtils
-import com.zerobias.buildtools.util.PortUtils
+import com.zerobias.buildtools.util.ZbbSlotProvider
 import com.zerobias.buildtools.util.HealthCheckUtils
 import com.zerobias.buildtools.util.ExecUtils
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import com.github.gradle.node.npm.task.NpmTask
+import com.github.gradle.node.npm.task.NpxTask
 
 // Extension for configuration
 open class StackTestingExtension {
@@ -34,136 +34,76 @@ open class StackTestingExtension {
     var composeFile: java.io.File? = null
     var healthCheckServices: List<String> = emptyList()
     var healthCheckTimeout: Int = 60
-    var defaultSlotPrefix: String = "test"
-    var defaultPortStart: Int = 8000
-
-    /** Extra -P property names this project accepts beyond the standard "slot" and "preserve". */
-    var extraProperties: Set<String> = emptySet()
 }
 
 val extension = extensions.create<StackTestingExtension>("zbStack")
 
-// Validate -P properties before any task executes (fail fast before builds)
-SlotUtils.validateOnStackTasks(gradle, project, setOf("slot", "preserve") + extension.extraProperties)
+// ============================================================
+// Slot Environment
+//
+// Reads from active zbb slot (ZB_SLOT env var).
+// All env vars are already in the shell from `zbb slot load`.
+// We also read the .env file for docker compose --env-file.
+// ============================================================
 
-// Shared slot name resolution
 val slotName: String by lazy {
-    val rawName = if (project.hasProperty("slot")) {
-        project.property("slot") as String
-    } else {
-        // Auto-generate: prefix + timestamp
-        "${extension.defaultSlotPrefix}-" + LocalDateTime.now().format(
-            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
-        )
-    }
-    // Docker Compose requires lowercase alphanumeric + hyphens/underscores
-    rawName.lowercase().replace(Regex("[^a-z0-9_-]"), "-")
+    ZbbSlotProvider.requireActiveSlot()
 }
 
-// Shared computed values
-val slotsDir = SlotUtils.getSlotsDir()
-val slotDir = SlotUtils.getSlotDir(slotName)
-val slotEnvFile = slotDir.resolve(".env")
-val isEphemeral = SlotUtils.isEphemeralSlot(slotName)
-val preserveSlot = project.hasProperty("preserve")
+val slotEnv: Map<String, String> by lazy {
+    ZbbSlotProvider.getSlotEnv()
+}
+
+val envFilePath: String by lazy {
+    ZbbSlotProvider.activeEnvFilePath()
+}
+
+// Inject slot env into all process-spawning task types
+// so test processes (mocha, npm test, etc.) see slot vars
+if (ZbbSlotProvider.isInsideSlot()) {
+    val env = ZbbSlotProvider.getSlotEnv()
+    tasks.withType<NpxTask>().configureEach {
+        environment.putAll(env)
+    }
+    tasks.withType<NpmTask>().configureEach {
+        environment.putAll(env)
+    }
+    tasks.withType<Exec>().configureEach {
+        environment.putAll(env)
+    }
+    tasks.withType<JavaExec>().configureEach {
+        environment.putAll(env)
+    }
+}
 
 // ============================================================
 // Stack Management Tasks
 // ============================================================
 
+// stackUp is registered as a bare task. Projects add doFirst/doLast to implement
+// their specific startup sequence (e.g., postgres → schema → app).
+// The plugin provides helper functions and slot env, not compose orchestration.
 tasks.register("stackUp") {
     group = "stack"
-    description = "Start ${extension.serviceName} stack [-Pslot=<name>]"
-
-    doFirst {
-        val composeFile = extension.composeFile
-            ?: throw GradleException("composeFile not configured in zbStack extension")
-
-        if (!composeFile.exists()) {
-            throw GradleException("Compose file not found: $composeFile")
-        }
-
-        val workingDir = composeFile.parentFile
-
-        // Ensure slot exists
-        if (!SlotUtils.slotExists(slotName)) {
-            println("Creating new slot: $slotName")
-            slotDir.mkdirs()
-            slotEnvFile.writeText("STACK_NAME=$slotName\n")
-        }
-
-        // Load slot environment
-        val env = SlotUtils.loadSlotEnv(slotName).toMutableMap()
-        val stackName = env["STACK_NAME"] ?: slotName
-
-        // Find available port if needed
-        val servicePortEnvVar = "${extension.serviceName.uppercase().replace("-", "_")}_PORT"
-        if (!env.containsKey(servicePortEnvVar)) {
-            val port = PortUtils.findAvailablePort(extension.defaultPortStart)
-            env[servicePortEnvVar] = port.toString()
-            SlotUtils.updateSlotEnv(slotName, mapOf(servicePortEnvVar to port.toString()))
-            println("Allocated port: $port")
-        }
-
-        // Start service
-        println("Starting ${extension.serviceName}...")
-        ExecUtils.exec(
-            command = listOf(
-                "docker", "compose",
-                "-f", composeFile.absolutePath,
-                "-p", stackName,
-                "--env-file", slotEnvFile.absolutePath,
-                "up", "-d", extension.serviceName
-            ),
-            workingDir = workingDir
-        )
-
-        // Health checks
-        extension.healthCheckServices.forEach { service ->
-            println("Waiting for $service to be healthy...")
-            HealthCheckUtils.waitForDockerHealth(
-                workingDir = workingDir,
-                slotName = stackName,
-                serviceName = service,
-                envFile = slotEnvFile,
-                maxWaitSeconds = extension.healthCheckTimeout
-            )
-        }
-
-        // Display connection info
-        println("")
-        println("✓ Stack ready: $stackName")
-        println("  Slot dir: ${slotDir.absolutePath}")
-        println("")
-        println("Quick connect:")
-        println("  source ${slotDir.absolutePath}/connect.env")
-        println("")
-    }
+    description = "Start ${extension.serviceName} stack (requires active zbb slot)"
 }
 
 tasks.register("stackDown") {
     group = "stack"
-    description = "Stop ${extension.serviceName} [-Pslot=<name>]"
+    description = "Stop ${extension.serviceName}"
 
     doFirst {
+        val slot = slotName
         val composeFile = extension.composeFile
             ?: throw GradleException("composeFile not configured in zbStack extension")
 
-        if (!SlotUtils.slotExists(slotName)) {
-            println("Slot does not exist: $slotName")
-            return@doFirst
-        }
-
-        val env = SlotUtils.loadSlotEnv(slotName)
-        val stackName = env["STACK_NAME"] ?: slotName
-
-        println("Stopping ${extension.serviceName}: $stackName")
+        println("Stopping ${extension.serviceName}: $slot")
         ExecUtils.execIgnoreErrors(
             command = listOf(
                 "docker", "compose",
                 "-f", composeFile.absolutePath,
-                "-p", stackName,
-                "--env-file", slotEnvFile.absolutePath,
+                "-p", slot,
+                "--env-file", envFilePath,
                 "stop", extension.serviceName
             ),
             workingDir = composeFile.parentFile
@@ -175,85 +115,68 @@ tasks.register("stackDown") {
 
 tasks.register("stackDestroy") {
     group = "stack"
-    description = "Destroy ${extension.serviceName} stack [-Pslot=<name>] [-Ppreserve to keep slot]"
+    description = "Destroy ${extension.serviceName} stack"
 
     doFirst {
+        val slot = slotName
         val composeFile = extension.composeFile
             ?: throw GradleException("composeFile not configured in zbStack extension")
 
-        if (!SlotUtils.slotExists(slotName)) {
-            println("Slot does not exist: $slotName")
-            return@doFirst
-        }
+        println("Destroying stack: $slot")
+        ExecUtils.execIgnoreErrors(
+            command = listOf(
+                "docker", "compose",
+                "-f", composeFile.absolutePath,
+                "-p", slot,
+                "--env-file", envFilePath,
+                "down", "-v"
+            ),
+            workingDir = composeFile.parentFile
+        )
 
-        val env = SlotUtils.loadSlotEnv(slotName)
-        val stackName = env["STACK_NAME"] ?: slotName
+        println("✓ Stack destroyed: $slot")
+    }
+}
 
-        if (isEphemeral && !preserveSlot) {
-            // Ephemeral slot: destroy everything and delete slot
-            println("Destroying full stack: $stackName")
-            ExecUtils.execIgnoreErrors(
-                command = listOf(
-                    "docker", "compose",
-                    "-f", composeFile.absolutePath,
-                    "-p", stackName,
-                    "--env-file", slotEnvFile.absolutePath,
-                    "down", "-v"
-                ),
-                workingDir = composeFile.parentFile
-            )
+tasks.register("stackInfo") {
+    group = "stack"
+    description = "Show stack connection information"
 
-            println("Deleting slot: $slotName")
-            delete(slotDir)
-            println("✓ Stack destroyed and slot deleted: $slotName")
-        } else {
-            // Persistent slot: only remove service
-            println("Persistent slot - removing only ${extension.serviceName}: $stackName")
-            ExecUtils.execIgnoreErrors(
-                command = listOf(
-                    "docker", "compose",
-                    "-f", composeFile.absolutePath,
-                    "-p", stackName,
-                    "--env-file", slotEnvFile.absolutePath,
-                    "down"
-                ),
-                workingDir = composeFile.parentFile
-            )
-            println("✓ ${extension.serviceName} removed (slot preserved)")
-        }
+    doFirst {
+        val slot = slotName
+        val env = slotEnv
+
+        println("")
+        println("Slot: $slot")
+        println("  Env file: $envFilePath")
+        println("")
+
+        env.filter { (key, _) -> key.endsWith("_PORT") || key.endsWith("_URL") }
+            .toSortedMap()
+            .forEach { (key, value) ->
+                println("  $key: $value")
+            }
+        println("")
     }
 }
 
 // ============================================================
-// Info Tasks
+// Ephemeral Slot Tasks (for CI / isolated test runs)
 // ============================================================
 
-tasks.register("stackInfo") {
+tasks.register("createTestSlot") {
     group = "stack"
-    description = "Show stack connection information [-Pslot=<name>]"
+    description = "Create an ephemeral slot for testing (use -PslotTtl=30m to set TTL)"
 
-    doFirst {
-        if (!SlotUtils.slotExists(slotName)) {
-            println("Slot does not exist: $slotName")
-            return@doFirst
+    doLast {
+        val ttl = if (project.hasProperty("slotTtl")) {
+            project.property("slotTtl") as String
+        } else {
+            "30m"
         }
 
-        val env = SlotUtils.loadSlotEnv(slotName)
-
-        println("")
-        println("Slot: $slotName (${if (isEphemeral) "ephemeral" else "persistent"})")
-        println("  Directory: ${slotDir.absolutePath}")
-        println("")
-        println("Quick connect:")
-        println("  source ${slotDir.absolutePath}/connect.env")
-        println("")
-
-        // Show service-specific connection info
-        env.forEach { (key, value) ->
-            if (key.endsWith("_PORT") || key.endsWith("_URL")) {
-                println("  $key: $value")
-            }
-        }
-        println("")
+        val name = ZbbSlotProvider.createEphemeralSlot(ttl)
+        println("Ephemeral slot created: $name (ttl: $ttl)")
+        println("Load with: zbb slot load $name")
     }
 }

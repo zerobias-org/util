@@ -1,10 +1,33 @@
 {
   "name": "@zerobias-org/zbb",
-  "description": "ZeroBias Build — run Gradle tasks from any subdirectory",
-  "version": "0.1.1",
+  "description": "ZeroBias Build — Gradle wrapper + slot-based environment management",
+  "version": "0.3.0",
   "type": "module",
   "bin": {
     "zbb": "bin/zbb.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./slot": {
+      "types": "./dist/slot/index.d.ts",
+      "default": "./dist/slot/index.js"
+    },
+    "./env": {
+      "types": "./dist/env/index.d.ts",
+      "default": "./dist/env/index.js"
+    }
+  },
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "transpile": "tsc -b",
+    "build": "npm run lint && npm run transpile",
+    "nx:build": "npm run lint && npm run transpile",
+    "lint": "eslint 'lib/**/*.ts'",
+    "lint:fix": "eslint --fix 'lib/**/*.ts'",
+    "test": "node --import tsx/esm --test lib/**/*.test.ts"
   },
   "repository": {
     "type": "git",
@@ -17,9 +40,11 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "files": [
-    "bin"
+    "bin",
+    "lib",
+    "dist"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }

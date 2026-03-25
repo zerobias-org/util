@@ -7,6 +7,7 @@ plugins {
 val zb = extensions.getByType<ZbExtension>()
 
 zb.hasConnectionProfile.convention(true)
+zb.includeConnectionProfileInDist.convention(true)
 
 val validateConnector by tasks.registering {
     group = "lifecycle"

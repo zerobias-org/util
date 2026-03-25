@@ -10,7 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import yaml from 'js-yaml';
+import { parse as yamlParse } from 'yaml';
 import type { TestProfile, Logger } from './types.js';
 
 /**
@@ -132,7 +132,7 @@ export class TestProfileLoader {
     if (ext === '.json') {
       raw = JSON.parse(content);
     } else if (ext === '.yml' || ext === '.yaml') {
-      raw = yaml.load(content);
+      raw = yamlParse(content);
     } else {
       throw new ProfileValidationError(filePath, `Unsupported file extension: ${ext}`);
     }

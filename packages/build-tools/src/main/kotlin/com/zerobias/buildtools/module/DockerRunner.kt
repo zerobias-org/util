@@ -3,15 +3,20 @@ package com.zerobias.buildtools.module
 import com.zerobias.buildtools.util.ExecUtils
 import org.gradle.api.GradleException
 import java.io.File
-import java.net.HttpURLConnection
 import java.net.ServerSocket
 import java.net.URI
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
+import java.security.cert.X509Certificate
 
 /**
  * Manages Docker container lifecycle for Hub Modules.
  *
  * Provides start/stop/health-check operations used by the
  * `startModule` and `stopModule` Gradle tasks.
+ *
+ * All containers run with SSL (self-signed certs). There is no insecure mode.
  */
 @OptIn(ExperimentalStdlibApi::class)
 object DockerRunner {
@@ -34,9 +39,9 @@ object DockerRunner {
         companion object {
             fun fromJson(json: String): ContainerInfo {
                 fun extract(key: String): String {
-                    val match = Regex(""""$key"\s*:\s*"?([^",}\n]+)"?""").find(json)
-                        ?: throw GradleException("Missing '$key' in module-container.json")
-                    return match.groupValues[1].trim()
+                    val regex = """"$key"\s*:\s*"?([^",}\n]+)"?""".toRegex()
+                    return regex.find(json)?.groupValues?.get(1)?.trim()
+                        ?: throw GradleException("Missing '$key' in container JSON")
                 }
                 return ContainerInfo(
                     containerId = extract("containerId"),
@@ -49,15 +54,10 @@ object DockerRunner {
     }
 
     /**
-     * Start a module container. Removes any stale container with the same name first.
-     *
-     * @param imageName  Docker image name:tag (e.g. "github-github:local")
-     * @param containerName  Deterministic name (e.g. "module-github-github")
-     * @param hostPort  Host port to map to container port 8888
-     * @param insecure  If true, sets HUB_NODE_INSECURE=true in the container
-     * @return ContainerInfo with the running container details
+     * Start a module container.
+     * Always runs with SSL (self-signed certs). No insecure mode.
      */
-    fun start(imageName: String, containerName: String, hostPort: Int, insecure: Boolean): ContainerInfo {
+    fun start(imageName: String, containerName: String, hostPort: Int): ContainerInfo {
         // Remove any existing container with this name (idempotent restart)
         ExecUtils.execIgnoreErrors(listOf("docker", "rm", "-f", containerName))
 
@@ -65,9 +65,12 @@ object DockerRunner {
             add("docker"); add("run"); add("-d")
             add("-p"); add("$hostPort:8888")
             add("--name"); add(containerName)
-            if (insecure) {
-                add("-e"); add("HUB_NODE_INSECURE=true")
+            // Tag with slot for cleanup by zbb destroy
+            val slotName = System.getenv("ZB_SLOT")
+            if (slotName != null) {
+                add("--label"); add("zerobias.slot=$slotName")
             }
+            add("--label"); add("hub.test=true")
             add(imageName)
         }
 
@@ -76,25 +79,33 @@ object DockerRunner {
             containerId = containerId,
             port = hostPort,
             image = imageName,
-            baseUrl = "http://localhost:$hostPort"
+            baseUrl = "https://localhost:$hostPort"
         )
     }
 
     /**
-     * Poll the module's health endpoint until it responds with nonsensitiveProfileFields.
-     *
-     * @param port  Host port the container is mapped to
-     * @param timeoutMs  Maximum wait time (default 60s)
-     * @param intervalMs  Poll interval (default 1s)
+     * Poll the module's health endpoint until it responds.
+     * Uses HTTPS with self-signed cert trust (modules generate certs at startup).
      */
     fun waitForHealthy(port: Int, timeoutMs: Long = 60_000, intervalMs: Long = 1_000) {
         val deadline = System.currentTimeMillis() + timeoutMs
-        val url = "http://localhost:$port/"
+        val url = "https://localhost:$port/"
         var lastError: String? = null
+
+        // Trust all certs (modules use self-signed)
+        val trustAll = arrayOf<javax.net.ssl.TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, trustAll, java.security.SecureRandom())
 
         while (System.currentTimeMillis() < deadline) {
             try {
-                val conn = URI(url).toURL().openConnection() as HttpURLConnection
+                val conn = URI(url).toURL().openConnection() as HttpsURLConnection
+                conn.sslSocketFactory = sslContext.socketFactory
+                conn.setHostnameVerifier { _, _ -> true }
                 conn.connectTimeout = 2_000
                 conn.readTimeout = 2_000
                 conn.requestMethod = "GET"
@@ -129,7 +140,7 @@ object DockerRunner {
     }
 
     /**
-     * Stop and remove a container by name only (fallback when JSON file is missing).
+     * Stop and remove a container by name only (fallback).
      */
     fun stopByName(containerName: String) {
         ExecUtils.execIgnoreErrors(listOf("docker", "stop", "-t", "10", containerName))
@@ -137,16 +148,20 @@ object DockerRunner {
     }
 
     /**
-     * Get container logs for diagnostics.
+     * Get container logs.
      */
     fun getLogs(containerId: String): String {
-        return ExecUtils.execCapture(listOf("docker", "logs", containerId), throwOnError = false)
+        return try {
+            ExecUtils.execCapture(listOf("docker", "logs", containerId))
+        } catch (e: Exception) {
+            "(failed to get logs: ${e.message})"
+        }
     }
 
     /**
-     * Find an available TCP port by briefly binding to port 0.
+     * Find a free port on localhost.
      */
     fun findFreePort(): Int {
-        return ServerSocket(0).use { it.localPort }
+        ServerSocket(0).use { return it.localPort }
     }
 }

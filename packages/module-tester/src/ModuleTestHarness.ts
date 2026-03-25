@@ -482,7 +482,7 @@ export class ModuleTestHarness {
   /**
    * Get the state for a deployment
    */
-  private getState(deploymentId?: string): ConnectionState {
+  public getState(deploymentId?: string): ConnectionState {
     const id = deploymentId ?? this.defaultConnection;
 
     if (!id) {
