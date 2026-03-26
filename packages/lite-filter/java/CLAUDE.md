@@ -1,12 +1,16 @@
-# CLAUDE.md - Java/Maven Implementation
+# CLAUDE.md - Java Implementation
 
-This file provides Java/Maven-specific guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides Java-specific guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 **For general project information, data model, syntax, and behavioral specifications, see [../CLAUDE.md](../CLAUDE.md).**
 
 ## Java Implementation Overview
 
-This is the Java/Maven implementation of lite-filter. The module provides a type-safe API for parsing RFC4515 filters and testing Java objects (Maps, POJOs, etc.) against filter criteria.
+This is the Java implementation of lite-filter, built with Gradle using the `zb.java-library` convention plugin from `packages/build-tools`. The module provides a type-safe API for parsing RFC4515 filters and testing Java objects (Maps, POJOs, etc.) against filter criteria.
+
+**Build system:** Gradle (via `zb.java-library` convention plugin)
+**Java target:** 11 (compiled with Java 21 toolchain)
+**Publishing:** Maven Central via Sonatype Central Portal
 
 ## Java-Specific Architecture
 
@@ -339,27 +343,35 @@ private boolean evaluateIncludesAny(Object propValue, Object compareValue) {
 
 ## Development Commands
 
-```bash
-# Install dependencies
-mvn install
+All commands run from `packages/lite-filter/`:
 
+```bash
 # Build
-mvn clean compile
+./gradlew build
 
 # Run tests
-mvn test
+./gradlew test
 
 # Run specific test
-mvn test -Dtest=ExpressionTest
-
-# Package
-mvn package
+./gradlew test --tests "com.zerobias.litefilter.ExpressionTest"
 
 # Generate Javadoc
-mvn javadoc:javadoc
+./gradlew javadoc
 
 # Clean
-mvn clean
+./gradlew clean
+
+# Publish to local Maven repo (~/.m2)
+./gradlew publishToMavenLocal
+
+# Publish to local staging directory for inspection
+./gradlew publishToLocalStaging
+
+# Publish to Maven Central (requires GPG key + Sonatype credentials)
+./gradlew publishToMavenCentral
+
+# Full CI gate
+./gradlew gate
 ```
 
 ## Testing Guidelines

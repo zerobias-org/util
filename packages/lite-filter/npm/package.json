@@ -42,12 +42,12 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/zerobias-org/util.git",
-    "directory": "lite-filter"
+    "directory": "packages/lite-filter/npm"
   },
   "bugs": {
     "url": "https://github.com/zerobias-org/util/issues"
   },
-  "homepage": "https://github.com/zerobias-org/util/tree/main/lite-filter#readme",
+  "homepage": "https://github.com/zerobias-org/util/tree/main/packages/lite-filter#readme",
   "dependencies": {
     "fast-fuzzy": "^1.12.0"
   },
