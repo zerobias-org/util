@@ -539,11 +539,11 @@ async function handleLogs(args) {
         case 'show': {
             const logName = args[1];
             if (!logName) {
-                console.error('Usage: zbb logs show <name> [--source local|docker|aws] [--tail N] [--follow]');
+                console.error('Usage: zbb logs show <name> [--source local|docker|aws] [-n|--tail N] [-f|--follow]');
                 process.exit(1);
             }
             const follow = args.includes('--follow') || args.includes('-f');
-            const tailIdx = args.indexOf('--tail');
+            const tailIdx = Math.max(args.indexOf('--tail'), args.indexOf('-n'));
             const tailN = tailIdx !== -1 ? args[tailIdx + 1] : '50';
             const sourceIdx = args.indexOf('--source');
             let source = sourceIdx !== -1 ? args[sourceIdx + 1] : 'auto';
@@ -559,7 +559,13 @@ async function handleLogs(args) {
                     source = 'docker';
                 }
             }
-            const { execFileSync } = await import('node:child_process');
+            const { spawn: spawnChild } = await import('node:child_process');
+            /** Spawn a command with stdio inherited; resolves on exit, rejects on error. */
+            const run = (cmd, cmdArgs) => new Promise((resolve, reject) => {
+                const child = spawnChild(cmd, cmdArgs, { stdio: 'inherit' });
+                child.on('error', reject);
+                child.on('exit', () => resolve());
+            });
             switch (source) {
                 case 'local': {
                     const { join } = await import('node:path');
@@ -573,22 +579,18 @@ async function handleLogs(args) {
                     if (follow)
                         tailArgs.push('-f');
                     tailArgs.push(logPath);
-                    try {
-                        execFileSync('tail', tailArgs, { stdio: 'inherit' });
-                    }
-                    catch {
-                        // tail exits non-zero on signal (Ctrl+C for follow mode)
-                    }
+                    await run('tail', tailArgs);
                     break;
                 }
                 case 'docker': {
                     const stackName = slot.env.get('STACK_NAME') ?? slot.name;
                     const containerName = `${stackName}-${logName}`;
-                    const dockerArgs = ['logs', '--tail', tailN, containerName];
+                    const dockerArgs = ['logs', '--tail', tailN];
                     if (follow)
                         dockerArgs.push('-f');
+                    dockerArgs.push(containerName);
                     try {
-                        execFileSync('docker', dockerArgs, { stdio: 'inherit' });
+                        await run('docker', dockerArgs);
                     }
                     catch {
                         console.error(`Docker container not found or docker not available: ${containerName}`);
@@ -606,7 +608,7 @@ async function handleLogs(args) {
                     if (follow)
                         awsArgs.push('--follow');
                     try {
-                        execFileSync('aws', awsArgs, { stdio: 'inherit' });
+                        await run('aws', awsArgs);
                     }
                     catch {
                         console.error('AWS CLI not found or not configured. Install aws-cli and run: aws configure');
@@ -619,10 +621,52 @@ async function handleLogs(args) {
             }
             break;
         }
+        case 'debug': {
+            const serviceName = args[1];
+            if (!serviceName) {
+                console.error('Usage: zbb logs debug <service>');
+                process.exit(1);
+            }
+            await signalContainer(slot, serviceName, 'SIGUSR2', 'DEBUG');
+            break;
+        }
+        case 'info': {
+            const serviceName = args[1];
+            if (!serviceName) {
+                console.error('Usage: zbb logs info <service>');
+                process.exit(1);
+            }
+            await signalContainer(slot, serviceName, 'SIGUSR1', 'INFO');
+            break;
+        }
         default:
             console.error(`Unknown logs command: ${sub}`);
-            console.error('Usage: zbb logs <list|show>');
+            console.error('Usage: zbb logs <list|show|debug|info>');
             process.exit(1);
+    }
+}
+/**
+ * Send a signal to the node process inside a Docker container.
+ * PID 1 is typically a shell wrapper (start.sh), so we find the
+ * actual node process and signal it directly.
+ */
+async function signalContainer(slot, serviceName, signal, levelName) {
+    const stackName = slot.env.get('STACK_NAME') ?? slot.name;
+    const containerName = `${stackName}-${serviceName}`;
+    try {
+        const { execSync } = await import('node:child_process');
+        // Find the node PID inside the container (not PID 1 which is often a shell wrapper)
+        const pid = execSync(`docker exec ${containerName} sh -c "ps aux | grep '[n]ode' | awk '{print \\$1}' | head -1"`, { encoding: 'utf8' }).trim();
+        if (!pid) {
+            console.error(`No node process found in container: ${containerName}`);
+            process.exit(1);
+        }
+        execSync(`docker exec ${containerName} kill -${signal} ${pid}`);
+        console.log(`Log level set to ${levelName} for ${serviceName} (PID ${pid})`);
+    }
+    catch {
+        console.error(`Failed to signal container: ${containerName}`);
+        process.exit(1);
     }
 }
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -633,7 +677,7 @@ Usage:
   zbb slot <create|load|list|info|delete|gc>   Slot management
   zbb env <list|get|set|unset|reset|diff>       Environment variables
   zbb secret <create|get|list|update|delete>    Secret management
-  zbb logs <list|show>                           Log viewer (local/docker/aws)
+  zbb logs <list|show|debug|info>                Log viewer + log level control
   zbb dataloader [args...]                       Run dataloader with slot SQL env
   zbb publish [--dry-run]                        Publish all artifacts (Gradle)
   zbb up|down|destroy|info                       Stack aliases (Gradle)
