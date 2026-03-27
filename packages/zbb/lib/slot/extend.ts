@@ -4,7 +4,7 @@ import { scanEnvDeclarations, type ScannedVar } from '../env/Scanner.js';
 import { allocatePorts } from './PortAllocator.js';
 import { resolveAll } from '../env/Resolver.js';
 import { generateSecret } from '../env/SecretGen.js';
-import { loadRepoConfig } from '../config.js';
+import { loadRepoConfig, loadProjectConfig } from '../config.js';
 
 export interface ExtendResult {
   extended: boolean;
@@ -23,8 +23,13 @@ export interface ExtendResult {
  * - Second call is a no-op (idempotent)
  */
 export async function extendSlot(slot: Slot, repoRoot: string): Promise<ExtendResult> {
-  // 1. Scan all declared vars from zbb.yaml files in the repo
-  const scanned = await scanEnvDeclarations(repoRoot);
+  // 1. Scan declared vars — respect inherit: false
+  const projectConfig = await loadProjectConfig(process.cwd());
+  const inherit = projectConfig.inherit !== false;
+  const { join } = await import('node:path');
+  const scanned = inherit
+    ? await scanEnvDeclarations(repoRoot)
+    : await scanEnvDeclarations(process.cwd(), join(process.cwd(), 'zbb.yaml'));
 
   // 2. Load current slot state
   const currentEnv = slot.env.getAll();
