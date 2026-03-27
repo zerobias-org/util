@@ -1,6 +1,14 @@
 import { EventEmitter } from 'node:events';
 import { SlotEnvironment } from './SlotEnvironment.js';
 import { SlotWatcher } from './SlotWatcher.js';
+import { lookupDnsTxt as _lookupDnsTxt } from '../env/DnsTxtResolver.js';
+/**
+ * Internal dependencies — overridable for testing.
+ * @internal
+ */
+export declare const _deps: {
+    lookupDnsTxt: typeof _lookupDnsTxt;
+};
 export interface SlotMeta {
     name: string;
     created: string;
@@ -53,6 +61,25 @@ export declare class Slot extends EventEmitter {
     get watcher(): SlotWatcher | null;
     /** Wire watcher events through the Slot EventEmitter */
     private _wireWatcherEvents;
+    /**
+     * Resolve DNS TXT provisioning records for this slot.
+     *
+     * Queries `_hub.<searchDomain>` TXT records and merges any KEY=value pairs
+     * into the slot environment as defaults. User-set values (source: "user" or
+     * "override") are never overwritten.
+     *
+     * Uses a disk-based TTL cache at `{slot.path}/dns-cache.yml` to avoid
+     * redundant DNS queries. TTL defaults to 30 seconds.
+     *
+     * Never throws — DNS failures (timeout, NXDOMAIN) are silent no-ops.
+     *
+     * PROV-01: queries DNS and sets values with source "dns"
+     * PROV-02: respects TTL cache on disk
+     * PROV-03: never overwrites user/override values
+     * PROV-04: idempotent across multiple calls with same DNS data
+     * PROV-05: DNS failure is a silent no-op
+     */
+    resolve(): Promise<void>;
     /** Close slot — stop watchers, remove listeners */
     close(): Promise<void>;
     /** Alias for close */
