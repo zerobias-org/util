@@ -28,6 +28,7 @@ export interface ManifestEntry {
   derived?: boolean;
   generated?: string;
   allocated?: number;
+  description?: string;
 }
 
 /**
