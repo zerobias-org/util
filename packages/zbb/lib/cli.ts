@@ -16,6 +16,7 @@ import { runPreflightChecks, formatPreflightResults } from './preflight.js';
 import { resolveStackAlias, runGradle } from './gradle.js';
 import {
   findRepoRoot,
+  loadProjectConfig,
   loadRepoConfig,
   loadUserConfig,
   type ToolRequirement,
@@ -195,6 +196,26 @@ export async function main(argv: string[]): Promise<void> {
       const slot = await SlotManager.load(process.env.ZB_SLOT);
       await extendSlotFromCwd(slot);
     }
+
+    // Print exec_hints after successful stackUp
+    if (alias === 'stackUp') {
+      const repoRoot = findRepoRoot(process.cwd());
+      if (repoRoot) {
+        const projConfig = await loadProjectConfig(repoRoot);
+        const hints = projConfig.stack?.exec_hints;
+        if (hints && hints.length > 0) {
+          process.on('exit', (code) => {
+            if (code === 0) {
+              process.stdout.write('\nAccess running containers:\n');
+              for (const hint of hints) {
+                process.stdout.write(`  ${hint}\n`);
+              }
+            }
+          });
+        }
+      }
+    }
+
     runGradle([alias, ...args.slice(1)]);
     return;
   }

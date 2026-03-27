@@ -27,9 +27,10 @@ export interface EnvVarDeclaration {
 }
 
 export interface StackConfig {
-  compose?: string;
+  compose?: string | string[];
   services?: string[];
   healthcheck?: Record<string, { container: string; timeout: number }>;
+  exec_hints?: string[];
 }
 
 export interface ProjectConfig {
