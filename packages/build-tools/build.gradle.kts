@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.zerobias"
-version = "1.0-SNAPSHOT"
+version = "1.0.0"
 
 java {
     toolchain {
@@ -32,4 +32,17 @@ dependencies {
 
     // YAML manipulation (replaces yq CLI dependency)
     implementation("org.yaml:snakeyaml:2.2")
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/zerobias-com/util")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: "zerobias-com"
+                password = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
+            }
+        }
+    }
 }

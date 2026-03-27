@@ -65,6 +65,7 @@ val preReleaseCounter: String = try {
 } catch (e: Exception) { "0" }
 
 // Read base version from package.json (source of truth)
+// Returns the clean semver without pre-release suffix
 fun readBaseVersion(): String {
     val pkgJson = project.file("package.json")
     if (!pkgJson.exists()) {
@@ -73,7 +74,18 @@ fun readBaseVersion(): String {
     val match = Regex(""""version"\s*:\s*"([^"]+)"""").find(pkgJson.readText())
     val raw = match?.groupValues?.get(1)
         ?: throw GradleException("Cannot find 'version' in package.json at ${pkgJson.absolutePath}")
-    return raw.replace(Regex("-.*"), "")  // strip existing pre-release suffix
+    return raw.replace(Regex("-.*"), "")
+}
+
+// Read full version from package.json including any pre-release suffix
+fun readFullVersion(): String {
+    val pkgJson = project.file("package.json")
+    if (!pkgJson.exists()) {
+        throw GradleException("package.json not found in ${project.projectDir} — cannot determine version")
+    }
+    val match = Regex(""""version"\s*:\s*"([^"]+)"""").find(pkgJson.readText())
+    return match?.groupValues?.get(1)
+        ?: throw GradleException("Cannot find 'version' in package.json at ${pkgJson.absolutePath}")
 }
 
 val baseVersion = readBaseVersion()
@@ -106,13 +118,28 @@ fun resolvePreReleaseVersion(base: String, suffix: String, startCounter: Int): S
 }
 
 val gitCounter = preReleaseCounter.toIntOrNull() ?: 0
+val fullVersion = readFullVersion()
 
-version = when (branch) {
-    "main"   -> baseVersion                                                // 6.8.0
-    "qa"     -> resolvePreReleaseVersion(baseVersion, "rc", gitCounter)    // 6.8.0-rc.4
-    "dev"    -> resolvePreReleaseVersion(baseVersion, "dev", gitCounter)   // 6.8.0-dev.7
-    "uat"    -> resolvePreReleaseVersion(baseVersion, "uat", gitCounter)   // 6.8.0-uat.3
-    else     -> resolvePreReleaseVersion(baseVersion, "uat", gitCounter)   // 6.8.0-uat.3
+// If package.json already has the correct branch suffix, use it directly.
+// Only re-resolve if the suffix doesn't match the current branch.
+val branchSuffix: String? = when (branch) {
+    "main" -> null
+    "qa"   -> "rc"
+    "dev"  -> "dev"
+    "uat"  -> "uat"
+    else   -> "uat"
+}
+
+// At config time, compute version without querying registry.
+// resolvePreReleaseVersion (registry check + increment) only runs during publish.
+version = if (branch == "main") {
+    baseVersion
+} else if (branchSuffix != null && fullVersion.contains("-${branchSuffix}.")) {
+    // package.json already has the right suffix (e.g. 6.11.0-uat.0) — use as-is
+    fullVersion
+} else {
+    // Default: base version + branch suffix + git counter (no registry check)
+    "${baseVersion}-${branchSuffix!!}.${gitCounter}"
 }
 
 val npmDistTag: String = when (branch) {
@@ -491,15 +518,30 @@ val publishHubSdk by tasks.registering {
     dependsOn(gate)
 }
 
+// On branches, resolve version against registry before publishing to avoid conflicts.
+// On main, bumpVersion handles this via commit-and-tag-version.
+val resolvePublishVersion by tasks.registering {
+    group = "publish"
+    description = "Resolve a non-conflicting version for branch publish"
+    onlyIf { branch != "main" && branchSuffix != null }
+    doLast {
+        val resolved = resolvePreReleaseVersion(baseVersion, branchSuffix!!, gitCounter)
+        if (resolved != project.version.toString()) {
+            logger.lifecycle("Resolved publish version: ${project.version} → $resolved")
+            project.version = resolved
+        }
+    }
+}
+
 val publishAll by tasks.registering {
     group = "publish"
     description = "Publish all artifacts (staging -- uses --tag next)"
-    dependsOn(bumpVersion, publishNpm, publishImage, publishSdk, publishHubSdk)
+    dependsOn(bumpVersion, resolvePublishVersion, publishNpm, publishImage, publishSdk, publishHubSdk)
 }
 
-// Ensure bump runs before any publish task reads version
+// Ensure version resolution runs before any publish task reads version
 listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { taskName ->
-    tasks.named(taskName) { mustRunAfter(bumpVersion) }
+    tasks.named(taskName) { mustRunAfter(bumpVersion, resolvePublishVersion) }
 }
 
 // Guard lifecycle publish stubs: skip if module has no changes since last tag.
@@ -585,25 +627,30 @@ val promoteAll by tasks.registering {
     }
 }
 
-// Commit bumped version after successful promote (main branch only)
+// Commit published version after successful promote
 val commitVersion by tasks.registering {
     group = "publish"
     description = "Commit bumped package.json version"
     mustRunAfter(promoteAll)
-    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded }
+    onlyIf { !isDryRun && promoteAllSucceeded }
     doLast {
-        val ver = readBaseVersion()
+        val ver = project.version.toString()
+        val pkgFile = project.file("package.json")
         val moduleDir = project.projectDir.relativeTo(project.rootDir).path
         val pkgPath = "${moduleDir}/package.json"
 
-        // Stage only the bumped package.json
+        // Write the published version into package.json (restorePackageJson may have reverted it)
+        val content = pkgFile.readText()
+        val updated = content.replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
+        pkgFile.writeText(updated)
+
+        // Stage and commit
         com.zerobias.buildtools.util.ExecUtils.exec(
             command = listOf("git", "add", pkgPath),
             workingDir = project.rootDir,
             throwOnError = true
         )
 
-        // Commit with conventional commit format
         com.zerobias.buildtools.util.ExecUtils.exec(
             command = listOf("git", "commit", "-m", "chore(release): ${zb.vendor.get()}-${zb.product.get()} v${ver}"),
             workingDir = project.rootDir,

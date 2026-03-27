@@ -155,6 +155,11 @@ export async function main(argv) {
         runGradle(['publish', ...publishArgs]);
         return;
     }
+    // Publish Gradle plugins/libs to GitHub Packages Maven
+    if (command === 'publishRemote') {
+        runGradle(['publishAllPublicationsToGitHubPackagesRepository', ...args.slice(1)]);
+        return;
+    }
     // Stack aliases → gradle
     const alias = resolveStackAlias(command);
     if (alias) {
