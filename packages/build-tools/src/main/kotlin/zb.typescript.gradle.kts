@@ -1119,6 +1119,16 @@ val setupFixtures by tasks.registering {
             } else {
                 logger.lifecycle("setupFixtures: Reusing Deployment ID = $deploymentId")
             }
+            // Clear stale local slot state so the node re-ensures the deployment fresh
+            val slotDir = System.getenv("ZB_SLOT_DIR")
+            if (slotDir != null) {
+                val imageName = moduleKey.substringAfter("/").replace("/", "-")
+                val depStateDir = java.io.File("$slotDir/state/deployments/$imageName/$deploymentId")
+                if (depStateDir.exists()) {
+                    depStateDir.deleteRecursively()
+                    logger.lifecycle("setupFixtures: Cleared stale local deployment state")
+                }
+            }
         } else {
             logger.lifecycle("setupFixtures: Creating deployment")
             val deployJson = runCliJson(
