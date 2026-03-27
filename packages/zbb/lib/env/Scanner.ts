@@ -14,8 +14,25 @@ export interface ScannedVar {
 /**
  * Scan repo root and all project zbb.yaml files, collecting env declarations.
  * First declaration wins for defaults/generation. Returns in discovery order.
+ *
+ * When projectOnly is set, scans only that single zbb.yaml (for inherit: false projects).
  */
-export async function scanEnvDeclarations(repoRoot: string): Promise<ScannedVar[]> {
+export async function scanEnvDeclarations(repoRoot: string, projectOnly?: string): Promise<ScannedVar[]> {
+  if (projectOnly) {
+    const vars: ScannedVar[] = [];
+    const config = await loadYamlOrDefault<ProjectConfig>(projectOnly, {});
+    if (config.env) {
+      for (const [name, decl] of Object.entries(config.env)) {
+        vars.push({ name, declaration: decl, source: relative(repoRoot, projectOnly) });
+      }
+    }
+    return vars;
+  }
+
+  return _scanAll(repoRoot);
+}
+
+async function _scanAll(repoRoot: string): Promise<ScannedVar[]> {
   const vars: ScannedVar[] = [];
   const seen = new Set<string>();
 
