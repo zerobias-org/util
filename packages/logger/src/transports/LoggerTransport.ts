@@ -177,6 +177,18 @@ export abstract class LoggerTransport extends Transport {
     // Clean up extra newlines
     output = output.replaceAll(/\n+/g, '\n').replace(/\n$/, '');
 
+    // Wrap lines to maxLineLength if set
+    if (this.maxLineLength > 0) {
+      output = output.split('\n').map(line => {
+        if (line.length <= this.maxLineLength) return line;
+        const chunks: string[] = [];
+        for (let i = 0; i < line.length; i += this.maxLineLength) {
+          chunks.push(line.slice(i, i + this.maxLineLength));
+        }
+        return chunks.join('\n');
+      }).join('\n');
+    }
+
     return output;
   }
 
