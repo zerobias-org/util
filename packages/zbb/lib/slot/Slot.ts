@@ -51,7 +51,7 @@ export interface SlotMeta {
 export class Slot extends EventEmitter {
   public readonly name: string;
   public readonly path: string;
-  public readonly env: SlotEnvironment;
+  public env: SlotEnvironment;
 
   private _meta: SlotMeta | null = null;
   private _watcher: SlotWatcher | null = null;
