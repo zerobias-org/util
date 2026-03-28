@@ -189,11 +189,15 @@ export class DataMapper {
         case 'convert': {
           const dataType = rule.transform.options?.dataType || 'string';
           const sourceVal = sourceValues[0];
-          // Handle array-to-array conversion (convert each element)
-          transformedValue = Array.isArray(sourceVal)
-            ? sourceVal.map(item => this.convertValue(item, dataType))
-            : this.convertValue(sourceVal, dataType);
-
+          if (dataType === 'array') {
+            // Wrap value in array (or keep as-is if already an array)
+            transformedValue = this.convertValue(sourceVal, dataType);
+          } else {
+            // Handle array-to-array conversion (convert each element)
+            transformedValue = Array.isArray(sourceVal)
+              ? sourceVal.map(item => this.convertValue(item, dataType))
+              : this.convertValue(sourceVal, dataType);
+          }
           break;
         }
 
@@ -430,6 +434,9 @@ export class DataMapper {
         } catch {
           return null;
         }
+      }
+      case 'array': {
+        return Array.isArray(value) ? value : [value];
       }
       default: {
         return value.toString();
