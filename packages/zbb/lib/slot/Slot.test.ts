@@ -105,7 +105,7 @@ describe('slot.resolve()', () => {
   it('PROV-02: writes dns-cache.yml and skips DNS on second call within TTL', async () => {
     let callCount = 0;
     slotDeps.lookupDnsTxt = async (_prefix: string) => {
-      callCount++;
+      callCount += 1;
       return { INSTALL_TYPE: 'appliance' };
     };
 
@@ -176,7 +176,7 @@ describe('slot.resolve()', () => {
   it('re-queries DNS when dns-cache.yml TTL has expired', async () => {
     let callCount = 0;
     slotDeps.lookupDnsTxt = async (_prefix: string) => {
-      callCount++;
+      callCount += 1;
       return { INSTALL_TYPE: 'appliance' };
     };
 
