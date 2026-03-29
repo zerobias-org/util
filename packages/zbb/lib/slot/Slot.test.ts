@@ -31,6 +31,8 @@ describe('slot.resolve()', () => {
     originalLookupDnsTxt = slotDeps.lookupDnsTxt;
     // Default: DNS returns nothing
     slotDeps.lookupDnsTxt = async (_prefix: string) => undefined;
+    // Set resolve host so resolve() doesn't early-return
+    await slot.env.setDeclared('SLOT_RESOLVE_HOST', '_test', 'default');
   });
 
   afterEach(async () => {

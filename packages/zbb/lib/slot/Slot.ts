@@ -190,10 +190,16 @@ export class Slot extends EventEmitter {
       }
     }
 
+    // Read DNS prefix from slot env — caller sets SLOT_RESOLVE_HOST (e.g. _hub in hub/zbb.yaml)
+    const resolveHost = this.env.get('SLOT_RESOLVE_HOST');
+    if (!resolveHost) {
+      return; // No resolve host configured — nothing to query
+    }
+
     // Query DNS — wrapped in try/catch for PROV-05
     let dnsValues: Record<string, string> | undefined;
     try {
-      dnsValues = await _deps.lookupDnsTxt('_hub');
+      dnsValues = await _deps.lookupDnsTxt(resolveHost);
     } catch {
       return; // DNS failure is a silent no-op (PROV-05)
     }
