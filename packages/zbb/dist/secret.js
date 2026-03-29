@@ -345,6 +345,20 @@ async function secretUpdate(args, slot) {
     }
     writeFileSync(filePath, stringify(data, { lineWidth: -1 }));
     console.log(`✓ Secret '${name}' updated (${changed} key(s))`);
+    // Sync to Hub DB if this secret is linked to a Hub secret (_id)
+    const hubId = data._id;
+    if (hubId) {
+        try {
+            const { execSync } = await import('node:child_process');
+            const resolved = resolveRefs(data, dir);
+            const profileJson = JSON.stringify(resolved);
+            execSync(`hub-node --json server secrets update ${hubId} --profile '${profileJson.replace(/'/g, "'\\''")}'  --draft false`, { stdio: ['pipe', 'pipe', 'pipe'] });
+            console.log(`✓ Synced to Hub secret ${hubId}`);
+        }
+        catch (err) {
+            console.warn(`⚠ Failed to sync to Hub: ${err.message}`);
+        }
+    }
 }
 /**
  * zbb secret delete <name>

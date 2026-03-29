@@ -752,12 +752,12 @@ val buildImageExec by tasks.registering(Exec::class) {
     dependsOn(compileServer, generateDockerfile)
     workingDir(project.projectDir)
     val imageName = zb.dockerImageName.get()
-    val (_, pkgVer) = readPackageNameVersion()
+    val resolvedVersion = project.version.toString()
     val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
     commandLine("docker", "build",
         "-f", dockerfilePath,
         "-t", "${imageName}:local",
-        "-t", "${imageName}:${pkgVer}",
+        "-t", "${imageName}:${resolvedVersion}",
         ".")
     inputs.file(dockerfilePath)
     inputs.dir("dist")
@@ -768,7 +768,7 @@ val buildImageExec by tasks.registering(Exec::class) {
     doLast {
         marker.get().asFile.apply {
             parentFile.mkdirs()
-            writeText("${imageName}:${pkgVer}")
+            writeText("${imageName}:${resolvedVersion}")
         }
     }
 }
@@ -776,8 +776,6 @@ val buildImageExec by tasks.registering(Exec::class) {
 tasks.named("buildImage") {
     dependsOn(buildImageExec)
 }
-
-
 
 // ════════════════════════════════════════════════════════════
 // DOCKER RUNTIME — start/stop module container for local dev
@@ -891,6 +889,25 @@ val restorePackageJson by tasks.registering {
 val isDryRun: Boolean = extra["isDryRun"] as Boolean
 @Suppress("UNCHECKED_CAST")
 val preflightChecks = extra["preflightChecks"] as TaskProvider<*>
+@Suppress("UNCHECKED_CAST")
+val stagedPackages = extra["stagedPackages"] as MutableList<Pair<String, java.io.File>>
+
+/**
+ * Check if a package version already exists on the registry.
+ * Returns true if already published (npm view exits 0 and returns the version).
+ */
+fun isAlreadyPublished(name: String, version: String, workDir: java.io.File): Boolean {
+    return try {
+        val output = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf("npm", "view", "${name}@${version}", "version"),
+            workingDir = workDir,
+            throwOnError = false
+        ).trim()
+        output == version
+    } catch (e: Exception) {
+        false
+    }
+}
 
 val publishNpmExec by tasks.registering(NpmTask::class) {
     group = "publish"
@@ -903,12 +920,22 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
     workingDir.set(project.projectDir)
 
     doFirst {
+        val (name, _) = readPackageNameVersion()
+        val ver = project.version.toString()
         if (isDryRun) {
-            val (name, _) = readPackageNameVersion()
-            val ver = project.version.toString()
             logger.lifecycle("[DRY RUN] Would publish ${name}@${ver} with --tag next")
             throw org.gradle.api.tasks.StopExecutionException()
         }
+        // Skip if already published (e.g. from a previous failed run)
+        if (isAlreadyPublished(name, ver, project.projectDir)) {
+            logger.lifecycle("[publishNpmExec] ${name}@${ver} already published — skipping (will still promote)")
+            stagedPackages.add(name to project.projectDir)
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
+    doLast {
+        val (name, _) = readPackageNameVersion()
+        stagedPackages.add(name to project.projectDir)
     }
 }
 
@@ -954,33 +981,65 @@ fun runCliJson(vararg command: String): String {
     ).trim()
 }
 
+// Optional: test against a published module instead of local build
+// Usage: zbb testHub -PhubTestModule=@auditlogic/module-github-github@6.8.0
+val hubTestModule: String? = project.findProperty("hubTestModule") as? String
+
 val setupFixtures by tasks.registering {
     group = "lifecycle"
     description = "Set up Hub e2e test fixtures: dataloader, deployment, connection"
-    dependsOn(tasks.named("compile"))
+    if (hubTestModule == null) {
+        dependsOn(tasks.named("compile"))
+    }
     onlyIf { project.file("test/e2e").exists() }
     doLast {
         // Resolve slot env (needed for CLI commands that read SERVER_URL, API_KEY, etc.)
         com.zerobias.buildtools.util.ZbbSlotProvider.requireActiveSlot()
 
-        val (moduleKey, moduleVersion) = readPackageNameVersion()
+        val moduleKey: String
+        val moduleVersion: String
+        if (hubTestModule != null) {
+            // Parse published module: @scope/name@version
+            val atIndex = hubTestModule.lastIndexOf('@')
+            if (atIndex <= 0) {
+                throw org.gradle.api.GradleException(
+                    "Invalid hubTestModule format: $hubTestModule. Expected: @scope/name@version"
+                )
+            }
+            moduleKey = hubTestModule.substring(0, atIndex)
+            moduleVersion = hubTestModule.substring(atIndex + 1)
+            logger.lifecycle("setupFixtures: Testing published module $moduleKey@$moduleVersion")
+        } else {
+            val (key, _) = readPackageNameVersion()
+            moduleKey = key
+            moduleVersion = project.version.toString()
+        }
         logger.lifecycle("setupFixtures: $moduleKey@$moduleVersion")
 
         // ── Step 1: Load module artifacts via dataloader ───────────────────
-        // Dataloader expects module-{name}.yml in module root; we generate it to generated/.
-        // Symlink so dataloader finds it without duplicating the file.
-        val noScope = moduleKey.split("/").last()
-        val distSpec = project.file("generated/${noScope}.yml")
-        val rootLink = project.file("${noScope}.yml")
-        if (distSpec.exists() && !rootLink.exists()) {
-            java.nio.file.Files.createSymbolicLink(rootLink.toPath(), distSpec.toPath())
+        if (hubTestModule != null) {
+            logger.lifecycle("setupFixtures: Step 1 — loading published module via dataloader")
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("zbb", "dataloader", moduleKey, moduleVersion),
+                workingDir = project.projectDir,
+                throwOnError = true
+            )
+        } else {
+            // Dataloader expects module-{name}.yml in module root; we generate it to generated/.
+            // Symlink so dataloader finds it without duplicating the file.
+            val noScope = moduleKey.split("/").last()
+            val distSpec = project.file("generated/${noScope}.yml")
+            val rootLink = project.file("${noScope}.yml")
+            if (distSpec.exists() && !rootLink.exists()) {
+                java.nio.file.Files.createSymbolicLink(rootLink.toPath(), distSpec.toPath())
+            }
+            logger.lifecycle("setupFixtures: Step 1 — loading module artifacts via zbb dataloader")
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("zbb", "dataloader", "-d", "."),
+                workingDir = project.projectDir,
+                throwOnError = true
+            )
         }
-        logger.lifecycle("setupFixtures: Step 1 — loading module artifacts via zbb dataloader")
-        com.zerobias.buildtools.util.ExecUtils.exec(
-            command = listOf("zbb", "dataloader", "-d", "."),
-            workingDir = project.projectDir,
-            throwOnError = true
-        )
 
         // ── Step 2: Get registered node ID (auto-register + start if needed) ─
         logger.lifecycle("setupFixtures: Step 2 — getting registered node ID")
@@ -1048,7 +1107,28 @@ val setupFixtures by tasks.registering {
         ).trim()
         var deploymentId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(existingDeployJson)?.groupValues?.get(1)
         if (deploymentId != null) {
-            logger.lifecycle("setupFixtures: Reusing Deployment ID = $deploymentId")
+            // Check if deployment version matches — update if not
+            val existingVersion = Regex(""""moduleVersion"\s*:\s*"([^"]+)"""").find(existingDeployJson)?.groupValues?.get(1)
+            if (existingVersion != null && existingVersion != moduleVersion) {
+                logger.lifecycle("setupFixtures: Deployment version mismatch ($existingVersion → $moduleVersion), updating...")
+                runCliJson(
+                    "hub-node", "--json", "deployments", "update", deploymentId,
+                    "--module", "$moduleKey@$moduleVersion"
+                )
+                logger.lifecycle("setupFixtures: Updated Deployment ID = $deploymentId to $moduleKey@$moduleVersion")
+            } else {
+                logger.lifecycle("setupFixtures: Reusing Deployment ID = $deploymentId")
+            }
+            // Clear stale local slot state so the node re-ensures the deployment fresh
+            val slotDir = System.getenv("ZB_SLOT_DIR")
+            if (slotDir != null) {
+                val imageName = moduleKey.substringAfter("/").replace("/", "-")
+                val depStateDir = java.io.File("$slotDir/state/deployments/$imageName/$deploymentId")
+                if (depStateDir.exists()) {
+                    depStateDir.deleteRecursively()
+                    logger.lifecycle("setupFixtures: Cleared stale local deployment state")
+                }
+            }
         } else {
             logger.lifecycle("setupFixtures: Creating deployment")
             val deployJson = runCliJson(
@@ -1172,14 +1252,67 @@ val setupFixtures by tasks.registering {
             logger.lifecycle("setupFixtures: Created Connection (TARGET_ID) = $targetId")
         }
 
+        // ── Step 5b: Always sync zbb secret → Hub secret ─────────────────
+        // Ensures the Hub secret profile matches the local zbb secret (handles
+        // first run with empty draft secret AND subsequent token rotations).
+        val syncSecretListJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf("zbb", "secret", "list", "--module", moduleKey, "--json"),
+            workingDir = project.projectDir,
+            environment = emptyMap(),
+            throwOnError = false
+        ).trim()
+        val syncSecretName = Regex(""""name"\s*:\s*"([^"]+)"""").find(syncSecretListJson)?.groupValues?.get(1)
+
+        if (syncSecretName != null) {
+            // Get secretId from the connection on this deployment
+            val connListJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                command = listOf("hub-node", "--json", "connections", "list", "--deployment", deploymentId),
+                workingDir = project.projectDir,
+                environment = emptyMap(),
+                throwOnError = false
+            ).trim()
+            val hubSecretId = Regex(""""secretId"\s*:\s*"([0-9a-f-]{36})"""").find(connListJson)?.groupValues?.get(1)
+
+            if (hubSecretId != null) {
+                val secretGetJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                    command = listOf("zbb", "secret", "get", syncSecretName, "--json"),
+                    workingDir = project.projectDir,
+                    environment = emptyMap(),
+                    throwOnError = true
+                ).trim()
+
+                // Build profile JSON from zbb secret (skip metadata keys starting with _)
+                val profileEntries = Regex(""""([^"_][^"]*?)"\s*:\s*"([^"]*?)"""").findAll(secretGetJson)
+                    .map { """"${it.groupValues[1]}":"${it.groupValues[2]}"""" }
+                    .joinToString(",")
+                val profileJson = "{$profileEntries}"
+
+                runCliJson(
+                    "hub-node", "--json", "server", "secrets", "update", hubSecretId,
+                    "--profile", profileJson,
+                    "--draft", "false"
+                )
+                logger.lifecycle("setupFixtures: Synced secret $hubSecretId from zbb secret '$syncSecretName'")
+            } else {
+                logger.warn("setupFixtures: No secretId found on connection — secret sync skipped")
+            }
+        }
+
         // ── Step 6: Ensure deployment + connect via target metadata ──────
         // getTargetMetadata ensures deployment is running and connection is established
         logger.lifecycle("setupFixtures: Step 6 — ensuring target ready (TARGET_ID=$targetId)")
-        com.zerobias.buildtools.util.ExecUtils.exec(
+        val metadataJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
             command = listOf("hub-node", "--json", "server", "targets", "metadata", targetId),
             workingDir = project.projectDir,
             throwOnError = true
-        )
+        ).trim()
+        // hub-node may exit 0 but return a hub-level error in JSON
+        if (metadataJson.contains("\"err.not.found\"") || metadataJson.contains("\"statusCode\":404") || metadataJson.contains("\"statusCode\": 404")) {
+            throw org.gradle.api.GradleException(
+                "setupFixtures: Target not ready — deployment not found on node.\n$metadataJson\n" +
+                "The node may not have this deployment loaded. Try: zbb destroy && zbb up"
+            )
+        }
 
         // Export fixture IDs for testHub task
         project.ext.set("SETUP_FIXTURES_TARGET_ID", targetId)
@@ -1267,19 +1400,33 @@ val publishSdkExec by tasks.registering(NpmTask::class) {
         val ver = project.version.toString()
         originalSdkPackageJson = patchPackageJsonVersion(sdkPkg, ver)
 
+        val content = sdkPkg.readText()
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: "unknown-sdk"
+
         if (isDryRun) {
-            val content = sdkPkg.readText()
-            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-            val name = nameMatch?.groupValues?.get(1) ?: "unknown-sdk"
             logger.lifecycle("[DRY RUN] Would publish SDK ${name}@${ver} with --tag next")
             throw org.gradle.api.tasks.StopExecutionException()
         }
+        if (isAlreadyPublished(name, ver, project.file("sdk"))) {
+            logger.lifecycle("[publishSdkExec] ${name}@${ver} already published — skipping (will still promote)")
+            stagedPackages.add(name to project.file("sdk"))
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
+    doLast {
+        val sdkPkg = project.file("sdk/package.json")
+        val content = sdkPkg.readText()
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: return@doLast
+        stagedPackages.add(name to project.file("sdk"))
     }
 }
 
 tasks.named("publishSdk") {
     dependsOn(publishSdkExec)
 }
+
+// SDK publishes must run after module npm publish
+publishSdkExec.configure { mustRunAfter(publishNpmExec) }
 
 // -- Hub SDK Publish ----------------------------------------------
 
@@ -1322,13 +1469,24 @@ val publishHubSdkExec by tasks.registering(NpmTask::class) {
         originalHubSdkPackageJson = patchPackageJsonVersion(hubSdkPkg, ver)
         logger.lifecycle("Patched hub-sdk/package.json version to $ver")
 
+        val content = hubSdkPkg.readText()
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: "unknown-hub-sdk"
+
         if (isDryRun) {
-            val content = hubSdkPkg.readText()
-            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-            val name = nameMatch?.groupValues?.get(1) ?: "unknown-hub-sdk"
             logger.lifecycle("[DRY RUN] Would publish Hub SDK ${name}@${ver} with --tag next")
             throw org.gradle.api.tasks.StopExecutionException()
         }
+        if (isAlreadyPublished(name, ver, project.file("hub-sdk"))) {
+            logger.lifecycle("[publishHubSdkExec] ${name}@${ver} already published — skipping (will still promote)")
+            stagedPackages.add(name to project.file("hub-sdk"))
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+    }
+    doLast {
+        val hubSdkPkg = project.file("hub-sdk/package.json")
+        val content = hubSdkPkg.readText()
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: return@doLast
+        stagedPackages.add(name to project.file("hub-sdk"))
     }
 }
 
@@ -1336,9 +1494,12 @@ tasks.named("publishHubSdk") {
     dependsOn(publishHubSdkExec)
 }
 
+// Hub SDK publish must run after module npm publish
+publishHubSdkExec.configure { mustRunAfter(publishNpmExec) }
+
 // -- Docker Image Publish (Multi-Arch buildx -> ECR + GHCR) ------
-// All registry config from slot env. No fallbacks. No derivation.
-// zbb.yaml declares these, resolvers compute them. Fail fast if missing.
+// Docker image registry config from slot env.
+// Image name derived from dockerImageName (same name used for local build, ECR, GHCR, pkg-proxy).
 // Resolved lazily in doFirst to avoid config-time failure when env not set.
 
 // Step 1: Ensure ECR repository exists (idempotent)
@@ -1351,10 +1512,9 @@ val ensureEcrRepo by tasks.registering(Exec::class) {
     doFirst {
         val awsRegion = System.getenv("AWS_REGION")
             ?: throw GradleException("AWS_REGION not set in slot env — add to zbb.yaml")
-        val ecrRepoName = System.getenv("ECR_REPO_NAME")
-            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
+        val imageName = zb.dockerImageName.get()
         commandLine("aws", "ecr", "create-repository",
-            "--repository-name", ecrRepoName,
+            "--repository-name", imageName,
             "--region", awsRegion)
         isIgnoreExitValue = true // already exists -> non-zero is OK
     }
@@ -1369,21 +1529,55 @@ val publishImageEcr by tasks.registering(Exec::class) {
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
     doFirst {
+        val imageName = zb.dockerImageName.get()
         val ver = project.version.toString().substringBefore("+")
         if (isDryRun) {
-            // In dryRun, log intent without requiring env vars to be present
-            val ecrRepoName = System.getenv("ECR_REPO_NAME") ?: "<ECR_REPO_NAME>"
             val ecrRegistry = System.getenv("ECR_REGISTRY") ?: "<ECR_REGISTRY>"
-            logger.lifecycle("[DRY RUN] Would push multi-arch image to ECR: ${ecrRegistry}/${ecrRepoName}:${ver}")
+            logger.lifecycle("[DRY RUN] Would push multi-arch image to ECR: ${ecrRegistry}/${imageName}:${ver}")
             throw org.gradle.api.tasks.StopExecutionException()
         }
         val ecrRegistry = System.getenv("ECR_REGISTRY")
             ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
-        val ecrRepoName = System.getenv("ECR_REPO_NAME")
-            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
-        commandLine("docker", "buildx", "build",
-            "--platform", "linux/amd64,linux/arm64",
-            "-t", "${ecrRegistry}/${ecrRepoName}:${ver}", "--push", ".")
+        val isCI = System.getenv("CI") == "true"
+        val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
+
+        if (isCI) {
+            // CI: Docker login already done by GitHub Actions, use default buildx builder
+            commandLine("docker", "buildx", "build",
+                "-f", dockerfilePath,
+                "--platform", "linux/amd64,linux/arm64",
+                "-t", "${ecrRegistry}/${imageName}:${ver}", "--push", ".")
+        } else {
+            // Local: manage auth and builder ourselves (bypasses WSL credsStore)
+            val awsRegion = System.getenv("AWS_REGION") ?: "us-east-1"
+            val tmpDockerConfig = java.io.File(project.buildDir, "docker-publish-config").apply { mkdirs() }
+
+            val srcBuildx = java.io.File(System.getProperty("user.home"), ".docker/buildx")
+            val dstBuildx = java.io.File(tmpDockerConfig, "buildx")
+            if (srcBuildx.exists() && !dstBuildx.exists()) {
+                srcBuildx.toPath().toRealPath().let { src ->
+                    java.nio.file.Files.createSymbolicLink(dstBuildx.toPath(), src)
+                }
+            }
+
+            val ecrToken = ProcessBuilder("aws", "ecr", "get-login-password", "--region", awsRegion)
+                .start().let { proc ->
+                    val token = proc.inputStream.bufferedReader().readText().trim()
+                    proc.waitFor()
+                    token
+                }
+            val authStr = java.util.Base64.getEncoder().encodeToString("AWS:${ecrToken}".toByteArray())
+            java.io.File(tmpDockerConfig, "config.json").writeText(
+                """{"auths":{"${ecrRegistry}":{"auth":"$authStr"}}}"""
+            )
+
+            commandLine("docker", "buildx", "build",
+                "--builder", "multiarch",
+                "-f", dockerfilePath,
+                "--platform", "linux/amd64,linux/arm64",
+                "-t", "${ecrRegistry}/${imageName}:${ver}", "--push", ".")
+            environment("DOCKER_CONFIG", tmpDockerConfig.absolutePath)
+        }
     }
 }
 
@@ -1396,21 +1590,50 @@ val publishImageGhcr by tasks.registering(Exec::class) {
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
     doFirst {
+        val imageName = zb.dockerImageName.get()
         val ver = project.version.toString().substringBefore("+")
         if (isDryRun) {
-            // In dryRun, log intent without requiring env vars to be present
-            val ecrRepoName = System.getenv("ECR_REPO_NAME") ?: "<ECR_REPO_NAME>"
             val ghcrRegistry = System.getenv("GHCR_REGISTRY") ?: "<GHCR_REGISTRY>"
-            logger.lifecycle("[DRY RUN] Would push multi-arch image to GHCR: ${ghcrRegistry}/${ecrRepoName}:${ver}")
+            logger.lifecycle("[DRY RUN] Would push multi-arch image to GHCR: ${ghcrRegistry}/${imageName}:${ver}")
             throw org.gradle.api.tasks.StopExecutionException()
         }
         val ghcrRegistry = System.getenv("GHCR_REGISTRY")
             ?: throw GradleException("GHCR_REGISTRY not set in slot env — add to zbb.yaml")
-        val ecrRepoName = System.getenv("ECR_REPO_NAME")
-            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
-        commandLine("docker", "buildx", "build",
-            "--platform", "linux/amd64,linux/arm64",
-            "-t", "${ghcrRegistry}/${ecrRepoName}:${ver}", "--push", ".")
+        val isCI = System.getenv("CI") == "true"
+        val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
+
+        if (isCI) {
+            // CI: Docker login already done by GitHub Actions, use default buildx builder
+            commandLine("docker", "buildx", "build",
+                "-f", dockerfilePath,
+                "--platform", "linux/amd64,linux/arm64",
+                "-t", "${ghcrRegistry}/${imageName}:${ver}", "--push", ".")
+        } else {
+            // Local: manage auth and builder ourselves (bypasses WSL credsStore)
+            val npmToken = System.getenv("NPM_TOKEN")
+                ?: throw GradleException("NPM_TOKEN not set — needed for GHCR push")
+            val tmpDockerConfig = java.io.File(project.buildDir, "docker-publish-config").apply { mkdirs() }
+
+            val srcBuildx = java.io.File(System.getProperty("user.home"), ".docker/buildx")
+            val dstBuildx = java.io.File(tmpDockerConfig, "buildx")
+            if (srcBuildx.exists() && !dstBuildx.exists()) {
+                srcBuildx.toPath().toRealPath().let { src ->
+                    java.nio.file.Files.createSymbolicLink(dstBuildx.toPath(), src)
+                }
+            }
+
+            val ghcrAuthStr = java.util.Base64.getEncoder().encodeToString("auditlogic:${npmToken}".toByteArray())
+            java.io.File(tmpDockerConfig, "config.json").writeText(
+                """{"auths":{"ghcr.io":{"auth":"$ghcrAuthStr"}}}"""
+            )
+
+            commandLine("docker", "buildx", "build",
+                "--builder", "multiarch",
+                "-f", dockerfilePath,
+                "--platform", "linux/amd64,linux/arm64",
+                "-t", "${ghcrRegistry}/${imageName}:${ver}", "--push", ".")
+            environment("DOCKER_CONFIG", tmpDockerConfig.absolutePath)
+        }
     }
 }
 

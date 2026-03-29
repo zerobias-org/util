@@ -106,7 +106,7 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
       }
       if (response.headers['hub-error'] === 'true') {
         this._metadata.status = ConnectionStatus.Error;
-        return Promise.reject(response);
+        return Promise.reject(CoreError.deserialize(response.data));
       }
       this._metadata.status = ConnectionStatus.On;
       return response;

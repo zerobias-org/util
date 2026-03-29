@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/module-test-client",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Wire protocol client for testing Hub modules — implements any module's generated interface via manifest-driven dynamic invocation",
   "type": "module",
   "main": "dist/index.js",

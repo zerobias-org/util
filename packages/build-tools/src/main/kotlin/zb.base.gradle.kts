@@ -65,6 +65,7 @@ val preReleaseCounter: String = try {
 } catch (e: Exception) { "0" }
 
 // Read base version from package.json (source of truth)
+// Returns the clean semver without pre-release suffix
 fun readBaseVersion(): String {
     val pkgJson = project.file("package.json")
     if (!pkgJson.exists()) {
@@ -73,23 +74,80 @@ fun readBaseVersion(): String {
     val match = Regex(""""version"\s*:\s*"([^"]+)"""").find(pkgJson.readText())
     val raw = match?.groupValues?.get(1)
         ?: throw GradleException("Cannot find 'version' in package.json at ${pkgJson.absolutePath}")
-    return raw.replace(Regex("-.*"), "")  // strip existing pre-release suffix
+    return raw.replace(Regex("-.*"), "")
+}
+
+// Read full version from package.json including any pre-release suffix
+fun readFullVersion(): String {
+    val pkgJson = project.file("package.json")
+    if (!pkgJson.exists()) {
+        throw GradleException("package.json not found in ${project.projectDir} — cannot determine version")
+    }
+    val match = Regex(""""version"\s*:\s*"([^"]+)"""").find(pkgJson.readText())
+    return match?.groupValues?.get(1)
+        ?: throw GradleException("Cannot find 'version' in package.json at ${pkgJson.absolutePath}")
 }
 
 val baseVersion = readBaseVersion()
 
-version = when (branch) {
-    "main"   -> baseVersion                                    // 6.8.0
-    "qa"     -> "${baseVersion}-rc.${preReleaseCounter}"       // 6.8.0-rc.4
-    "dev"    -> "${baseVersion}-alpha.${preReleaseCounter}"    // 6.8.0-alpha.12
-    else     -> "${baseVersion}-dev.${preReleaseCounter}"      // 6.8.0-dev.7
+// For non-main branches, resolve a pre-release version that doesn't collide
+// with already-published versions on the registry.
+fun resolvePreReleaseVersion(base: String, suffix: String, startCounter: Int): String {
+    val pkgJson = project.file("package.json")
+    if (!pkgJson.exists()) return "${base}-${suffix}.${startCounter}"
+    val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1)
+        ?: return "${base}-${suffix}.${startCounter}"
+
+    var counter = startCounter
+    var candidate = "${base}-${suffix}.${counter}"
+    // Check up to 50 increments (safety limit)
+    repeat(50) {
+        val exists = try {
+            val output = providers.exec {
+                commandLine("npm", "view", "${name}@${candidate}", "version")
+                isIgnoreExitValue = true
+            }.standardOutput.asText.get().trim()
+            output == candidate
+        } catch (e: Exception) { false }
+
+        if (!exists) return candidate
+        counter++
+        candidate = "${base}-${suffix}.${counter}"
+    }
+    return candidate // fallback — use whatever we landed on
+}
+
+val gitCounter = preReleaseCounter.toIntOrNull() ?: 0
+val fullVersion = readFullVersion()
+
+// If package.json already has the correct branch suffix, use it directly.
+// Only re-resolve if the suffix doesn't match the current branch.
+val branchSuffix: String? = when (branch) {
+    "main" -> null
+    "qa"   -> "rc"
+    "dev"  -> "dev"
+    "uat"  -> "uat"
+    else   -> "uat"
+}
+
+// At config time, compute version without querying registry.
+// resolvePreReleaseVersion (registry check + increment) only runs during publish.
+version = if (branch == "main") {
+    baseVersion
+} else if (branchSuffix != null && fullVersion.contains("-${branchSuffix}.")) {
+    // package.json already has the right suffix (e.g. 6.11.0-uat.0) — use as-is
+    fullVersion
+} else {
+    // Default: base version + branch suffix + git counter (no registry check)
+    "${baseVersion}-${branchSuffix!!}.${gitCounter}"
 }
 
 val npmDistTag: String = when (branch) {
     "main" -> "latest"
-    "qa"   -> "rc"
-    "dev"  -> "alpha"
-    else   -> "dev"
+    "qa"   -> "qa"
+    "dev"  -> "dev"
+    "uat"  -> "uat"
+    else   -> "uat"
 }
 
 // Store as extra properties for child plugins to access
@@ -127,7 +185,7 @@ val bumpVersion by tasks.registering(Exec::class) {
 val tagVersion by tasks.registering(Exec::class) {
     group = "publish"
     description = "Create git tag for published version"
-    onlyIf { branch == "main" && !(extra["isDryRun"] as Boolean) }
+    onlyIf { branch == "main" && !(extra["isDryRun"] as Boolean) && promoteAllSucceeded }
     workingDir(project.rootDir)
     commandLine("echo", "placeholder")
     doFirst {
@@ -144,24 +202,31 @@ val isDryRun: Boolean = project.findProperty("dryRun") == "true"
 extra["isDryRun"] = isDryRun
 
 // ────────────────────────────────────────────────────────────
-// Changed-since-tag detection — publish tasks skip unchanged modules
-// Uses last version tag (git describe --tags --abbrev=0), not HEAD~1
+// Changed-since detection — publish tasks skip unchanged modules
+// On main: compares against last version tag (what changed since last release)
+// On branches: always publish (dev versions are cheap, skip detection adds friction)
 // ────────────────────────────────────────────────────────────
 val changedSinceTag: Boolean by lazy {
-    try {
-        val lastTag = providers.exec {
-            commandLine("git", "describe", "--tags", "--abbrev=0")
-        }.standardOutput.asText.get().trim()
-
-        val changedFiles = providers.exec {
-            commandLine("git", "diff", "--name-only", lastTag, "HEAD")
-        }.standardOutput.asText.get().trim()
-
-        val projectRelativePath = project.projectDir.relativeTo(project.rootDir).path
-        changedFiles.lines().any { it.startsWith(projectRelativePath) }
-    } catch (e: Exception) {
-        // No tags exist yet (bootstrap) -> treat as changed
+    if (branch != "main") {
         true
+    } else {
+        try {
+            // Find a tag matching this module's prefix
+            val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
+            val lastTag = providers.exec {
+                commandLine("git", "describe", "--tags", "--match", "${tagPrefix}*", "--abbrev=0")
+            }.standardOutput.asText.get().trim()
+
+            val changedFiles = providers.exec {
+                commandLine("git", "diff", "--name-only", lastTag, "HEAD")
+            }.standardOutput.asText.get().trim()
+
+            val projectRelativePath = project.projectDir.relativeTo(project.rootDir).path
+            changedFiles.lines().any { it.startsWith(projectRelativePath) }
+        } catch (e: Exception) {
+            // No matching tag found — always publish
+            true
+        }
     }
 }
 
@@ -237,6 +302,24 @@ val preflightChecks by tasks.registering {
                 logger.warn("Preflight WARNING: AWS_ACCESS_KEY_ID not set — ECR push will fail")
             } else {
                 logger.lifecycle("Preflight: AWS credentials are set")
+            }
+
+            // 5b. Docker buildx multi-platform support
+            try {
+                val buildxCheck = providers.exec {
+                    commandLine("docker", "buildx", "inspect", "--bootstrap")
+                    isIgnoreExitValue = true
+                }
+                val output = buildxCheck.standardOutput.asText.get()
+                if (output.contains("linux/amd64") && output.contains("linux/arm64")) {
+                    logger.lifecycle("Preflight: Docker buildx multi-platform available")
+                } else {
+                    logger.warn("Preflight WARNING: Docker buildx missing multi-platform support (need linux/amd64 + linux/arm64)")
+                    logger.warn("  Fix: docker buildx create --name multiarch --driver docker-container --use && docker buildx inspect --bootstrap")
+                }
+            } catch (e: Exception) {
+                logger.warn("Preflight WARNING: Docker buildx not available — ${e.message}")
+                logger.warn("  Fix: docker buildx create --name multiarch --driver docker-container --use")
             }
         }
 
@@ -435,15 +518,30 @@ val publishHubSdk by tasks.registering {
     dependsOn(gate)
 }
 
+// On branches, resolve version against registry before publishing to avoid conflicts.
+// On main, bumpVersion handles this via commit-and-tag-version.
+val resolvePublishVersion by tasks.registering {
+    group = "publish"
+    description = "Resolve a non-conflicting version for branch publish"
+    onlyIf { branch != "main" && branchSuffix != null }
+    doLast {
+        val resolved = resolvePreReleaseVersion(baseVersion, branchSuffix!!, gitCounter)
+        if (resolved != project.version.toString()) {
+            logger.lifecycle("Resolved publish version: ${project.version} → $resolved")
+            project.version = resolved
+        }
+    }
+}
+
 val publishAll by tasks.registering {
     group = "publish"
     description = "Publish all artifacts (staging -- uses --tag next)"
-    dependsOn(bumpVersion, publishNpm, publishImage, publishSdk, publishHubSdk)
+    dependsOn(bumpVersion, resolvePublishVersion, publishNpm, publishImage, publishSdk, publishHubSdk)
 }
 
-// Ensure bump runs before any publish task reads version
+// Ensure version resolution runs before any publish task reads version
 listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { taskName ->
-    tasks.named(taskName) { mustRunAfter(bumpVersion) }
+    tasks.named(taskName) { mustRunAfter(bumpVersion, resolvePublishVersion) }
 }
 
 // Guard lifecycle publish stubs: skip if module has no changes since last tag.
@@ -462,16 +560,54 @@ listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { ta
     }
 }
 
-// Shared success flag -- set by publishAll.doLast only if all dependsOn tasks succeed.
-// promoteAll uses this to ensure it only runs after successful staging publish.
-// IMPORTANT: Do NOT use finalizedBy(promoteAll) -- finalizedBy runs on failure too.
+// Shared success flags for publish pipeline coordination.
+// publishAllSucceeded: gates promoteAll, commitVersion, tagVersion
+// promoteAllSucceeded: gates commitVersion, tagVersion (only commit if fully promoted)
 var publishAllSucceeded = false
+var promoteAllSucceeded = false
+
+// Track which npm packages were staged to 'next' (for rollback on failure)
+val stagedPackages = mutableListOf<Pair<String, java.io.File>>() // (packageName, workingDir)
+extra["stagedPackages"] = stagedPackages
 
 publishAll.configure {
     doLast {
-        // doLast only executes if publishAll and all its dependsOn succeeded
         publishAllSucceeded = true
         logger.lifecycle("All staging publishes succeeded -- ready to promote")
+    }
+}
+
+// Rollback on any publish failure — remove 'next' dist-tags and revert package.json bump.
+// Fires on both partial staging failure and promote failure.
+gradle.buildFinished {
+    if (!isDryRun && branch == "main" && stagedPackages.isNotEmpty() && !promoteAllSucceeded) {
+        logger.warn("⚠ Publish pipeline failed — rolling back ${stagedPackages.size} staged package(s)")
+
+        // Remove 'next' dist-tags for all packages that were staged
+        for ((pkgName, workDir) in stagedPackages) {
+            try {
+                com.zerobias.buildtools.util.ExecUtils.exec(
+                    command = listOf("npm", "dist-tag", "rm", pkgName, "next"),
+                    workingDir = workDir,
+                    throwOnError = false
+                )
+                logger.warn("  Removed 'next' dist-tag from $pkgName")
+            } catch (e: Exception) {
+                logger.warn("  Failed to remove 'next' tag from $pkgName: ${e.message}")
+            }
+        }
+
+        // Revert package.json bump
+        try {
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "checkout", "--", "package.json"),
+                workingDir = project.projectDir,
+                throwOnError = false
+            )
+            logger.warn("  Reverted package.json version bump")
+        } catch (e: Exception) {
+            logger.warn("  Failed to revert package.json: ${e.message}")
+        }
     }
 }
 
@@ -485,17 +621,122 @@ val promoteAll by tasks.registering {
         }
         publishAllSucceeded
     }
+    doLast {
+        promoteAllSucceeded = true
+        logger.lifecycle("All promotions succeeded")
+    }
 }
 
-// Top-level publish task: bump → stage → promote → tag
+// Commit published version after successful promote
+val commitVersion by tasks.registering {
+    group = "publish"
+    description = "Commit bumped package.json version"
+    mustRunAfter(promoteAll)
+    onlyIf { !isDryRun && promoteAllSucceeded }
+    doLast {
+        val ver = project.version.toString()
+        val pkgFile = project.file("package.json")
+        val moduleDir = project.projectDir.relativeTo(project.rootDir).path
+        val pkgPath = "${moduleDir}/package.json"
+
+        // Write the published version into package.json (restorePackageJson may have reverted it)
+        val content = pkgFile.readText()
+        val updated = content.replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
+        pkgFile.writeText(updated)
+
+        // Stage and commit
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("git", "add", pkgPath),
+            workingDir = project.rootDir,
+            throwOnError = true
+        )
+
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("git", "commit", "-m", "chore(release): ${zb.vendor.get()}-${zb.product.get()} v${ver}"),
+            workingDir = project.rootDir,
+            throwOnError = true
+        )
+        logger.lifecycle("Committed version bump: v${ver}")
+    }
+}
+
+// Publish release event to the global event router (AWS Lambda)
+val publishReleaseEvent by tasks.registering {
+    group = "publish"
+    description = "Publish release event to event router Lambda"
+    mustRunAfter(tagVersion)
+    onlyIf { !isDryRun && promoteAllSucceeded }
+    doLast {
+        val pkgJson = project.file("package.json")
+        if (!pkgJson.exists()) return@doLast
+
+        val content = pkgJson.readText()
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: return@doLast
+        val ver = project.version.toString()
+
+        // Get dist-tags
+        val distTags = try {
+            com.zerobias.buildtools.util.ExecUtils.execCapture(
+                command = listOf("npm", "view", "${name}@${ver}", "dist-tags", "--json"),
+                workingDir = project.projectDir,
+                throwOnError = false
+            ).trim()
+        } catch (e: Exception) { "{}" }
+
+        // Get git info
+        val commitHash = try {
+            providers.exec { commandLine("git", "rev-parse", "HEAD") }
+                .standardOutput.asText.get().trim()
+        } catch (e: Exception) { "" }
+
+        val repository = try {
+            providers.exec { commandLine("git", "remote", "get-url", "origin") }
+                .standardOutput.asText.get().trim()
+                .replace(Regex("""\.git$"""), "")
+                .replace(Regex("""^git@github\.com:"""), "https://github.com/")
+        } catch (e: Exception) { "" }
+
+        // Extract zerobias/auditmation metadata from package.json
+        val zerobias = Regex(""""zerobias"\s*:\s*(\{[^}]*\})""").find(content)?.groupValues?.get(1) ?: "{}"
+        val auditmation = Regex(""""auditmation"\s*:\s*(\{[^}]*\})""").find(content)?.groupValues?.get(1) ?: "{}"
+
+        val eventId = java.util.UUID.randomUUID().toString()
+        val payload = """{"body":{"id":"$eventId","service":"release","eventType":"release","name":"$name","version":"$ver","repository":"$repository","commitHash":"$commitHash","distTags":$distTags,"zerobias":$zerobias,"auditmation":$auditmation}}"""
+
+        logger.lifecycle("Publishing release event for ${name}@${ver}")
+
+        try {
+            val result = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                command = listOf(
+                    "aws", "lambda", "invoke",
+                    "--function-name", "auditmation-event-router-events",
+                    "--payload", payload,
+                    "--cli-binary-format", "raw-in-base64-out",
+                    "--region", "us-east-1",
+                    "/dev/stdout"
+                ),
+                workingDir = project.projectDir,
+                throwOnError = true
+            ).trim()
+            logger.lifecycle("Release event published: $result")
+        } catch (e: Exception) {
+            logger.warn("Failed to publish release event: ${e.message}")
+            // Non-fatal — don't fail the publish for an event routing issue
+        }
+    }
+}
+
+// Top-level publish task: bump → stage → promote → commit → tag → release event
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
-    dependsOn(publishAll, promoteAll, tagVersion)
+    dependsOn(publishAll, promoteAll, commitVersion, tagVersion, publishReleaseEvent)
 }
 
-// tagVersion runs after promote succeeds
-tagVersion.configure { mustRunAfter(promoteAll) }
+// Ordering: promote → commit → tag → release event
+tagVersion.configure { mustRunAfter(commitVersion) }
+commitVersion.configure { mustRunAfter(promoteAll) }
+publishReleaseEvent.configure { mustRunAfter(tagVersion) }
 
 // ────────────────────────────────────────────────────────────
 // Metadata sync — utility task (not in default build chain)
