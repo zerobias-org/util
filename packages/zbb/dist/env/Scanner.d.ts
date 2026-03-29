@@ -8,5 +8,7 @@ export interface ScannedVar {
 /**
  * Scan repo root and all project zbb.yaml files, collecting env declarations.
  * First declaration wins for defaults/generation. Returns in discovery order.
+ *
+ * When projectOnly is set, scans only that single zbb.yaml (for inherit: false projects).
  */
-export declare function scanEnvDeclarations(repoRoot: string): Promise<ScannedVar[]>;
+export declare function scanEnvDeclarations(repoRoot: string, projectOnly?: string): Promise<ScannedVar[]>;

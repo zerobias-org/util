@@ -5,8 +5,23 @@ import { loadYamlOrDefault } from '../yaml.js';
 /**
  * Scan repo root and all project zbb.yaml files, collecting env declarations.
  * First declaration wins for defaults/generation. Returns in discovery order.
+ *
+ * When projectOnly is set, scans only that single zbb.yaml (for inherit: false projects).
  */
-export async function scanEnvDeclarations(repoRoot) {
+export async function scanEnvDeclarations(repoRoot, projectOnly) {
+    if (projectOnly) {
+        const vars = [];
+        const config = await loadYamlOrDefault(projectOnly, {});
+        if (config.env) {
+            for (const [name, decl] of Object.entries(config.env)) {
+                vars.push({ name, declaration: decl, source: relative(repoRoot, projectOnly) });
+            }
+        }
+        return vars;
+    }
+    return _scanAll(repoRoot);
+}
+async function _scanAll(repoRoot) {
     const vars = [];
     const seen = new Set();
     // 1. Repo-level .zbb.yaml

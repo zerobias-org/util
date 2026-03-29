@@ -61,9 +61,16 @@ export class LoggerEngine {
       trace: 6
     };
 
+    // Use printf format to avoid logform's json() which uses
+    // safe-stable-stringify.configure() — broken under Bun's bundler
+    const safeFormat = winston.format.printf((info) => {
+      return JSON.stringify(info);
+    });
+
     this._logger = winston.createLogger({
       levels: customLevels,
       level: 'trace', // Allow all levels, we filter in our log() method
+      format: safeFormat,
       transports
     });
   }

@@ -9,7 +9,7 @@ import { scanEnvDeclarations } from '../env/Scanner.js';
 import { resolveAll } from '../env/Resolver.js';
 import { generateSecret } from '../env/SecretGen.js';
 import { saveYaml } from '../yaml.js';
-import { findRepoRoot, getSlotsDir, loadUserConfig, loadRepoConfig, } from '../config.js';
+import { findRepoRoot, getSlotsDir, loadUserConfig, loadRepoConfig, loadProjectConfig, } from '../config.js';
 export class SlotManager {
     /**
      * Create a new slot.
@@ -34,10 +34,18 @@ export class SlotManager {
         }
         // Find repo root (optional — slot can be created outside a project)
         const repoRoot = options.repoRoot ?? findRepoRoot(process.cwd());
+        // Check if current project opts out of repo-wide inheritance
+        const projectConfig = await loadProjectConfig(process.cwd());
+        const inherit = projectConfig.inherit !== false;
         let scanned = [];
-        if (repoRoot) {
+        if (!inherit) {
+            // Standalone project — scan only this project's zbb.yaml
+            const { join } = await import('node:path');
+            scanned = await scanEnvDeclarations(process.cwd(), join(process.cwd(), 'zbb.yaml'));
+        }
+        else if (repoRoot) {
             const repoConfig = await loadRepoConfig(repoRoot);
-            // 1. Scan all zbb.yaml files
+            // Scan all zbb.yaml files across repo
             scanned = await scanEnvDeclarations(repoRoot);
         }
         // 2. Allocate a non-overlapping port range for this slot

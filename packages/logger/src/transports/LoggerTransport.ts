@@ -177,6 +177,22 @@ export abstract class LoggerTransport extends Transport {
     // Clean up extra newlines
     output = output.replaceAll(/\n+/g, '\n').replace(/\n$/, '');
 
+    // Wrap lines to maxLineLength if set. Continuation lines indented with 4 spaces.
+    if (this.maxLineLength > 0) {
+      const indent = '    ';
+      const wrapWidth = this.maxLineLength - indent.length;
+      output = output.split('\n').map(line => {
+        if (line.length <= this.maxLineLength) return line;
+        const first = line.slice(0, this.maxLineLength);
+        const rest = line.slice(this.maxLineLength);
+        const chunks: string[] = [first];
+        for (let i = 0; i < rest.length; i += wrapWidth) {
+          chunks.push(indent + rest.slice(i, i + wrapWidth));
+        }
+        return chunks.join('\n');
+      }).join('\n');
+    }
+
     return output;
   }
 

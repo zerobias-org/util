@@ -14,6 +14,7 @@ import {
   getSlotsDir,
   loadUserConfig,
   loadRepoConfig,
+  loadProjectConfig,
   type RepoConfig,
   type UserConfig,
 } from '../config.js';
@@ -53,10 +54,18 @@ export class SlotManager {
     // Find repo root (optional — slot can be created outside a project)
     const repoRoot = options.repoRoot ?? findRepoRoot(process.cwd());
 
+    // Check if current project opts out of repo-wide inheritance
+    const projectConfig = await loadProjectConfig(process.cwd());
+    const inherit = projectConfig.inherit !== false;
+
     let scanned: Awaited<ReturnType<typeof scanEnvDeclarations>> = [];
-    if (repoRoot) {
+    if (!inherit) {
+      // Standalone project — scan only this project's zbb.yaml
+      const { join } = await import('node:path');
+      scanned = await scanEnvDeclarations(process.cwd(), join(process.cwd(), 'zbb.yaml'));
+    } else if (repoRoot) {
       const repoConfig = await loadRepoConfig(repoRoot);
-      // 1. Scan all zbb.yaml files
+      // Scan all zbb.yaml files across repo
       scanned = await scanEnvDeclarations(repoRoot);
     }
 

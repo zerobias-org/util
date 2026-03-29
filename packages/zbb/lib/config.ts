@@ -27,15 +27,18 @@ export interface EnvVarDeclaration {
 }
 
 export interface StackConfig {
-  compose?: string;
+  compose?: string | string[];
   services?: string[];
   healthcheck?: Record<string, { container: string; timeout: number }>;
+  exec_hints?: string[];
 }
 
 export interface ProjectConfig {
   env?: Record<string, EnvVarDeclaration>;
   require?: ToolRequirement[];
   stack?: StackConfig;
+  /** When false, slot creation scans only this project's zbb.yaml — no repo-wide scan. Default: true. */
+  inherit?: boolean;
 }
 
 export interface RepoConfig {

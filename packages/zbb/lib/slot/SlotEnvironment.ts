@@ -13,6 +13,14 @@ const SENSITIVE_PATTERNS = [
   /jwt$/i,
 ];
 
+/**
+ * Source values for ManifestEntry:
+ *   "override"  — user set via `zbb env set` (written to overrides.env)
+ *   "resolver"  — computed by a registered resolver function
+ *   "user"      — user-declared in .env directly
+ *   "dns"       — provisioned from DNS TXT records by slot.resolve()
+ *   "default"   — set by slot create as a default value
+ */
 export interface ManifestEntry {
   source: string;
   type: string;
@@ -20,6 +28,7 @@ export interface ManifestEntry {
   derived?: boolean;
   generated?: string;
   allocated?: number;
+  description?: string;
 }
 
 /**
@@ -123,6 +132,37 @@ export class SlotEnvironment extends EventEmitter {
       });
     }
     await this.writeOverrides();
+    this.emit('change', { key, value });
+  }
+
+  /**
+   * Set a value in the declared env (.env file) with explicit source tracking in manifest.
+   * Used by slot.resolve() to record DNS-provisioned values.
+   *
+   * - If the key already has a manifest entry with source "user" or "override": no-op.
+   * - Otherwise: sets value in declared env and records manifest with given source.
+   *
+   * @param key - Environment variable name
+   * @param value - Value to set
+   * @param source - Source label (e.g. "dns")
+   * @param mask - Optional: force mask for display
+   */
+  async setDeclared(key: string, value: string, source: string, mask?: boolean): Promise<void> {
+    const existing = this.manifest.get(key);
+    if (existing?.source === 'user' || existing?.source === 'override') {
+      return; // Never overwrite user or override values
+    }
+
+    this.declared.set(key, value);
+    this.manifest.set(key, {
+      source,
+      type: 'string',
+      ...(mask !== undefined ? { mask } : {}),
+    });
+
+    const { saveYaml } = await import('../yaml.js');
+    await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
+    await writeFile(this.envPath, serializeEnv(this.declared), 'utf-8');
     this.emit('change', { key, value });
   }
 
