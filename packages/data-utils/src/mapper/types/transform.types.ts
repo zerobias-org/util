@@ -20,7 +20,7 @@ export type TransformType =
 /**
  * Data types for conversion
  */
-export type DataType = 'string' | 'number' | 'date' | 'boolean';
+export type DataType = 'string' | 'number' | 'date' | 'boolean' | 'array';
 
 /**
  * Conditional operators for conditional transform
