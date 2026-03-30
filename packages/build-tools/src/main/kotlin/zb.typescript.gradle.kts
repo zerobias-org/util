@@ -457,8 +457,11 @@ tasks.named("testDocker") {
 // These tasks only run when buildImage or testDocker is in the task graph.
 // ════════════════════════════════════════════════════════════
 
+val isInterface: Boolean = extra["isInterface"] as Boolean
+
 // Helper: check if Docker-related tasks are in the graph
 fun isDockerBuild(): Boolean {
+    if (isInterface) return false
     return try {
         gradle.taskGraph.hasTask(tasks.named("buildImage").get()) ||
         gradle.taskGraph.hasTask(tasks.named("testDocker").get())
@@ -750,6 +753,7 @@ val buildImageExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Build Docker image"
     dependsOn(compileServer, generateDockerfile)
+    onlyIf { !isInterface }
     workingDir(project.projectDir)
     val imageName = zb.dockerImageName.get()
     val resolvedVersion = project.version.toString()
@@ -1506,7 +1510,7 @@ publishHubSdkExec.configure { mustRunAfter(publishNpmExec) }
 val ensureEcrRepo by tasks.registering(Exec::class) {
     group = "publish"
     description = "Create ECR repository if it does not exist"
-    onlyIf { zb.hasConnectionProfile.get() && !isDryRun }
+    onlyIf { !isInterface && zb.hasConnectionProfile.get() && !isDryRun }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
     doFirst {
@@ -1525,7 +1529,7 @@ val publishImageEcr by tasks.registering(Exec::class) {
     group = "publish"
     description = "Build and push multi-arch Docker image to ECR"
     dependsOn(tasks.named("buildImage"), ensureEcrRepo, preflightChecks)
-    onlyIf { zb.hasConnectionProfile.get() }
+    onlyIf { !isInterface && zb.hasConnectionProfile.get() }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
     doFirst {
@@ -1538,46 +1542,26 @@ val publishImageEcr by tasks.registering(Exec::class) {
         }
         val ecrRegistry = System.getenv("ECR_REGISTRY")
             ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
-        val isCI = System.getenv("CI") == "true"
         val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
+        val ecrImage = "${ecrRegistry}/${imageName}:${ver}"
 
-        if (isCI) {
-            // CI: Docker login already done by GitHub Actions, use default buildx builder
-            commandLine("docker", "buildx", "build",
-                "-f", dockerfilePath,
-                "--platform", "linux/amd64,linux/arm64",
-                "-t", "${ecrRegistry}/${imageName}:${ver}", "--push", ".")
-        } else {
-            // Local: manage auth and builder ourselves (bypasses WSL credsStore)
-            val awsRegion = System.getenv("AWS_REGION") ?: "us-east-1"
-            val tmpDockerConfig = java.io.File(project.buildDir, "docker-publish-config").apply { mkdirs() }
+        // Try normal buildx push first (works when credsStore is functional)
+        // Falls back to explicit auth config if host credentials fail
+        commandLine("bash", "-c", """
+            docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ecrImage --push . 2>&1 && exit 0
 
-            val srcBuildx = java.io.File(System.getProperty("user.home"), ".docker/buildx")
-            val dstBuildx = java.io.File(tmpDockerConfig, "buildx")
-            if (srcBuildx.exists() && !dstBuildx.exists()) {
-                srcBuildx.toPath().toRealPath().let { src ->
-                    java.nio.file.Files.createSymbolicLink(dstBuildx.toPath(), src)
-                }
-            }
-
-            val ecrToken = ProcessBuilder("aws", "ecr", "get-login-password", "--region", awsRegion)
-                .start().let { proc ->
-                    val token = proc.inputStream.bufferedReader().readText().trim()
-                    proc.waitFor()
-                    token
-                }
-            val authStr = java.util.Base64.getEncoder().encodeToString("AWS:${ecrToken}".toByteArray())
-            java.io.File(tmpDockerConfig, "config.json").writeText(
-                """{"auths":{"${ecrRegistry}":{"auth":"$authStr"}}}"""
-            )
-
-            commandLine("docker", "buildx", "build",
-                "--builder", "multiarch",
-                "-f", dockerfilePath,
-                "--platform", "linux/amd64,linux/arm64",
-                "-t", "${ecrRegistry}/${imageName}:${ver}", "--push", ".")
-            environment("DOCKER_CONFIG", tmpDockerConfig.absolutePath)
-        }
+            echo "Buildx push failed with host credentials — retrying with explicit ECR auth..."
+            TMPCONF=$(mktemp -d)
+            # Symlink buildx state so builder is available
+            if [ -d ~/.docker/buildx ]; then ln -sf $(realpath ~/.docker/buildx) ${'$'}TMPCONF/buildx; fi
+            ECR_TOKEN=$(aws ecr get-login-password --region ${System.getenv("AWS_REGION") ?: "us-east-1"})
+            AUTH=$(echo -n "AWS:${'$'}ECR_TOKEN" | base64 -w0)
+            echo '{"auths":{"$ecrRegistry":{"auth":"'"${'$'}AUTH"'"}}}' > ${'$'}TMPCONF/config.json
+            DOCKER_CONFIG=${'$'}TMPCONF docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ecrImage --push .
+            EXIT=${'$'}?
+            rm -rf ${'$'}TMPCONF
+            exit ${'$'}EXIT
+        """.trimIndent())
     }
 }
 
@@ -1586,7 +1570,7 @@ val publishImageGhcr by tasks.registering(Exec::class) {
     group = "publish"
     description = "Build and push multi-arch Docker image to GHCR"
     dependsOn(tasks.named("buildImage"), publishImageEcr, preflightChecks)
-    onlyIf { zb.hasConnectionProfile.get() }
+    onlyIf { !isInterface && zb.hasConnectionProfile.get() }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
     doFirst {
@@ -1599,41 +1583,25 @@ val publishImageGhcr by tasks.registering(Exec::class) {
         }
         val ghcrRegistry = System.getenv("GHCR_REGISTRY")
             ?: throw GradleException("GHCR_REGISTRY not set in slot env — add to zbb.yaml")
-        val isCI = System.getenv("CI") == "true"
         val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
+        val ghcrImage = "${ghcrRegistry}/${imageName}:${ver}"
+        val npmToken = System.getenv("NPM_TOKEN")
+            ?: throw GradleException("NPM_TOKEN not set — needed for GHCR push")
 
-        if (isCI) {
-            // CI: Docker login already done by GitHub Actions, use default buildx builder
-            commandLine("docker", "buildx", "build",
-                "-f", dockerfilePath,
-                "--platform", "linux/amd64,linux/arm64",
-                "-t", "${ghcrRegistry}/${imageName}:${ver}", "--push", ".")
-        } else {
-            // Local: manage auth and builder ourselves (bypasses WSL credsStore)
-            val npmToken = System.getenv("NPM_TOKEN")
-                ?: throw GradleException("NPM_TOKEN not set — needed for GHCR push")
-            val tmpDockerConfig = java.io.File(project.buildDir, "docker-publish-config").apply { mkdirs() }
+        // Try normal buildx push first, fall back to explicit auth config
+        commandLine("bash", "-c", """
+            docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ghcrImage --push . 2>&1 && exit 0
 
-            val srcBuildx = java.io.File(System.getProperty("user.home"), ".docker/buildx")
-            val dstBuildx = java.io.File(tmpDockerConfig, "buildx")
-            if (srcBuildx.exists() && !dstBuildx.exists()) {
-                srcBuildx.toPath().toRealPath().let { src ->
-                    java.nio.file.Files.createSymbolicLink(dstBuildx.toPath(), src)
-                }
-            }
-
-            val ghcrAuthStr = java.util.Base64.getEncoder().encodeToString("auditlogic:${npmToken}".toByteArray())
-            java.io.File(tmpDockerConfig, "config.json").writeText(
-                """{"auths":{"ghcr.io":{"auth":"$ghcrAuthStr"}}}"""
-            )
-
-            commandLine("docker", "buildx", "build",
-                "--builder", "multiarch",
-                "-f", dockerfilePath,
-                "--platform", "linux/amd64,linux/arm64",
-                "-t", "${ghcrRegistry}/${imageName}:${ver}", "--push", ".")
-            environment("DOCKER_CONFIG", tmpDockerConfig.absolutePath)
-        }
+            echo "Buildx push failed with host credentials — retrying with explicit GHCR auth..."
+            TMPCONF=$(mktemp -d)
+            if [ -d ~/.docker/buildx ]; then ln -sf $(realpath ~/.docker/buildx) ${'$'}TMPCONF/buildx; fi
+            AUTH=$(echo -n "auditlogic:$npmToken" | base64 -w0)
+            echo '{"auths":{"ghcr.io":{"auth":"'"${'$'}AUTH"'"}}}' > ${'$'}TMPCONF/config.json
+            DOCKER_CONFIG=${'$'}TMPCONF docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ghcrImage --push .
+            EXIT=${'$'}?
+            rm -rf ${'$'}TMPCONF
+            exit ${'$'}EXIT
+        """.trimIndent())
     }
 }
 

@@ -19,12 +19,17 @@ export interface EnvVarDeclaration {
   description?: string;
   mask?: boolean;
   generate?: string;
-  source?: 'env' | 'cwd';
+  source?: 'env' | 'cwd' | 'vault';
+  /** Vault KV v2 ref — "mount/path.field" (single field lookup). Requires source: vault. */
+  vault?: string;
+  /** When true, always re-fetch on `zbb env refresh` / `zbb publish`. Default: false. */
+  refresh?: boolean;
   required?: boolean;
   deprecated?: boolean;
   replacedBy?: string;
   message?: string;
 }
+
 
 export interface StackConfig {
   compose?: string | string[];

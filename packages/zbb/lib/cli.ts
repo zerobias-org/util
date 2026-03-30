@@ -27,7 +27,6 @@ import { spawn } from 'node:child_process';
 /**
  * Extend slot from cwd context: walk up to find repo root (.zbb.yaml/gradlew),
  * scan zbb.yaml declarations, add missing vars to slot, re-export to process.env.
- * Shared by: slot load, zbb up/down/destroy, zbb dataloader.
  * Returns the repo root path, or null if no project context found.
  */
 async function extendSlotFromCwd(slot: Slot): Promise<string | null> {
@@ -46,6 +45,45 @@ async function extendSlotFromCwd(slot: Slot): Promise<string | null> {
   return repoRoot;
 }
 
+/**
+ * Full slot preparation: extend + resolve (DNS + vault) + re-export to process.env.
+ * Shared by: slot load, --slot flag, publish, gate, testHub, and all Gradle commands.
+ *
+ * @param slot - Loaded slot instance
+ * @param options.fatal - If true, vault errors abort (exit 1). Default: false (warnings only).
+ * @returns repo root path, or null
+ */
+async function prepareSlot(slot: Slot, options?: { fatal?: boolean }): Promise<string | null> {
+  const repoRoot = await extendSlotFromCwd(slot);
+
+  // Run resolve: DNS + vault
+  const vaultResult = await slot.resolve(repoRoot ?? undefined);
+
+  if (vaultResult.refreshed.length > 0) {
+    console.log('Vault credentials refreshed:');
+    for (const name of vaultResult.refreshed) {
+      console.log(`  \u2713 ${name}`);
+    }
+  }
+  if (vaultResult.errors.length > 0) {
+    for (const { name, error } of vaultResult.errors) {
+      console.error(`  \u2717 ${name}: ${error}`);
+    }
+    if (options?.fatal) {
+      console.error('Vault credential refresh failed — aborting');
+      process.exit(1);
+    }
+  }
+
+  // Re-export all slot env to process.env so child processes see updated values
+  const slotEnv = slot.env.getAll();
+  for (const [k, v] of Object.entries(slotEnv)) {
+    if (v) process.env[k] = v;
+  }
+
+  return repoRoot;
+}
+
 export async function main(argv: string[]): Promise<void> {
   let args = argv.slice(2);
 
@@ -56,13 +94,9 @@ export async function main(argv: string[]): Promise<void> {
     const slotName = args[slotIdx + 1];
     args = [...args.slice(0, slotIdx), ...args.slice(slotIdx + 2)];
 
-    // Load slot env into process.env
+    // Load slot and prepare: extend + resolve (DNS + vault) + re-export env
     const slot = await SlotManager.load(slotName);
     process.env.ZB_SLOT = slotName;
-    const slotEnv = slot.env.getAll();
-    for (const [k, v] of Object.entries(slotEnv)) {
-      if (v) process.env[k] = v;
-    }
 
     // Set JAVA_HOME if not already correct
     if (!process.env.JAVA_HOME || !process.env.JAVA_HOME.includes('21')) {
@@ -74,8 +108,7 @@ export async function main(argv: string[]): Promise<void> {
       }
     }
 
-    // Extend from cwd context
-    await extendSlotFromCwd(slot);
+    await prepareSlot(slot);
   }
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
@@ -182,7 +215,7 @@ export async function main(argv: string[]): Promise<void> {
 
     if (process.env.ZB_SLOT) {
       const slot = await SlotManager.load(process.env.ZB_SLOT);
-      await extendSlotFromCwd(slot);
+      await prepareSlot(slot, { fatal: true });
     }
 
     runGradle(['publish', ...publishArgs]);
@@ -200,7 +233,7 @@ export async function main(argv: string[]): Promise<void> {
   if (alias) {
     if (process.env.ZB_SLOT) {
       const slot = await SlotManager.load(process.env.ZB_SLOT);
-      await extendSlotFromCwd(slot);
+      await prepareSlot(slot);
     }
 
     // Print exec_hints after successful stackUp
@@ -226,7 +259,11 @@ export async function main(argv: string[]): Promise<void> {
     return;
   }
 
-  // Everything else → gradle
+  // Everything else → gradle (resolve slot if loaded)
+  if (process.env.ZB_SLOT) {
+    const slot = await SlotManager.load(process.env.ZB_SLOT);
+    await prepareSlot(slot);
+  }
   runGradle(args);
 }
 
@@ -291,37 +328,23 @@ async function handleSlot(args: string[]): Promise<void> {
 
       const slot = await SlotManager.load(slotName);
 
-      // Extend slot from cwd context (walk up to nearest zbb.yaml)
-      const repoRoot = await extendSlotFromCwd(slot);
+      // Extend + resolve (DNS + vault) + re-export env
+      const repoRoot = await prepareSlot(slot);
       if (!repoRoot) {
         if (isReload) {
-          // No-args reload requires project context
           console.error('No zbb.yaml or .zbb.yaml found. Run from inside a project directory.');
           process.exit(1);
         }
-        // Named load from non-project dir — warn but allow (user may cd into project after)
         console.warn('Warning: No zbb.yaml or .zbb.yaml found in directory tree. Slot extension skipped.');
       }
 
-      // Re-eval mode: already inside a slot, just re-export env to current shell
+      // Re-eval mode: already inside a slot, just confirm
       if (isReload) {
-        const slotEnv = slot.env.getAll();
-        // Write updated env to a sourceable file so the parent shell can pick it up
-        // For now, print export statements that the user can eval, or just confirm
-        // Actually: zbb runs as a child process, can't modify parent shell env.
-        // But we CAN update the slot's .env so next command in this shell sees changes.
         console.log(`Slot '${slotName}' re-evaluated from ${process.cwd()}`);
         break;
       }
 
-      // First load: apply slot env, run preflight, spawn subshell
-
-      // Apply slot env to process.env BEFORE preflight so checks like
-      // JAVA_HOME-dependent java version work correctly.
-      const slotEnvForPreflight = slot.env.getAll();
-      for (const [k, v] of Object.entries(slotEnvForPreflight)) {
-        if (v) process.env[k] = v;
-      }
+      // First load: run preflight, spawn subshell
 
       // Run preflight checks and apply cleanse (only if in a project)
       if (repoRoot) {
@@ -577,6 +600,31 @@ async function handleEnv(args: string[]): Promise<void> {
       break;
     }
 
+    case 'refresh': {
+      const repoRoot = findRepoRoot(process.cwd());
+      if (!repoRoot) {
+        console.error('Could not find repo root (.zbb.yaml or gradlew)');
+        process.exit(1);
+      }
+      console.log('Resolving external sources (DNS + vault)...');
+      const result = await slot.resolve(repoRoot);
+      if (result.refreshed.length > 0) {
+        for (const name of result.refreshed) {
+          console.log(`  \u2713 ${name}`);
+        }
+      }
+      if (result.errors.length > 0) {
+        for (const { name, error } of result.errors) {
+          console.error(`  \u2717 ${name}: ${error}`);
+        }
+        process.exit(1);
+      }
+      if (result.refreshed.length === 0 && result.errors.length === 0) {
+        console.log('  No vars to refresh.');
+      }
+      break;
+    }
+
     case 'diff': {
       const slotEnv = slot.env.getAll();
       const parentKeys = new Set(Object.keys(process.env));
@@ -597,7 +645,7 @@ async function handleEnv(args: string[]): Promise<void> {
 
     default:
       console.error(`Unknown env command: ${sub}`);
-      console.error('Usage: zbb env <list|get|set|unset|reset|diff>');
+      console.error('Usage: zbb env <list|get|set|unset|reset|refresh|diff>');
       process.exit(1);
   }
 }
@@ -811,7 +859,7 @@ function printUsage(): void {
 
 Usage:
   zbb slot <create|load|list|info|delete|gc>   Slot management
-  zbb env <list|get|set|unset|reset|diff>       Environment variables
+  zbb env <list|get|set|unset|reset|refresh|diff>  Environment variables
   zbb secret <create|get|list|update|delete>    Secret management
   zbb logs <list|show|debug|info>                Log viewer + log level control
   zbb dataloader [args...]                       Run dataloader with slot SQL env

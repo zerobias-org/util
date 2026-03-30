@@ -92,11 +92,14 @@ export async function extendSlot(slot, repoRoot) {
     for (const [k, v] of newCwdVars)
         preResolved.set(k, v);
     // 11. Collect missing derived/string vars (those not yet in preResolved)
+    //     Skip vault-sourced vars — they are handled by slot.resolve()
     const derivedVars = new Map();
     for (const v of missingVars) {
         if (preResolved.has(v.name))
             continue;
         if (v.declaration.deprecated)
+            continue;
+        if (v.declaration.source === 'vault')
             continue;
         const defaultVal = v.declaration.default;
         if (defaultVal !== undefined) {
@@ -158,7 +161,7 @@ export async function extendSlot(slot, repoRoot) {
             addedVars.push(v.name);
         }
     }
-    // New derived / string defaults
+    // New derived / string defaults (skip vault-sourced — handled by slot.resolve())
     for (const r of resolved) {
         if (r.name in currentEnv)
             continue; // safety: skip existing

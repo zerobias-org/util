@@ -5,6 +5,7 @@ import { SlotEnvironment } from './SlotEnvironment.js';
 import { SlotWatcher } from './SlotWatcher.js';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
 import { lookupDnsTxt as _lookupDnsTxt } from '../env/DnsTxtResolver.js';
+import { refreshVaultVars, type RefreshResult } from './refresh.js';
 
 /** Default DNS cache TTL in seconds when not available from DNS response */
 const DEFAULT_DNS_TTL = 30;
@@ -162,68 +163,66 @@ export class Slot extends EventEmitter {
   // ── DNS Provisioning ───────────────────────────────────────
 
   /**
-   * Resolve DNS TXT provisioning records for this slot.
+   * Resolve external env var sources for this slot.
    *
-   * Queries `_hub.<searchDomain>` TXT records and merges any KEY=value pairs
-   * into the slot environment as defaults. User-set values (source: "user" or
-   * "override") are never overwritten.
+   * Runs in order:
+   *   1. DNS TXT provisioning (declared values, silent on failure)
+   *   2. Vault secret resolution (overrides, refresh:true always re-fetched)
    *
-   * Uses a disk-based TTL cache at `{slot.path}/dns-cache.yml` to avoid
-   * redundant DNS queries. TTL defaults to 30 seconds.
-   *
-   * Never throws — DNS failures (timeout, NXDOMAIN) are silent no-ops.
-   *
-   * PROV-01: queries DNS and sets values with source "dns"
-   * PROV-02: respects TTL cache on disk
-   * PROV-03: never overwrites user/override values
-   * PROV-04: idempotent across multiple calls with same DNS data
-   * PROV-05: DNS failure is a silent no-op
+   * @param repoRoot - Repo root path (needed for vault var scanning)
+   * @returns Vault refresh result (DNS is silent)
    */
-  async resolve(): Promise<void> {
+  async resolve(repoRoot?: string): Promise<RefreshResult> {
+    // ── DNS TXT provisioning ──
+    await this.resolveDns();
+
+    // ── Vault secret resolution ──
+    if (repoRoot) {
+      return refreshVaultVars(this, repoRoot);
+    }
+    return { refreshed: [], errors: [] };
+  }
+
+  /**
+   * DNS TXT provisioning — queries `_hub.<searchDomain>` for KEY=value pairs.
+   * Silent on failure. Uses disk-based TTL cache.
+   */
+  private async resolveDns(): Promise<void> {
     const cachePath = join(this.path, 'dns-cache.yml');
 
-    // Check TTL cache — if valid, return immediately (PROV-02)
+    // Check TTL cache — if valid, skip
     const cache = await loadYamlOrDefault<DnsCache | null>(cachePath, null);
     if (cache && cache.expires_at) {
       if (Date.now() < new Date(cache.expires_at).getTime()) {
-        return; // Cache is still valid
+        return;
       }
     }
 
-    // Read DNS prefix from slot env — caller sets SLOT_RESOLVE_HOST (e.g. _hub in hub/zbb.yaml)
     const resolveHost = this.env.get('SLOT_RESOLVE_HOST');
-    if (!resolveHost) {
-      return; // No resolve host configured — nothing to query
-    }
+    if (!resolveHost) return;
 
-    // Query DNS — wrapped in try/catch for PROV-05
     let dnsValues: Record<string, string> | undefined;
     try {
       dnsValues = await _deps.lookupDnsTxt(resolveHost);
     } catch {
-      return; // DNS failure is a silent no-op (PROV-05)
+      return;
     }
 
-    if (!dnsValues || Object.keys(dnsValues).length === 0) {
-      return; // No DNS records, nothing to merge
-    }
+    if (!dnsValues || Object.keys(dnsValues).length === 0) return;
 
-    // Merge DNS values into slot env, respecting source priority (PROV-03)
     for (const [key, value] of Object.entries(dnsValues)) {
       await this.env.setDeclared(key, value, 'dns');
     }
 
-    // Write TTL cache to disk (PROV-02)
     const now = Date.now();
     const ttl = DEFAULT_DNS_TTL;
-    const newCache: DnsCache = {
-      prefix: '_hub',
+    await saveYaml(cachePath, {
+      prefix: resolveHost,
       queried_at: new Date(now).toISOString(),
       expires_at: new Date(now + ttl * 1000).toISOString(),
       ttl,
       values: dnsValues,
-    };
-    await saveYaml(cachePath, newCache);
+    } satisfies DnsCache);
   }
 
   // ── Lifecycle ──────────────────────────────────────────────
