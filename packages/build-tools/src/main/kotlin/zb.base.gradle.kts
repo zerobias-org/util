@@ -1108,7 +1108,7 @@ val promoteAll by tasks.registering {
 // Commit published version after successful promote
 val commitVersion by tasks.registering {
     group = "publish"
-    description = "Commit bumped package.json version"
+    description = "Commit bumped package.json version + updated gate stamp"
     mustRunAfter(promoteAll)
     onlyIf { !isDryRun && promoteAllSucceeded }
     doLast {
@@ -1122,9 +1122,25 @@ val commitVersion by tasks.registering {
         val updated = content.replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
         pkgFile.writeText(updated)
 
-        // Stage and commit
+        // Regenerate gate stamp with the new source hash (post version bump)
+        val stampFile = gateStampFile.asFile
+        if (stampFile.exists()) {
+            val stampContent = stampFile.readText()
+            val newSourceHash = computeSourceHash()
+            val newDistHash = try { computeDistHash() } catch (_: Exception) { "" }
+            val updatedStamp = stampContent
+                .replace(Regex(""""sourceHash"\s*:\s*"[^"]+""""), """"sourceHash": "$newSourceHash"""")
+                .replace(Regex(""""distHash"\s*:\s*"[^"]+""""), """"distHash": "$newDistHash"""")
+                .replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
+                .replace(Regex(""""timestamp"\s*:\s*"[^"]+""""), """"timestamp": "${java.time.Instant.now()}"""")
+            stampFile.writeText(updatedStamp)
+            logger.lifecycle("Updated gate-stamp.json with post-publish hashes")
+        }
+
+        // Stage both package.json and gate-stamp.json
+        val stampPath = "${moduleDir}/gate-stamp.json"
         com.zerobias.buildtools.util.ExecUtils.exec(
-            command = listOf("git", "add", pkgPath),
+            command = listOf("git", "add", pkgPath, stampPath),
             workingDir = project.rootDir,
             throwOnError = true
         )
@@ -1134,7 +1150,7 @@ val commitVersion by tasks.registering {
             workingDir = project.rootDir,
             throwOnError = true
         )
-        logger.lifecycle("Committed version bump: v${ver}")
+        logger.lifecycle("Committed version bump + gate stamp: v${ver}")
     }
 }
 
