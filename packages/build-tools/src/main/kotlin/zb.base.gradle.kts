@@ -185,36 +185,59 @@ extra["isInterface"] = isInterface
 val moduleRelativePath = project.projectDir.relativeTo(project.rootDir).path
 val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
 
-val bumpVersion by tasks.registering(Exec::class) {
+val bumpVersion by tasks.registering {
     group = "publish"
-    description = "Bump package.json version from conventional commits (main branch only)"
+    description = "Bump package.json version on main branch"
     onlyIf { branch == "main" }
-    workingDir(project.rootDir)
-    commandLine("npx", "commit-and-tag-version",
-        "--path", moduleRelativePath,
-        "--tag-prefix", tagPrefix,
-        "--skip.changelog",  // changelog generation is separate concern
-        "--skip.commit",     // Gradle commits after all modules bump
-        "--skip.tag"         // Gradle tags after successful publish
-    )
-    // After bump, re-read version so project.version is current
     doLast {
-        val newVersion = readBaseVersion()
-        project.version = newVersion
-        logger.lifecycle("Version bumped to $newVersion (from conventional commits)")
+        val pkgJson = project.file("package.json")
+        val currentVersion = readBaseVersion()
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1)
+            ?: throw GradleException("Cannot find 'name' in package.json")
+
+        // Check if current version is already published
+        val published = try {
+            val output = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                command = listOf("npm", "view", "${name}@${currentVersion}", "version"),
+                workingDir = project.projectDir,
+                throwOnError = false
+            ).trim()
+            output == currentVersion
+        } catch (_: Exception) { false }
+
+        if (published) {
+            // Bump patch: 6.11.1 → 6.11.2
+            val parts = currentVersion.split(".")
+            val newVersion = "${parts[0]}.${parts[1]}.${parts[2].toInt() + 1}"
+            val content = pkgJson.readText()
+            val updated = content.replace(
+                Regex(""""version"\s*:\s*"[^"]+""""),
+                """"version": "$newVersion""""
+            )
+            pkgJson.writeText(updated)
+            project.version = newVersion
+            logger.lifecycle("Version bumped: $currentVersion → $newVersion (previous version already published)")
+        } else {
+            project.version = currentVersion
+            logger.lifecycle("Version $currentVersion not yet published — using as-is")
+        }
     }
 }
 
 // Tag after successful publish (not during bump)
-val tagVersion by tasks.registering(Exec::class) {
+val tagVersion by tasks.registering {
     group = "publish"
     description = "Create git tag for published version"
     onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded }
-    workingDir(project.rootDir)
-    commandLine("echo", "placeholder")
-    doFirst {
+    doLast {
         val ver = readBaseVersion()
-        commandLine("git", "tag", "${tagPrefix}${ver}")
+        val tag = "${tagPrefix}${ver}"
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("git", "tag", "-a", tag, "-m", "Release ${zb.vendor.get()}-${zb.product.get()} v${ver}"),
+            workingDir = project.rootDir,
+            throwOnError = true
+        )
+        logger.lifecycle("Created tag: $tag")
     }
 }
 
@@ -231,26 +254,60 @@ extra["isDryRun"] = isDryRun
 // On branches: always publish (dev versions are cheap, skip detection adds friction)
 // ────────────────────────────────────────────────────────────
 val changedSinceTag: Boolean by lazy {
-    if (branch != "main") {
-        true
-    } else {
-        try {
-            // Find a tag matching this module's prefix
-            val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
-            val lastTag = providers.exec {
-                commandLine("git", "describe", "--tags", "--match", "${tagPrefix}*", "--abbrev=0")
-            }.standardOutput.asText.get().trim()
+    try {
+        val projectRelativePath = project.projectDir.relativeTo(project.rootDir).path
+        val modTagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
 
+        // Find main's latest tag for this module
+        val lastTag = providers.exec {
+            commandLine("git", "describe", "--tags", "--match", "${modTagPrefix}*", "--abbrev=0", "origin/main")
+        }.standardOutput.asText.get().trim()
+
+        val tagVersion = lastTag.removePrefix(modTagPrefix)
+
+        if (branch == "main") {
+            // Main: check if module files changed since the last tag
+            // This catches new commits that touched this package
             val changedFiles = providers.exec {
                 commandLine("git", "diff", "--name-only", lastTag, "HEAD")
             }.standardOutput.asText.get().trim()
 
-            val projectRelativePath = project.projectDir.relativeTo(project.rootDir).path
-            changedFiles.lines().any { it.startsWith(projectRelativePath) }
-        } catch (e: Exception) {
-            // No matching tag found — always publish
-            true
+            val hasModuleChanges = changedFiles.lines().any {
+                it.startsWith(projectRelativePath) &&
+                !it.endsWith("gate-stamp.json")
+            }
+
+            if (hasModuleChanges) {
+                true
+            } else {
+                logger.lifecycle("No module changes since $lastTag — skipping publish")
+                false
+            }
+        } else {
+            // Branches (dev/qa/uat): check if module files differ from origin/main
+            // This catches both:
+            //   - New work on the branch (should publish -uat.0)
+            //   - Pure merge-back from main with no branch changes (should skip)
+            val changedFiles = providers.exec {
+                commandLine("git", "diff", "--name-only", "origin/main", "HEAD")
+            }.standardOutput.asText.get().trim()
+
+            val hasModuleChanges = changedFiles.lines().any {
+                it.startsWith(projectRelativePath) &&
+                !it.endsWith("gate-stamp.json") &&
+                !it.endsWith("package-lock.json")
+            }
+
+            if (hasModuleChanges) {
+                true
+            } else {
+                logger.lifecycle("No module changes vs origin/main — in sync with main, skipping")
+                false
+            }
         }
+    } catch (e: Exception) {
+        // No tag or origin/main not reachable — always publish
+        true
     }
 }
 
@@ -663,11 +720,17 @@ val build by tasks.registering {
     dependsOn(buildArtifacts)
 }
 
+val testDataloader by tasks.registering {
+    group = "lifecycle"
+    description = "Run dataloader test (create Neon branch, load artifacts, validate)"
+    dependsOn(compile)
+}
+
 // Phase 6: GATE — full CI validation
 val gate by tasks.registering {
     group = "lifecycle"
     description = "Full CI gate — all checks must pass"
-    dependsOn(validate, lint, compile, test, testDirect, testDocker, buildArtifacts)
+    dependsOn(validate, lint, compile, test, testDirect, testDocker, testDataloader, buildArtifacts)
 }
 
 // ── Gate stamp — written after gate passes, verified before publish ──
@@ -758,7 +821,7 @@ fun checkGateStamp(): GateStampResult {
         }
 
         // 2. Verify all tasks passed
-        val requiredTasks = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "buildArtifacts")
+        val requiredTasks = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "testDataloader", "buildArtifacts")
         for (taskName in requiredTasks) {
             val taskStatus = Regex(""""$taskName":\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
             if (taskStatus != "passed" && taskStatus != "skipped" && taskStatus != "up-to-date") {
@@ -823,7 +886,7 @@ val writeGateStamp by tasks.registering {
     doLast {
         val sourceHash = computeSourceHash()
         val distHash = computeDistHash()
-        val taskNames = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "buildArtifacts")
+        val taskNames = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "testDataloader", "buildArtifacts")
         val taskResults = taskNames.map { taskName ->
             val task = project.tasks.findByName(taskName)
             val state = task?.state
@@ -920,6 +983,7 @@ gradle.taskGraph.whenReady {
         "testDirect", "testDirectExec",
         "testDocker", "testDockerExec",
         "testHub", "testHubExec",
+        "testDataloader", "testDataloaderExec",
         "startModule", "startModuleExec",
         "stopModule", "stopModuleExec"
     )

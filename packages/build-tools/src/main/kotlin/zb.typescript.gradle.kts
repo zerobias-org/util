@@ -1361,6 +1361,169 @@ val testHub by tasks.registering {
     dependsOn(testHubExec)
 }
 
+// ════════════════════════════════════════════════════════════
+// DATALOADER TEST — create Neon branch, load artifacts, validate, clean up
+// ════════════════════════════════════════════════════════════
+
+val testDataloaderExec by tasks.registering {
+    group = "lifecycle"
+    description = "Run dataloader against ephemeral Neon branch"
+    dependsOn(tasks.named("compile"))
+    onlyIf {
+        // Only run if NEON_API_KEY is available (vault resolved)
+        val hasNeon = System.getenv("NEON_API_KEY")?.isNotBlank() == true
+        if (!hasNeon) logger.lifecycle("testDataloader: NEON_API_KEY not set — skipping")
+        hasNeon
+    }
+    doLast {
+        val neonApiKey = System.getenv("NEON_API_KEY")
+            ?: throw GradleException("NEON_API_KEY not set — configure vault source in zbb.yaml")
+        val neonProjectId = System.getenv("NEON_PROJECT_ID")
+            ?: throw GradleException("NEON_PROJECT_ID not set — configure vault source in zbb.yaml")
+        val parentBranch = System.getenv("NEON_PARENT_BRANCH") ?: "content-master"
+        val dbRole = System.getenv("NEON_DB_ROLE") ?: "neondb_owner"
+        val dbName = System.getenv("NEON_DB_NAME") ?: "zerobias"
+
+        val (moduleName, _) = readPackageNameVersion()
+        val branchName = "test/${moduleName.replace("@", "").replace("/", "-")}-${System.currentTimeMillis()}"
+
+        // ── Step 1a: Look up parent branch ID by name ──
+        logger.lifecycle("testDataloader: Looking up parent branch '$parentBranch'")
+        val branchesOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf(
+                "curl", "-sf",
+                "-H", "Authorization: Bearer $neonApiKey",
+                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches"
+            ),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+        // Find the branch with matching name and extract its ID
+        val parentIdPattern = Regex(""""id"\s*:\s*"(br-[^"]+)"[^}]*?"name"\s*:\s*"${Regex.escape(parentBranch)}"""")
+        val parentIdAlt = Regex(""""name"\s*:\s*"${Regex.escape(parentBranch)}"[^}]*?"id"\s*:\s*"(br-[^"]+)"""")
+        val parentId = parentIdPattern.find(branchesOutput)?.groupValues?.get(1)
+            ?: parentIdAlt.find(branchesOutput)?.groupValues?.get(1)
+            ?: throw GradleException("testDataloader: Parent branch '$parentBranch' not found in project $neonProjectId")
+
+        logger.lifecycle("testDataloader: Parent branch ID = $parentId")
+
+        // ── Step 1b: Create Neon branch ──
+        logger.lifecycle("testDataloader: Creating Neon branch '$branchName' from '$parentBranch'")
+        val createPayload = """{"branch":{"name":"$branchName","parent_id":"$parentId"},"endpoints":[{"type":"read_write","suspend_timeout_seconds":300}]}"""
+        val createOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf(
+                "curl", "-sf",
+                "-H", "Authorization: Bearer $neonApiKey",
+                "-H", "Content-Type: application/json",
+                "-X", "POST",
+                "-d", createPayload,
+                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches"
+            ),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+
+        // Parse branch ID and endpoint host from response
+        val branchId = Regex(""""id"\s*:\s*"(br-[^"]+)"""").find(createOutput)?.groupValues?.get(1)
+            ?: throw GradleException("testDataloader: Failed to parse branch ID from Neon response:\n$createOutput")
+        val host = Regex(""""host"\s*:\s*"([^"]+)"""").find(createOutput)?.groupValues?.get(1)
+            ?: throw GradleException("testDataloader: Failed to parse host from Neon response:\n$createOutput")
+
+        // ── Step 1c: Get the role password ──
+        val passwordOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf(
+                "curl", "-sf",
+                "-H", "Authorization: Bearer $neonApiKey",
+                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches/$branchId/roles/$dbRole/reveal_password"
+            ),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+        val password = Regex(""""password"\s*:\s*"([^"]+)"""").find(passwordOutput)?.groupValues?.get(1)
+            ?: throw GradleException("testDataloader: Failed to get password for role $dbRole")
+
+        logger.lifecycle("testDataloader: Neon branch created")
+        logger.lifecycle("  NEON_PROJECT_ID = $neonProjectId")
+        logger.lifecycle("  NEON_PARENT_BRANCH = $parentBranch")
+        logger.lifecycle("  NEON_BRANCH_ID = $branchId")
+        logger.lifecycle("  NEON_BRANCH_NAME = $branchName")
+        logger.lifecycle("  NEON_DB_ROLE = $dbRole")
+        logger.lifecycle("  NEON_DB_NAME = $dbName")
+        logger.lifecycle("  PGHOST = $host")
+        logger.lifecycle("  PGPORT = 5432")
+        logger.lifecycle("  PGUSER = $dbRole")
+        logger.lifecycle("  PGPASSWORD = ***")
+        logger.lifecycle("  PGDATABASE = $dbName")
+        logger.lifecycle("  PGSSLMODE = require")
+
+        try {
+            // ── Step 2: Run dataloader with Neon PG vars ──
+            logger.lifecycle("testDataloader: Running dataloader")
+
+            // Symlink distribution spec if needed
+            val (name, _) = readPackageNameVersion()
+            val noScope = name.split("/").last()
+            val distSpec = project.file("generated/${noScope}.yml")
+            val rootLink = project.file("${noScope}.yml")
+            if (distSpec.exists() && !rootLink.exists()) {
+                java.nio.file.Files.createSymbolicLink(rootLink.toPath(), distSpec.toPath())
+            }
+
+            val pgEnv = mapOf(
+                "PGHOST" to host,
+                "PGPORT" to "5432",
+                "PGUSER" to dbRole,
+                "PGPASSWORD" to password,
+                "PGDATABASE" to dbName,
+                "PGSSLMODE" to "require"
+            )
+
+            // Run dataloader and capture all output
+            val dlProcess = ProcessBuilder(listOf("dataloader", "-d", "."))
+                .directory(project.projectDir)
+                .redirectErrorStream(true)
+                .apply { environment().putAll(pgEnv) }
+                .start()
+
+            // Stream output line by line to Gradle logger
+            val reader = dlProcess.inputStream.bufferedReader()
+            val output = StringBuilder()
+            reader.forEachLine { line ->
+                logger.lifecycle("  [dataloader] $line")
+                output.appendLine(line)
+            }
+
+            val dlExit = dlProcess.waitFor()
+            if (dlExit != 0) {
+                throw GradleException("testDataloader: dataloader exited with code $dlExit\n${output}")
+            }
+            logger.lifecycle("testDataloader: Dataloader completed successfully")
+
+        } finally {
+            // ── Step 3: Clean up Neon branch ──
+            logger.lifecycle("testDataloader: Cleaning up Neon branch '$branchName'")
+            try {
+                com.zerobias.buildtools.util.ExecUtils.exec(
+                    command = listOf(
+                        "curl", "-sf", "-X", "DELETE",
+                        "-H", "Authorization: Bearer $neonApiKey",
+                        "https://console.neon.tech/api/v2/projects/$neonProjectId/branches/$branchId"
+                    ),
+                    workingDir = project.projectDir,
+                    throwOnError = false
+                )
+                logger.lifecycle("testDataloader: Neon branch deleted")
+            } catch (e: Exception) {
+                logger.warn("testDataloader: Failed to delete Neon branch $branchId: ${e.message}")
+            }
+        }
+    }
+}
+
+tasks.named("testDataloader") {
+    dependsOn(testDataloaderExec)
+}
+
 tasks.named("publishNpm") {
     dependsOn(publishNpmExec)
 }
