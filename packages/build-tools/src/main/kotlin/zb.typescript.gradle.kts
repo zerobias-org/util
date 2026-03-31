@@ -15,6 +15,8 @@ plugins {
 
 val zb = extensions.getByType<ZbExtension>()
 val npmDistTag: String = extra["npmDistTag"] as String
+@Suppress("UNCHECKED_CAST")
+val npmDistTags: List<String> = extra["npmDistTags"] as List<String>
 
 // ── Node.js configuration (uses system Node from nvm) ──
 // Resolve nvm-managed Node from .nvmrc so the Gradle daemon uses the correct version
@@ -1641,84 +1643,77 @@ listOf(
 // Runs after ALL staging publishes succeed (wired via publish -> publishAll -> promoteAll)
 // ════════════════════════════════════════════════════════════
 
-val promoteNpm by tasks.registering(NpmTask::class) {
+// Helper: promote a package to all applicable dist-tags
+fun promotePackage(name: String, ver: String, workDir: java.io.File, tags: List<String>) {
+    for (tag in tags) {
+        logger.lifecycle("  Tagging ${name}@${ver} → $tag")
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("npm", "dist-tag", "add", "${name}@${ver}", tag),
+            workingDir = workDir,
+            throwOnError = true
+        )
+    }
+    // Remove staging 'next' tag
+    try {
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("npm", "dist-tag", "rm", name, "next"),
+            workingDir = workDir,
+            throwOnError = false
+        )
+    } catch (_: Exception) {}
+}
+
+val promoteNpm by tasks.registering {
     group = "publish"
-    description = "Promote module NPM package from 'next' to correct dist-tag"
-    npmCommand.set(listOf("dist-tag", "add"))
-    args.set(project.provider {
+    description = "Promote module NPM package from 'next' to all applicable dist-tags"
+    doLast {
         val (name, _) = readPackageNameVersion()
         val ver = project.version.toString()
-        listOf("${name}@${ver}", npmDistTag)
-    })
-    workingDir.set(project.projectDir)
-
-    doFirst {
         if (isDryRun) {
-            val (name, _) = readPackageNameVersion()
-            val ver = project.version.toString()
-            logger.lifecycle("[DRY RUN] Would promote ${name}@${ver} from 'next' to '${npmDistTag}'")
-            throw org.gradle.api.tasks.StopExecutionException()
+            logger.lifecycle("[DRY RUN] Would promote ${name}@${ver} to tags: ${npmDistTags.joinToString(", ")}")
+            return@doLast
         }
+        logger.lifecycle("Promoting ${name}@${ver}")
+        promotePackage(name, ver, project.projectDir, npmDistTags)
     }
 }
 
-val promoteHubSdk by tasks.registering(NpmTask::class) {
+val promoteHubSdk by tasks.registering {
     group = "publish"
-    description = "Promote Hub SDK from 'next' to correct dist-tag"
-    npmCommand.set(listOf("dist-tag", "add"))
-    workingDir.set(project.file("hub-sdk"))
-
-    args.set(project.provider {
+    description = "Promote Hub SDK from 'next' to all applicable dist-tags"
+    doLast {
         val hubSdkPkg = project.file("hub-sdk/package.json")
+        if (!hubSdkPkg.exists()) return@doLast
         val content = hubSdkPkg.readText()
-        val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-        val name = nameMatch?.groupValues?.get(1) ?: error("No name in hub-sdk/package.json")
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+            ?: error("No name in hub-sdk/package.json")
         val ver = project.version.toString()
-        listOf("${name}@${ver}", npmDistTag)
-    })
-
-    doFirst {
-        val hubSdkPkg = project.file("hub-sdk/package.json")
-        if (!hubSdkPkg.exists()) {
-            throw org.gradle.api.tasks.StopExecutionException()
-        }
         if (isDryRun) {
-            val content = hubSdkPkg.readText()
-            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-            val name = nameMatch?.groupValues?.get(1) ?: "unknown"
-            val ver = project.version.toString()
-            logger.lifecycle("[DRY RUN] Would promote Hub SDK ${name}@${ver} from 'next' to '${npmDistTag}'")
-            throw org.gradle.api.tasks.StopExecutionException()
+            logger.lifecycle("[DRY RUN] Would promote Hub SDK ${name}@${ver} to tags: ${npmDistTags.joinToString(", ")}")
+            return@doLast
         }
+        logger.lifecycle("Promoting Hub SDK ${name}@${ver}")
+        promotePackage(name, ver, project.file("hub-sdk"), npmDistTags)
     }
 }
 
-val promoteSdk by tasks.registering(NpmTask::class) {
+val promoteSdk by tasks.registering {
     group = "publish"
-    description = "Promote API client SDK from 'next' to correct dist-tag"
+    description = "Promote API client SDK from 'next' to all applicable dist-tags"
     onlyIf { zb.hasOpenApiSdk.get() }
-    npmCommand.set(listOf("dist-tag", "add"))
-    workingDir.set(project.file("sdk"))
-
-    args.set(project.provider {
+    doLast {
         val sdkPkg = project.file("sdk/package.json")
+        if (!sdkPkg.exists()) return@doLast
         val content = sdkPkg.readText()
-        val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-        val name = nameMatch?.groupValues?.get(1) ?: error("No name in sdk/package.json")
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+            ?: error("No name in sdk/package.json")
         val ver = project.version.toString()
-        listOf("${name}@${ver}", npmDistTag)
-    })
-
-    doFirst {
         if (isDryRun) {
-            val sdkPkg = project.file("sdk/package.json")
-            val content = sdkPkg.readText()
-            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-            val name = nameMatch?.groupValues?.get(1) ?: "unknown"
-            val ver = project.version.toString()
-            logger.lifecycle("[DRY RUN] Would promote SDK ${name}@${ver} from 'next' to '${npmDistTag}'")
-            throw org.gradle.api.tasks.StopExecutionException()
+            logger.lifecycle("[DRY RUN] Would promote SDK ${name}@${ver} to tags: ${npmDistTags.joinToString(", ")}")
+            return@doLast
         }
+        logger.lifecycle("Promoting SDK ${name}@${ver}")
+        promotePackage(name, ver, project.file("sdk"), npmDistTags)
     }
 }
 

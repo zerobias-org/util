@@ -150,6 +150,16 @@ val npmDistTag: String = when (branch) {
     else   -> "uat"
 }
 
+// Promotion order: dev → qa → uat → latest (main)
+// Publishing on a branch tags all lower dist-tags too.
+val npmDistTags: List<String> = when (branch) {
+    "main" -> listOf("dev", "qa", "uat", "latest")
+    "uat"  -> listOf("dev", "qa", "uat")
+    "qa"   -> listOf("dev", "qa")
+    "dev"  -> listOf("dev")
+    else   -> listOf("dev", "qa", "uat")  // feature branches act as uat level
+}
+
 // Detect interface-only modules (no Docker build needed)
 // Set "interface": true in package.json to skip all Docker tasks.
 val isInterface: Boolean = run {
@@ -164,6 +174,7 @@ if (isInterface) {
 
 // Store as extra properties for child plugins to access
 extra["npmDistTag"] = npmDistTag
+extra["npmDistTags"] = npmDistTags
 extra["isInterface"] = isInterface
 
 // ────────────────────────────────────────────────────────────
@@ -198,7 +209,7 @@ val bumpVersion by tasks.registering(Exec::class) {
 val tagVersion by tasks.registering(Exec::class) {
     group = "publish"
     description = "Create git tag for published version"
-    onlyIf { branch == "main" && !(extra["isDryRun"] as Boolean) && promoteAllSucceeded }
+    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded }
     workingDir(project.rootDir)
     commandLine("echo", "placeholder")
     doFirst {
