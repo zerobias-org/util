@@ -1513,6 +1513,7 @@ val ensureEcrRepo by tasks.registering(Exec::class) {
     onlyIf { !isInterface && zb.hasConnectionProfile.get() && !isDryRun }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
+    isIgnoreExitValue = true // already exists -> non-zero is OK
     doFirst {
         val awsRegion = System.getenv("AWS_REGION")
             ?: throw GradleException("AWS_REGION not set in slot env — add to zbb.yaml")
@@ -1520,7 +1521,6 @@ val ensureEcrRepo by tasks.registering(Exec::class) {
         commandLine("aws", "ecr", "create-repository",
             "--repository-name", imageName,
             "--region", awsRegion)
-        isIgnoreExitValue = true // already exists -> non-zero is OK
     }
 }
 

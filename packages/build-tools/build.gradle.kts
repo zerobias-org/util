@@ -4,7 +4,33 @@ plugins {
 }
 
 group = "com.zerobias"
-version = "1.0.0"
+
+// Auto-bump patch version: check what's published, use next available
+val baseVersion = "1.0"
+version = run {
+    val token = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
+    if (token.isEmpty()) return@run "$baseVersion.0"
+
+    val repoUrl = "https://maven.pkg.github.com/zerobias-com/util"
+    val metadataUrl = "$repoUrl/com/zerobias/build-tools/maven-metadata.xml"
+    try {
+        val url = uri(metadataUrl).toURL()
+        val conn = url.openConnection()
+        conn.setRequestProperty("Authorization", "Bearer $token")
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+
+        val xml = conn.getInputStream().bufferedReader().readText()
+        // Find all versions matching baseVersion.N
+        val pattern = Regex("""\Q$baseVersion\E\.(\d+)""")
+        val maxPatch = pattern.findAll(xml)
+            .mapNotNull { it.groupValues[1].toIntOrNull() }
+            .maxOrNull() ?: -1
+        "$baseVersion.${maxPatch + 1}"
+    } catch (_: Exception) {
+        "$baseVersion.0"
+    }
+}
 
 java {
     toolchain {

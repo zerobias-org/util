@@ -266,67 +266,8 @@ val preflightChecks by tasks.registering {
         }
         logger.lifecycle("Preflight: version = $ver, package = $pkgName")
 
-        // 0. Gate stamp verification
-        // CI: must exist and sourceHash must match — fail fast otherwise
-        // Local: stamp was already validated by whenReady block; gate re-ran if needed
-        val isCI = System.getenv("CI") == "true"
-        val stampFile = gateStampFile.asFile
-        if (isCI) {
-            if (!stampFile.exists()) {
-                throw GradleException("Preflight FAILED: no gate-stamp.json found — run zbb gate locally and commit the stamp")
-            }
-            val content = stampFile.readText()
-            val stampTs = Regex(""""timestamp"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: "unknown"
-
-            val stampSourceHash = Regex(""""sourceHash"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-                ?: throw GradleException("Preflight FAILED: gate-stamp.json missing sourceHash — re-run zbb gate locally")
-            val currentSourceHash = computeSourceHash()
-            if (stampSourceHash != currentSourceHash) {
-                throw GradleException("Preflight FAILED: source changed since gate at $stampTs — run zbb gate locally and commit")
-            }
-
-            val requiredTasks = listOf("validate", "lint", "compile", "test", "buildArtifacts")
-            for (taskName in requiredTasks) {
-                val taskStatus = Regex(""""$taskName":\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-                if (taskStatus != "passed" && taskStatus != "skipped" && taskStatus != "up-to-date") {
-                    throw GradleException("Preflight FAILED: gate task '$taskName' was '${taskStatus ?: "missing"}' — run zbb gate locally")
-                }
-            }
-
-            val testSuites = mapOf(
-                "unit" to project.file("test/unit"),
-                "integration" to project.file("test/integration"),
-                "e2e" to project.file("test/e2e")
-            )
-            for ((suite, dir) in testSuites) {
-                val currentExpected = countExpectedTests(dir)
-                if (currentExpected == 0) continue
-                val stampExpected = Regex(""""$suite":\s*\{[^}]*"expected":\s*(\d+)""")
-                    .find(content)?.groupValues?.get(1)?.toIntOrNull()
-                val stampRan = Regex(""""$suite":\s*\{[^}]*"ran":\s*(\d+)""")
-                    .find(content)?.groupValues?.get(1)?.toIntOrNull()
-                if (stampExpected == null || stampRan == null) {
-                    throw GradleException("Preflight FAILED: gate-stamp.json missing test results for $suite — run zbb gate locally")
-                }
-                if (currentExpected != stampExpected) {
-                    throw GradleException("Preflight FAILED: $suite test count changed ($stampExpected → $currentExpected) — run zbb gate locally")
-                }
-                if (stampRan != stampExpected) {
-                    throw GradleException("Preflight FAILED: $suite only ran $stampRan/$stampExpected — run zbb gate locally")
-                }
-            }
-
-            logger.lifecycle("Preflight: gate stamp valid (from $stampTs)")
-        } else {
-            // Local: stamp was handled by whenReady — just log status
-            if (stampFile.exists()) {
-                val content = stampFile.readText()
-                val stampTs = Regex(""""timestamp"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: "unknown"
-                logger.lifecycle("Preflight: gate stamp present (from $stampTs)")
-            } else {
-                logger.lifecycle("Preflight: gate stamp written by gate (fresh run)")
-            }
-        }
+        // 0. Gate stamp — already validated by whenReady block (CI fails fast there if invalid)
+        logger.lifecycle("Preflight: gate stamp validated at build start")
 
         // 1. Registry auth — verify NPM_TOKEN is set
         val npmToken = System.getenv("NPM_TOKEN")
@@ -370,24 +311,22 @@ val preflightChecks by tasks.registering {
                 throw GradleException("Preflight FAILED: Docker not available — ${e.message}")
             }
 
-            // 5. Docker buildx multi-platform support
-            val buildxFix = """
-  Fix: docker buildx rm multiarch 2>/dev/null; docker buildx create --name multiarch --driver docker-container --platform linux/amd64,linux/arm64 --use && docker buildx inspect --bootstrap""".trimEnd()
+            // 5. Docker buildx multi-platform — must be ready at this point
             try {
                 val buildxCheck = providers.exec {
-                    commandLine("docker", "buildx", "inspect", "--bootstrap")
+                    commandLine("docker", "buildx", "ls")
                     isIgnoreExitValue = true
                 }
                 val output = buildxCheck.standardOutput.asText.get()
                 if (output.contains("linux/amd64") && output.contains("linux/arm64")) {
                     logger.lifecycle("Preflight: Docker buildx multi-platform available")
                 } else {
-                    throw GradleException("Preflight FAILED: Docker buildx missing linux/arm64 platform$buildxFix")
+                    throw GradleException("Preflight FAILED: no builder with linux/amd64 + linux/arm64 found\n  Fix: docker buildx create --name multiarch --driver docker-container --platform linux/amd64,linux/arm64 --use && docker buildx inspect --bootstrap")
                 }
             } catch (e: GradleException) {
                 throw e
             } catch (e: Exception) {
-                throw GradleException("Preflight FAILED: Docker buildx not available — ${e.message}$buildxFix")
+                throw GradleException("Preflight FAILED: Docker buildx not available — ${e.message}")
             }
 
             // 6. ECR — validate env vars and actual login
@@ -752,7 +691,9 @@ fun hashFiles(dirs: List<String>, files: List<String>): String {
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
-val sourceFiles = listOf("package.json", "package-lock.json", "api.yml", "tsconfig.json")
+// package.json excluded — version field gets patched during publish, which would invalidate the hash.
+// package-lock.json excluded — npm ci may regenerate it slightly differently across environments.
+val sourceFiles = listOf("api.yml", "tsconfig.json")
 val sourceDirs = listOf("src")
 
 fun computeSourceHash(): String = hashFiles(sourceDirs, sourceFiles)
@@ -1006,8 +947,7 @@ gradle.taskGraph.whenReady {
         }
         GateStampResult.TESTS_CHANGED -> {
             if (isCI) {
-                // CI: test count mismatch — fail fast (preflight will catch it)
-                // Don't skip anything so preflight runs and fails with clear message
+                throw GradleException("gate-stamp.json test counts don't match current test files — run zbb gate locally and commit the stamp")
             } else {
                 // Local: source is fine but tests changed — re-run tests, skip validation/build
                 // Let gate run which includes tests, then writeGateStamp updates the stamp
@@ -1020,8 +960,11 @@ gradle.taskGraph.whenReady {
             }
         }
         GateStampResult.INVALID -> {
+            if (isCI) {
+                // CI: fail fast — don't attempt to run gate, it will fail anyway
+                throw GradleException("gate-stamp.json is missing or invalid — run zbb gate locally and commit the stamp before publishing")
+            }
             // Local: let gate run fully — it writes a new stamp
-            // CI: preflight will hard-fail
             logger.lifecycle("Gate stamp invalid — full gate will run")
         }
     }
@@ -1195,83 +1138,58 @@ val commitVersion by tasks.registering {
     }
 }
 
-// Publish release event to the global event router (AWS Lambda)
+// Release event — handled by CI workflow (release-announcement action)
+// which sends Slack notification + Lambda event with full metadata.
+// This task is a no-op placeholder to keep the publish chain intact.
 val publishReleaseEvent by tasks.registering {
     group = "publish"
-    description = "Publish release event to event router Lambda"
+    description = "Release announcement (handled by CI workflow)"
     mustRunAfter(tagVersion)
     onlyIf { !isDryRun && promoteAllSucceeded }
     doLast {
-        val pkgJson = project.file("package.json")
-        if (!pkgJson.exists()) return@doLast
-
-        val content = pkgJson.readText()
-        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: return@doLast
         val ver = project.version.toString()
-
-        // Get dist-tags
-        val distTags = try {
-            com.zerobias.buildtools.util.ExecUtils.execCapture(
-                command = listOf("npm", "view", "${name}@${ver}", "dist-tags", "--json"),
-                workingDir = project.projectDir,
-                throwOnError = false
-            ).trim()
-        } catch (e: Exception) { "{}" }
-
-        // Get git info
-        val commitHash = try {
-            providers.exec { commandLine("git", "rev-parse", "HEAD") }
-                .standardOutput.asText.get().trim()
-        } catch (e: Exception) { "" }
-
-        val repository = try {
-            providers.exec { commandLine("git", "remote", "get-url", "origin") }
-                .standardOutput.asText.get().trim()
-                .replace(Regex("""\.git$"""), "")
-                .replace(Regex("""^git@github\.com:"""), "https://github.com/")
-        } catch (e: Exception) { "" }
-
-        // Extract zerobias/auditmation metadata from package.json
-        val zerobias = Regex(""""zerobias"\s*:\s*(\{[^}]*\})""").find(content)?.groupValues?.get(1) ?: "{}"
-        val auditmation = Regex(""""auditmation"\s*:\s*(\{[^}]*\})""").find(content)?.groupValues?.get(1) ?: "{}"
-
-        val eventId = java.util.UUID.randomUUID().toString()
-        val payload = """{"body":{"id":"$eventId","service":"release","eventType":"release","name":"$name","version":"$ver","repository":"$repository","commitHash":"$commitHash","distTags":$distTags,"zerobias":$zerobias,"auditmation":$auditmation}}"""
-
-        logger.lifecycle("Publishing release event for ${name}@${ver}")
-
-        try {
-            val result = com.zerobias.buildtools.util.ExecUtils.execCapture(
-                command = listOf(
-                    "aws", "lambda", "invoke",
-                    "--function-name", "auditmation-event-router-events",
-                    "--payload", payload,
-                    "--cli-binary-format", "raw-in-base64-out",
-                    "--region", "us-east-1",
-                    "/dev/stdout"
-                ),
-                workingDir = project.projectDir,
-                throwOnError = true
-            ).trim()
-            logger.lifecycle("Release event published: $result")
-        } catch (e: Exception) {
-            logger.warn("Failed to publish release event: ${e.message}")
-            // Non-fatal — don't fail the publish for an event routing issue
-        }
+        val pkgJson = project.file("package.json")
+        val name = if (pkgJson.exists()) {
+            Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1) ?: "unknown"
+        } else "unknown"
+        logger.lifecycle("Published ${name}@${ver} — release announcement handled by CI workflow")
     }
 }
 
 // Top-level publish task: bump → stage → promote → commit → tag → release event
+// Push version commit and tags to remote
+val pushVersion by tasks.registering {
+    group = "publish"
+    description = "Push version commit and tags to remote"
+    mustRunAfter(tagVersion)
+    onlyIf { !isDryRun && promoteAllSucceeded }
+    doLast {
+        try {
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "push", "--follow-tags"),
+                workingDir = project.rootDir,
+                throwOnError = true
+            )
+            logger.lifecycle("Pushed version commit and tags to remote")
+        } catch (e: Exception) {
+            logger.warn("Failed to push: ${e.message}")
+            // Non-fatal — don't fail the publish for a push issue
+        }
+    }
+}
+
+// Top-level publish: bump → stage → promote → commit → tag → push → release event
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
-    dependsOn(publishAll, promoteAll, commitVersion, tagVersion, publishReleaseEvent)
+    dependsOn(publishAll, promoteAll, commitVersion, tagVersion, pushVersion, publishReleaseEvent)
 }
 
-// Ordering: promote → commit → tag → release event
+// Ordering: promote → commit → tag → push → release event
 tagVersion.configure { mustRunAfter(commitVersion) }
 commitVersion.configure { mustRunAfter(promoteAll) }
-publishReleaseEvent.configure { mustRunAfter(tagVersion) }
+pushVersion.configure { mustRunAfter(tagVersion) }
+publishReleaseEvent.configure { mustRunAfter(pushVersion) }
 
 // ────────────────────────────────────────────────────────────
 // Metadata sync — utility task (not in default build chain)
