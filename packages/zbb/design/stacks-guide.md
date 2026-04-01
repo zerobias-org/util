@@ -461,23 +461,89 @@ zbb logs show dana --tail 100
 
 **[OPEN]** `zbb stop dana` when hub is running — warn? error? force flag? SystemD would refuse unless you also stop hub.
 
+### Lifecycle as Contract
+
+This is a key concept: **the lifecycle is the abstraction boundary between stacks and build systems.**
+
+The stack manifest declares *what* — `build`, `test`, `gate`, `start`, `stop`, `health`. The implementation declares *how* — and that could be Gradle, npm scripts, a Makefile, a shell script, whatever. Consumers never see it.
+
+```yaml
+# Dana — Gradle-based TypeScript service
+lifecycle:
+  build: ./gradlew build
+  test: ./gradlew test
+  gate: ./gradlew gate
+  start: docker compose up -d
+  stop: docker compose down
+  health: curl -sf http://localhost:${DANA_PORT}/health
+  seed: psql -f schema/seed.sql
+```
+
+```yaml
+# A Python service — completely different tooling, same interface
+lifecycle:
+  build: pip install -e .
+  test: pytest
+  start: uvicorn main:app --port ${PORT}
+  stop: kill $(cat .pid)
+  health: curl -sf http://localhost:${PORT}/health
+```
+
+```yaml
+# A Go appliance binary — yet another toolchain
+lifecycle:
+  build: go build -o dist/hub-manager ./cmd/manager
+  test: go test ./...
+  start: ./dist/hub-manager --port ${PORT}
+  health: curl -sf http://localhost:${PORT}/health
+```
+
+zbb doesn't care what's behind the lifecycle commands. It runs them, checks the health contract, reports pass/fail. This makes stacks composable across build systems, not just runtime systems.
+
+**Why this matters:**
+
+- **CI becomes stack-agnostic.** `zbb build hub && zbb test hub && zbb gate hub` — the pipeline doesn't know or care that it's Gradle underneath. Swap to a different build system, CI scripts don't change.
+- **SDLC pipelines compose.** `zbb gate hub` can run the gate for hub AND validate its deps are healthy. The dependency graph IS the pipeline graph.
+- **Health checks are contracts.** A packaged stack promises "I'm healthy when this endpoint returns 200." A dev stack promises the same. Consumers wait for the contract, not the implementation.
+- **Module SDLC gets this for free.** A module stack declares `build`, `test`, `gate`, `publish`. The build-tools Gradle plugins become lifecycle implementations behind the stack interface. `zbb build` in a module directory does the right thing without knowing it's Gradle underneath.
+- **Gradle is the most common lifecycle provider today, but it's an implementation detail.** The stack interface means any build system can participate.
+
+**[OPEN]** Lifecycle command format: plain shell commands (shown above)? Or structured with working directory, env overrides, timeout?
+
+```yaml
+lifecycle:
+  build:
+    command: ./gradlew build
+    cwd: .                    # relative to stack root
+    timeout: 300              # seconds
+  health:
+    command: curl -sf http://localhost:${PORT}/health
+    interval: 2               # seconds between retries
+    timeout: 120              # total wait time
+    retries: 60
+```
+
+**[OPEN]** Are lifecycle commands the same for packaged and dev? Packaged stacks probably don't have `build` or `test`. Maybe the manifest has `lifecycle` (always) and `dev_lifecycle` (dev mode only)?
+
 ### Dev Lifecycle
 
 Dev stacks (added from a local path) have additional commands:
 
 ```bash
-# Build the stack's project
+# Build the stack's project (delegates to lifecycle.build)
 zbb build hub
-# [OPEN] Delegates to what? Gradle? npm? Detected from project?
 
-# Run tests
+# Run tests (delegates to lifecycle.test)
 zbb test hub
+
+# Full gate (delegates to lifecycle.gate)
+zbb gate hub
 
 # Rebuild and restart (common workflow)
 zbb build hub && zbb restart hub:server
 ```
 
-**[OPEN]** Does `zbb build` replace `zbb compile` / `zbb gate` / Gradle invocation? Or is it a higher-level command that calls the right build system for the stack?
+**cwd shorthand:** `cd hub && zbb build` detects the stack from cwd — same as `zbb build hub` from anywhere.
 
 ## Slot Directory Structure (with Stacks)
 
@@ -601,10 +667,11 @@ Collected from throughout this document:
 - Is postgres a shared stack or owned by its consumer?
 
 ### Lifecycle
-- What does `zbb build` delegate to?
 - What happens when you stop a stack that others depend on?
 - Switch from packaged to dev in place, or remove + re-add?
 - Restart policies for packaged stacks?
+- Lifecycle command format: plain shell strings or structured (cwd, timeout, retries)?
+- Same lifecycle block for packaged and dev? Or separate `dev_lifecycle`?
 
 ### State & Env
 - Does the flat slot-level `.env` survive, or only per-stack `.env`?
