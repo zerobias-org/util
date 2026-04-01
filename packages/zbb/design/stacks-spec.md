@@ -1,6 +1,7 @@
 # zbb Stacks — Design Specification
 
-> Detailed rationale, mechanics, and open questions behind the stacks user guide.
+> Detailed rationale, mechanics, and open questions.
+> Start with the [User Guide](stacks-guide.md) for concepts, commands, and manifest format.
 
 ## Environment: Three-Layer Model
 
