@@ -133,6 +133,8 @@ export class SlotEnvironment extends EventEmitter {
         ...(existing ?? { source: 'override', type: 'string' }),
         ...(mask !== undefined ? { mask } : {}),
       });
+      const { saveYaml } = await import('../yaml.js');
+      await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
     }
     await this.writeOverrides();
     this.emit('change', { key, value });
