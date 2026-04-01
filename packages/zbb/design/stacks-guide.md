@@ -725,18 +725,124 @@ const slot = await SlotManager.load('local');
 const env = slot.stacks.get('hub').env.getAll();
 ```
 
+## State Model
+
+### Two Layers: Schema (manifest) and Instance (file)
+
+Each stack declares a **state schema** in its manifest — the shape of state it publishes. This is the contract. Other stacks, tools, and scripts can discover what state exists and what values are valid.
+
+```yaml
+# In zbb.yaml (stack manifest) — the interface
+state:
+  status:
+    type: enum
+    values: [starting, healthy, degraded, stopped, error]
+  schema_applied:
+    type: boolean
+  seeded:
+    type: boolean
+  endpoints:
+    api: { type: url }
+    health: { type: url }
+```
+
+The **state file** is the instance — plain YAML on disk in the slot, updated at runtime by lifecycle commands.
+
+```yaml
+# ~/.zbb/slots/local/stacks/dana/state.yaml — the instance
+status: healthy
+schema_applied: true
+seeded: true
+endpoints:
+  api: http://localhost:15001
+  health: http://localhost:15001/health
+```
+
+Like an OpenAPI spec (interface) vs an HTTP response (instance). The manifest says "dana publishes state with this shape." The file holds the current values.
+
+### Why This Matters
+
+**Dependency conditions can reference state, not just "running":**
+
+```yaml
+depends:
+  dana:
+    package: "@zerobias-com/dana@^1.2.0"
+    ready_when:
+      status: healthy
+      schema_applied: true
+```
+
+Hub doesn't start until dana's state file satisfies those conditions. zbb watches the file (same filesystem-as-IPC pattern that node-lib uses today) and starts hub when conditions are met.
+
+**`zbb status` reads state files — no docker ps, no health polling:**
+
+```bash
+zbb status
+#   STACK       STATUS     SCHEMA   SEEDED   ENDPOINTS
+#   postgres    healthy    —        —        localhost:15000
+#   dana        healthy    true     true     localhost:15001
+#   hub         starting   —        —        —
+```
+
+### Design Principles
+
+**The file IS the interface.** No SDK, no typed accessors, no library required. Any tool can participate:
+
+```bash
+# Bash
+yq '.status' ~/.zbb/slots/local/stacks/dana/state.yaml
+
+# Python
+import yaml
+state = yaml.safe_load(open(state_path))
+if state['schema_applied']: ...
+
+# AI agent
+# Just read the file. The manifest tells you what keys to expect.
+
+# CI
+while [ "$(yq '.status' dana/state.yaml)" != "healthy" ]; do sleep 1; done
+```
+
+**The manifest is discoverable metadata.** Tools can introspect what state a stack publishes without running it. CI pipelines can validate that dependency conditions are satisfiable. Linters can check that `ready_when` references valid state keys.
+
+**Lifecycle commands update state.** The `start` lifecycle command is responsible for updating `state.yaml` as it progresses (status: starting → healthy, schema_applied: false → true). zbb can wrap this — run the command, validate the state file matches the schema afterward.
+
+**File watcher for change detection.** Same pattern as node-lib's SlotWatcher — inotify/fs.watch on the state file, debounced, event-driven. No polling. When dana's state changes, zbb evaluates whether hub's `ready_when` conditions are now satisfied.
+
+### Lessons from node-lib
+
+Hub's node-lib has a sophisticated state system (SlotState, DeploymentManager, CommandManager) with typed accessors, exclusive-writer patterns, and Joi validation. It works well for its dedicated consumers (node, cli, manager).
+
+But AI agents and scripts consistently bypass it — the typed accessor API is too heavy. For stacks, the state model must be lighter:
+
+| node-lib pattern | stack equivalent |
+|-----------------|------------------|
+| Typed accessors (`getStatus()`) | Plain YAML read (`yq '.status'`) |
+| SDK import required | No import — file IS the interface |
+| Joi validation on write | Schema in manifest, validated by zbb optionally |
+| Exclusive writer | **[OPEN]** Any process can write? Or still exclusive? |
+| EventEmitter API | File watcher — any tool can watch |
+
+**[OPEN]** Should state writes be exclusive (one owner per state file) or open? Exclusive prevents races but requires coordination. Open is simpler but risks conflicting writes. Could have a `state.owner` field in the manifest that declares which process/lifecycle command owns writes.
+
+**[OPEN]** Should zbb validate state writes against the schema? Always, optionally, or never? Strict validation catches bugs but adds friction. No validation is simpler but allows drift.
+
+**[OPEN]** State history/transitions — does the state file only hold current state, or also a log of transitions? Current-only is simpler. A transition log enables debugging ("when did dana go unhealthy?"). Could be a separate `state-log.yaml` or just rely on filesystem mtime + logs.
+
 ## SystemD-like Properties
 
 Stacks with dependencies behave like SystemD units:
 
 - **Dependency ordering** — `zbb start hub` starts postgres, then dana, then hub (respecting `depends`)
-- **Health checks** — each stack/sub-stack declares a health check; dependencies must be healthy before dependents start
+- **State-based readiness** — dependencies must satisfy `ready_when` conditions, not just "running"
 - **Stop ordering** — reverse of start (hub stops before dana stops before postgres)
+- **File-based observation** — state changes propagate via filesystem watches, not polling
 
 **[OPEN]** Additional SystemD-like features to consider:
 - **Restart policies** — auto-restart on crash? Probably not for dev, maybe for packaged.
-- **Readiness vs liveness** — "started" vs "ready to accept connections"
-- **Timeout** — how long to wait for health before failing
+- **Timeout** — how long to wait for `ready_when` before failing
 - **Conflict declarations** — "this stack cannot coexist with X" (probably not needed)
 
 ## Open Questions Summary
@@ -779,6 +885,9 @@ These were discussed and decided:
 
 #### State
 - Keep slot-level logs/state dirs for cross-cutting concerns alongside per-stack dirs?
+- State writes: exclusive owner per file, or any process can write?
+- Schema validation on write: always, optional, or never?
+- State history: current-only, or transition log for debugging?
 
 #### Migration
 - Incremental adoption path for existing `zbb.yaml` projects?
