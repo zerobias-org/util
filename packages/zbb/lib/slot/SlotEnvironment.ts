@@ -127,10 +127,11 @@ export class SlotEnvironment extends EventEmitter {
   /** Set a user override (persisted to overrides.env). Optional mask flag. */
   async set(key: string, value: string, mask?: boolean): Promise<void> {
     this.overrides.set(key, value);
-    if (mask !== undefined) {
+    const existing = this.manifest.get(key);
+    if (!existing || mask !== undefined) {
       this.manifest.set(key, {
-        ...(this.manifest.get(key) ?? { source: 'override', type: 'string' }),
-        mask,
+        ...(existing ?? { source: 'override', type: 'string' }),
+        ...(mask !== undefined ? { mask } : {}),
       });
     }
     await this.writeOverrides();
