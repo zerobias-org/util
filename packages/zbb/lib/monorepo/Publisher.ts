@@ -112,7 +112,8 @@ function resolvePublishVersion(
     if (!isVersionPublished(pkg.name, version, registry)) {
       return { version, bumped: true };
     }
-    attempts++;
+
+    attempts += 1;
   }
 
   throw new Error(`${pkg.name}: could not find unpublished version after 50 patch bumps from ${pkg.version}`);

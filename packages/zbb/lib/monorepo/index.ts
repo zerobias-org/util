@@ -127,7 +127,7 @@ function parseArgs(args: string[]): ParsedArgs {
         result.all = true;
         break;
       case '--base':
-        result.base = args[++i];
+        result.base = args[i += 1];
         break;
       case '--dry-run':
         result.dryRun = true;

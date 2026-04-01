@@ -125,7 +125,9 @@ export function countExpectedTests(testDir: string): number {
     if (!file.endsWith('.ts') && !file.endsWith('.js')) continue;
     const content = readFileSync(file, 'utf-8');
     for (const line of content.split('\n')) {
-      if (TEST_PATTERN.test(line)) count++;
+      if (TEST_PATTERN.test(line)) {
+        count += 1;
+      };
     }
   }
 
