@@ -129,9 +129,9 @@ When you add a stack, zbb resolves the dependency tree:
 
 This is npm install for runtime environments.
 
-### Namespaced Imports/Exports
+### Imports, Exports, and Aliasing
 
-Stacks export named values. Consumers import them by dependency name.
+Stacks explicitly declare what they export. Only exported vars are visible to consumers. This is the stack's public API — internal vars are encapsulated.
 
 Dana's manifest:
 ```yaml
@@ -141,12 +141,20 @@ exports: [DANA_URL, DANA_PORT, JWT_PUBLIC_KEY]
 Hub's manifest:
 ```yaml
 imports:
-  dana: [DANA_URL, DANA_PORT, JWT_PUBLIC_KEY]
+  dana:
+    - DANA_URL                        # → process.env.DANA_URL
+    - DANA_PORT                       # → process.env.DANA_PORT
+    - JWT_PUBLIC_KEY                  # → process.env.JWT_PUBLIC_KEY
+    - DANA_URL as PROXY_URL           # → process.env.PROXY_URL (no DANA_URL)
 ```
 
-Inside Hub's environment, imported values are available. **[OPEN]** As `DANA_URL` (bare, from the import declaration)? As `dana.DANA_URL` (namespaced)? Both? The ergonomics matter here — existing code reads `process.env.DANA_URL`, not `process.env.dana.DANA_URL`.
+**Rules:**
 
-**[OPEN]** Are all stack env vars implicitly available under the namespace, or only explicitly declared exports? Explicit is cleaner but more work to maintain. Implicit is convenient but leaky.
+- **Bare import:** `DANA_URL` → appears as `process.env.DANA_URL` in the consumer's env
+- **Aliased import:** `DANA_URL as PROXY_URL` → appears as `process.env.PROXY_URL` only. The original name is NOT also visible.
+- **One var per import:** each import creates exactly one env var in the consumer. No duplicates.
+- **Collision detection:** if two dependencies export the same name and both are imported bare, `stack add` fails with an error. Must alias one.
+- **Explicit exports only:** internal stack vars (not listed in `exports`) are never visible to consumers. This lets stacks refactor internals without breaking consumers.
 
 ### Bounds Checking
 
@@ -621,18 +629,101 @@ Option 3 feels right for incremental adoption. Existing projects keep working. N
 
 **[OPEN]** Can a project be both a "legacy" zbb.yaml project (flat env, no stacks) and participate in a stack-based slot? The slot would need to bridge the two models.
 
-## Auto-activation
+## Shell Environment Model
 
-**[OPEN]** The `cd`-based auto-activation is mentioned in the design but needs fleshing out.
+### Three Layers
 
-Options:
-- **direnv integration** — `.envrc` files that call `zbb stack enter <name>`
-- **Shell hook** — zbb registers a `cd` hook (like nvm's auto-use)
-- **Explicit only** — `zbb stack enter hub` / `--stack hub` flag, no magic
+The shell env is scoped by context:
 
-Explicit is simplest and most predictable. direnv is battle-tested. Shell hook is fragile.
+| Context | What's visible |
+|---------|----------------|
+| **In slot, no stack** | Slot vars only (`ZB_SLOT`, `ZB_SLOT_DIR`, etc.) |
+| **In slot + stack** | Slot vars + stack's own vars + stack's resolved imports |
+| **Different stack** | Slot vars + that stack's vars + that stack's imports |
 
-**[OPEN]** What does "entering" a stack mean exactly? Today `zbb slot load` spawns a subshell. Does `zbb stack enter` also spawn a subshell? Or just update the current shell's env? If it's just env updates, how do you "leave" a stack?
+Stacks never see each other's internal vars. Dana's `LOG_LEVEL` and Hub's `LOG_LEVEL` don't collide — they're only visible when you're in that stack's context. Lifecycle commands (`zbb start hub`) build their env from the resolved stack state on disk, not from the current shell env.
+
+### cd Hook (direnv-like)
+
+Inside a slot subshell, a `cd` hook automatically scopes the env to the current stack:
+
+1. `cd` fires the hook
+2. Hook walks up the directory tree looking for a stack manifest (like `findRepoRoot` today)
+3. Found → knows which stack. Combines `ZB_SLOT` to locate resolved state: `~/.zbb/slots/$ZB_SLOT/stacks/$STACK/.env`
+4. Sources the `.env` (diffs current env, exports new vars, unsets vars from the previous stack)
+
+No pre-computed directory map needed. The manifest file IS the marker. `ZB_SLOT` IS the pointer to resolved state. Walking a few directories is fast.
+
+```bash
+# Automatic — env changes as you move between stacks
+[zb:local]:~$ cd com/dana
+# hook fires → loads dana's env
+[zb:local]:~/com/dana$ echo $DANA_PORT
+15001
+
+[zb:local]:~/com/dana$ cd ../hub
+# hook fires → unsets dana's internal vars, loads hub's env
+[zb:local]:~/com/hub$ echo $HUB_SERVER_PORT
+15004
+```
+
+### Shell Function
+
+`zbb` in the interactive shell is a **shell function** wrapping the binary (same pattern as nvm). This enables `zbb env set` to modify the current shell env:
+
+```bash
+# Installed into the subshell during `zbb slot load`
+zbb() {
+  command zbb "$@"
+  local rc=$?
+  # Re-source env after commands that change it
+  case "$1" in
+    env) _zbb_reload_env ;;
+  esac
+  return $rc
+}
+```
+
+Without this, `zbb env set FOO bar` writes to disk but the shell env is stale until the next `cd` triggers the hook.
+
+**Who sees what:**
+
+| Consumer | Calls | Env sync |
+|----------|-------|----------|
+| **Interactive shell** | Shell function | Yes — `cd` hook + function re-source |
+| **Scripts, CI** | Binary directly (`command zbb`, `/usr/bin/zbb`) | No — builds env from disk via `--slot`/`--stack` flags |
+| **Gradle, node child_process** | Binary directly | No — reads slot state from disk |
+| **AI agents** | Binary with `--slot`/`--stack` | No — self-contained |
+
+The shell function is only the interactive DX wrapper. Everything non-interactive uses the binary directly and is unaffected.
+
+### Risks
+
+**Script portability.** A bash script that calls `zbb env set` won't update its own env — it's calling the binary, not the function. This is the same behavior as nvm (`nvm use 22` in a script doesn't affect the parent shell). It's a well-understood pattern, but could surprise users who don't know the difference. Mitigation: `zbb env set` in non-interactive mode could print a warning: "Note: env updated on disk. Interactive shell will pick this up on next cd."
+
+**Hook performance.** The `cd` hook runs on every directory change. Walking up for a manifest file should be fast (<1ms), but if the `.env` source is slow (large file, slow disk), it could feel laggy. Mitigation: keep stack `.env` files small; the hook is a file read, not a resolution step — resolution happened at `stack add` time.
+
+**Nested subshells.** If someone runs `zbb slot load` inside an existing slot subshell, they get nested subshells. Today this is already possible and confusing. Stacks don't make it worse, but don't fix it either. Mitigation: detect and warn.
+
+**PROMPT_COMMAND conflicts.** The `cd` hook likely uses `PROMPT_COMMAND` or a `chpwd`-style trap. Other tools (starship, direnv itself, etc.) also use these. Mitigation: append to `PROMPT_COMMAND` rather than replacing it; check for conflicts at `slot load` time.
+
+### Non-Interactive Usage
+
+Scripts, CI, and tooling don't need the shell function or hook. They use flags:
+
+```bash
+# CI — all env resolved from disk, no shell state needed
+zbb --slot ci --stack hub start
+zbb --slot ci --stack hub test
+
+# Gradle — reads ZB_SLOT from env, builds its own env from disk
+./gradlew stackUp    # slot env already in shell from zbb slot load
+
+# Node.js — programmatic API
+import { SlotManager } from '@zerobias-org/zbb';
+const slot = await SlotManager.load('local');
+const env = slot.stacks.get('hub').env.getAll();
+```
 
 ## SystemD-like Properties
 
@@ -650,43 +741,55 @@ Stacks with dependencies behave like SystemD units:
 
 ## Open Questions Summary
 
-Collected from throughout this document:
+### Resolved
 
-### Naming & Format
-- Stack manifest filename: `zbb-stack.yaml`? `stack.yaml`? Extend `zbb.yaml`?
-- Package format: npm tarball? New artifact type?
-- Version source: package.json? Stack manifest?
+These were discussed and decided:
 
-### Namespace Mechanics
-- How do imported vars appear in the consumer's env? Bare (`DANA_URL`)? Qualified (`dana.DANA_URL`)? Both?
-- Are exports explicit only, or all env vars under namespace?
+| Question | Decision |
+|----------|----------|
+| Namespace mechanics | Bare imports (`DANA_URL` → `process.env.DANA_URL`). `as` for aliasing. Each import creates exactly one var. |
+| Explicit vs implicit exports | Explicit only. Internal vars are encapsulated. |
+| Collision handling | Two deps export same name, both imported bare → error at `stack add`. Must alias one. |
+| Shell env scoping | Three layers: slot → stack + imports. Scoped by cwd. No flat merge of all stacks. |
+| Shell sync mechanism | cd hook (direnv-like) + shell function wrapping binary. Non-interactive uses binary directly. |
+| Activation model | cd hook inside slot subshell. No separate "stack enter" subshell. `--slot`/`--stack` flags for non-interactive. |
+| Sub-stack exports | Yes, sub-stacks can have their own exports. Parent stack's exports is the union. |
+| Intra-stack deps | Yes, for start ordering within a stack. |
+| Lifecycle as contract | Manifest declares what (build, test, start, health). Implementation is shell commands. Build system is impl detail. |
+| Lifecycle env | Commands build their own env from resolved stack state on disk, not from current shell. |
+| Entering a stack | Not a separate subshell. You enter a slot (subshell), then cd hook scopes env to whichever stack you're in. |
 
-### Composition
-- Can sub-stacks have their own exports?
-- Can sub-stacks have intra-stack dependencies?
-- Is postgres a shared stack or owned by its consumer?
+### Still Open
 
-### Lifecycle
-- What happens when you stop a stack that others depend on?
-- Switch from packaged to dev in place, or remove + re-add?
-- Restart policies for packaged stacks?
-- Lifecycle command format: plain shell strings or structured (cwd, timeout, retries)?
-- Same lifecycle block for packaged and dev? Or separate `dev_lifecycle`?
+#### Naming & Format
+- Stack manifest: extend existing `zbb.yaml` with new fields? Or separate file?
+- Package format: npm tarball? Infrastructure exists but stacks aren't JS libraries.
+- Version source: `package.json` (single source of truth, like today)?
+- Could `package.json` and stack manifest merge, or keep separate concerns?
 
-### State & Env
-- Does the flat slot-level `.env` survive, or only per-stack `.env`?
-- Where do cross-stack references resolve?
-- Slot-level vs stack-level logs and state directories?
+#### Lifecycle Details
+- Command format: plain shell strings for most, structured for health checks? Or structured everywhere?
+- Packaged stacks omit `build`/`test` — implicit (just don't declare them) or explicit (`mode` field)?
+- Stop with dependents running: warn + `--force`? `--cascade` flag for reverse-order shutdown?
+- Restart policies for packaged stacks: defer to later?
 
-### Migration
-- How do existing zbb.yaml projects coexist with stacks?
-- Can a project participate in both models?
+#### Composition
+- Postgres: shared leaf stack or always owned by consumer?
+- Packaged → dev switch in place (keep ports/secrets/state) or remove + re-add?
 
-### Activation
-- direnv? Shell hook? Explicit only?
-- What does "entering" a stack mean for the shell?
+#### State
+- Keep slot-level logs/state dirs for cross-cutting concerns alongside per-stack dirs?
 
-### Distribution
-- What exactly goes in a packaged stack?
-- npm publish or custom artifact?
-- Can package.json and stack manifest merge?
+#### Migration
+- Incremental adoption path for existing `zbb.yaml` projects?
+- Legacy flat-env projects coexisting with stack-based projects in same slot?
+
+#### Distribution
+- What exactly goes in a packaged stack tarball?
+- Simple stacks (postgres) reference images directly without compose files?
+
+#### Shell Risks (documented, not blocking)
+- Script portability: `zbb env set` in scripts calls binary, not function — env not updated in calling script
+- Hook performance at scale
+- PROMPT_COMMAND conflicts with starship, direnv, etc.
+- Nested subshell detection
