@@ -1052,6 +1052,103 @@ But AI agents and scripts consistently bypass it — the typed accessor API is t
 
 **[OPEN]** State history/transitions — does the state file only hold current state, or also a log of transitions? Current-only is simpler. A transition log enables debugging ("when did dana go unhealthy?"). Could be a separate `state-log.yaml` or just rely on filesystem mtime + logs.
 
+## Secrets and Testing
+
+### How It Works Today
+
+Hub modules use `describeModule()` from `module-test-client` to run the same test suite against multiple targets. The test client auto-discovers secrets matching the module's `_module` key via `zbb secret list --module <key>`. Each secret represents a different target system (postgres, mysql, SQL Server for the SQL module; different GitHub orgs for the GitHub module).
+
+```typescript
+// One test, adapts to whatever secrets exist in the slot
+describeModule<Sql>('SQL Module', (client) => {
+  it('should get root object', async () => {
+    const root = await client.getObjectsApi().getObject('/');
+    expect(root).to.be.ok;
+  });
+});
+```
+
+If the slot has 3 secrets for this module, the test runs 3 times — once per target. CI sets up different secrets than local dev. Tests don't know or care.
+
+### With Stacks
+
+If every module is a stack, the test workflow becomes:
+
+```bash
+# Add the module stack — deps (Dana, Hub, Postgres) resolve automatically
+zbb stack add ./my-module
+
+# Create secrets for test targets
+zbb secret create postgres-local host=localhost port=${PGPORT} ...
+zbb secret create mysql-ci host=mysql.ci.internal ...
+
+# Run tests — discovers all matching secrets, runs against each
+zbb test my-module
+```
+
+**Isolation via stack lifecycle:**
+
+```bash
+# Create stack (allocates ports, pulls deps, generates secrets)
+zbb stack add ./sql-module
+
+# Test against all configured targets
+zbb test sql-module
+
+# Clean up — removes JUST THIS STACK
+zbb stack remove sql-module
+```
+
+`stack remove` calls cleanup hooks declared in the manifest:
+
+```yaml
+lifecycle:
+  cleanup:
+    - docker compose down -v           # remove containers + volumes
+    - rm -rf ${ZB_SLOT_LOGS}/sql-*     # remove log files
+    - rm -rf ${ZB_SLOT_STATE}/sql-*    # remove test fixtures
+```
+
+Dependencies (Dana, Hub) stay running if other stacks need them. Only the module's own resources are cleaned up.
+
+### CI Pipeline
+
+```bash
+# Ephemeral slot — isolated, auto-cleaned
+zbb slot create --ephemeral --ttl 15m
+
+# Add module — deps pulled as packaged stacks
+zbb stack add @auditlogic/module-sql@6.8.0
+
+# CI creates its own secrets (different targets than dev)
+zbb secret create pg-ci host=$CI_PG_HOST user=$CI_PG_USER ...
+zbb secret create mssql-ci host=$CI_MSSQL_HOST user=$CI_MSSQL_USER ...
+
+# Same test command — adapts to whatever secrets exist
+zbb test module-sql
+
+# Ephemeral slot auto-cleans after TTL
+```
+
+The secret inventory IS the test matrix. Add a secret, get a test run. Remove a secret, skip that target. No test code changes.
+
+### Secrets as Stack-Level Resources
+
+Secrets declared in the stack manifest become part of the stack contract:
+
+```yaml
+# In zbb.yaml
+secrets:
+  connection_profile:
+    schema: connectionProfile.yml     # validates secret shape
+    required_for: [testDirect, testDocker, testHub]
+    discovery: auto                    # zbb secret list --module <key>
+```
+
+**[OPEN]** Should the stack manifest declare a secret schema so `zbb secret create` can validate? Today `--type @connectionProfile.yml` does this optionally. With stacks, the manifest could make it automatic — every secret for this module must match the connection profile schema.
+
+**[OPEN]** Should `zbb stack add` auto-create template secrets (with empty values) based on the schema? This would make the "what credentials do I need?" question self-documenting.
+
 ## SystemD-like Properties
 
 Stacks with dependencies behave like SystemD units:
