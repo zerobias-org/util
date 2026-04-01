@@ -296,6 +296,13 @@ require:
     parse: "psql \\(PostgreSQL\\) (\\S+)"
     version: ">=14"
 
+# Log sources — declares where `zbb logs` reads from
+# Single source: unnamed (zbb logs show dana → just works)
+# Multiple sources: named (zbb logs show dana:access)
+logs:
+  source: docker
+  container: "${STACK_NAME}-dana"
+
 # Lifecycle hooks
 # [OPEN] Are these shell commands? References to scripts? Gradle tasks?
 lifecycle:
@@ -352,6 +359,7 @@ env:
     type: string
     default: "ws://localhost:${HUB_SERVER_PORT}"
   # ...
+
 ```
 
 ### Example: Postgres (Packaged, Leaf Dependency)
@@ -552,6 +560,74 @@ zbb build hub && zbb restart hub:server
 ```
 
 **cwd shorthand:** `cd hub && zbb build` detects the stack from cwd — same as `zbb build hub` from anywhere.
+
+## Logs
+
+Logs are a stack-level concern. Each stack (or sub-stack) declares its log sources in the manifest. `zbb logs` reads the declaration and routes to the right backend.
+
+### Declaration
+
+A stack with one log source doesn't need to name it:
+
+```yaml
+# Single source — `zbb logs show dana` just works
+logs:
+  source: docker
+  container: "${STACK_NAME}-dana"
+```
+
+A stack with multiple sources names them:
+
+```yaml
+# Multiple sources — `zbb logs show myservice:app` or `zbb logs show myservice:access`
+logs:
+  app:
+    source: docker
+    container: "${STACK_NAME}-myservice"
+  access:
+    source: file
+    path: "${ZB_SLOT_LOGS}/myservice-access.log"
+  cloudwatch:
+    source: aws
+    log_group: "${AWS_LOG_GROUP}"
+```
+
+Sub-stacks declare their own logs. The parent doesn't know or care where its children's logs come from.
+
+### Supported sources
+
+| Source | Backend | Example |
+|--------|---------|---------|
+| `docker` | `docker logs <container>` | Container stdout/stderr |
+| `file` | `tail` / file read | Log file on disk |
+| `aws` | `aws logs tail` | CloudWatch log group |
+
+**[OPEN]** Other sources to consider: journald, k8s pod logs, custom command.
+
+### Commands
+
+```bash
+# List all log sources across all stacks in slot
+zbb logs list
+#   STACK       SOURCE     NAME        TYPE      STATUS
+#   postgres    postgres   (default)   docker    running
+#   dana        dana       (default)   docker    running
+#   hub:server  server     (default)   docker    running
+#   hub:node    node       app         file      12K, 3m ago
+#   hub:node    node       cloudwatch  aws       —
+
+# Show logs — routes to declared backend
+zbb logs show dana                     # single source, no name needed
+zbb logs show hub:server               # sub-stack, single source
+zbb logs show hub:node:app             # sub-stack, named source
+zbb logs show hub:node:cloudwatch      # different backend, same interface
+
+# Tail and follow work across all backends
+zbb logs show dana --tail 100
+zbb logs show dana --follow
+```
+
+The stack manifest is the routing table. `zbb logs` is just a CLI that reads it and dispatches.
 
 ## Environment: Three-Layer Model
 
