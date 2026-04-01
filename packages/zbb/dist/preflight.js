@@ -70,6 +70,7 @@ export function runPreflightChecks(requirements, skipTools) {
                 ok: !!value,
                 required: 'set',
                 error: value ? undefined : `${req.tool} not set in environment`,
+                install: req.install,
             });
             continue;
         }

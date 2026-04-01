@@ -14,6 +14,7 @@ import { runPreflightChecks, formatPreflightResults } from './preflight.js';
 import { resolveStackAlias, runGradle } from './gradle.js';
 import { findRepoRoot, loadProjectConfig, loadRepoConfig, loadUserConfig, } from './config.js';
 import { spawn } from 'node:child_process';
+import { isMonorepo, isMonorepoCommand, handleMonorepo } from './monorepo/index.js';
 /**
  * Extend slot from cwd context: walk up to find repo root (.zbb.yaml/gradlew),
  * scan zbb.yaml declarations, add missing vars to slot, re-export to process.env.
@@ -106,6 +107,12 @@ export async function main(argv) {
         return;
     }
     const command = args[0];
+    // Monorepo commands: clean/build/test/gate/publish in npm workspace monorepos
+    // Stack commands (up/down/destroy/info) still route to Gradle even in monorepos.
+    const repoRoot = findRepoRoot(process.cwd());
+    if (repoRoot && isMonorepoCommand(command) && isMonorepo(repoRoot)) {
+        return handleMonorepo(command, args.slice(1), repoRoot);
+    }
     // Slot subcommands
     if (command === 'slot')
         return handleSlot(args.slice(1));
@@ -749,6 +756,13 @@ Usage:
   zbb <gradle-task> [args...]                    Run Gradle task
   zbb --version                                  Show version
   zbb --help                                     Show this help
+
+Monorepo commands (when .zbb.yaml has monorepo.enabled: true):
+  zbb clean [--all]                        Clean build artifacts
+  zbb build [--all] [--verbose]            Build affected packages
+  zbb test [--all] [--verbose]             Test affected packages
+  zbb gate [--all] [--check]               Full pipeline + write gate-stamp.json
+  zbb publish [--dry-run] [--force]        Publish changed packages (main only)
 
 Secret commands:
   zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]
