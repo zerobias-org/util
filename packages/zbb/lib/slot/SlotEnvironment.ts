@@ -157,8 +157,9 @@ export class SlotEnvironment extends EventEmitter {
 
     this.declared.set(key, value);
     this.manifest.set(key, {
+      ...existing,
       source,
-      type: 'string',
+      type: existing?.type ?? 'string',
       ...(mask !== undefined ? { mask } : {}),
     });
 
