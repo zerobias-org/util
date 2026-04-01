@@ -127,11 +127,14 @@ export class SlotEnvironment extends EventEmitter {
   /** Set a user override (persisted to overrides.env). Optional mask flag. */
   async set(key: string, value: string, mask?: boolean): Promise<void> {
     this.overrides.set(key, value);
-    if (mask !== undefined) {
+    const existing = this.manifest.get(key);
+    if (!existing || mask !== undefined) {
       this.manifest.set(key, {
-        ...(this.manifest.get(key) ?? { source: 'override', type: 'string' }),
-        mask,
+        ...(existing ?? { source: 'override', type: 'string' }),
+        ...(mask !== undefined ? { mask } : {}),
       });
+      const { saveYaml } = await import('../yaml.js');
+      await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
     }
     await this.writeOverrides();
     this.emit('change', { key, value });
@@ -183,6 +186,13 @@ export class SlotEnvironment extends EventEmitter {
   /** Remove a user override. */
   async unset(key: string): Promise<void> {
     this.overrides.delete(key);
+    // Remove from manifest if it was an override-sourced entry (user-added)
+    const entry = this.manifest.get(key);
+    if (entry?.source === 'override') {
+      this.manifest.delete(key);
+      const { saveYaml } = await import('../yaml.js');
+      await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
+    }
     await this.writeOverrides();
     this.emit('change', { key, value: undefined });
   }
