@@ -553,44 +553,189 @@ zbb build hub && zbb restart hub:server
 
 **cwd shorthand:** `cd hub && zbb build` detects the stack from cwd — same as `zbb build hub` from anywhere.
 
+## Environment: Three-Layer Model
+
+Today's env system tangles schema, values, and provenance. With stacks, these are cleanly separated into three layers per stack:
+
+### Layer 1: Schema (in `zbb.yaml` — the stack manifest)
+
+What vars exist, their types, formulas, descriptions. This is the declaration — checked into source control, part of the stack's public contract.
+
+```yaml
+# zbb.yaml (stack manifest)
+env:
+  DANA_PORT:
+    type: port
+    description: Dana API host port
+  DANA_URL:
+    type: string
+    description: Dana API gateway URL
+    value: "http://localhost:${DANA_PORT}"    # formula — always derived
+  PGPASSWORD:
+    type: secret
+    generate: base64:12
+  NPM_TOKEN:
+    type: string
+    source: env
+    required: true
+    mask: true
+```
+
+### Layer 2: Manifest (per-stack, in slot — the provenance)
+
+How each var got its value. This is the **source of truth** — every var has a resolution record. Changing the manifest recalculates the `.env`.
+
+```yaml
+# ~/.zbb/slots/local/stacks/dana/manifest.yaml
+DANA_PORT:
+  resolution: allocated
+  value: 15001
+  source: com/dana/zbb.yaml
+
+DANA_URL:
+  resolution: derived
+  formula: "http://localhost:${DANA_PORT}"
+  inputs: { DANA_PORT: 15001 }
+  # value computed from formula — not stored here
+
+SERVER_URL:
+  resolution: override
+  value: "https://custom.example.com"
+  set_by: user
+  set_at: 2026-04-01T10:00:00Z
+  default_formula: "http://localhost:${DANA_PORT}"
+
+NPM_TOKEN:
+  resolution: inherited
+  source: env
+
+JWT_PRIVATE_KEY:
+  resolution: generated
+  generator: rsa:2048
+
+HUB_SERVER_URL:
+  resolution: imported
+  from: dana
+  original_name: DANA_URL
+  alias: null              # or "PROXY_URL" if aliased
+```
+
+### Layer 3: `.env` (per-stack, in slot — the computed output)
+
+Plain key=value. The final resolved state. **Never edited directly** — always derived from the manifest. This is what lifecycle commands and the shell see.
+
+```
+# ~/.zbb/slots/local/stacks/dana/.env
+DANA_PORT=15001
+DANA_URL=http://localhost:15001
+SERVER_URL=https://custom.example.com
+NPM_TOKEN=ghp_abc123
+JWT_PRIVATE_KEY=LS0tLS1CRUdJTi...
+```
+
+### Flow
+
+```
+Schema (zbb.yaml)  →  declares what vars exist + formulas
+                          ↓
+                    zbb stack add / zbb env set
+                          ↓
+Manifest            →  records how each var was resolved
+                          ↓
+                    recalculate (topo-sorted formula evaluation)
+                          ↓
+.env                →  computed output (cache, never edited)
+```
+
+**`zbb env set FOO bar`** writes to the manifest as `resolution: override`. Then `.env` is recalculated. No separate `overrides.env` — the manifest is the single source of truth.
+
+**If an input changes** (e.g., `DANA_PORT` gets reallocated), all vars with formulas referencing it are recomputed in `.env`. The manifest records the formula, not the frozen value.
+
+**Resolution precedence:**
+1. Override (user set via `zbb env set`)
+2. Imported (from dependency stack)
+3. Inherited (from parent shell, `source: env`)
+4. Generated (secrets, `generate: rsa:2048`)
+5. Allocated (ports)
+6. Derived (formula from `value:` field)
+7. Default (literal from `default:` field — computed once, frozen)
+
+### DX: `zbb env explain`
+
+The manifest powers full introspection:
+
+```bash
+zbb env explain DANA_URL
+#   Name:        DANA_URL
+#   Type:        string (from @zerobias-com/dana)
+#   Description: Dana API gateway URL
+#   Resolution:  derived
+#   Formula:     http://localhost:${DANA_PORT}
+#   Inputs:      DANA_PORT = 15001 (allocated)
+#   Current:     http://localhost:15001
+#   Overridable: yes
+
+zbb env explain SERVER_URL
+#   Name:        SERVER_URL
+#   Resolution:  override (user)
+#   Current:     https://custom.example.com
+#   Formula:     http://localhost:${DANA_PORT}
+#   Set by:      zbb env set (2026-04-01)
+
+zbb env explain NPM_TOKEN
+#   Name:        NPM_TOKEN
+#   Resolution:  inherited (parent shell)
+#   Current:     ***
+#   Required:    yes
+```
+
+No more "where did this value come from?" The manifest answers every question. A TUI, web UI, AI agent, or `yq` one-liner can access the same data.
+
+### Distinction: `value` vs `default`
+
+```yaml
+env:
+  DANA_URL:
+    value: "http://localhost:${DANA_PORT}"     # formula — recomputes when DANA_PORT changes
+
+  CUSTOM_SETTING:
+    default: "http://localhost:${DANA_PORT}"   # default — computed once at stack add, then frozen
+```
+
+`value` = live derivation (always tracks inputs). `default` = initial value (snapshot). Override wins over both.
+
 ## Slot Directory Structure (with Stacks)
 
 ```
 ~/.zbb/slots/local/
-  slot.yaml                    # slot metadata (unchanged)
-  .env                         # [OPEN] flat slot-level env? or removed in favor of per-stack?
-  manifest.yaml                # [OPEN] still global? or per-stack?
-  overrides.env                # user overrides (unchanged)
+  slot.yaml                    # slot metadata (portRange, created, ephemeral)
 
-  stacks/                      # NEW — per-stack runtime state
+  stacks/                      # per-stack runtime state
     dana/
-      stack.yaml               # resolved manifest (exact version, mode, source path)
-      .env                     # dana's allocated env vars
-      manifest.yaml            # dana's var provenance
+      stack.yaml               # resolved identity (name, version, mode, source path)
+      manifest.yaml            # Layer 2: provenance — source of truth for all vars
+      .env                     # Layer 3: computed output — never edited directly
+      state.yaml               # runtime state (status, schema_applied, etc.)
       logs/                    # dana's log files
       state/                   # dana's runtime state
-        secrets/               # dana's connection profiles
+        secrets/               # connection profiles
     hub/
       stack.yaml
-      .env
       manifest.yaml
+      .env
+      state.yaml
       logs/
       state/
     postgres/
       stack.yaml
+      manifest.yaml
       .env
-      ...
+      state.yaml
 
-  config/                      # shared config (unchanged)
-  logs/                        # [OPEN] keep slot-level logs? or only per-stack?
-  state/                       # [OPEN] keep slot-level state? or only per-stack?
+  config/                      # slot-level shared config
+  logs/                        # slot-level logs (cross-cutting)
+  state/                       # slot-level state (cross-cutting)
 ```
-
-**[OPEN]** Big question: does the flat `.env` at slot root survive? Today every var from every project is merged into one file. With stacks, each stack could own its own `.env`. But then how do cross-stack references resolve? Options:
-
-- **Merged `.env` still exists** — assembled from all stack `.env` files + imports. This is what the shell sees.
-- **No merged file** — each stack's env is isolated, imports are resolved at start time.
-- **Both** — stacks own their vars, slot assembles a merged view for the shell.
 
 ## Distribution
 
@@ -863,6 +1008,10 @@ These were discussed and decided:
 | Intra-stack deps | Yes, for start ordering within a stack. |
 | Lifecycle as contract | Manifest declares what (build, test, start, health). Implementation is shell commands. Build system is impl detail. |
 | Lifecycle env | Commands build their own env from resolved stack state on disk, not from current shell. |
+| Env three-layer model | Schema (zbb.yaml) → Manifest (provenance, source of truth) → .env (computed output). Manifest change recalculates .env. No separate overrides.env. |
+| Flat slot .env | Replaced by per-stack .env. Shell env scoped by cd hook. |
+| `value` vs `default` | `value` = live formula (recomputes). `default` = initial value (frozen). Override wins over both. |
+| Resolver functions | Should become declared formulas in manifest. Code-only resolvers are invisible and cause problems. |
 | Entering a stack | Not a separate subshell. You enter a slot (subshell), then cd hook scopes env to whichever stack you're in. |
 
 ### Still Open
@@ -883,11 +1032,12 @@ These were discussed and decided:
 - Postgres: shared leaf stack or always owned by consumer?
 - Packaged → dev switch in place (keep ports/secrets/state) or remove + re-add?
 
-#### State
-- Keep slot-level logs/state dirs for cross-cutting concerns alongside per-stack dirs?
+#### State & Env
 - State writes: exclusive owner per file, or any process can write?
-- Schema validation on write: always, optional, or never?
+- State schema validation on write: always, optional, or never?
 - State history: current-only, or transition log for debugging?
+- Complex transforms (protocol swap `http→ws`): declared formula syntax, or keep as registered functions referenced in manifest?
+- Resolution precedence: is the 7-level priority order right, or does it need adjustment?
 
 #### Migration
 - Incremental adoption path for existing `zbb.yaml` projects?
