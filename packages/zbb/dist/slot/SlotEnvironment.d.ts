@@ -11,10 +11,12 @@ export interface ManifestEntry {
     source: string;
     type: string;
     mask?: boolean;
+    hidden?: boolean;
     derived?: boolean;
     generated?: string;
     allocated?: number;
     description?: string;
+    examples?: string[];
 }
 /**
  * Manages a slot's environment variables.
