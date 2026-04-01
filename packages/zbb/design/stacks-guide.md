@@ -84,17 +84,48 @@ Rules:
 
 ## Quick Start
 
-```bash
-# Dev workflow
-zbb slot create local
-zbb stack add ./dana              # dev mode
-zbb stack add ./hub               # finds dana in slot, binds to it
-zbb start hub                     # starts postgres → dana → hub
+### Dev Workflow
 
-# CI workflow
+```bash
+# 1. Create and enter a slot
+zbb slot create local
+zbb slot load local
+[zb:local]:~/zerobias$
+
+# 2. Add stacks (resolves deps, allocates ports, generates secrets)
+zbb stack add ./dana              # dev mode — you have source
+zbb stack add ./hub               # finds dana already in slot, binds
+
+# 3. Start
+zbb start hub                     # starts postgres → dana → hub, health-checked
+
+# 4. Work — cd hook scopes env to current stack
+cd com/hub
+[zb:local]:~/zerobias/com/hub$ echo $HUB_SERVER_PORT
+15004
+
+cd ../dana
+[zb:local]:~/zerobias/com/dana$ echo $DANA_PORT
+15001
+```
+
+If you're already in a loaded slot, `stack add` resolves and writes state to the slot. The cd hook picks up the stack env on your next directory change. `stack add` does NOT start anything — that's `zbb start`.
+
+### CI Workflow
+
+```bash
 zbb slot create --ephemeral --ttl 15m
+zbb slot load ci-run
 zbb stack add @zerobias-com/hub@2.1.0    # packaged deps auto-resolved
 zbb start hub && zbb test hub
+```
+
+### Without a Subshell
+
+```bash
+# Non-interactive — slot and stack as flags, no subshell needed
+zbb --slot local --stack hub start
+zbb --slot local --stack hub test
 ```
 
 `cd hub && zbb start` and `zbb start hub` are equivalent — cwd detection or explicit name.
