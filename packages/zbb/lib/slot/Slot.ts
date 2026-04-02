@@ -6,6 +6,7 @@ import { SlotWatcher } from './SlotWatcher.js';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
 import { lookupDnsTxt as _lookupDnsTxt } from '../env/DnsTxtResolver.js';
 import { refreshVaultVars, type RefreshResult } from './refresh.js';
+import { StackManager } from '../stack/StackManager.js';
 
 /** Default DNS cache TTL in seconds when not available from DNS response */
 const DEFAULT_DNS_TTL = 30;
@@ -56,6 +57,7 @@ export class Slot extends EventEmitter {
 
   private _meta: SlotMeta | null = null;
   private _watcher: SlotWatcher | null = null;
+  private _stacks: StackManager | null = null;
   private _initialized = false;
 
   constructor(name: string, slotsDir: string) {
@@ -111,6 +113,20 @@ export class Slot extends EventEmitter {
   get logsDir() { return join(this.path, 'logs'); }
   get stateDir() { return join(this.path, 'state'); }
   get tmpDir() { return join(this.path, 'state', 'tmp'); }
+  get stacksDir() { return join(this.path, 'stacks'); }
+
+  /** Whether this slot has any stacks */
+  get hasStacks(): boolean {
+    return existsSync(this.stacksDir);
+  }
+
+  /** Stack manager for this slot (lazy-initialized) */
+  get stacks(): StackManager {
+    if (!this._stacks) {
+      this._stacks = new StackManager(this);
+    }
+    return this._stacks;
+  }
 
   /** Env vars that expose slot directories */
   getSlotEnvVars(): Record<string, string> {
@@ -121,6 +137,7 @@ export class Slot extends EventEmitter {
       ZB_SLOT_LOGS: this.logsDir,
       ZB_SLOT_STATE: this.stateDir,
       ZB_SLOT_TMP: this.tmpDir,
+      ZB_STACKS_DIR: this.stacksDir,
       STACK_NAME: this.name,
     };
   }

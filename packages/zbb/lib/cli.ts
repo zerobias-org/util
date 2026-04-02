@@ -23,6 +23,7 @@ import {
 } from './config.js';
 import { scanEnvDeclarations } from './env/Scanner.js';
 import { spawn } from 'node:child_process';
+import { handleStack, detectStackContext } from './stack/commands.js';
 
 /**
  * Extend slot from cwd context: walk up to find repo root (.zbb.yaml/gradlew),
@@ -85,6 +86,18 @@ async function prepareSlot(slot: Slot, options?: { fatal?: boolean }): Promise<s
 }
 
 export async function main(argv: string[]): Promise<void> {
+  try {
+    await _main(argv);
+  } catch (err: any) {
+    console.error(err.message);
+    if (argv.includes('--verbose') || argv.includes('-v') || process.env.ZBB_VERBOSE === '1') {
+      console.error(err.stack);
+    }
+    process.exit(1);
+  }
+}
+
+async function _main(argv: string[]): Promise<void> {
   let args = argv.slice(2);
 
   // Global --slot flag: load slot env before running any command
@@ -111,6 +124,14 @@ export async function main(argv: string[]): Promise<void> {
     await prepareSlot(slot);
   }
 
+  // Global --stack flag: set stack context for non-interactive use
+  // Usage: zbb --slot local --stack hub start
+  const stackIdx = args.indexOf('--stack');
+  if (stackIdx !== -1 && args[stackIdx + 1]) {
+    process.env.ZB_STACK = args[stackIdx + 1];
+    args = [...args.slice(0, stackIdx), ...args.slice(stackIdx + 2)];
+  }
+
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     printUsage();
     return;
@@ -131,10 +152,21 @@ export async function main(argv: string[]): Promise<void> {
   // Slot subcommands
   if (command === 'slot') return handleSlot(args.slice(1));
 
+  // Stack subcommands
+  if (command === 'stack') {
+    const slotName = process.env.ZB_SLOT;
+    if (!slotName) {
+      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+      process.exit(1);
+    }
+    const slot = await SlotManager.load(slotName);
+    return handleStack(args.slice(1), slot);
+  }
+
   // Secret subcommands
   if (command === 'secret') return handleSecretCmd(args.slice(1));
 
-  // Env subcommands
+  // Env subcommands (stack-aware)
   if (command === 'env') return handleEnv(args.slice(1));
 
   // Log subcommands
@@ -394,9 +426,21 @@ async function handleSlot(args: string[]): Promise<void> {
       const promptTemplate = userConfig.prompt ?? '[zb:{{slot}}]:\\w$ ';
       shellEnv.PS1 = promptTemplate.replace('{{slot}}', slotName);
 
+      // Generate rcfile that sources the hook
+      const { join: pathJoin, dirname: pathDirname } = await import('node:path');
+      const { fileURLToPath: pathFileURLToPath } = await import('node:url');
+      const { writeFileSync } = await import('node:fs');
+
+      const thisDir = pathDirname(pathFileURLToPath(import.meta.url));
+      // hook.sh lives in lib/shell/ — go up from dist/ to package root, then into lib/
+      const pkgRoot = pathJoin(thisDir, '..');
+      const hookPath = pathJoin(pkgRoot, 'lib', 'shell', 'hook.sh');
+      const rcFile = pathJoin(slot.path, '.zbb-bashrc');
+      writeFileSync(rcFile, `${shellEnv.PS1 ? `PS1='${shellEnv.PS1}'` : ''}\n[ -f "${hookPath}" ] && source "${hookPath}"\n`, 'utf-8');
+
       // Spawn subshell
       console.log(`Loading slot '${slotName}'...`);
-      const shell = spawn('bash', ['--norc', '--noprofile', '-i'], {
+      const shell = spawn('bash', ['--rcfile', rcFile, '-i'], {
         stdio: 'inherit',
         env: shellEnv,
       });
@@ -539,18 +583,39 @@ async function handleEnv(args: string[]): Promise<void> {
   const slot = await SlotManager.load(slotName);
   const sub = args[0];
 
+  // Detect stack context for stack-scoped env operations
+  const stackCtx = slot.hasStacks
+    ? (process.env.ZB_STACK
+        ? await slot.stacks.load(process.env.ZB_STACK)
+        : await detectStackContext(slot))
+    : null;
+
   switch (sub) {
     case 'list': {
       const unmask = args.includes('--unmask');
-      const manifest = slot.env.getManifest();
 
-      for (const key of slot.env.list()) {
-        const value = unmask ? slot.env.get(key)! : (slot.env.shouldMask(key) ? '***' : slot.env.getMasked(key)!);
-        const entry = manifest[key];
-        const source = entry?.source ?? '';
-        const typeInfo = entry?.derived ? 'derived' : (entry?.type ?? '');
-        const override = slot.env.isOverride(key) ? ' (override)' : '';
-        console.log(`  ${key}=${value}  (${source} — ${typeInfo}${override})`);
+      if (stackCtx) {
+        // Stack-scoped env list
+        const manifest = stackCtx.env.getManifest();
+        console.log(`  [stack: ${stackCtx.name}]`);
+        for (const key of stackCtx.env.list()) {
+          const value = unmask ? stackCtx.env.get(key)! : (stackCtx.env.shouldMask(key) ? '***' : stackCtx.env.getMasked(key)!);
+          const entry = manifest[key];
+          const resolution = entry?.resolution ?? '';
+          const typeInfo = entry?.type ?? '';
+          console.log(`  ${key}=${value}  (${resolution} — ${typeInfo})`);
+        }
+      } else {
+        // Slot-level env list
+        const manifest = slot.env.getManifest();
+        for (const key of slot.env.list()) {
+          const value = unmask ? slot.env.get(key)! : (slot.env.shouldMask(key) ? '***' : slot.env.getMasked(key)!);
+          const entry = manifest[key];
+          const source = entry?.source ?? '';
+          const typeInfo = entry?.derived ? 'derived' : (entry?.type ?? '');
+          const override = slot.env.isOverride(key) ? ' (override)' : '';
+          console.log(`  ${key}=${value}  (${source} — ${typeInfo}${override})`);
+        }
       }
       break;
     }
@@ -561,7 +626,7 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Usage: zbb env get <VAR>');
         process.exit(1);
       }
-      const value = slot.env.get(key);
+      const value = stackCtx ? stackCtx.env.get(key) : slot.env.get(key);
       if (value === undefined) {
         console.error(`Variable '${key}' not set.`);
         process.exit(1);
@@ -577,9 +642,17 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Usage: zbb env set <VAR> <value>');
         process.exit(1);
       }
-      const old = slot.env.get(key);
-      await slot.env.set(key, value);
-      console.log(`  ${key}: ${old ?? '(unset)'} -> ${value} (saved to overrides.env)`);
+      if (stackCtx) {
+        const old = stackCtx.env.get(key);
+        await stackCtx.env.set(key, value);
+        console.log(`  ${key}: ${old ?? '(unset)'} -> ${value} (stack: ${stackCtx.name})`);
+        // Sync merged slot .env
+        await slot.stacks.syncSlotEnv();
+      } else {
+        const old = slot.env.get(key);
+        await slot.env.set(key, value);
+        console.log(`  ${key}: ${old ?? '(unset)'} -> ${value} (saved to overrides.env)`);
+      }
       break;
     }
 
@@ -589,12 +662,22 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Usage: zbb env unset <VAR>');
         process.exit(1);
       }
-      await slot.env.unset(key);
+      if (stackCtx) {
+        await stackCtx.env.unset(key);
+        // Sync merged slot .env
+        await slot.stacks.syncSlotEnv();
+      } else {
+        await slot.env.unset(key);
+      }
       console.log(`  ${key}: unset`);
       break;
     }
 
     case 'reset': {
+      if (stackCtx) {
+        console.error('Reset is only supported at slot level, not per-stack.');
+        process.exit(1);
+      }
       await slot.env.reset();
       console.log('All overrides cleared.');
       break;
@@ -625,6 +708,40 @@ async function handleEnv(args: string[]): Promise<void> {
       break;
     }
 
+    case 'explain': {
+      const key = args[1];
+      if (!key) {
+        console.error('Usage: zbb env explain <VAR>');
+        process.exit(1);
+      }
+
+      if (stackCtx) {
+        const result = stackCtx.env.explain(key, stackCtx.manifest.env);
+        console.log(`  Name:        ${result.name}`);
+        if (result.type) console.log(`  Type:        ${result.type} (from ${stackCtx.identity.name})`);
+        if (result.description) console.log(`  Description: ${result.description}`);
+        console.log(`  Resolution:  ${result.resolution}`);
+        if (result.formula) console.log(`  Formula:     ${result.formula}`);
+        if (result.inputs) {
+          const inputStr = Object.entries(result.inputs).map(([k, v]) => `${k} = ${v}`).join(', ');
+          console.log(`  Inputs:      ${inputStr}`);
+        }
+        console.log(`  Current:     ${result.current ?? '(unset)'}`);
+        if (result.from) console.log(`  From:        ${result.from}`);
+        if (result.original_name) console.log(`  Original:    ${result.original_name}`);
+        console.log(`  Overridable: ${result.overridable ? 'yes' : 'no'}`);
+      } else {
+        const value = slot.env.get(key);
+        const entry = slot.env.getManifestEntry(key);
+        console.log(`  Name:   ${key}`);
+        console.log(`  Value:  ${slot.env.shouldMask(key) ? '***MASKED***' : (value ?? '(unset)')}`);
+        console.log(`  Source: ${entry?.source ?? 'unknown'}`);
+        console.log(`  Type:   ${entry?.type ?? 'string'}`);
+        if (entry?.derived) console.log('  Derived: yes');
+      }
+      break;
+    }
+
     case 'diff': {
       const slotEnv = slot.env.getAll();
       const parentKeys = new Set(Object.keys(process.env));
@@ -645,7 +762,7 @@ async function handleEnv(args: string[]): Promise<void> {
 
     default:
       console.error(`Unknown env command: ${sub}`);
-      console.error('Usage: zbb env <list|get|set|unset|reset|refresh|diff>');
+      console.error('Usage: zbb env <list|get|set|unset|reset|refresh|explain|diff>');
       process.exit(1);
   }
 }
@@ -662,11 +779,43 @@ async function handleLogs(args: string[]): Promise<void> {
   const slot = await SlotManager.load(slotName);
   const sub = args[0];
 
+  // Resolve stack log sources if in stack context
+  const logStackCtx = slot.hasStacks
+    ? (process.env.ZB_STACK
+        ? await slot.stacks.load(process.env.ZB_STACK)
+        : await detectStackContext(slot))
+    : null;
+
   switch (sub) {
     case 'list': {
       const { readdir, stat } = await import('node:fs/promises');
       const { existsSync } = await import('node:fs');
       const { join } = await import('node:path');
+
+      // Stack-declared log sources
+      if (slot.hasStacks) {
+        const stacks = await slot.stacks.list();
+        for (const stack of stacks) {
+          if (!stack.manifest.logs) continue;
+          const logs = stack.manifest.logs;
+          const envAll = stack.env.getAll();
+          const interpolateStr = (s: string) => s.replace(/\$\{([^}]+)\}/g, (_, k) => envAll[k] ?? process.env[k] ?? `\${${k}}`);
+
+          if ('source' in logs) {
+            // Single source
+            const src = logs as import('./config.js').LogSourceConfig;
+            const label = src.container ? interpolateStr(src.container) : (src.path ? interpolateStr(src.path) : stack.name);
+            console.log(`  ${stack.name.padEnd(16)} (${src.source})   ${label}`);
+          } else {
+            // Multi-source
+            for (const [name, src] of Object.entries(logs)) {
+              const typed = src as import('./config.js').LogSourceConfig;
+              const label = typed.container ? interpolateStr(typed.container) : (typed.path ? interpolateStr(typed.path) : name);
+              console.log(`  ${stack.name}:${name}`.padEnd(18) + ` (${typed.source})   ${label}`);
+            }
+          }
+        }
+      }
       const { execSync } = await import('node:child_process');
 
       // File-based logs
@@ -716,6 +865,43 @@ async function handleLogs(args: string[]): Promise<void> {
       const sourceIdx = args.indexOf('--source');
       let source = sourceIdx !== -1 ? args[sourceIdx + 1] : 'auto';
 
+      // Try to resolve from stack log declarations first
+      // Supports: "dana" (single source), "hub:server" (substack), "hub:node:app" (named source)
+      if (source === 'auto' && slot.hasStacks) {
+        const logParts = logName.split(':');
+        const targetStackName = logParts[0];
+        const logSourceName = logParts.length > 1 ? logParts.slice(1).join(':') : undefined;
+
+        try {
+          const targetStack = await slot.stacks.load(targetStackName);
+          if (targetStack.manifest.logs) {
+            const logs = targetStack.manifest.logs;
+            const envAll = targetStack.env.getAll();
+            const interpolateLogStr = (s: string) => s.replace(/\$\{([^}]+)\}/g, (_, k) => envAll[k] ?? process.env[k] ?? `\${${k}}`);
+
+            let logConfig: import('./config.js').LogSourceConfig | undefined;
+            if ('source' in logs) {
+              logConfig = logs as import('./config.js').LogSourceConfig;
+            } else if (logSourceName && logSourceName in logs) {
+              logConfig = (logs as Record<string, import('./config.js').LogSourceConfig>)[logSourceName];
+            }
+
+            if (logConfig) {
+              source = logConfig.source;
+              // Override log target based on config
+              if (logConfig.source === 'docker' && logConfig.container) {
+                // Will be used below in docker case
+                process.env._ZBB_LOG_CONTAINER = interpolateLogStr(logConfig.container);
+              } else if (logConfig.source === 'file' && logConfig.path) {
+                process.env._ZBB_LOG_PATH = interpolateLogStr(logConfig.path);
+              } else if (logConfig.source === 'aws' && logConfig.log_group) {
+                process.env._ZBB_LOG_GROUP = interpolateLogStr(logConfig.log_group);
+              }
+            }
+          }
+        } catch { /* stack not found, fall through to auto-detect */ }
+      }
+
       // Auto-detect source: try local file, fall back to docker
       if (source === 'auto') {
         const { join } = await import('node:path');
@@ -739,10 +925,12 @@ async function handleLogs(args: string[]): Promise<void> {
         });
 
       switch (source) {
-        case 'local': {
+        case 'local':
+        case 'file': {
           const { join } = await import('node:path');
           const { existsSync } = await import('node:fs');
-          const logPath = join(slot.logsDir, `${logName}.log`);
+          const logPath = process.env._ZBB_LOG_PATH ?? join(slot.logsDir, `${logName}.log`);
+          delete process.env._ZBB_LOG_PATH;
 
           if (!existsSync(logPath)) {
             console.error(`Log file not found: ${logPath}`);
@@ -758,8 +946,8 @@ async function handleLogs(args: string[]): Promise<void> {
         }
 
         case 'docker': {
-          const stackName = slot.env.get('STACK_NAME') ?? slot.name;
-          const containerName = `${stackName}-${logName}`;
+          const containerName = process.env._ZBB_LOG_CONTAINER ?? `${slot.env.get('STACK_NAME') ?? slot.name}-${logName}`;
+          delete process.env._ZBB_LOG_CONTAINER;
           const dockerArgs = ['logs', '--tail', tailN];
           if (follow) dockerArgs.push('-f');
           dockerArgs.push(containerName);
@@ -774,7 +962,8 @@ async function handleLogs(args: string[]): Promise<void> {
 
         case 'aws': {
           const envKey = `HUB_AWS_LOG_GROUP_${logName.toUpperCase().replace(/-/g, '_')}`;
-          const logGroup = slot.env.get(envKey) ?? slot.env.get('HUB_AWS_LOG_GROUP');
+          const logGroup = process.env._ZBB_LOG_GROUP ?? slot.env.get(envKey) ?? slot.env.get('HUB_AWS_LOG_GROUP');
+          delete process.env._ZBB_LOG_GROUP;
           if (!logGroup) {
             console.error(`No log group configured. Set ${envKey} or HUB_AWS_LOG_GROUP in slot env.`);
             process.exit(1);
@@ -858,16 +1047,31 @@ function printUsage(): void {
   console.log(`zbb — ZeroBias Build
 
 Usage:
-  zbb slot <create|load|list|info|delete|gc>   Slot management
-  zbb env <list|get|set|unset|reset|refresh|diff>  Environment variables
-  zbb secret <create|get|list|update|delete>    Secret management
-  zbb logs <list|show|debug|info>                Log viewer + log level control
-  zbb dataloader [args...]                       Run dataloader with slot SQL env
-  zbb publish [--dry-run]                        Publish all artifacts (Gradle)
-  zbb up|down|destroy|info                       Stack aliases (Gradle)
-  zbb <gradle-task> [args...]                    Run Gradle task
-  zbb --version                                  Show version
-  zbb --help                                     Show this help
+  zbb slot <create|load|list|info|delete|gc>          Slot management
+  zbb stack <add|list|info|remove|update>             Stack management
+  zbb env <list|get|set|unset|reset|refresh|explain|diff>  Environment variables
+  zbb secret <create|get|list|update|delete>          Secret management
+  zbb logs <list|show|debug|info>                     Log viewer + log level control
+  zbb dataloader [args...]                            Run dataloader with slot SQL env
+  zbb publish [--dry-run]                             Publish all artifacts (Gradle)
+  zbb up|down|destroy|info                            Stack aliases (Gradle)
+  zbb <gradle-task> [args...]                         Run Gradle task
+  zbb --version                                       Show version
+  zbb --help                                          Show this help
+
+Stack commands:
+  zbb stack add <path> [--as <alias>]     Add dev stack from local path
+  zbb stack add <pkg@version>             Add packaged stack from npm
+  zbb stack list                          List stacks in current slot
+  zbb stack info <name>                   Show stack details, deps, exports, ports
+  zbb stack remove <name>                 Remove stack (runs cleanup hooks)
+  zbb stack start <stack[:substack]>      Start stack + deps (health-checked)
+  zbb stack stop <stack>                  Stop stack (deps stay running)
+  zbb stack restart <stack[:substack]>    Stop + start
+  zbb stack status                        Show all stack statuses
+  zbb stack build <stack>                 Run stack's build command
+  zbb stack test <stack>                  Run stack's test command
+  zbb stack gate <stack>                  Run stack's gate command
 
 Secret commands:
   zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]

@@ -1,0 +1,67 @@
+name: "@zerobias-com/minio"
+version: "1.0.0"
+
+exports:
+  - AWS_ENDPOINT
+  - AWS_ACCESS_KEY_ID
+  - AWS_SECRET_ACCESS_KEY
+  - AWS_REGION
+  - AWS_DEFAULT_REGION
+  - S3_FORCE_PATH_STYLE
+  - MINIO_PORT
+  - MINIO_CONSOLE_PORT
+
+env:
+  MINIO_PORT:
+    type: port
+    description: MinIO S3 API port
+
+  MINIO_CONSOLE_PORT:
+    type: port
+    description: MinIO web console port
+
+  AWS_ACCESS_KEY_ID:
+    type: string
+    default: "minioadmin"
+
+  AWS_SECRET_ACCESS_KEY:
+    type: string
+    default: "minioadmin"
+
+  AWS_REGION:
+    type: string
+    default: "us-east-1"
+
+  AWS_DEFAULT_REGION:
+    type: string
+    default: "us-east-1"
+
+  AWS_ENDPOINT:
+    type: string
+    value: "http://localhost:${MINIO_PORT}"
+    description: S3-compatible endpoint URL
+
+  S3_FORCE_PATH_STYLE:
+    type: string
+    default: "true"
+    description: Required for MinIO (path-style vs virtual-hosted)
+
+state:
+  status:
+    type: enum
+    values: [starting, healthy, stopped, error]
+
+lifecycle:
+  start: docker compose -f compose.yml -p ${STACK_NAME} up -d
+  stop: docker stop ${STACK_NAME}-minio 2>/dev/null; docker rm ${STACK_NAME}-minio 2>/dev/null; true
+  health:
+    command: "curl -sf http://localhost:${MINIO_PORT}/minio/health/live >/dev/null"
+    interval: 2
+    timeout: 30
+  cleanup:
+    - "docker stop ${STACK_NAME}-minio 2>/dev/null; docker rm ${STACK_NAME}-minio 2>/dev/null; true"
+    - "docker volume rm ${STACK_NAME}_minio-data 2>/dev/null; true"
+
+logs:
+  source: docker
+  container: "${STACK_NAME}-minio"

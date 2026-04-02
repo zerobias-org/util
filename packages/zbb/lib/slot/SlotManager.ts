@@ -81,6 +81,7 @@ export class SlotManager {
     await mkdir(join(slotDir, 'logs'), { recursive: true });
     await mkdir(join(slotDir, 'state'), { recursive: true });
     await mkdir(join(slotDir, 'state', 'tmp'), { recursive: true });
+    await mkdir(join(slotDir, 'stacks'), { recursive: true });
 
     // 4. Build slot env vars (available for ${VAR} resolution)
     const slot = new Slot(name, slotsDir);
