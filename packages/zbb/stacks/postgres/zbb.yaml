@@ -1,0 +1,51 @@
+name: "@zerobias-com/postgres"
+version: "17.0.0"
+
+exports: [PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE]
+
+env:
+  PGPORT:
+    type: port
+    description: PostgreSQL host port
+
+  PGHOST:
+    type: string
+    default: localhost
+
+  PGUSER:
+    type: string
+    default: postgres
+
+  PGPASSWORD:
+    type: secret
+    generate: hex:12
+
+  PGDATABASE:
+    type: string
+    default: zerobias
+
+  POSTGRES_VERSION:
+    type: string
+    default: "17"
+    description: PostgreSQL major version (image tag)
+
+state:
+  status:
+    type: enum
+    values: [starting, healthy, stopped, error]
+
+lifecycle:
+  start: docker compose -f compose.yml -p ${STACK_NAME} up -d
+  stop: docker stop ${STACK_NAME}-postgres 2>/dev/null; docker rm ${STACK_NAME}-postgres 2>/dev/null; true
+  health:
+    command: "pg_isready -h localhost -p ${PGPORT} -U ${PGUSER}"
+    interval: 2
+    timeout: 30
+  cleanup:
+    - "docker stop ${STACK_NAME}-postgres 2>/dev/null; docker rm ${STACK_NAME}-postgres 2>/dev/null; true"
+    - "docker volume rm ${STACK_NAME}_postgres-data 2>/dev/null; true"
+    - "docker network rm ${STACK_NAME}_default 2>/dev/null; true"
+
+logs:
+  source: docker
+  container: "${STACK_NAME}-postgres"

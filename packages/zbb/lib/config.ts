@@ -16,12 +16,16 @@ export interface ToolRequirement {
 export interface EnvVarDeclaration {
   type: 'port' | 'string' | 'secret';
   default?: string;
+  /** Live formula that recomputes when inputs change (unlike `default` which freezes). */
+  value?: string;
   description?: string;
   mask?: boolean;
   generate?: string;
-  source?: 'env' | 'cwd' | 'vault';
+  source?: 'env' | 'cwd' | 'vault' | 'file';
   /** Vault KV v2 ref — "mount/path.field" (single field lookup). Requires source: vault. */
   vault?: string;
+  /** File path to read value from. Supports ~ for homedir. Requires source: file. Falls back to env var or default. */
+  file?: string;
   /** When true, always re-fetch on `zbb env refresh` / `zbb publish`. Default: false. */
   refresh?: boolean;
   required?: boolean;
@@ -59,6 +63,84 @@ export interface UserConfig {
   slots?: { dir: string };
   prompt?: string;
   skip_checks?: string[];
+}
+
+// ── Stack Manifest Types ────────────────────────────────────────────
+
+export interface DependencySpec {
+  package: string;
+  ready_when?: Record<string, unknown>;
+}
+
+export interface SubstackConfig {
+  compose?: string;
+  services?: string[];
+  depends?: string[];
+  exports?: string[];
+  logs?: LogSourceConfig | Record<string, LogSourceConfig>;
+}
+
+export interface StateFieldSchema {
+  type: 'string' | 'boolean' | 'enum' | 'url' | 'number';
+  values?: string[];
+}
+
+export interface LifecycleConfig {
+  build?: string;
+  test?: string;
+  gate?: string;
+  start?: string;
+  stop?: string;
+  health?: string | HealthCheckConfig;
+  seed?: string;
+  cleanup?: string | string[];
+}
+
+export interface HealthCheckConfig {
+  command: string;
+  interval?: number;
+  timeout?: number;
+}
+
+export interface LogSourceConfig {
+  source: 'docker' | 'file' | 'aws';
+  container?: string;
+  path?: string;
+  log_group?: string;
+}
+
+export interface SecretSchemaConfig {
+  schema?: string;
+  discovery?: 'auto' | 'manual';
+}
+
+export interface StackManifest {
+  name: string;
+  version: string;
+  depends?: Record<string, string | DependencySpec>;
+  exports?: string[];
+  imports?: Record<string, (string | ImportAlias)[]>;
+  substacks?: Record<string, SubstackConfig>;
+  env?: Record<string, EnvVarDeclaration>;
+  state?: Record<string, StateFieldSchema>;
+  lifecycle?: LifecycleConfig;
+  logs?: LogSourceConfig | Record<string, LogSourceConfig>;
+  secrets?: Record<string, SecretSchemaConfig>;
+  require?: ToolRequirement[];
+}
+
+export interface ImportAlias {
+  from: string;
+  as: string;
+}
+
+export interface StackIdentity {
+  name: string;
+  version: string;
+  mode: 'dev' | 'packaged';
+  source: string;
+  added: string;
+  alias?: string;
 }
 
 // ── Paths ────────────────────────────────────────────────────────────
@@ -107,4 +189,13 @@ export async function loadRepoConfig(repoRoot: string): Promise<RepoConfig> {
 
 export async function loadProjectConfig(projectDir: string): Promise<ProjectConfig> {
   return loadYamlOrDefault<ProjectConfig>(join(projectDir, 'zbb.yaml'), {});
+}
+
+export function isStackManifest(config: ProjectConfig | StackManifest): config is StackManifest {
+  return 'name' in config && typeof (config as StackManifest).name === 'string';
+}
+
+export async function loadStackManifest(dir: string): Promise<StackManifest | null> {
+  const config = await loadYamlOrDefault<ProjectConfig & StackManifest>(join(dir, 'zbb.yaml'), {} as any);
+  return isStackManifest(config) ? config : null;
 }

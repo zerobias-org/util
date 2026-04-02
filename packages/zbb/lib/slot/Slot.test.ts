@@ -119,7 +119,7 @@ describe('slot.resolve()', () => {
     // Verify cache file was written
     const cacheContent = await readFile(join(slotDir, 'dns-cache.yml'), 'utf-8');
     const cache = parseYaml<DnsCache>(cacheContent);
-    assert.equal(cache.prefix, '_hub');
+    assert.equal(cache.prefix, '_test');
     assert.ok(cache.queried_at, 'queried_at should be set');
     assert.ok(cache.expires_at, 'expires_at should be set');
     assert.ok(cache.ttl > 0, 'ttl should be positive');
