@@ -156,6 +156,30 @@ export class Stack extends EventEmitter {
   }
 
   /**
+   * Run a lifecycle command silently (no stdout/stderr, no health polling logs).
+   * Used for quick liveness checks without cluttering output.
+   */
+  async runLifecycleQuiet(phase: string): Promise<number> {
+    const lifecycle = this.manifest.lifecycle;
+    if (!lifecycle) return 0;
+
+    const command = (lifecycle as Record<string, unknown>)[phase];
+    if (!command) return 0;
+
+    if (phase === 'health' && typeof command === 'object') {
+      // Single-shot health check — no polling, just one attempt
+      const config = command as HealthCheckConfig;
+      return this.execCommandQuiet(config.command);
+    }
+
+    if (typeof command === 'string') {
+      return this.execCommandQuiet(command);
+    }
+
+    return this.execCommandQuiet(String(command));
+  }
+
+  /**
    * Run health check with polling.
    */
   async runHealthCheck(config: HealthCheckConfig): Promise<number> {
@@ -229,6 +253,24 @@ export class Stack extends EventEmitter {
   }
 
   // ── Private ─────────────────────────────────────────────────
+
+  private execCommandQuiet(command: string): Promise<number> {
+    return new Promise((resolve) => {
+      const cwd = this.identity.mode === 'dev' ? this.identity.source : this.path;
+      const envVars = { ...process.env, ...this.env.getAll() };
+
+      const child = spawn('bash', ['-c', command], {
+        cwd,
+        env: envVars,
+        stdio: ['ignore', 'ignore', 'ignore'],
+        detached: false,
+      });
+
+      child.on('exit', (code) => {
+        resolve(code ?? 1);
+      });
+    });
+  }
 
   private execCommand(command: string): Promise<number> {
     return new Promise((resolve) => {

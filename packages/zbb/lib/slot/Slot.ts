@@ -43,12 +43,15 @@ export interface SlotMeta {
  * file watching, and event propagation.
  *
  * Extends EventEmitter — emits:
- *   'env:change'        — env file modified
- *   'state:change'      — state file modified
- *   'deployment:change'  — deployment file modified (with filePath)
- *   'command:change'     — command file modified (with filePath)
- *   'ready'             — slot fully initialized
- *   'error'             — watcher error
+ *   'env:change'              — slot root .env modified (filePath)
+ *   'state:change'            — slot state file modified (filePath)
+ *   'deployment:change'       — deployment file modified (filePath)
+ *   'command:change'          — command file modified (filePath)
+ *   'stack:env:change'        — stack .env modified (stackName, filePath)
+ *   'stack:state:change'      — stack state.yaml modified (stackName, filePath)
+ *   'stack:manifest:change'   — stack manifest.yaml modified (stackName, filePath)
+ *   'ready'                   — slot fully initialized
+ *   'error'                   — watcher error
  */
 export class Slot extends EventEmitter {
   public readonly name: string;
@@ -161,10 +164,17 @@ export class Slot extends EventEmitter {
   private _wireWatcherEvents(): void {
     if (!this._watcher) return;
 
-    // Propagate watcher events through the Slot with absolute paths
+    // Propagate slot-level watcher events with absolute paths
     for (const event of ['env:change', 'state:change', 'deployment:change', 'command:change']) {
       this._watcher.on(event, (relPath: string) => {
         this.emit(event, join(this.path, relPath));
+      });
+    }
+
+    // Propagate stack-level events with stack name + absolute path
+    for (const event of ['stack:env:change', 'stack:state:change', 'stack:manifest:change']) {
+      this._watcher.on(event, (stackName: string, relPath: string) => {
+        this.emit(event, stackName, join(this.path, relPath));
       });
     }
 

@@ -216,3 +216,99 @@ describe('Stack.getStatus', () => {
     assert.ok(status.deps.includes('dana'));
   });
 });
+
+describe('Stack.runLifecycleQuiet', () => {
+  it('runs command silently and returns exit code 0', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    const sourceDir = join(tmpDir, 'source');
+
+    await createMockStackSource(sourceDir, {
+      name: '@zerobias-com/myapp',
+      version: '1.0.0',
+      lifecycle: { health: { command: 'echo ok', interval: 1, timeout: 5 } },
+    });
+
+    await createAddedStack(stacksDir, 'myapp', {
+      identity: {
+        name: '@zerobias-com/myapp', version: '1.0.0',
+        mode: 'dev', source: sourceDir, added: new Date().toISOString(),
+      },
+      sourceDir,
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+    const code = await stack.runLifecycleQuiet('health');
+    assert.equal(code, 0);
+  });
+
+  it('returns non-zero for failing health check', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    const sourceDir = join(tmpDir, 'source');
+
+    await createMockStackSource(sourceDir, {
+      name: '@zerobias-com/myapp',
+      version: '1.0.0',
+      lifecycle: { health: { command: 'exit 1', interval: 1, timeout: 5 } },
+    });
+
+    await createAddedStack(stacksDir, 'myapp', {
+      identity: {
+        name: '@zerobias-com/myapp', version: '1.0.0',
+        mode: 'dev', source: sourceDir, added: new Date().toISOString(),
+      },
+      sourceDir,
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+    const code = await stack.runLifecycleQuiet('health');
+    assert.ok(code !== 0);
+  });
+
+  it('returns 0 when no lifecycle defined', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    const sourceDir = join(tmpDir, 'source');
+
+    await createMockStackSource(sourceDir, {
+      name: '@zerobias-com/myapp',
+      version: '1.0.0',
+    });
+
+    await createAddedStack(stacksDir, 'myapp', {
+      identity: {
+        name: '@zerobias-com/myapp', version: '1.0.0',
+        mode: 'dev', source: sourceDir, added: new Date().toISOString(),
+      },
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+    const code = await stack.runLifecycleQuiet('health');
+    assert.equal(code, 0);
+  });
+
+  it('returns 0 for string command health check', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    const sourceDir = join(tmpDir, 'source');
+
+    await createMockStackSource(sourceDir, {
+      name: '@zerobias-com/myapp',
+      version: '1.0.0',
+      lifecycle: { health: 'true' },
+    });
+
+    await createAddedStack(stacksDir, 'myapp', {
+      identity: {
+        name: '@zerobias-com/myapp', version: '1.0.0',
+        mode: 'dev', source: sourceDir, added: new Date().toISOString(),
+      },
+      sourceDir,
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+    const code = await stack.runLifecycleQuiet('health');
+    assert.equal(code, 0);
+  });
+});

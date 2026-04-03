@@ -438,6 +438,26 @@ async function handleSlot(args: string[]): Promise<void> {
       const rcFile = pathJoin(slot.path, '.zbb-bashrc');
       writeFileSync(rcFile, `${shellEnv.PS1 ? `PS1='${shellEnv.PS1}'` : ''}\n[ -f "${hookPath}" ] && source "${hookPath}"\n`, 'utf-8');
 
+      // Check stack health on slot load — show status, update stale state, start heartbeat
+      if (slot.hasStacks) {
+        const { ensureHeartbeat } = await import('./stack/commands.js');
+        const { handleStack } = await import('./stack/commands.js');
+
+        // Run heartbeat check (non-quiet) to show all stack health + update stale states
+        console.log('Stack health:');
+        await handleStack(['heartbeat'], slot);
+
+        // Start background heartbeat if any stacks are running
+        const stacks = await slot.stacks.list();
+        const anyRunning = (await Promise.all(stacks.map(async s => {
+          const st = await s.getState();
+          return st.status === 'healthy' || st.status === 'partial';
+        }))).some(Boolean);
+        if (anyRunning) {
+          await ensureHeartbeat(slot);
+        }
+      }
+
       // Spawn subshell
       console.log(`Loading slot '${slotName}'...`);
       const shell = spawn('bash', ['--rcfile', rcFile, '-i'], {
@@ -445,7 +465,12 @@ async function handleSlot(args: string[]): Promise<void> {
         env: shellEnv,
       });
 
-      shell.on('exit', (code) => {
+      shell.on('exit', async (code) => {
+        // Stop heartbeat on slot exit
+        if (slot.hasStacks) {
+          const { stopHeartbeat } = await import('./stack/commands.js');
+          await stopHeartbeat(slot);
+        }
         process.exit(code ?? 0);
       });
 

@@ -90,9 +90,22 @@ _zbb_scope_env() {
   fi
 }
 
+# ── Heartbeat alert display ──────────────────────────────────────────
+
+_zbb_check_heartbeat_alerts() {
+  local alerts_file="${ZB_SLOT_DIR:-}/state/heartbeat-alerts.log"
+  if [ -f "$alerts_file" ] && [ -s "$alerts_file" ]; then
+    # Display alerts with bell
+    echo -ne "\a"
+    cat "$alerts_file"
+    # Clear after display
+    > "$alerts_file"
+  fi
+}
+
 # Hook into cd via PROMPT_COMMAND (append, don't replace)
 if [[ ! "$PROMPT_COMMAND" =~ _zbb_scope_env ]]; then
-  PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}_zbb_scope_env"
+  PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}_zbb_scope_env;_zbb_check_heartbeat_alerts"
 fi
 
 # ── zbb wrapper ──────────────────────────────────────────────────────

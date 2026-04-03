@@ -130,6 +130,9 @@ export async function handleStack(args: string[], slot: Slot): Promise<void> {
       process.exit(1);
     }
 
+    case 'heartbeat':
+      return handleHeartbeat(slot, { quiet: args.includes('--quiet') });
+
     // Lifecycle commands under `zbb stack <verb>`
     case 'start':
     case 'stop':
@@ -165,6 +168,9 @@ export async function handleLifecycle(
       console.log(`Starting ${target}...`);
       await slot.stacks.start(target);
       console.log(`Started ${target}`);
+
+      // Ensure heartbeat background loop is running
+      await ensureHeartbeat(slot);
       break;
     }
 
@@ -176,6 +182,16 @@ export async function handleLifecycle(
       }
       await slot.stacks.stop(target);
       console.log(`Stopped ${target}`);
+
+      // Check if any stacks still running — if none, stop heartbeat
+      const remaining = await slot.stacks.list();
+      const anyRunning = (await Promise.all(remaining.map(async s => {
+        const st = await s.getState();
+        return st.status === 'healthy' || st.status === 'partial';
+      }))).some(Boolean);
+      if (!anyRunning) {
+        await stopHeartbeat(slot);
+      }
       break;
     }
 
@@ -263,4 +279,127 @@ async function detectStackName(slot: Slot): Promise<string | null> {
   const stacks = await slot.stacks.list();
   const match = stacks.find(s => s.name === shortName || s.identity.name === manifest.name);
   return match?.name ?? null;
+}
+
+// ── Heartbeat ─────────────────────────────────────────────────────
+
+const HEARTBEAT_PID_FILE = 'heartbeat.pid';
+
+/**
+ * Run a single heartbeat pass — check health of all running stacks.
+ * Called by `zbb stack heartbeat` (invoked by the background loop).
+ */
+async function handleHeartbeat(slot: Slot, options?: { quiet?: boolean }): Promise<void> {
+  const stacks = await slot.stacks.list();
+  const quiet = options?.quiet ?? false;
+
+  for (const stack of stacks) {
+    const state = await stack.getState();
+    const prevStatus = String(state.status);
+
+    // Skip stopped stacks — they're intentionally not running
+    if (prevStatus === 'stopped' || prevStatus === 'stopping') {
+      if (!quiet) console.log(`  \x1b[90m${stack.name} — stopped\x1b[0m`);
+      continue;
+    }
+
+    // Skip stacks without a health check
+    if (!stack.manifest.lifecycle?.health) {
+      if (!quiet) console.log(`  ${stack.name} — ${prevStatus} (no health check)`);
+      continue;
+    }
+
+    const code = await stack.runLifecycleQuiet('health');
+
+    if (code !== 0 && prevStatus !== 'error') {
+      // Was healthy/partial, now failing
+      await stack.setState({ status: 'error' });
+      console.error(`\x07\x1b[31m[heartbeat] ${stack.name} — error (was ${prevStatus})\x1b[0m`);
+    } else if (code === 0 && prevStatus === 'error') {
+      // Was error, now passing — recovered
+      await stack.setState({ status: 'healthy' });
+      console.log(`\x1b[32m[heartbeat] ${stack.name} — recovered\x1b[0m`);
+    } else if (code === 0) {
+      // Still healthy
+      if (!quiet) console.log(`  \x1b[32m${stack.name} — healthy\x1b[0m`);
+    } else {
+      // Still in error
+      if (!quiet) console.log(`  \x1b[31m${stack.name} — error\x1b[0m`);
+    }
+  }
+}
+
+/**
+ * Ensure a heartbeat background loop is running for this slot.
+ * Spawns `zbb stack heartbeat` every 30s in the background.
+ * Writes PID to slot state so duplicates are prevented.
+ */
+export async function ensureHeartbeat(slot: Slot): Promise<void> {
+  const { join } = await import('node:path');
+  const { readFileSync, writeFileSync, existsSync } = await import('node:fs');
+  const { spawn } = await import('node:child_process');
+
+  const pidFile = join(slot.path, 'state', HEARTBEAT_PID_FILE);
+
+  // Check if already running
+  if (existsSync(pidFile)) {
+    try {
+      const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+      if (pid > 0) {
+        process.kill(pid, 0); // throws if process doesn't exist
+        return; // already running
+      }
+    } catch {
+      // PID stale — continue to start new one
+    }
+  }
+
+  // Spawn background loop: runs zbb stack heartbeat every 30s
+  // Writes heartbeat alerts to a file that the shell hook checks on each prompt
+  const { join: joinPath } = await import('node:path');
+  const alertsFile = joinPath(slot.path, 'state', 'heartbeat-alerts.log');
+
+  const child = spawn('bash', ['-c', `
+    ALERTS_FILE="${alertsFile}"
+    while true; do
+      sleep 30
+      OUTPUT=$(zbb stack heartbeat --quiet 2>&1)
+      if [ -n "$OUTPUT" ]; then
+        echo "$OUTPUT" >> "$ALERTS_FILE"
+      fi
+    done
+  `], {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, ZB_SLOT: slot.name },
+  });
+
+  child.unref();
+
+  if (child.pid) {
+    writeFileSync(pidFile, String(child.pid), 'utf-8');
+  }
+}
+
+/**
+ * Stop the heartbeat background loop for this slot.
+ */
+export async function stopHeartbeat(slot: Slot): Promise<void> {
+  const { join } = await import('node:path');
+  const { readFileSync, unlinkSync, existsSync } = await import('node:fs');
+
+  const pidFile = join(slot.path, 'state', HEARTBEAT_PID_FILE);
+
+  if (!existsSync(pidFile)) return;
+
+  try {
+    const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+    if (pid > 0) {
+      process.kill(pid, 'SIGTERM');
+    }
+  } catch {
+    // Process already dead
+  }
+
+  try { unlinkSync(pidFile); } catch { /* ignore */ }
 }

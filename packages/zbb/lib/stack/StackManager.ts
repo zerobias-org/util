@@ -256,17 +256,29 @@ export class StackManager {
       const stack = await this.load(name);
       const state = await stack.getState();
 
-      // Skip if already fully healthy (but NOT if partial — substacks still need starting)
-      if (state.status === 'healthy' && !(name === stackName && substack)) {
-        console.log(`  ${name} — already running`);
-        continue;
+      // If state says healthy/partial, verify with a live health check.
+      // Containers may have crashed since the state was last written.
+      if (state.status === 'healthy' || state.status === 'partial') {
+        const stillHealthy = stack.manifest.lifecycle?.health
+          ? (await stack.runLifecycleQuiet('health')) === 0
+          : true; // no health check defined — trust state
+
+        if (stillHealthy) {
+          if (state.status === 'healthy') {
+            console.log(`  ${name} — already running`);
+            continue;
+          }
+          if (state.status === 'partial' && name !== stackName) {
+            console.log(`  ${name} — already running (partial)`);
+            continue;
+          }
+        } else {
+          console.log(`  ${name} — was healthy but health check failed, restarting...`);
+          await stack.setState({ status: 'stopped' });
+          // Fall through to start
+        }
       }
-      // For the target stack with substack notation, also skip if fully healthy and not partial
-      if (state.status === 'healthy' && name === stackName && substack) {
-        // Already fully healthy — substack is implicitly running
-        console.log(`  ${name} — already running`);
-        continue;
-      }
+
       if (state.status === 'partial' && name !== stackName) {
         // Dependency is partially running — for deps, partial counts as running
         console.log(`  ${name} — already running (partial)`);

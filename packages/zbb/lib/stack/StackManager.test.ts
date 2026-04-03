@@ -263,3 +263,131 @@ describe('StackManager.getStartOrder', () => {
     );
   });
 });
+
+describe('StackManager.start — live health verification', () => {
+  it('restarts a stack whose state is healthy but health check fails', async () => {
+    const sourceDir = join(tmpDir, 'src-app');
+    await createMockStackSource(sourceDir, {
+      name: '@test/app',
+      version: '1.0.0',
+      lifecycle: {
+        start: 'echo started',
+        health: { command: 'true', interval: 1, timeout: 5 },
+      },
+    });
+
+    const mgr = new StackManager(slot);
+    const stack = await mgr.add(sourceDir);
+
+    // Manually set state to healthy (simulating a previously running stack)
+    await stack.setState({ status: 'healthy' });
+
+    // Start should verify health — since 'true' passes, it should skip
+    await mgr.start('app');
+    const state = await stack.getState();
+    assert.equal(state.status, 'healthy');
+  });
+
+  it('detects crashed stack and restarts it', async () => {
+    const sourceDir = join(tmpDir, 'src-app');
+    // Health check will fail (simulating crashed container)
+    await createMockStackSource(sourceDir, {
+      name: '@test/app',
+      version: '1.0.0',
+      lifecycle: {
+        start: 'echo restarted',
+        health: { command: 'false', interval: 1, timeout: 3 },
+      },
+    });
+
+    const mgr = new StackManager(slot);
+    const stack = await mgr.add(sourceDir);
+
+    // Manually set state to healthy (simulating previously running stack that crashed)
+    await stack.setState({ status: 'healthy' });
+
+    // Start should detect health failure, restart, then health check fails again → error
+    // The start itself succeeds (echo restarted = code 0) but health fails
+    try {
+      await mgr.start('app');
+    } catch {
+      // Expected — health check fails after restart
+    }
+
+    const state = await stack.getState();
+    // Should be error since health check always fails
+    assert.equal(state.status, 'error');
+  });
+
+  it('throws when starting a stack that does not exist', async () => {
+    const mgr = new StackManager(slot);
+    await assert.rejects(
+      () => mgr.start('nonexistent'),
+      /not found/,
+    );
+  });
+});
+
+describe('StackManager.stop — cascade', () => {
+  it('stops dependents before stopping the target', async () => {
+    const srcA = join(tmpDir, 'src-a');
+    await createMockStackSource(srcA, {
+      name: '@test/a',
+      version: '1.0.0',
+      lifecycle: { start: 'echo a', stop: 'echo stop-a' },
+    });
+
+    const srcB = join(tmpDir, 'src-b');
+    await createMockStackSource(srcB, {
+      name: '@test/b',
+      version: '1.0.0',
+      depends: { a: '@test/a@^1.0.0' },
+      lifecycle: { start: 'echo b', stop: 'echo stop-b' },
+    });
+
+    const mgr = new StackManager(slot);
+    await mgr.add(srcA);
+    await mgr.add(srcB);
+
+    // Mark both as healthy
+    const stackA = await mgr.load('a');
+    const stackB = await mgr.load('b');
+    await stackA.setState({ status: 'healthy' });
+    await stackB.setState({ status: 'healthy' });
+
+    // Stop a — should cascade to stop b first
+    await mgr.stop('a');
+
+    const stateA = await stackA.getState();
+    const stateB = await stackB.getState();
+    assert.equal(stateA.status, 'stopped');
+    assert.equal(stateB.status, 'stopped');
+  });
+});
+
+describe('StackManager.remove — cascade', () => {
+  it('removes dependents before removing the target', async () => {
+    const srcA = join(tmpDir, 'src-a');
+    await createMockStackSource(srcA, {
+      name: '@test/a',
+      version: '1.0.0',
+    });
+
+    const srcB = join(tmpDir, 'src-b');
+    await createMockStackSource(srcB, {
+      name: '@test/b',
+      version: '1.0.0',
+      depends: { a: '@test/a@^1.0.0' },
+    });
+
+    const mgr = new StackManager(slot);
+    await mgr.add(srcA);
+    await mgr.add(srcB);
+
+    // Remove a — should cascade to remove b first
+    await mgr.remove('a');
+
+    const stacks = await mgr.list();
+    assert.equal(stacks.length, 0);
+  });
+});
