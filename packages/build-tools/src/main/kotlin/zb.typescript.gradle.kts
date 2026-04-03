@@ -15,6 +15,8 @@ plugins {
 
 val zb = extensions.getByType<ZbExtension>()
 val npmDistTag: String = extra["npmDistTag"] as String
+@Suppress("UNCHECKED_CAST")
+val npmDistTags: List<String> = extra["npmDistTags"] as List<String>
 
 // ── Node.js configuration (uses system Node from nvm) ──
 // Resolve nvm-managed Node from .nvmrc so the Gradle daemon uses the correct version
@@ -457,8 +459,11 @@ tasks.named("testDocker") {
 // These tasks only run when buildImage or testDocker is in the task graph.
 // ════════════════════════════════════════════════════════════
 
+val isInterface: Boolean = extra["isInterface"] as Boolean
+
 // Helper: check if Docker-related tasks are in the graph
 fun isDockerBuild(): Boolean {
+    if (isInterface) return false
     return try {
         gradle.taskGraph.hasTask(tasks.named("buildImage").get()) ||
         gradle.taskGraph.hasTask(tasks.named("testDocker").get())
@@ -750,6 +755,7 @@ val buildImageExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Build Docker image"
     dependsOn(compileServer, generateDockerfile)
+    onlyIf { !isInterface }
     workingDir(project.projectDir)
     val imageName = zb.dockerImageName.get()
     val resolvedVersion = project.version.toString()
@@ -944,10 +950,10 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
 //
 // setupFixtures: CLI-only fixture chain (no SQL)
 //   1. zbb dataloader -d .                    (load module artifacts)
-//   2. hub-node server node list --json        (get registered node ID)
-//   3. hub-node deployments create --module    (create deployment)
-//   4. hub-node server boundaries list --json  (get boundary ID)
-//   5. hub-node connections create             (create connection)
+//   2. hub-cli server node list --json        (get registered node ID)
+//   3. hub-cli deployments create --module    (create deployment)
+//   4. hub-cli server boundaries list --json  (get boundary ID)
+//   5. hub-cli connections create             (create connection)
 //
 // testHub: depends on setupFixtures, runs mocha with TEST_MODE=hub
 // ════════════════════════════════════════════════════════════
@@ -972,11 +978,20 @@ fun readPackageNameVersion(): Pair<String, String> {
  * Returns the raw JSON string for caller to parse.
  * Uses slot env (already in process.env via ZbbSlotProvider).
  */
+// Slot env for CLI commands — loaded once, cached
+val slotEnv: Map<String, String> by lazy {
+    if (com.zerobias.buildtools.util.ZbbSlotProvider.isInsideSlot()) {
+        com.zerobias.buildtools.util.ZbbSlotProvider.getSlotEnv()
+    } else {
+        emptyMap()
+    }
+}
+
 fun runCliJson(vararg command: String): String {
     return com.zerobias.buildtools.util.ExecUtils.execCapture(
         command = command.toList(),
         workingDir = project.projectDir,
-        environment = emptyMap(), // inherits Gradle process env (slot vars already set)
+        environment = slotEnv,
         throwOnError = true
     ).trim()
 }
@@ -1022,6 +1037,7 @@ val setupFixtures by tasks.registering {
             com.zerobias.buildtools.util.ExecUtils.exec(
                 command = listOf("zbb", "dataloader", moduleKey, moduleVersion),
                 workingDir = project.projectDir,
+                environment = slotEnv,
                 throwOnError = true
             )
         } else {
@@ -1037,20 +1053,21 @@ val setupFixtures by tasks.registering {
             com.zerobias.buildtools.util.ExecUtils.exec(
                 command = listOf("zbb", "dataloader", "-d", "."),
                 workingDir = project.projectDir,
+                environment = slotEnv,
                 throwOnError = true
             )
         }
 
         // ── Step 2: Get registered node ID (auto-register + start if needed) ─
         logger.lifecycle("setupFixtures: Step 2 — getting registered node ID")
-        var nodeListJson = runCliJson("hub-node", "--json", "server", "node", "list")
+        var nodeListJson = runCliJson("hub-cli", "--json", "server", "node", "list")
         var nodeId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(nodeListJson)?.groupValues?.get(1)
 
         if (nodeId == null) {
             // No node registered — register via CLI, set code
             logger.lifecycle("setupFixtures: No node found — auto-registering")
             val registerJson = runCliJson(
-                "hub-node", "--json", "server", "register", "--max-nodes", "1"
+                "hub-cli", "--json", "server", "register", "--max-nodes", "1"
             )
             val regCode = Regex(""""code"\s*:\s*"([^"]+)"""").find(registerJson)?.groupValues?.get(1)
                 ?: throw org.gradle.api.GradleException(
@@ -1060,8 +1077,9 @@ val setupFixtures by tasks.registering {
 
             // Set registration code in slot env so node picks it up on start
             com.zerobias.buildtools.util.ExecUtils.exec(
-                command = listOf("hub-node", "env", "set", "REGISTRATION_CODE", regCode),
+                command = listOf("hub-cli", "env", "set", "REGISTRATION_CODE", regCode),
                 workingDir = project.projectDir,
+                environment = slotEnv,
                 throwOnError = true
             )
         }
@@ -1069,8 +1087,9 @@ val setupFixtures by tasks.registering {
         // Always ensure node is running (idempotent — returns immediately if already up)
         logger.lifecycle("setupFixtures: Ensuring node is running")
         com.zerobias.buildtools.util.ExecUtils.exec(
-            command = listOf("hub-node", "node", "start"),
+            command = listOf("hub-cli", "node", "start"),
             workingDir = project.projectDir,
+            environment = slotEnv,
             throwOnError = true
         )
 
@@ -1080,7 +1099,7 @@ val setupFixtures by tasks.registering {
             var retries = 0
             while (retries < 30) {
                 Thread.sleep(2000)
-                nodeListJson = runCliJson("hub-node", "--json", "server", "node", "list")
+                nodeListJson = runCliJson("hub-cli", "--json", "server", "node", "list")
                 nodeId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(nodeListJson)?.groupValues?.get(1)
                 if (nodeId != null) break
                 retries++
@@ -1091,7 +1110,7 @@ val setupFixtures by tasks.registering {
             if (nodeId == null) {
                 throw org.gradle.api.GradleException(
                     "setupFixtures: Node did not register after 60s.\n" +
-                    "Check hub-node logs: zbb logs show node"
+                    "Check hub-cli logs: zbb logs show node"
                 )
             }
         }
@@ -1100,7 +1119,7 @@ val setupFixtures by tasks.registering {
         // ── Step 3: Find or create deployment ─────────────────────────────
         logger.lifecycle("setupFixtures: Step 3 — deployment for $moduleKey@$moduleVersion on node $nodeId")
         val existingDeployJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf("hub-node", "--json", "server", "deployments", "list"),
+            command = listOf("hub-cli", "--json", "server", "deployments", "list"),
             workingDir = project.projectDir,
             environment = emptyMap(),
             throwOnError = false
@@ -1112,7 +1131,7 @@ val setupFixtures by tasks.registering {
             if (existingVersion != null && existingVersion != moduleVersion) {
                 logger.lifecycle("setupFixtures: Deployment version mismatch ($existingVersion → $moduleVersion), updating...")
                 runCliJson(
-                    "hub-node", "--json", "deployments", "update", deploymentId,
+                    "hub-cli", "--json", "deployments", "update", deploymentId,
                     "--module", "$moduleKey@$moduleVersion"
                 )
                 logger.lifecycle("setupFixtures: Updated Deployment ID = $deploymentId to $moduleKey@$moduleVersion")
@@ -1132,7 +1151,7 @@ val setupFixtures by tasks.registering {
         } else {
             logger.lifecycle("setupFixtures: Creating deployment")
             val deployJson = runCliJson(
-                "hub-node", "--json", "deployments", "create",
+                "hub-cli", "--json", "deployments", "create",
                 "--module", "$moduleKey@$moduleVersion",
                 "--node-id", nodeId
             )
@@ -1145,7 +1164,7 @@ val setupFixtures by tasks.registering {
 
         // ── Step 4: Get boundary ID ─────────────────────────────────────────
         logger.lifecycle("setupFixtures: Step 4 — getting boundary ID")
-        val boundaryListJson = runCliJson("hub-node", "--json", "server", "boundaries", "list")
+        val boundaryListJson = runCliJson("hub-cli", "--json", "server", "boundaries", "list")
         val boundaryId = run {
             val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(boundaryListJson)
                 ?: throw org.gradle.api.GradleException(
@@ -1160,7 +1179,7 @@ val setupFixtures by tasks.registering {
 
         // Check for existing connection on this deployment
         val existingConnJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf("hub-node", "--json", "connections", "list", "--deployment", deploymentId),
+            command = listOf("hub-cli", "--json", "connections", "list", "--deployment", deploymentId),
             workingDir = project.projectDir,
             environment = emptyMap(),
             throwOnError = false
@@ -1199,7 +1218,7 @@ val setupFixtures by tasks.registering {
                 val profileJson = profileKeys.joinToString(",") { """"$it":"file.$secretName.$it"""" }
 
                 // Get connectionProfileId from deployment
-                val deployGetJson = runCliJson("hub-node", "--json", "server", "deployments", "get", deploymentId)
+                val deployGetJson = runCliJson("hub-cli", "--json", "server", "deployments", "get", deploymentId)
                 val connProfileId = Regex(""""connectionProfileId"\s*:\s*"([0-9a-f-]{36})"""")
                     .find(deployGetJson)?.groupValues?.get(1)
                     ?: throw org.gradle.api.GradleException(
@@ -1208,7 +1227,7 @@ val setupFixtures by tasks.registering {
 
                 // Create Hub secret with file refs
                 val createSecretJson = runCliJson(
-                    "hub-node", "--json", "server", "secrets", "create",
+                    "hub-cli", "--json", "server", "secrets", "create",
                     "--name", "$secretName (file)",
                     "--connection-profile-id", connProfileId,
                     "--boundary-id", boundaryId,
@@ -1233,7 +1252,7 @@ val setupFixtures by tasks.registering {
             val connectionName = "$moduleName E2E"
 
             val connArgs = mutableListOf(
-                "hub-node", "--json", "connections", "create",
+                "hub-cli", "--json", "connections", "create",
                 "--deployment-id", deploymentId,
                 "--boundary-id", boundaryId,
                 "--name", connectionName,
@@ -1266,7 +1285,7 @@ val setupFixtures by tasks.registering {
         if (syncSecretName != null) {
             // Get secretId from the connection on this deployment
             val connListJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-                command = listOf("hub-node", "--json", "connections", "list", "--deployment", deploymentId),
+                command = listOf("hub-cli", "--json", "connections", "list", "--deployment", deploymentId),
                 workingDir = project.projectDir,
                 environment = emptyMap(),
                 throwOnError = false
@@ -1288,7 +1307,7 @@ val setupFixtures by tasks.registering {
                 val profileJson = "{$profileEntries}"
 
                 runCliJson(
-                    "hub-node", "--json", "server", "secrets", "update", hubSecretId,
+                    "hub-cli", "--json", "server", "secrets", "update", hubSecretId,
                     "--profile", profileJson,
                     "--draft", "false"
                 )
@@ -1302,11 +1321,11 @@ val setupFixtures by tasks.registering {
         // getTargetMetadata ensures deployment is running and connection is established
         logger.lifecycle("setupFixtures: Step 6 — ensuring target ready (TARGET_ID=$targetId)")
         val metadataJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf("hub-node", "--json", "server", "targets", "metadata", targetId),
+            command = listOf("hub-cli", "--json", "server", "targets", "metadata", targetId),
             workingDir = project.projectDir,
             throwOnError = true
         ).trim()
-        // hub-node may exit 0 but return a hub-level error in JSON
+        // hub-cli may exit 0 but return a hub-level error in JSON
         if (metadataJson.contains("\"err.not.found\"") || metadataJson.contains("\"statusCode\":404") || metadataJson.contains("\"statusCode\": 404")) {
             throw org.gradle.api.GradleException(
                 "setupFixtures: Target not ready — deployment not found on node.\n$metadataJson\n" +
@@ -1353,6 +1372,169 @@ val testHub by tasks.registering {
     group = "lifecycle"
     description = "Run Hub Client e2e tests (full stack through Hub Server)"
     dependsOn(testHubExec)
+}
+
+// ════════════════════════════════════════════════════════════
+// DATALOADER TEST — create Neon branch, load artifacts, validate, clean up
+// ════════════════════════════════════════════════════════════
+
+val testDataloaderExec by tasks.registering {
+    group = "lifecycle"
+    description = "Run dataloader against ephemeral Neon branch"
+    dependsOn(tasks.named("compile"))
+    onlyIf {
+        // Only run if NEON_API_KEY is available (vault resolved)
+        val hasNeon = System.getenv("NEON_API_KEY")?.isNotBlank() == true
+        if (!hasNeon) logger.lifecycle("testDataloader: NEON_API_KEY not set — skipping")
+        hasNeon
+    }
+    doLast {
+        val neonApiKey = System.getenv("NEON_API_KEY")
+            ?: throw GradleException("NEON_API_KEY not set — configure vault source in zbb.yaml")
+        val neonProjectId = System.getenv("NEON_PROJECT_ID")
+            ?: throw GradleException("NEON_PROJECT_ID not set — configure vault source in zbb.yaml")
+        val parentBranch = System.getenv("NEON_PARENT_BRANCH") ?: "content-master"
+        val dbRole = System.getenv("NEON_DB_ROLE") ?: "neondb_owner"
+        val dbName = System.getenv("NEON_DB_NAME") ?: "zerobias"
+
+        val (moduleName, _) = readPackageNameVersion()
+        val branchName = "test/${moduleName.replace("@", "").replace("/", "-")}-${System.currentTimeMillis()}"
+
+        // ── Step 1a: Look up parent branch ID by name ──
+        logger.lifecycle("testDataloader: Looking up parent branch '$parentBranch'")
+        val branchesOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf(
+                "curl", "-sf",
+                "-H", "Authorization: Bearer $neonApiKey",
+                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches"
+            ),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+        // Find the branch with matching name and extract its ID
+        val parentIdPattern = Regex(""""id"\s*:\s*"(br-[^"]+)"[^}]*?"name"\s*:\s*"${Regex.escape(parentBranch)}"""")
+        val parentIdAlt = Regex(""""name"\s*:\s*"${Regex.escape(parentBranch)}"[^}]*?"id"\s*:\s*"(br-[^"]+)"""")
+        val parentId = parentIdPattern.find(branchesOutput)?.groupValues?.get(1)
+            ?: parentIdAlt.find(branchesOutput)?.groupValues?.get(1)
+            ?: throw GradleException("testDataloader: Parent branch '$parentBranch' not found in project $neonProjectId")
+
+        logger.lifecycle("testDataloader: Parent branch ID = $parentId")
+
+        // ── Step 1b: Create Neon branch ──
+        logger.lifecycle("testDataloader: Creating Neon branch '$branchName' from '$parentBranch'")
+        val createPayload = """{"branch":{"name":"$branchName","parent_id":"$parentId"},"endpoints":[{"type":"read_write","suspend_timeout_seconds":300}]}"""
+        val createOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf(
+                "curl", "-sf",
+                "-H", "Authorization: Bearer $neonApiKey",
+                "-H", "Content-Type: application/json",
+                "-X", "POST",
+                "-d", createPayload,
+                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches"
+            ),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+
+        // Parse branch ID and endpoint host from response
+        val branchId = Regex(""""id"\s*:\s*"(br-[^"]+)"""").find(createOutput)?.groupValues?.get(1)
+            ?: throw GradleException("testDataloader: Failed to parse branch ID from Neon response:\n$createOutput")
+        val host = Regex(""""host"\s*:\s*"([^"]+)"""").find(createOutput)?.groupValues?.get(1)
+            ?: throw GradleException("testDataloader: Failed to parse host from Neon response:\n$createOutput")
+
+        // ── Step 1c: Get the role password ──
+        val passwordOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf(
+                "curl", "-sf",
+                "-H", "Authorization: Bearer $neonApiKey",
+                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches/$branchId/roles/$dbRole/reveal_password"
+            ),
+            workingDir = project.projectDir,
+            throwOnError = true
+        )
+        val password = Regex(""""password"\s*:\s*"([^"]+)"""").find(passwordOutput)?.groupValues?.get(1)
+            ?: throw GradleException("testDataloader: Failed to get password for role $dbRole")
+
+        logger.lifecycle("testDataloader: Neon branch created")
+        logger.lifecycle("  NEON_PROJECT_ID = $neonProjectId")
+        logger.lifecycle("  NEON_PARENT_BRANCH = $parentBranch")
+        logger.lifecycle("  NEON_BRANCH_ID = $branchId")
+        logger.lifecycle("  NEON_BRANCH_NAME = $branchName")
+        logger.lifecycle("  NEON_DB_ROLE = $dbRole")
+        logger.lifecycle("  NEON_DB_NAME = $dbName")
+        logger.lifecycle("  PGHOST = $host")
+        logger.lifecycle("  PGPORT = 5432")
+        logger.lifecycle("  PGUSER = $dbRole")
+        logger.lifecycle("  PGPASSWORD = ***")
+        logger.lifecycle("  PGDATABASE = $dbName")
+        logger.lifecycle("  PGSSLMODE = require")
+
+        try {
+            // ── Step 2: Run dataloader with Neon PG vars ──
+            logger.lifecycle("testDataloader: Running dataloader")
+
+            // Symlink distribution spec if needed
+            val (name, _) = readPackageNameVersion()
+            val noScope = name.split("/").last()
+            val distSpec = project.file("generated/${noScope}.yml")
+            val rootLink = project.file("${noScope}.yml")
+            if (distSpec.exists() && !rootLink.exists()) {
+                java.nio.file.Files.createSymbolicLink(rootLink.toPath(), distSpec.toPath())
+            }
+
+            val pgEnv = mapOf(
+                "PGHOST" to host,
+                "PGPORT" to "5432",
+                "PGUSER" to dbRole,
+                "PGPASSWORD" to password,
+                "PGDATABASE" to dbName,
+                "PGSSLMODE" to "require"
+            )
+
+            // Run dataloader and capture all output
+            val dlProcess = ProcessBuilder(listOf("dataloader", "-d", "."))
+                .directory(project.projectDir)
+                .redirectErrorStream(true)
+                .apply { environment().putAll(pgEnv) }
+                .start()
+
+            // Stream output line by line to Gradle logger
+            val reader = dlProcess.inputStream.bufferedReader()
+            val output = StringBuilder()
+            reader.forEachLine { line ->
+                logger.lifecycle("  [dataloader] $line")
+                output.appendLine(line)
+            }
+
+            val dlExit = dlProcess.waitFor()
+            if (dlExit != 0) {
+                throw GradleException("testDataloader: dataloader exited with code $dlExit\n${output}")
+            }
+            logger.lifecycle("testDataloader: Dataloader completed successfully")
+
+        } finally {
+            // ── Step 3: Clean up Neon branch ──
+            logger.lifecycle("testDataloader: Cleaning up Neon branch '$branchName'")
+            try {
+                com.zerobias.buildtools.util.ExecUtils.exec(
+                    command = listOf(
+                        "curl", "-sf", "-X", "DELETE",
+                        "-H", "Authorization: Bearer $neonApiKey",
+                        "https://console.neon.tech/api/v2/projects/$neonProjectId/branches/$branchId"
+                    ),
+                    workingDir = project.projectDir,
+                    throwOnError = false
+                )
+                logger.lifecycle("testDataloader: Neon branch deleted")
+            } catch (e: Exception) {
+                logger.warn("testDataloader: Failed to delete Neon branch $branchId: ${e.message}")
+            }
+        }
+    }
+}
+
+tasks.named("testDataloader") {
+    dependsOn(testDataloaderExec)
 }
 
 tasks.named("publishNpm") {
@@ -1506,9 +1688,10 @@ publishHubSdkExec.configure { mustRunAfter(publishNpmExec) }
 val ensureEcrRepo by tasks.registering(Exec::class) {
     group = "publish"
     description = "Create ECR repository if it does not exist"
-    onlyIf { zb.hasConnectionProfile.get() && !isDryRun }
+    onlyIf { !isInterface && zb.hasConnectionProfile.get() && !isDryRun }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
+    isIgnoreExitValue = true // already exists -> non-zero is OK
     doFirst {
         val awsRegion = System.getenv("AWS_REGION")
             ?: throw GradleException("AWS_REGION not set in slot env — add to zbb.yaml")
@@ -1516,7 +1699,6 @@ val ensureEcrRepo by tasks.registering(Exec::class) {
         commandLine("aws", "ecr", "create-repository",
             "--repository-name", imageName,
             "--region", awsRegion)
-        isIgnoreExitValue = true // already exists -> non-zero is OK
     }
 }
 
@@ -1525,7 +1707,7 @@ val publishImageEcr by tasks.registering(Exec::class) {
     group = "publish"
     description = "Build and push multi-arch Docker image to ECR"
     dependsOn(tasks.named("buildImage"), ensureEcrRepo, preflightChecks)
-    onlyIf { zb.hasConnectionProfile.get() }
+    onlyIf { !isInterface && zb.hasConnectionProfile.get() }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
     doFirst {
@@ -1538,46 +1720,26 @@ val publishImageEcr by tasks.registering(Exec::class) {
         }
         val ecrRegistry = System.getenv("ECR_REGISTRY")
             ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
-        val isCI = System.getenv("CI") == "true"
         val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
+        val ecrImage = "${ecrRegistry}/${imageName}:${ver}"
 
-        if (isCI) {
-            // CI: Docker login already done by GitHub Actions, use default buildx builder
-            commandLine("docker", "buildx", "build",
-                "-f", dockerfilePath,
-                "--platform", "linux/amd64,linux/arm64",
-                "-t", "${ecrRegistry}/${imageName}:${ver}", "--push", ".")
-        } else {
-            // Local: manage auth and builder ourselves (bypasses WSL credsStore)
-            val awsRegion = System.getenv("AWS_REGION") ?: "us-east-1"
-            val tmpDockerConfig = java.io.File(project.buildDir, "docker-publish-config").apply { mkdirs() }
+        // Try normal buildx push first (works when credsStore is functional)
+        // Falls back to explicit auth config if host credentials fail
+        commandLine("bash", "-c", """
+            docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ecrImage --push . 2>&1 && exit 0
 
-            val srcBuildx = java.io.File(System.getProperty("user.home"), ".docker/buildx")
-            val dstBuildx = java.io.File(tmpDockerConfig, "buildx")
-            if (srcBuildx.exists() && !dstBuildx.exists()) {
-                srcBuildx.toPath().toRealPath().let { src ->
-                    java.nio.file.Files.createSymbolicLink(dstBuildx.toPath(), src)
-                }
-            }
-
-            val ecrToken = ProcessBuilder("aws", "ecr", "get-login-password", "--region", awsRegion)
-                .start().let { proc ->
-                    val token = proc.inputStream.bufferedReader().readText().trim()
-                    proc.waitFor()
-                    token
-                }
-            val authStr = java.util.Base64.getEncoder().encodeToString("AWS:${ecrToken}".toByteArray())
-            java.io.File(tmpDockerConfig, "config.json").writeText(
-                """{"auths":{"${ecrRegistry}":{"auth":"$authStr"}}}"""
-            )
-
-            commandLine("docker", "buildx", "build",
-                "--builder", "multiarch",
-                "-f", dockerfilePath,
-                "--platform", "linux/amd64,linux/arm64",
-                "-t", "${ecrRegistry}/${imageName}:${ver}", "--push", ".")
-            environment("DOCKER_CONFIG", tmpDockerConfig.absolutePath)
-        }
+            echo "Buildx push failed with host credentials — retrying with explicit ECR auth..."
+            TMPCONF=$(mktemp -d)
+            # Symlink buildx state so builder is available
+            if [ -d ~/.docker/buildx ]; then ln -sf $(realpath ~/.docker/buildx) ${'$'}TMPCONF/buildx; fi
+            ECR_TOKEN=$(aws ecr get-login-password --region ${System.getenv("AWS_REGION") ?: "us-east-1"})
+            AUTH=$(echo -n "AWS:${'$'}ECR_TOKEN" | base64 -w0)
+            echo '{"auths":{"$ecrRegistry":{"auth":"'"${'$'}AUTH"'"}}}' > ${'$'}TMPCONF/config.json
+            DOCKER_CONFIG=${'$'}TMPCONF docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ecrImage --push .
+            EXIT=${'$'}?
+            rm -rf ${'$'}TMPCONF
+            exit ${'$'}EXIT
+        """.trimIndent())
     }
 }
 
@@ -1586,7 +1748,7 @@ val publishImageGhcr by tasks.registering(Exec::class) {
     group = "publish"
     description = "Build and push multi-arch Docker image to GHCR"
     dependsOn(tasks.named("buildImage"), publishImageEcr, preflightChecks)
-    onlyIf { zb.hasConnectionProfile.get() }
+    onlyIf { !isInterface && zb.hasConnectionProfile.get() }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
     doFirst {
@@ -1599,41 +1761,25 @@ val publishImageGhcr by tasks.registering(Exec::class) {
         }
         val ghcrRegistry = System.getenv("GHCR_REGISTRY")
             ?: throw GradleException("GHCR_REGISTRY not set in slot env — add to zbb.yaml")
-        val isCI = System.getenv("CI") == "true"
         val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile" else "generated/docker/Dockerfile"
+        val ghcrImage = "${ghcrRegistry}/${imageName}:${ver}"
+        val npmToken = System.getenv("NPM_TOKEN")
+            ?: throw GradleException("NPM_TOKEN not set — needed for GHCR push")
 
-        if (isCI) {
-            // CI: Docker login already done by GitHub Actions, use default buildx builder
-            commandLine("docker", "buildx", "build",
-                "-f", dockerfilePath,
-                "--platform", "linux/amd64,linux/arm64",
-                "-t", "${ghcrRegistry}/${imageName}:${ver}", "--push", ".")
-        } else {
-            // Local: manage auth and builder ourselves (bypasses WSL credsStore)
-            val npmToken = System.getenv("NPM_TOKEN")
-                ?: throw GradleException("NPM_TOKEN not set — needed for GHCR push")
-            val tmpDockerConfig = java.io.File(project.buildDir, "docker-publish-config").apply { mkdirs() }
+        // Try normal buildx push first, fall back to explicit auth config
+        commandLine("bash", "-c", """
+            docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ghcrImage --push . 2>&1 && exit 0
 
-            val srcBuildx = java.io.File(System.getProperty("user.home"), ".docker/buildx")
-            val dstBuildx = java.io.File(tmpDockerConfig, "buildx")
-            if (srcBuildx.exists() && !dstBuildx.exists()) {
-                srcBuildx.toPath().toRealPath().let { src ->
-                    java.nio.file.Files.createSymbolicLink(dstBuildx.toPath(), src)
-                }
-            }
-
-            val ghcrAuthStr = java.util.Base64.getEncoder().encodeToString("auditlogic:${npmToken}".toByteArray())
-            java.io.File(tmpDockerConfig, "config.json").writeText(
-                """{"auths":{"ghcr.io":{"auth":"$ghcrAuthStr"}}}"""
-            )
-
-            commandLine("docker", "buildx", "build",
-                "--builder", "multiarch",
-                "-f", dockerfilePath,
-                "--platform", "linux/amd64,linux/arm64",
-                "-t", "${ghcrRegistry}/${imageName}:${ver}", "--push", ".")
-            environment("DOCKER_CONFIG", tmpDockerConfig.absolutePath)
-        }
+            echo "Buildx push failed with host credentials — retrying with explicit GHCR auth..."
+            TMPCONF=$(mktemp -d)
+            if [ -d ~/.docker/buildx ]; then ln -sf $(realpath ~/.docker/buildx) ${'$'}TMPCONF/buildx; fi
+            AUTH=$(echo -n "auditlogic:$npmToken" | base64 -w0)
+            echo '{"auths":{"ghcr.io":{"auth":"'"${'$'}AUTH"'"}}}' > ${'$'}TMPCONF/config.json
+            DOCKER_CONFIG=${'$'}TMPCONF docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ghcrImage --push .
+            EXIT=${'$'}?
+            rm -rf ${'$'}TMPCONF
+            exit ${'$'}EXIT
+        """.trimIndent())
     }
 }
 
@@ -1673,84 +1819,77 @@ listOf(
 // Runs after ALL staging publishes succeed (wired via publish -> publishAll -> promoteAll)
 // ════════════════════════════════════════════════════════════
 
-val promoteNpm by tasks.registering(NpmTask::class) {
+// Helper: promote a package to all applicable dist-tags
+fun promotePackage(name: String, ver: String, workDir: java.io.File, tags: List<String>) {
+    for (tag in tags) {
+        logger.lifecycle("  Tagging ${name}@${ver} → $tag")
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("npm", "dist-tag", "add", "${name}@${ver}", tag),
+            workingDir = workDir,
+            throwOnError = true
+        )
+    }
+    // Remove staging 'next' tag
+    try {
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("npm", "dist-tag", "rm", name, "next"),
+            workingDir = workDir,
+            throwOnError = false
+        )
+    } catch (_: Exception) {}
+}
+
+val promoteNpm by tasks.registering {
     group = "publish"
-    description = "Promote module NPM package from 'next' to correct dist-tag"
-    npmCommand.set(listOf("dist-tag", "add"))
-    args.set(project.provider {
+    description = "Promote module NPM package from 'next' to all applicable dist-tags"
+    doLast {
         val (name, _) = readPackageNameVersion()
         val ver = project.version.toString()
-        listOf("${name}@${ver}", npmDistTag)
-    })
-    workingDir.set(project.projectDir)
-
-    doFirst {
         if (isDryRun) {
-            val (name, _) = readPackageNameVersion()
-            val ver = project.version.toString()
-            logger.lifecycle("[DRY RUN] Would promote ${name}@${ver} from 'next' to '${npmDistTag}'")
-            throw org.gradle.api.tasks.StopExecutionException()
+            logger.lifecycle("[DRY RUN] Would promote ${name}@${ver} to tags: ${npmDistTags.joinToString(", ")}")
+            return@doLast
         }
+        logger.lifecycle("Promoting ${name}@${ver}")
+        promotePackage(name, ver, project.projectDir, npmDistTags)
     }
 }
 
-val promoteHubSdk by tasks.registering(NpmTask::class) {
+val promoteHubSdk by tasks.registering {
     group = "publish"
-    description = "Promote Hub SDK from 'next' to correct dist-tag"
-    npmCommand.set(listOf("dist-tag", "add"))
-    workingDir.set(project.file("hub-sdk"))
-
-    args.set(project.provider {
+    description = "Promote Hub SDK from 'next' to all applicable dist-tags"
+    doLast {
         val hubSdkPkg = project.file("hub-sdk/package.json")
+        if (!hubSdkPkg.exists()) return@doLast
         val content = hubSdkPkg.readText()
-        val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-        val name = nameMatch?.groupValues?.get(1) ?: error("No name in hub-sdk/package.json")
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+            ?: error("No name in hub-sdk/package.json")
         val ver = project.version.toString()
-        listOf("${name}@${ver}", npmDistTag)
-    })
-
-    doFirst {
-        val hubSdkPkg = project.file("hub-sdk/package.json")
-        if (!hubSdkPkg.exists()) {
-            throw org.gradle.api.tasks.StopExecutionException()
-        }
         if (isDryRun) {
-            val content = hubSdkPkg.readText()
-            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-            val name = nameMatch?.groupValues?.get(1) ?: "unknown"
-            val ver = project.version.toString()
-            logger.lifecycle("[DRY RUN] Would promote Hub SDK ${name}@${ver} from 'next' to '${npmDistTag}'")
-            throw org.gradle.api.tasks.StopExecutionException()
+            logger.lifecycle("[DRY RUN] Would promote Hub SDK ${name}@${ver} to tags: ${npmDistTags.joinToString(", ")}")
+            return@doLast
         }
+        logger.lifecycle("Promoting Hub SDK ${name}@${ver}")
+        promotePackage(name, ver, project.file("hub-sdk"), npmDistTags)
     }
 }
 
-val promoteSdk by tasks.registering(NpmTask::class) {
+val promoteSdk by tasks.registering {
     group = "publish"
-    description = "Promote API client SDK from 'next' to correct dist-tag"
+    description = "Promote API client SDK from 'next' to all applicable dist-tags"
     onlyIf { zb.hasOpenApiSdk.get() }
-    npmCommand.set(listOf("dist-tag", "add"))
-    workingDir.set(project.file("sdk"))
-
-    args.set(project.provider {
+    doLast {
         val sdkPkg = project.file("sdk/package.json")
+        if (!sdkPkg.exists()) return@doLast
         val content = sdkPkg.readText()
-        val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-        val name = nameMatch?.groupValues?.get(1) ?: error("No name in sdk/package.json")
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+            ?: error("No name in sdk/package.json")
         val ver = project.version.toString()
-        listOf("${name}@${ver}", npmDistTag)
-    })
-
-    doFirst {
         if (isDryRun) {
-            val sdkPkg = project.file("sdk/package.json")
-            val content = sdkPkg.readText()
-            val nameMatch = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)
-            val name = nameMatch?.groupValues?.get(1) ?: "unknown"
-            val ver = project.version.toString()
-            logger.lifecycle("[DRY RUN] Would promote SDK ${name}@${ver} from 'next' to '${npmDistTag}'")
-            throw org.gradle.api.tasks.StopExecutionException()
+            logger.lifecycle("[DRY RUN] Would promote SDK ${name}@${ver} to tags: ${npmDistTags.joinToString(", ")}")
+            return@doLast
         }
+        logger.lifecycle("Promoting SDK ${name}@${ver}")
+        promotePackage(name, ver, project.file("sdk"), npmDistTags)
     }
 }
 

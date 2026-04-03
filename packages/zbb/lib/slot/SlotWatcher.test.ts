@@ -160,4 +160,72 @@ describe('SlotWatcher', () => {
     watcher.start();
     assert.throws(() => watcher!.start(), /already started/i);
   });
+
+  // ── Stack-level events ──────────────────────────────────────
+
+  it('writing to stacks/<name>/.env emits stack:env:change with stack name', async () => {
+    const stackDir = join(slotPath, 'stacks', 'dana');
+    await mkdir(stackDir, { recursive: true });
+
+    watcher = new SlotWatcher(slotPath, 'test-slot');
+    watcher.start();
+    await delay(100);
+
+    const eventPromise = new Promise<{ stackName: string; relPath: string }>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Timeout waiting for stack:env:change')), 2000);
+      watcher!.once('stack:env:change', (stackName: string, relPath: string) => {
+        clearTimeout(timer);
+        resolve({ stackName, relPath });
+      });
+    });
+
+    await writeFile(join(stackDir, '.env'), 'FOO=bar\n', 'utf-8');
+    const result = await eventPromise;
+    assert.equal(result.stackName, 'dana');
+    assert.ok(result.relPath.includes('stacks/dana/.env'));
+  });
+
+  it('writing to stacks/<name>/state.yaml emits stack:state:change with stack name', async () => {
+    const stackDir = join(slotPath, 'stacks', 'hub');
+    await mkdir(stackDir, { recursive: true });
+
+    watcher = new SlotWatcher(slotPath, 'test-slot');
+    watcher.start();
+    await delay(100);
+
+    const eventPromise = new Promise<{ stackName: string; relPath: string }>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Timeout waiting for stack:state:change')), 2000);
+      watcher!.once('stack:state:change', (stackName: string, relPath: string) => {
+        clearTimeout(timer);
+        resolve({ stackName, relPath });
+      });
+    });
+
+    await writeFile(join(stackDir, 'state.yaml'), 'status: healthy\n', 'utf-8');
+    const result = await eventPromise;
+    assert.equal(result.stackName, 'hub');
+    assert.ok(result.relPath.includes('stacks/hub/state.yaml'));
+  });
+
+  it('writing to stacks/<name>/manifest.yaml emits stack:manifest:change with stack name', async () => {
+    const stackDir = join(slotPath, 'stacks', 'postgres');
+    await mkdir(stackDir, { recursive: true });
+
+    watcher = new SlotWatcher(slotPath, 'test-slot');
+    watcher.start();
+    await delay(100);
+
+    const eventPromise = new Promise<{ stackName: string; relPath: string }>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Timeout waiting for stack:manifest:change')), 2000);
+      watcher!.once('stack:manifest:change', (stackName: string, relPath: string) => {
+        clearTimeout(timer);
+        resolve({ stackName, relPath });
+      });
+    });
+
+    await writeFile(join(stackDir, 'manifest.yaml'), 'PGPORT: {resolution: allocated}\n', 'utf-8');
+    const result = await eventPromise;
+    assert.equal(result.stackName, 'postgres');
+    assert.ok(result.relPath.includes('stacks/postgres/manifest.yaml'));
+  });
 });

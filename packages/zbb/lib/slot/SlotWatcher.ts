@@ -25,11 +25,14 @@ function debounce<T extends (...args: Array<any>) => void>(fn: T, delayMs: numbe
  *
  * Watches the entire slot directory (recursive) using node:fs.watch.
  * Emits typed events based on file paths:
- * - 'env:change'        - .env or overrides.env modified
- * - 'state:change'      - state/hub/state.yml modified
- * - 'deployment:change' - state/deployments/*.yml modified
- * - 'command:change'    - state/cmd/*.yml modified
- * - 'file:change'       - any file change (always emitted with relative filename)
+ * - 'env:change'              - .env or overrides.env at slot root
+ * - 'state:change'            - state/hub/state.yml modified
+ * - 'deployment:change'       - state/deployments/*.yml modified
+ * - 'command:change'          - state/cmd/*.yml modified
+ * - 'stack:env:change'        - stacks/<name>/.env modified (with stack name)
+ * - 'stack:state:change'      - stacks/<name>/state.yaml modified (with stack name)
+ * - 'stack:manifest:change'   - stacks/<name>/manifest.yaml modified (with stack name)
+ * - 'file:change'             - any file change (always emitted with relative filename)
  *
  * Uses 100ms debounce per-filename to coalesce rapid writes.
  * No external dependencies -- uses only node:fs.watch (inotify on Linux).
@@ -95,6 +98,9 @@ export class SlotWatcher extends EventEmitter {
       ? relative(this.slotPath, filename)
       : filename;
 
+    // Skip noisy paths — logs are on-demand only, heartbeat alerts handled by shell hook
+    if (rel.includes('/logs/') || rel.endsWith('-alerts.log')) return;
+
     // Always emit generic file:change with relative filename
     this.emit('file:change', rel);
 
@@ -104,6 +110,29 @@ export class SlotWatcher extends EventEmitter {
       return;
     }
 
+    // ── Stack-level events ──────────────────────────────────
+    // stacks/<name>/.env
+    const stackEnvMatch = rel.match(/^stacks\/([^/]+)\/.env$/);
+    if (stackEnvMatch) {
+      this.emit('stack:env:change', stackEnvMatch[1], rel);
+      return;
+    }
+
+    // stacks/<name>/state.yaml
+    const stackStateMatch = rel.match(/^stacks\/([^/]+)\/state\.yaml$/);
+    if (stackStateMatch) {
+      this.emit('stack:state:change', stackStateMatch[1], rel);
+      return;
+    }
+
+    // stacks/<name>/manifest.yaml
+    const stackManifestMatch = rel.match(/^stacks\/([^/]+)\/manifest\.yaml$/);
+    if (stackManifestMatch) {
+      this.emit('stack:manifest:change', stackManifestMatch[1], rel);
+      return;
+    }
+
+    // ── Legacy slot-level events ────────────────────────────
     // state/hub/state.yml
     if (rel === 'state/hub/state.yml') {
       this.emit('state:change', rel);

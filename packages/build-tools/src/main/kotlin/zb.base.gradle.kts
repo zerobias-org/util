@@ -40,7 +40,9 @@ val zb = extensions.create<ZbExtension>("zb").apply {
 // ────────────────────────────────────────────────────────────
 val vaultService = gradle.sharedServices.registerIfAbsent("vaultSecrets", VaultSecretsService::class) {
     parameters {
-        vaultAddress.set(providers.gradleProperty("vaultAddr").orElse("https://vault.auditmation.io:8200"))
+        vaultAddress.set(providers.gradleProperty("vaultAddr").orElse(
+            providers.environmentVariable("VAULT_ADDR").orElse("")
+        ))
     }
 }
 
@@ -58,11 +60,9 @@ val branch: String = providers.exec {
     commandLine("git", "rev-parse", "--abbrev-ref", "HEAD")
 }.standardOutput.asText.get().trim()
 
-val preReleaseCounter: String = try {
-    providers.exec {
-        commandLine("git", "rev-list", "--count", "HEAD", "--not", "origin/main")
-    }.standardOutput.asText.get().trim()
-} catch (e: Exception) { "0" }
+// Pre-release counter always starts at 0; resolvePreReleaseVersion increments
+// only if that version is already published on the registry.
+val preReleaseCounter: String = "0"
 
 // Read base version from package.json (source of truth)
 // Returns the clean semver without pre-release suffix
@@ -150,8 +150,32 @@ val npmDistTag: String = when (branch) {
     else   -> "uat"
 }
 
+// Promotion order: dev → qa → uat → latest (main)
+// Publishing on a branch tags all lower dist-tags too.
+val npmDistTags: List<String> = when (branch) {
+    "main" -> listOf("dev", "qa", "uat", "latest")
+    "uat"  -> listOf("dev", "qa", "uat")
+    "qa"   -> listOf("dev", "qa")
+    "dev"  -> listOf("dev")
+    else   -> listOf("dev", "qa", "uat")  // feature branches act as uat level
+}
+
+// Detect interface-only modules (no Docker build needed)
+// Set "interface": true in package.json to skip all Docker tasks.
+val isInterface: Boolean = run {
+    val pkgJson = project.file("package.json")
+    if (pkgJson.exists()) {
+        Regex(""""interface"\s*:\s*true""").containsMatchIn(pkgJson.readText())
+    } else false
+}
+if (isInterface) {
+    logger.lifecycle("Interface module detected — Docker tasks will be skipped")
+}
+
 // Store as extra properties for child plugins to access
 extra["npmDistTag"] = npmDistTag
+extra["npmDistTags"] = npmDistTags
+extra["isInterface"] = isInterface
 
 // ────────────────────────────────────────────────────────────
 // bumpVersion — conventional commits → package.json version bump
@@ -161,36 +185,59 @@ extra["npmDistTag"] = npmDistTag
 val moduleRelativePath = project.projectDir.relativeTo(project.rootDir).path
 val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
 
-val bumpVersion by tasks.registering(Exec::class) {
+val bumpVersion by tasks.registering {
     group = "publish"
-    description = "Bump package.json version from conventional commits (main branch only)"
+    description = "Bump package.json version on main branch"
     onlyIf { branch == "main" }
-    workingDir(project.rootDir)
-    commandLine("npx", "commit-and-tag-version",
-        "--path", moduleRelativePath,
-        "--tag-prefix", tagPrefix,
-        "--skip.changelog",  // changelog generation is separate concern
-        "--skip.commit",     // Gradle commits after all modules bump
-        "--skip.tag"         // Gradle tags after successful publish
-    )
-    // After bump, re-read version so project.version is current
     doLast {
-        val newVersion = readBaseVersion()
-        project.version = newVersion
-        logger.lifecycle("Version bumped to $newVersion (from conventional commits)")
+        val pkgJson = project.file("package.json")
+        val currentVersion = readBaseVersion()
+        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1)
+            ?: throw GradleException("Cannot find 'name' in package.json")
+
+        // Check if current version is already published
+        val published = try {
+            val output = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                command = listOf("npm", "view", "${name}@${currentVersion}", "version"),
+                workingDir = project.projectDir,
+                throwOnError = false
+            ).trim()
+            output == currentVersion
+        } catch (_: Exception) { false }
+
+        if (published) {
+            // Bump patch: 6.11.1 → 6.11.2
+            val parts = currentVersion.split(".")
+            val newVersion = "${parts[0]}.${parts[1]}.${parts[2].toInt() + 1}"
+            val content = pkgJson.readText()
+            val updated = content.replace(
+                Regex(""""version"\s*:\s*"[^"]+""""),
+                """"version": "$newVersion""""
+            )
+            pkgJson.writeText(updated)
+            project.version = newVersion
+            logger.lifecycle("Version bumped: $currentVersion → $newVersion (previous version already published)")
+        } else {
+            project.version = currentVersion
+            logger.lifecycle("Version $currentVersion not yet published — using as-is")
+        }
     }
 }
 
 // Tag after successful publish (not during bump)
-val tagVersion by tasks.registering(Exec::class) {
+val tagVersion by tasks.registering {
     group = "publish"
     description = "Create git tag for published version"
-    onlyIf { branch == "main" && !(extra["isDryRun"] as Boolean) && promoteAllSucceeded }
-    workingDir(project.rootDir)
-    commandLine("echo", "placeholder")
-    doFirst {
+    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded }
+    doLast {
         val ver = readBaseVersion()
-        commandLine("git", "tag", "${tagPrefix}${ver}")
+        val tag = "${tagPrefix}${ver}"
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("git", "tag", "-a", tag, "-m", "Release ${zb.vendor.get()}-${zb.product.get()} v${ver}"),
+            workingDir = project.rootDir,
+            throwOnError = true
+        )
+        logger.lifecycle("Created tag: $tag")
     }
 }
 
@@ -207,26 +254,60 @@ extra["isDryRun"] = isDryRun
 // On branches: always publish (dev versions are cheap, skip detection adds friction)
 // ────────────────────────────────────────────────────────────
 val changedSinceTag: Boolean by lazy {
-    if (branch != "main") {
-        true
-    } else {
-        try {
-            // Find a tag matching this module's prefix
-            val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
-            val lastTag = providers.exec {
-                commandLine("git", "describe", "--tags", "--match", "${tagPrefix}*", "--abbrev=0")
-            }.standardOutput.asText.get().trim()
+    try {
+        val projectRelativePath = project.projectDir.relativeTo(project.rootDir).path
+        val modTagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
 
+        // Find main's latest tag for this module
+        val lastTag = providers.exec {
+            commandLine("git", "describe", "--tags", "--match", "${modTagPrefix}*", "--abbrev=0", "origin/main")
+        }.standardOutput.asText.get().trim()
+
+        val tagVersion = lastTag.removePrefix(modTagPrefix)
+
+        if (branch == "main") {
+            // Main: check if module files changed since the last tag
+            // This catches new commits that touched this package
             val changedFiles = providers.exec {
                 commandLine("git", "diff", "--name-only", lastTag, "HEAD")
             }.standardOutput.asText.get().trim()
 
-            val projectRelativePath = project.projectDir.relativeTo(project.rootDir).path
-            changedFiles.lines().any { it.startsWith(projectRelativePath) }
-        } catch (e: Exception) {
-            // No matching tag found — always publish
-            true
+            val hasModuleChanges = changedFiles.lines().any {
+                it.startsWith(projectRelativePath) &&
+                !it.endsWith("gate-stamp.json")
+            }
+
+            if (hasModuleChanges) {
+                true
+            } else {
+                logger.lifecycle("No module changes since $lastTag — skipping publish")
+                false
+            }
+        } else {
+            // Branches (dev/qa/uat): check if module files differ from origin/main
+            // This catches both:
+            //   - New work on the branch (should publish -uat.0)
+            //   - Pure merge-back from main with no branch changes (should skip)
+            val changedFiles = providers.exec {
+                commandLine("git", "diff", "--name-only", "origin/main", "HEAD")
+            }.standardOutput.asText.get().trim()
+
+            val hasModuleChanges = changedFiles.lines().any {
+                it.startsWith(projectRelativePath) &&
+                !it.endsWith("gate-stamp.json") &&
+                !it.endsWith("package-lock.json")
+            }
+
+            if (hasModuleChanges) {
+                true
+            } else {
+                logger.lifecycle("No module changes vs origin/main — in sync with main, skipping")
+                false
+            }
         }
+    } catch (e: Exception) {
+        // No tag or origin/main not reachable — always publish
+        true
     }
 }
 
@@ -253,13 +334,15 @@ val preflightChecks by tasks.registering {
         }
         logger.lifecycle("Preflight: version = $ver, package = $pkgName")
 
+        // 0. Gate stamp — already validated by whenReady block (CI fails fast there if invalid)
+        logger.lifecycle("Preflight: gate stamp validated at build start")
+
         // 1. Registry auth — verify NPM_TOKEN is set
         val npmToken = System.getenv("NPM_TOKEN")
         if (npmToken.isNullOrBlank()) {
-            logger.warn("Preflight WARNING: NPM_TOKEN not set — npm publish will fail")
-        } else {
-            logger.lifecycle("Preflight: NPM_TOKEN is set")
+            throw GradleException("Preflight FAILED: NPM_TOKEN not set — npm publish requires auth")
         }
+        logger.lifecycle("Preflight: NPM_TOKEN is set")
 
         // 2. Check version is not "unspecified"
         if (ver == "unspecified" || ver == Project.DEFAULT_VERSION) {
@@ -277,54 +360,202 @@ val preflightChecks by tasks.registering {
             logger.lifecycle("Preflight: working tree is clean")
         }
 
-        // 4. Docker daemon (only if connector module)
-        val hasConnProfile = project.file("connectionProfile.yml").exists()
-        if (hasConnProfile) {
+        // 4–8. Docker + registry checks (skip for interface modules)
+        val needsDocker = !isInterface && project.file("connectionProfile.yml").exists()
+        if (needsDocker) {
+            // 4. Docker daemon
             try {
                 val dockerCheck = providers.exec {
                     commandLine("docker", "info")
                     isIgnoreExitValue = true
                 }
                 if (dockerCheck.result.get().exitValue != 0) {
-                    logger.warn("Preflight WARNING: Docker daemon not running — image publish will fail")
-                } else {
-                    logger.lifecycle("Preflight: Docker daemon is running")
+                    throw GradleException("Preflight FAILED: Docker daemon not running")
                 }
+                logger.lifecycle("Preflight: Docker daemon is running")
+            } catch (e: GradleException) {
+                throw e
             } catch (e: Exception) {
-                logger.warn("Preflight WARNING: Docker not available — ${e.message}")
-            }
-        }
-
-        // 5. AWS credentials (only if connector module — needed for ECR)
-        if (hasConnProfile) {
-            val awsKey = System.getenv("AWS_ACCESS_KEY_ID")
-            if (awsKey.isNullOrBlank()) {
-                logger.warn("Preflight WARNING: AWS_ACCESS_KEY_ID not set — ECR push will fail")
-            } else {
-                logger.lifecycle("Preflight: AWS credentials are set")
+                throw GradleException("Preflight FAILED: Docker not available — ${e.message}")
             }
 
-            // 5b. Docker buildx multi-platform support
+            // 5. Docker buildx multi-platform — must be ready at this point
             try {
                 val buildxCheck = providers.exec {
-                    commandLine("docker", "buildx", "inspect", "--bootstrap")
+                    commandLine("docker", "buildx", "ls")
                     isIgnoreExitValue = true
                 }
                 val output = buildxCheck.standardOutput.asText.get()
                 if (output.contains("linux/amd64") && output.contains("linux/arm64")) {
                     logger.lifecycle("Preflight: Docker buildx multi-platform available")
                 } else {
-                    logger.warn("Preflight WARNING: Docker buildx missing multi-platform support (need linux/amd64 + linux/arm64)")
-                    logger.warn("  Fix: docker buildx create --name multiarch --driver docker-container --use && docker buildx inspect --bootstrap")
+                    throw GradleException("Preflight FAILED: no builder with linux/amd64 + linux/arm64 found\n  Fix: docker buildx create --name multiarch --driver docker-container --platform linux/amd64,linux/arm64 --use && docker buildx inspect --bootstrap")
                 }
+            } catch (e: GradleException) {
+                throw e
             } catch (e: Exception) {
-                logger.warn("Preflight WARNING: Docker buildx not available — ${e.message}")
-                logger.warn("  Fix: docker buildx create --name multiarch --driver docker-container --use")
+                throw GradleException("Preflight FAILED: Docker buildx not available — ${e.message}")
             }
+
+            // 6. ECR — validate env vars and actual login
+            val ecrRegistry = System.getenv("ECR_REGISTRY")
+            val awsRegion = System.getenv("AWS_REGION")
+            if (ecrRegistry.isNullOrBlank()) {
+                throw GradleException("Preflight FAILED: ECR_REGISTRY not set in slot env")
+            }
+            if (awsRegion.isNullOrBlank()) {
+                throw GradleException("Preflight FAILED: AWS_REGION not set in slot env")
+            }
+            // Verify AWS identity resolves (credentials are valid)
+            try {
+                val identityProc = ProcessBuilder("aws", "sts", "get-caller-identity", "--region", awsRegion)
+                    .redirectErrorStream(true).start()
+                val identityOutput = identityProc.inputStream.bufferedReader().readText().trim()
+                val identityExit = identityProc.waitFor()
+                if (identityExit != 0) {
+                    throw GradleException("Preflight FAILED: aws sts get-caller-identity failed — no valid AWS credentials\n  $identityOutput")
+                }
+                logger.lifecycle("Preflight: AWS identity verified")
+            } catch (e: GradleException) {
+                throw e
+            } catch (e: Exception) {
+                throw GradleException("Preflight FAILED: AWS credential check failed — ${e.message}")
+            }
+
+            // Verify ECR token + docker login
+            try {
+                val tokenProc = ProcessBuilder("aws", "ecr", "get-login-password", "--region", awsRegion)
+                    .redirectErrorStream(true).start()
+                val tokenOutput = tokenProc.inputStream.bufferedReader().readText().trim()
+                val tokenExit = tokenProc.waitFor()
+                if (tokenExit != 0 || tokenOutput.isEmpty()) {
+                    throw GradleException("Preflight FAILED: aws ecr get-login-password failed (exit $tokenExit) — check AWS credentials\n  Output: $tokenOutput")
+                }
+                val loginProc = ProcessBuilder("docker", "login", "--username", "AWS", "--password-stdin", ecrRegistry)
+                    .redirectErrorStream(true).start()
+                loginProc.outputStream.bufferedWriter().use { it.write(tokenOutput) }
+                val loginOutput = loginProc.inputStream.bufferedReader().readText().trim()
+                val loginExit = loginProc.waitFor()
+                if (loginExit != 0) {
+                    throw GradleException("Preflight FAILED: docker login to ECR failed — $loginOutput")
+                }
+                logger.lifecycle("Preflight: ECR login successful ($ecrRegistry)")
+            } catch (e: GradleException) {
+                throw e
+            } catch (e: Exception) {
+                throw GradleException("Preflight FAILED: ECR auth check failed — ${e.message}")
+            }
+
+            // Verify ECR push permissions (describe + put)
+            val imageName = zb.dockerImageName.get()
+            try {
+                // ecr:DescribeRepositories verifies read access
+                val descProc = ProcessBuilder("aws", "ecr", "describe-repositories",
+                    "--repository-names", imageName, "--region", awsRegion)
+                    .redirectErrorStream(true).start()
+                val descOutput = descProc.inputStream.bufferedReader().readText().trim()
+                val descExit = descProc.waitFor()
+                if (descExit != 0) {
+                    if (descOutput.contains("RepositoryNotFoundException")) {
+                        logger.lifecycle("Preflight: ECR repo '$imageName' does not exist yet (will be created)")
+                        // Verify we can create repos
+                        val dryCreateProc = ProcessBuilder("aws", "ecr", "describe-registry", "--region", awsRegion)
+                            .redirectErrorStream(true).start()
+                        val dryCreateOutput = dryCreateProc.inputStream.bufferedReader().readText().trim()
+                        val dryCreateExit = dryCreateProc.waitFor()
+                        if (dryCreateExit != 0 && dryCreateOutput.contains("AccessDenied")) {
+                            throw GradleException("Preflight FAILED: no ECR write access — cannot create repositories\n  $dryCreateOutput")
+                        }
+                    } else if (descOutput.contains("AccessDenied")) {
+                        throw GradleException("Preflight FAILED: AccessDenied on ECR — role lacks ecr:DescribeRepositories permission\n  $descOutput")
+                    } else {
+                        throw GradleException("Preflight FAILED: ECR describe-repositories failed\n  $descOutput")
+                    }
+                } else {
+                    logger.lifecycle("Preflight: ECR repo '$imageName' exists and is accessible")
+                }
+
+                // ecr:GetAuthorizationToken already verified above (get-login-password uses it)
+                // ecr:BatchCheckLayerAvailability + ecr:PutImage — dry-run not possible, but if
+                // we got this far (describe + login), the role almost certainly has push perms.
+                // The one gap: a role with read-only ECR. Verify with ecr:InitiateLayerUpload.
+                val initProc = ProcessBuilder("aws", "ecr", "batch-check-layer-availability",
+                    "--repository-name", imageName,
+                    "--layer-digests", "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                    "--region", awsRegion)
+                    .redirectErrorStream(true).start()
+                val initOutput = initProc.inputStream.bufferedReader().readText().trim()
+                val initExit = initProc.waitFor()
+                if (initExit != 0 && initOutput.contains("AccessDenied")) {
+                    throw GradleException("Preflight FAILED: AccessDenied on ECR — role lacks push permissions (ecr:BatchCheckLayerAvailability)\n  $initOutput")
+                }
+                logger.lifecycle("Preflight: ECR push permissions verified")
+            } catch (e: GradleException) {
+                throw e
+            } catch (e: Exception) {
+                throw GradleException("Preflight FAILED: ECR permission check failed — ${e.message}")
+            }
+
+            // 7. GHCR — validate env vars, login, and push permissions
+            val ghcrRegistry = System.getenv("GHCR_REGISTRY")
+            if (ghcrRegistry.isNullOrBlank()) {
+                throw GradleException("Preflight FAILED: GHCR_REGISTRY not set in slot env")
+            }
+            if (npmToken.isNullOrBlank()) {
+                throw GradleException("Preflight FAILED: NPM_TOKEN not set — needed for GHCR push")
+            }
+            try {
+                val loginProc = ProcessBuilder("docker", "login", "ghcr.io", "--username", "auditlogic", "--password-stdin")
+                    .redirectErrorStream(true).start()
+                loginProc.outputStream.bufferedWriter().use { it.write(npmToken) }
+                val loginOutput = loginProc.inputStream.bufferedReader().readText().trim()
+                val loginExit = loginProc.waitFor()
+                if (loginExit != 0) {
+                    throw GradleException("Preflight FAILED: docker login to GHCR failed — $loginOutput")
+                }
+                logger.lifecycle("Preflight: GHCR login successful (ghcr.io)")
+            } catch (e: GradleException) {
+                throw e
+            } catch (e: Exception) {
+                throw GradleException("Preflight FAILED: GHCR auth check failed — ${e.message}")
+            }
+            // docker login succeeded — GHCR push credentials are valid
+        } else if (isInterface) {
+            logger.lifecycle("Preflight: interface module — skipping Docker/ECR/GHCR checks")
         }
 
-        // 6. Check if version already published (npm view — non-fatal check)
-        if (!npmToken.isNullOrBlank() && pkgName != "unknown") {
+        // 8. Verify npm registry auth (whoami against the registry in .npmrc)
+        try {
+            // Parse registry from .npmrc — look for the scoped registry
+            val npmrcFile = project.file(".npmrc")
+            val registry = if (npmrcFile.exists()) {
+                val registryLine = npmrcFile.readLines().firstOrNull { it.contains("registry=") && !it.startsWith("//") }
+                registryLine?.substringAfter("registry=")?.trim()
+            } else null
+
+            val whoamiCmd = if (registry != null) {
+                listOf("npm", "whoami", "--registry", registry)
+            } else {
+                listOf("npm", "whoami")
+            }
+            val whoami = providers.exec {
+                commandLine(whoamiCmd)
+                isIgnoreExitValue = true
+            }
+            val username = whoami.standardOutput.asText.get().trim()
+            val exitCode = whoami.result.get().exitValue
+            if (exitCode != 0 || username.isEmpty()) {
+                throw GradleException("Preflight FAILED: npm whoami failed against ${registry ?: "default registry"} — NPM_TOKEN may be invalid or expired")
+            }
+            logger.lifecycle("Preflight: npm authenticated as '$username' (${registry ?: "default registry"})")
+        } catch (e: GradleException) {
+            throw e
+        } catch (e: Exception) {
+            throw GradleException("Preflight FAILED: npm auth check failed — ${e.message}")
+        }
+
+        // 9. Check if version already published (npm view — non-fatal check)
+        if (pkgName != "unknown") {
             try {
                 val npmView = providers.exec {
                     commandLine("npm", "view", "${pkgName}@${ver}", "version")
@@ -332,7 +563,7 @@ val preflightChecks by tasks.registering {
                 }
                 val existing = npmView.standardOutput.asText.get().trim()
                 if (existing == ver) {
-                    logger.warn("Preflight WARNING: ${pkgName}@${ver} already published — publish will fail with duplicate")
+                    logger.warn("Preflight WARNING: ${pkgName}@${ver} already published — publish will skip or fail with duplicate")
                 } else {
                     logger.lifecycle("Preflight: ${pkgName}@${ver} not yet published")
                 }
@@ -341,7 +572,7 @@ val preflightChecks by tasks.registering {
             }
         }
 
-        // 7. Verify .npmrc exists and points to a registry
+        // 10. Verify .npmrc exists and points to a registry
         val npmrc = project.file(".npmrc")
         if (!npmrc.exists()) {
             throw GradleException("Preflight FAILED: .npmrc not found in ${project.projectDir} — npm publish requires registry config")
@@ -459,6 +690,7 @@ val buildImage by tasks.registering {
     group = "lifecycle"
     description = "Build Docker image"
     dependsOn(compile)
+    onlyIf { !isInterface }
 }
 
 // ── Docker runtime — start/stop module container for local dev ──
@@ -466,11 +698,13 @@ val startModule by tasks.registering {
     group = "docker"
     description = "Start module Docker container (use -Pport=N to set port)"
     dependsOn(buildImage)
+    onlyIf { !isInterface }
 }
 
 val stopModule by tasks.registering {
     group = "docker"
     description = "Stop module Docker container"
+    onlyIf { !isInterface }
 }
 
 val buildArtifacts by tasks.registering {
@@ -486,11 +720,329 @@ val build by tasks.registering {
     dependsOn(buildArtifacts)
 }
 
+val testDataloader by tasks.registering {
+    group = "lifecycle"
+    description = "Run dataloader test (create Neon branch, load artifacts, validate)"
+    dependsOn(compile)
+}
+
 // Phase 6: GATE — full CI validation
 val gate by tasks.registering {
     group = "lifecycle"
     description = "Full CI gate — all checks must pass"
-    dependsOn(validate, lint, compile, test, testDirect, testDocker, buildArtifacts)
+    dependsOn(validate, lint, compile, test, testDirect, testDocker, testDataloader, buildArtifacts)
+}
+
+// ── Gate stamp — written after gate passes, verified before publish ──
+// Two hashes:
+//   sourceHash — committed source files (src/, package.json, api.yml, etc.)
+//                Used by CI to verify the stamp matches the source code.
+//   distHash   — includes dist/ (build output, not committed)
+//                Used locally to skip gate entirely when nothing changed.
+
+fun hashFiles(dirs: List<String>, files: List<String>): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    for (name in files) {
+        val f = project.file(name)
+        if (f.exists()) {
+            digest.update(name.toByteArray())
+            digest.update(f.readBytes())
+        }
+    }
+    for (dirName in dirs) {
+        val dir = project.file(dirName)
+        if (dir.exists()) {
+            dir.walkTopDown()
+                .filter { it.isFile }
+                .sortedBy { it.relativeTo(project.projectDir).path }
+                .forEach { f ->
+                    val relPath = f.relativeTo(project.projectDir).path
+                    digest.update(relPath.toByteArray())
+                    digest.update(f.readBytes())
+                }
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
+// package.json excluded — version field gets patched during publish, which would invalidate the hash.
+// package-lock.json excluded — npm ci may regenerate it slightly differently across environments.
+val sourceFiles = listOf("api.yml", "tsconfig.json")
+val sourceDirs = listOf("src")
+
+fun computeSourceHash(): String = hashFiles(sourceDirs, sourceFiles)
+fun computeDistHash(): String = hashFiles(sourceDirs + "dist", sourceFiles)
+
+val gateStampFile = project.layout.projectDirectory.file("gate-stamp.json")
+
+// Collect test results from each test task's output.
+// Each test exec task writes a small JSON file to build/test-results-{suite}.json.
+// The gate stamp aggregates these.
+/**
+ * Count expected test cases by scanning for it( / it.only( / test( in test files.
+ */
+fun countExpectedTests(testDir: java.io.File): Int {
+    if (!testDir.exists()) return 0
+    val pattern = Regex("""(?:^|\s)(?:it|it\.only|test)\s*\(""")
+    return testDir.walkTopDown()
+        .filter { it.isFile && (it.name.endsWith(".ts") || it.name.endsWith(".js")) }
+        .sumOf { file ->
+            file.readLines().count { line -> pattern.containsMatchIn(line) }
+        }
+}
+
+/**
+ * Verify the gate stamp file: exists, valid JSON, hash matches current artifacts.
+ * Returns true if publish can skip gate.
+ */
+/**
+ * Check gate stamp validity. Returns a result indicating what can be skipped:
+ *   - FULL: distHash + test counts match — skip all gate tasks (local, nothing changed)
+ *   - SOURCE: sourceHash + test counts match, dist missing — skip tests, rebuild (CI path)
+ *   - TESTS_CHANGED: source/dist ok but test count mismatch — need to re-run tests
+ *   - INVALID: stamp stale or missing — re-run full gate
+ */
+enum class GateStampResult { FULL, SOURCE, TESTS_CHANGED, INVALID }
+
+fun checkGateStamp(): GateStampResult {
+    val stampFile = gateStampFile.asFile
+    if (!stampFile.exists()) return GateStampResult.INVALID
+
+    return try {
+        val content = stampFile.readText()
+
+        // 1. Verify sourceHash — source code hasn't changed
+        val stampSourceHash = Regex(""""sourceHash"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+            ?: return GateStampResult.INVALID
+        val currentSourceHash = computeSourceHash()
+        if (stampSourceHash != currentSourceHash) {
+            logger.lifecycle("Gate stamp invalid — source changed since last gate")
+            return GateStampResult.INVALID
+        }
+
+        // 2. Verify all tasks passed
+        val requiredTasks = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "testDataloader", "buildArtifacts")
+        for (taskName in requiredTasks) {
+            val taskStatus = Regex(""""$taskName":\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+            if (taskStatus != "passed" && taskStatus != "skipped" && taskStatus != "up-to-date") {
+                return GateStampResult.INVALID
+            }
+        }
+
+        // 3. Verify test counts — separate from source hash since tests are in test/, not src/
+        var testsMatch = true
+        val testSuites = mapOf(
+            "unit" to project.file("test/unit"),
+            "integration" to project.file("test/integration"),
+            "e2e" to project.file("test/e2e")
+        )
+        for ((suite, dir) in testSuites) {
+            val currentExpected = countExpectedTests(dir)
+            if (currentExpected == 0) continue
+
+            val stampExpected = Regex(""""$suite":\s*\{[^}]*"expected":\s*(\d+)""")
+                .find(content)?.groupValues?.get(1)?.toIntOrNull()
+            val stampRan = Regex(""""$suite":\s*\{[^}]*"ran":\s*(\d+)""")
+                .find(content)?.groupValues?.get(1)?.toIntOrNull()
+            val stampStatus = Regex(""""$suite":\s*\{[^}]*"status":\s*"([^"]+)"""")
+                .find(content)?.groupValues?.get(1)
+
+            if (stampExpected == null || stampRan == null || stampStatus == null) { testsMatch = false; break }
+            if (stampStatus != "passed" && stampStatus != "skipped") { testsMatch = false; break }
+            if (currentExpected != stampExpected) {
+                logger.lifecycle("Gate stamp: $suite test count changed ($stampExpected → $currentExpected)")
+                testsMatch = false; break
+            }
+            if (stampRan != stampExpected) { testsMatch = false; break }
+        }
+
+        if (!testsMatch) {
+            return GateStampResult.TESTS_CHANGED
+        }
+
+        // 4. Check distHash — if dist/ matches too, skip everything (local)
+        val stampDistHash = Regex(""""distHash"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
+        val currentDistHash = try { computeDistHash() } catch (_: Exception) { "" }
+        if (stampDistHash != null && stampDistHash == currentDistHash) {
+            logger.lifecycle("Gate stamp valid (distHash match) — skipping all gate tasks")
+            return GateStampResult.FULL
+        }
+
+        logger.lifecycle("Gate stamp valid (sourceHash match) — skipping tests, rebuild required")
+        GateStampResult.SOURCE
+    } catch (e: Exception) {
+        logger.warn("Gate stamp unreadable: ${e.message}")
+        GateStampResult.INVALID
+    }
+}
+
+val gateStampResult: GateStampResult by lazy { checkGateStamp() }
+
+val writeGateStamp by tasks.registering {
+    group = "lifecycle"
+    description = "Write gate stamp after successful gate pass"
+    mustRunAfter(gate)
+    outputs.upToDateWhen { false } // Always rewrite — stamp includes timestamp and task states
+    doLast {
+        val sourceHash = computeSourceHash()
+        val distHash = computeDistHash()
+        val taskNames = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "testDataloader", "buildArtifacts")
+        val taskResults = taskNames.map { taskName ->
+            val task = project.tasks.findByName(taskName)
+            val state = task?.state
+            val status = when {
+                state == null -> "not-found"
+                state.skipped -> "skipped"
+                state.executed -> "passed"
+                state.upToDate -> "up-to-date"
+                else -> "unknown"
+            }
+            """"$taskName": "$status""""
+        }
+
+        // Count expected tests from source files
+        val testSuites = mapOf(
+            "unit" to project.file("test/unit"),
+            "integration" to project.file("test/integration"),
+            "e2e" to project.file("test/e2e")
+        )
+        val testEntries = testSuites.map { (suite, dir) ->
+            val expected = countExpectedTests(dir)
+            val taskName = when (suite) {
+                "unit" -> "testUnit"
+                "integration" -> "testIntegration"
+                "e2e" -> "testDirect"
+                else -> suite
+            }
+            val task = project.tasks.findByName(taskName)
+            val ran = task?.state?.executed == true
+            val skipped = task?.state?.skipped == true
+            val passed = if (ran) expected else 0
+            val status = when {
+                skipped || expected == 0 -> "skipped"
+                ran -> "passed"
+                else -> "not-run"
+            }
+            """      "$suite": { "expected": $expected, "ran": $passed, "status": "$status" }"""
+        }
+
+        val stamp = """{
+  "version": "${project.version}",
+  "branch": "$branch",
+  "timestamp": "${java.time.Instant.now()}",
+  "sourceHash": "$sourceHash",
+  "distHash": "$distHash",
+  "tasks": {
+    ${taskResults.joinToString(",\n    ")}
+  },
+  "tests": {
+${testEntries.joinToString(",\n")}
+  }
+}
+"""
+        val stampFile = gateStampFile.asFile
+        stampFile.parentFile.mkdirs()
+        stampFile.writeText(stamp)
+
+        logger.lifecycle("Gate stamp written:")
+        for ((suite, dir) in testSuites) {
+            val expected = countExpectedTests(dir)
+            if (expected > 0) {
+                logger.lifecycle("  $suite: $expected/$expected passed")
+            }
+        }
+    }
+}
+
+gate.configure {
+    finalizedBy(writeGateStamp)
+}
+
+// When publish is in the task graph, decide what to skip based on gate stamp.
+//
+// LOCAL scenarios:
+//   1. No stamp or sourceHash mismatch (INVALID) → gate runs fully, writes new stamp
+//   2. sourceHash matches, distHash mismatch (SOURCE) → skip tests, rebuild
+//   3. distHash matches (FULL) → skip all gate tasks
+//
+// CI scenarios:
+//   4. No stamp or sourceHash mismatch → preflight hard-fails (handled in preflight check)
+//   5. sourceHash matches → skip tests, run npm ci + build (always SOURCE in CI since no dist/)
+gradle.taskGraph.whenReady {
+    val publishInGraph = try {
+        hasTask(tasks.named("publish").get()) ||
+        hasTask(tasks.named("publishAll").get())
+    } catch (_: Exception) { false }
+
+    if (!publishInGraph) return@whenReady
+
+    val testAndValidationTasks = setOf(
+        "validate", "validateSpec", "lint", "lintExec",
+        "test", "testUnit", "testUnitExec",
+        "testIntegration", "testIntegrationExec",
+        "testDirect", "testDirectExec",
+        "testDocker", "testDockerExec",
+        "testHub", "testHubExec",
+        "testDataloader", "testDataloaderExec",
+        "startModule", "startModuleExec",
+        "stopModule", "stopModuleExec"
+    )
+
+    val buildTasks = setOf(
+        "compile", "compileExec", "compileServer",
+        "buildArtifacts", "buildHubSdk", "buildHubSdkExec",
+        "buildOpenApiSdk", "buildImage", "buildImageExec", "build",
+        "installServerDeps", "generateServerApi", "generateServerEntry", "generateDockerfile",
+        "assembleSpec", "bundleSpec", "dereferenceSpec", "generateCode",
+        "npmInstall", "installDeps"
+    )
+
+    val isCI = System.getenv("CI") == "true"
+
+    when (gateStampResult) {
+        GateStampResult.FULL -> {
+            // Local: distHash + test counts match — skip everything
+            for (task in project.tasks) {
+                if (task.name in testAndValidationTasks || task.name in buildTasks) {
+                    task.enabled = false
+                }
+            }
+            project.tasks.findByName("gate")?.enabled = false
+            project.tasks.findByName("writeGateStamp")?.enabled = false
+        }
+        GateStampResult.SOURCE -> {
+            // sourceHash + test counts match, dist missing — skip tests, rebuild
+            for (task in project.tasks) {
+                if (task.name in testAndValidationTasks) {
+                    task.enabled = false
+                }
+            }
+            project.tasks.findByName("gate")?.enabled = false
+            project.tasks.findByName("writeGateStamp")?.enabled = false
+        }
+        GateStampResult.TESTS_CHANGED -> {
+            if (isCI) {
+                throw GradleException("gate-stamp.json test counts don't match current test files — run zbb gate locally and commit the stamp")
+            } else {
+                // Local: source is fine but tests changed — re-run tests, skip validation/build
+                // Let gate run which includes tests, then writeGateStamp updates the stamp
+                for (task in project.tasks) {
+                    if (task.name in buildTasks) {
+                        task.enabled = false
+                    }
+                }
+                logger.lifecycle("Gate stamp: test count changed — re-running tests")
+            }
+        }
+        GateStampResult.INVALID -> {
+            if (isCI) {
+                // CI: fail fast — don't attempt to run gate, it will fail anyway
+                throw GradleException("gate-stamp.json is missing or invalid — run zbb gate locally and commit the stamp before publishing")
+            }
+            // Local: let gate run fully — it writes a new stamp
+            logger.lifecycle("Gate stamp invalid — full gate will run")
+        }
+    }
 }
 
 // Phase 7: PUBLISH
@@ -504,6 +1056,7 @@ val publishImage by tasks.registering {
     group = "publish"
     description = "Push Docker image to registry"
     dependsOn(gate, buildImage)
+    onlyIf { !isInterface }
 }
 
 val publishSdk by tasks.registering {
@@ -630,7 +1183,7 @@ val promoteAll by tasks.registering {
 // Commit published version after successful promote
 val commitVersion by tasks.registering {
     group = "publish"
-    description = "Commit bumped package.json version"
+    description = "Commit bumped package.json version + updated gate stamp"
     mustRunAfter(promoteAll)
     onlyIf { !isDryRun && promoteAllSucceeded }
     doLast {
@@ -644,9 +1197,25 @@ val commitVersion by tasks.registering {
         val updated = content.replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
         pkgFile.writeText(updated)
 
-        // Stage and commit
+        // Regenerate gate stamp with the new source hash (post version bump)
+        val stampFile = gateStampFile.asFile
+        if (stampFile.exists()) {
+            val stampContent = stampFile.readText()
+            val newSourceHash = computeSourceHash()
+            val newDistHash = try { computeDistHash() } catch (_: Exception) { "" }
+            val updatedStamp = stampContent
+                .replace(Regex(""""sourceHash"\s*:\s*"[^"]+""""), """"sourceHash": "$newSourceHash"""")
+                .replace(Regex(""""distHash"\s*:\s*"[^"]+""""), """"distHash": "$newDistHash"""")
+                .replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
+                .replace(Regex(""""timestamp"\s*:\s*"[^"]+""""), """"timestamp": "${java.time.Instant.now()}"""")
+            stampFile.writeText(updatedStamp)
+            logger.lifecycle("Updated gate-stamp.json with post-publish hashes")
+        }
+
+        // Stage both package.json and gate-stamp.json
+        val stampPath = "${moduleDir}/gate-stamp.json"
         com.zerobias.buildtools.util.ExecUtils.exec(
-            command = listOf("git", "add", pkgPath),
+            command = listOf("git", "add", pkgPath, stampPath),
             workingDir = project.rootDir,
             throwOnError = true
         )
@@ -656,87 +1225,62 @@ val commitVersion by tasks.registering {
             workingDir = project.rootDir,
             throwOnError = true
         )
-        logger.lifecycle("Committed version bump: v${ver}")
+        logger.lifecycle("Committed version bump + gate stamp: v${ver}")
     }
 }
 
-// Publish release event to the global event router (AWS Lambda)
+// Release event — handled by CI workflow (release-announcement action)
+// which sends Slack notification + Lambda event with full metadata.
+// This task is a no-op placeholder to keep the publish chain intact.
 val publishReleaseEvent by tasks.registering {
     group = "publish"
-    description = "Publish release event to event router Lambda"
+    description = "Release announcement (handled by CI workflow)"
     mustRunAfter(tagVersion)
     onlyIf { !isDryRun && promoteAllSucceeded }
     doLast {
-        val pkgJson = project.file("package.json")
-        if (!pkgJson.exists()) return@doLast
-
-        val content = pkgJson.readText()
-        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1) ?: return@doLast
         val ver = project.version.toString()
-
-        // Get dist-tags
-        val distTags = try {
-            com.zerobias.buildtools.util.ExecUtils.execCapture(
-                command = listOf("npm", "view", "${name}@${ver}", "dist-tags", "--json"),
-                workingDir = project.projectDir,
-                throwOnError = false
-            ).trim()
-        } catch (e: Exception) { "{}" }
-
-        // Get git info
-        val commitHash = try {
-            providers.exec { commandLine("git", "rev-parse", "HEAD") }
-                .standardOutput.asText.get().trim()
-        } catch (e: Exception) { "" }
-
-        val repository = try {
-            providers.exec { commandLine("git", "remote", "get-url", "origin") }
-                .standardOutput.asText.get().trim()
-                .replace(Regex("""\.git$"""), "")
-                .replace(Regex("""^git@github\.com:"""), "https://github.com/")
-        } catch (e: Exception) { "" }
-
-        // Extract zerobias/auditmation metadata from package.json
-        val zerobias = Regex(""""zerobias"\s*:\s*(\{[^}]*\})""").find(content)?.groupValues?.get(1) ?: "{}"
-        val auditmation = Regex(""""auditmation"\s*:\s*(\{[^}]*\})""").find(content)?.groupValues?.get(1) ?: "{}"
-
-        val eventId = java.util.UUID.randomUUID().toString()
-        val payload = """{"body":{"id":"$eventId","service":"release","eventType":"release","name":"$name","version":"$ver","repository":"$repository","commitHash":"$commitHash","distTags":$distTags,"zerobias":$zerobias,"auditmation":$auditmation}}"""
-
-        logger.lifecycle("Publishing release event for ${name}@${ver}")
-
-        try {
-            val result = com.zerobias.buildtools.util.ExecUtils.execCapture(
-                command = listOf(
-                    "aws", "lambda", "invoke",
-                    "--function-name", "auditmation-event-router-events",
-                    "--payload", payload,
-                    "--cli-binary-format", "raw-in-base64-out",
-                    "--region", "us-east-1",
-                    "/dev/stdout"
-                ),
-                workingDir = project.projectDir,
-                throwOnError = true
-            ).trim()
-            logger.lifecycle("Release event published: $result")
-        } catch (e: Exception) {
-            logger.warn("Failed to publish release event: ${e.message}")
-            // Non-fatal — don't fail the publish for an event routing issue
-        }
+        val pkgJson = project.file("package.json")
+        val name = if (pkgJson.exists()) {
+            Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1) ?: "unknown"
+        } else "unknown"
+        logger.lifecycle("Published ${name}@${ver} — release announcement handled by CI workflow")
     }
 }
 
 // Top-level publish task: bump → stage → promote → commit → tag → release event
+// Push version commit and tags to remote
+val pushVersion by tasks.registering {
+    group = "publish"
+    description = "Push version commit and tags to remote"
+    mustRunAfter(tagVersion)
+    onlyIf { !isDryRun && promoteAllSucceeded }
+    doLast {
+        try {
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "push", "--follow-tags"),
+                workingDir = project.rootDir,
+                throwOnError = true
+            )
+            logger.lifecycle("Pushed version commit and tags to remote")
+        } catch (e: Exception) {
+            logger.warn("Failed to push: ${e.message}")
+            // Non-fatal — don't fail the publish for a push issue
+        }
+    }
+}
+
+// Top-level publish: bump → stage → promote → commit → tag → push → release event
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
-    dependsOn(publishAll, promoteAll, commitVersion, tagVersion, publishReleaseEvent)
+    dependsOn(publishAll, promoteAll, commitVersion, tagVersion, pushVersion, publishReleaseEvent)
 }
 
-// Ordering: promote → commit → tag → release event
+// Ordering: promote → commit → tag → push → release event
 tagVersion.configure { mustRunAfter(commitVersion) }
 commitVersion.configure { mustRunAfter(promoteAll) }
-publishReleaseEvent.configure { mustRunAfter(tagVersion) }
+pushVersion.configure { mustRunAfter(tagVersion) }
+publishReleaseEvent.configure { mustRunAfter(pushVersion) }
 
 // ────────────────────────────────────────────────────────────
 // Metadata sync — utility task (not in default build chain)

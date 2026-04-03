@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-17}
+    container_name: ${STACK_NAME}-postgres
+    ports:
+      - "${PGPORT}:5432"
+    environment:
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
+      POSTGRES_DB: ${PGDATABASE:-zerobias}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    labels:
+      zerobias.slot: ${STACK_NAME}
+
+volumes:
+  postgres-data:
