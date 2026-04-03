@@ -152,6 +152,10 @@ export function getZbbDir(): string {
 }
 
 export function getSlotsDir(userConfig?: UserConfig): string {
+  // ZB_SLOT_DIR is the canonical slot path — derive slots dir from it
+  if (process.env.ZB_SLOT_DIR) {
+    return resolve(process.env.ZB_SLOT_DIR, '..');
+  }
   return userConfig?.slots?.dir
     ? resolve(userConfig.slots.dir.replace('~', homedir()))
     : join(ZBB_DIR, 'slots');

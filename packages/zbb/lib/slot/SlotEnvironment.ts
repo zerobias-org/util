@@ -127,16 +127,17 @@ export class SlotEnvironment extends EventEmitter {
   /** Set a user override (persisted to overrides.env). Optional mask flag. */
   async set(key: string, value: string, mask?: boolean): Promise<void> {
     this.overrides.set(key, value);
-    const existing = this.manifest.get(key);
-    if (!existing || mask !== undefined) {
-      this.manifest.set(key, {
-        ...(existing ?? { source: 'override', type: 'string' }),
-        ...(mask !== undefined ? { mask } : {}),
-      });
-      const { saveYaml } = await import('../yaml.js');
-      await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
-    }
+    // Write value to disk FIRST — before manifest write can trigger watcher
     await this.writeOverrides();
+    // Always update manifest source to 'override' so UI/consumers see correct provenance
+    const existing = this.manifest.get(key);
+    this.manifest.set(key, {
+      ...(existing ?? { source: 'override', type: 'string' }),
+      source: 'override',
+      ...(mask !== undefined ? { mask } : {}),
+    });
+    const { saveYaml } = await import('../yaml.js');
+    await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
     this.emit('change', { key, value });
   }
 
