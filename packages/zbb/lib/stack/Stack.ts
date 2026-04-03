@@ -256,7 +256,7 @@ export class Stack extends EventEmitter {
 
   private execCommandQuiet(command: string): Promise<number> {
     return new Promise((resolve) => {
-      const cwd = this.identity.mode === 'dev' ? this.identity.source : this.path;
+      const cwd = this.identity.source || this.path;
       const envVars = { ...process.env, ...this.env.getAll() };
 
       const child = spawn('bash', ['-c', command], {
@@ -274,7 +274,7 @@ export class Stack extends EventEmitter {
 
   private execCommand(command: string): Promise<number> {
     return new Promise((resolve) => {
-      const cwd = this.identity.mode === 'dev' ? this.identity.source : this.path;
+      const cwd = this.identity.source || this.path;
       const envVars = { ...process.env, ...this.env.getAll() };
 
       const child = spawn('bash', ['-c', command], {
