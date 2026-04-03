@@ -1,8 +1,8 @@
 # zbb Stacks — User Guide
 
-> **Status:** Design draft. Target DX before implementation.
+> **Status:** Implemented. See `CLAUDE.md` for development guide.
 
-Stacks are composable units of infrastructure that live inside zbb slots. They turn "clone repo, read wiki, set 20 env vars, pray" into `zbb stack add ./my-service && zbb start my-service`.
+Stacks are composable units of infrastructure that live inside zbb slots. They turn "clone repo, read wiki, set 20 env vars, pray" into `zbb stack add ./my-service && zbb stack start my-service`.
 
 ## Why
 
@@ -11,7 +11,7 @@ Today, "Hub needs Dana needs Postgres" lives in tribal knowledge and Gradle task
 ```bash
 zbb slot create local
 zbb stack add ./my-service     # deps resolve automatically
-zbb start my-service           # postgres → dana → my-service, health-checked
+zbb stack start my-service     # postgres → dana → my-service, health-checked
 ```
 
 CI is the same commands with an ephemeral slot. The gap between "I have source code" and "I have a running environment" collapses to dependency resolution.
@@ -44,8 +44,8 @@ Consumers don't care which mode. Dana exports the same `DANA_URL` either way.
 Stacks contain sub-stacks. Hub has server, pkg-proxy, events — individually startable:
 
 ```bash
-zbb start hub              # all sub-stacks + deps
-zbb start hub:server       # just server + deps
+zbb stack start hub              # all sub-stacks + deps
+zbb stack start hub:server       # just server + deps
 ```
 
 Sub-stacks discovered automatically on `stack add`. They declare their own exports, logs, and intra-stack dependencies.

@@ -1,5 +1,6 @@
 # zbb Stacks — Design Specification
 
+> **Status:** Implemented. See `CLAUDE.md` for development guide.
 > Detailed rationale, mechanics, and open questions.
 > Start with the [User Guide](stacks-guide.md) for concepts, commands, and manifest format.
 
