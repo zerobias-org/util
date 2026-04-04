@@ -1,9 +1,9 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, writeFile, stat } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { stringify as yamlStringify } from 'yaml';
+// yaml stringify not needed — using stack.setState() API directly
 import { Stack } from './Stack.js';
 import { createMockStackSource, createAddedStack } from './test-helpers.js';
 
@@ -325,7 +325,7 @@ describe('setState idempotency', () => {
 
     // First call with same data as on-disk state — sets initial state
     let changeCount = 0;
-    stack.on('state:change', () => { changeCount++; });
+    stack.on('state:change', () => { changeCount += 1; });
 
     // Set with different data — should write and emit
     await stack.setState({ status: 'healthy' });
@@ -354,7 +354,7 @@ describe('setState idempotency', () => {
     await stack.load();
 
     let changeCount = 0;
-    stack.on('state:change', () => { changeCount++; });
+    stack.on('state:change', () => { changeCount += 1; });
 
     await stack.setState({ a: 1 });
     assert.equal(changeCount, 1);
@@ -377,7 +377,7 @@ describe('setState idempotency', () => {
     await stack.load();
 
     let changeCount = 0;
-    stack.on('state:change', () => { changeCount++; });
+    stack.on('state:change', () => { changeCount += 1; });
 
     await stack.setState({ status: 'running' });
     assert.equal(changeCount, 1);
@@ -402,7 +402,7 @@ describe('setState idempotency', () => {
     await stack.setState({ b: 2, a: 1 });
 
     let changeCount = 0;
-    stack.on('state:change', () => { changeCount++; });
+    stack.on('state:change', () => { changeCount += 1; });
 
     // File is written by YAML serializer which may use different key order
     // Re-setting with same values but different insertion order must be idempotent

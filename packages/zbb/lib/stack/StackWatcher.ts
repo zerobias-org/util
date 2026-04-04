@@ -1,7 +1,7 @@
 import { watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { join, relative } from 'node:path';
+import { relative } from 'node:path';
 
 type WatchScope = 'state' | 'env';
 
