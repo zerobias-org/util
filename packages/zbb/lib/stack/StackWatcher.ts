@@ -1,7 +1,8 @@
 import { watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { relative } from 'node:path';
+import { join } from 'node:path';
 
 type WatchScope = 'state' | 'env';
 
@@ -26,12 +27,14 @@ function debounce<T extends (...args: Parameters<T>) => void>(fn: T, delayMs: nu
  * Stack-specific file watcher with on-demand scoped subscriptions.
  *
  * Unlike SlotWatcher (which watches the entire slot directory recursively),
- * StackWatcher watches only explicitly subscribed scopes. No subscription
+ * StackWatcher watches only explicitly subscribed paths. No subscription
  * means zero fs.watch overhead.
  *
  * Scopes:
- * - 'state' — watches substacks/ directory and stack-level state.yaml
+ * - 'state' — watches substacks/ directory (recursive) and stack-level state.yaml
  * - 'env'   — watches stack-level .env file
+ *
+ * Each scope creates narrow, targeted watchers — never the whole stack tree.
  *
  * Events emitted:
  * - 'substack:change' (substackName: string, relPath: string) — file under substacks/<name>/
@@ -43,7 +46,7 @@ function debounce<T extends (...args: Parameters<T>) => void>(fn: T, delayMs: nu
  */
 export class StackWatcher extends EventEmitter {
   private readonly stackPath: string;
-  private watchers: Map<WatchScope, FSWatcher> = new Map();
+  private scopeWatchers: Map<WatchScope, FSWatcher[]> = new Map();
   private debouncers: Map<string, (filename: string) => void> = new Map();
 
   /**
@@ -62,30 +65,33 @@ export class StackWatcher extends EventEmitter {
    *
    * 'state' — starts watching:
    *   - substacks/ directory (recursive) for substack:change events
-   *   - stack-level state.yaml for state:change events
+   *   - state.yaml file for state:change events
+   *   Two narrow watchers, NOT the whole stack tree.
    *
    * 'env' — starts watching:
-   *   - stack-level .env file for env:change events
+   *   - .env file for env:change events
    */
   watch(scope: WatchScope): void {
-    if (this.watchers.has(scope)) return;
+    if (this.scopeWatchers.has(scope)) return;
 
     if (scope === 'state') {
-      this.startStateWatcher();
+      this.startStateWatchers();
     } else if (scope === 'env') {
       this.startEnvWatcher();
     }
   }
 
   /**
-   * Stop watching a specific scope. Closes just that scope's watcher.
+   * Stop watching a specific scope. Closes just that scope's watchers.
    * Other scopes remain active.
    */
   unwatch(scope: WatchScope): void {
-    const w = this.watchers.get(scope);
-    if (w) {
-      w.close();
-      this.watchers.delete(scope);
+    const watchers = this.scopeWatchers.get(scope);
+    if (watchers) {
+      for (const w of watchers) {
+        w.close();
+      }
+      this.scopeWatchers.delete(scope);
     }
   }
 
@@ -93,10 +99,12 @@ export class StackWatcher extends EventEmitter {
    * Stop all watchers, clear debouncers, remove all listeners.
    */
   async close(): Promise<void> {
-    for (const w of this.watchers.values()) {
-      w.close();
+    for (const watchers of this.scopeWatchers.values()) {
+      for (const w of watchers) {
+        w.close();
+      }
     }
-    this.watchers.clear();
+    this.scopeWatchers.clear();
     this.debouncers.clear();
     this.removeAllListeners();
   }
@@ -108,65 +116,140 @@ export class StackWatcher extends EventEmitter {
    */
   isWatching(scope?: WatchScope): boolean {
     if (scope !== undefined) {
-      return this.watchers.has(scope);
+      return this.scopeWatchers.has(scope);
     }
-    return this.watchers.size > 0;
+    return this.scopeWatchers.size > 0;
   }
 
   // ── Private ─────────────────────────────────────────────────
 
   /**
-   * Start watcher for the 'state' scope.
+   * Start watchers for the 'state' scope.
    *
-   * Watches the entire stack directory recursively to catch both:
-   * - substacks/<name>/<file> → substack:change(name, relPath)
-   * - state.yaml at stack root → state:change
+   * Creates TWO narrow watchers:
+   * 1. substacks/ directory (recursive) — catches substack state changes
+   * 2. state.yaml file — catches stack-level state changes
    *
-   * This approach handles the case where substacks/ directory doesn't
-   * exist when the watcher starts — the watcher will catch it when it's
-   * created and files are written into it.
+   * If substacks/ doesn't exist yet, the watcher is deferred until
+   * it's created. The stack directory (non-recursive) is watched to
+   * detect substacks/ creation, then replaced with the narrow watcher.
    */
-  private startStateWatcher(): void {
-    const watcher = watch(this.stackPath, { recursive: true, persistent: false }, (_eventType, filename) => {
+  private startStateWatchers(): void {
+    const watchers: FSWatcher[] = [];
+
+    // Watcher 1: substacks/ directory (recursive)
+    const substacksDir = join(this.stackPath, 'substacks');
+    if (existsSync(substacksDir)) {
+      watchers.push(this.watchSubstacksDir(substacksDir));
+    } else {
+      // substacks/ doesn't exist yet — watch stack dir (non-recursive)
+      // to detect when substacks/ is created, then switch to narrow watcher
+      const bootstrapWatcher = watch(this.stackPath, { recursive: false, persistent: false }, (_eventType, filename) => {
+        if (filename && filename.replace(/\\/g, '/') === 'substacks' && existsSync(substacksDir)) {
+          // substacks/ just appeared — close bootstrap watcher, start narrow one
+          bootstrapWatcher.close();
+          const idx = watchers.indexOf(bootstrapWatcher);
+          if (idx !== -1) {
+            watchers[idx] = this.watchSubstacksDir(substacksDir);
+          }
+        }
+      });
+      bootstrapWatcher.on('error', (err) => this.emit('error', err));
+      watchers.push(bootstrapWatcher);
+    }
+
+    // Watcher 2: state.yaml at stack root
+    const stateFile = join(this.stackPath, 'state.yaml');
+    if (existsSync(stateFile)) {
+      const stateWatcher = watch(stateFile, { persistent: false }, () => {
+        this.getDebouncedDispatch('state.yaml')('state.yaml');
+      });
+      stateWatcher.on('error', (err) => this.emit('error', err));
+      watchers.push(stateWatcher);
+    } else {
+      // state.yaml doesn't exist yet — watch stack dir (non-recursive) for it
+      // Reuse the bootstrap watcher if we already have one, otherwise create
+      const hasBootstrap = !existsSync(substacksDir);
+      if (!hasBootstrap) {
+        const stateBootstrap = watch(this.stackPath, { recursive: false, persistent: false }, (_eventType, filename) => {
+          if (filename && filename.replace(/\\/g, '/') === 'state.yaml' && existsSync(stateFile)) {
+            stateBootstrap.close();
+            const idx = watchers.indexOf(stateBootstrap);
+            const narrowWatcher = watch(stateFile, { persistent: false }, () => {
+              this.getDebouncedDispatch('state.yaml')('state.yaml');
+            });
+            narrowWatcher.on('error', (err) => this.emit('error', err));
+            if (idx !== -1) {
+              watchers[idx] = narrowWatcher;
+            } else {
+              watchers.push(narrowWatcher);
+            }
+          }
+        });
+        stateBootstrap.on('error', (err) => this.emit('error', err));
+        watchers.push(stateBootstrap);
+      }
+    }
+
+    this.scopeWatchers.set('state', watchers);
+  }
+
+  /**
+   * Watch the substacks/ directory recursively.
+   * Dispatches substack:change events for state files and collection items.
+   */
+  private watchSubstacksDir(substacksDir: string): FSWatcher {
+    const watcher = watch(substacksDir, { recursive: true, persistent: false }, (_eventType, filename) => {
       if (!filename) return;
-      this.getDebouncedDispatch(filename)(filename);
+      this.getDebouncedDispatch(`substacks/${filename}`)(filename);
     });
 
-    watcher.on('error', (err) => {
-      this.emit('error', err);
-    });
-
-    this.watchers.set('state', watcher);
+    watcher.on('error', (err) => this.emit('error', err));
+    return watcher;
   }
 
   /**
    * Start watcher for the 'env' scope.
    *
-   * Watches the stack directory non-recursively to catch .env changes.
-   * Using the directory (non-recursive) rather than the file directly
-   * avoids issues where the file doesn't exist yet.
+   * Watches the .env file directly. If .env doesn't exist yet,
+   * watches the stack directory (non-recursive) to detect creation.
    */
   private startEnvWatcher(): void {
+    const envFile = join(this.stackPath, '.env');
+    const watchers: FSWatcher[] = [];
+
     const debouncedEmit = debounce(() => {
-      if (this.watchers.has('env')) {
+      if (this.scopeWatchers.has('env')) {
         this.emit('env:change');
       }
     }, 100);
 
-    const watcher = watch(this.stackPath, { recursive: false, persistent: false }, (_eventType, filename) => {
-      if (!filename) return;
-      // Only dispatch .env changes in env scope
-      const normalized = filename.replace(/\\/g, '/');
-      if (normalized === '.env') {
+    if (existsSync(envFile)) {
+      const watcher = watch(envFile, { persistent: false }, () => {
         debouncedEmit();
-      }
-    });
+      });
+      watcher.on('error', (err) => this.emit('error', err));
+      watchers.push(watcher);
+    } else {
+      // .env doesn't exist yet — watch stack dir to detect creation
+      const bootstrap = watch(this.stackPath, { recursive: false, persistent: false }, (_eventType, filename) => {
+        if (filename && filename.replace(/\\/g, '/') === '.env' && existsSync(envFile)) {
+          bootstrap.close();
+          const narrow = watch(envFile, { persistent: false }, () => {
+            debouncedEmit();
+          });
+          narrow.on('error', (err) => this.emit('error', err));
+          const idx = watchers.indexOf(bootstrap);
+          if (idx !== -1) {
+            watchers[idx] = narrow;
+          }
+        }
+      });
+      bootstrap.on('error', (err) => this.emit('error', err));
+      watchers.push(bootstrap);
+    }
 
-    watcher.on('error', (err) => {
-      this.emit('error', err);
-    });
-
-    this.watchers.set('env', watcher);
+    this.scopeWatchers.set('env', watchers);
   }
 
   /**
@@ -185,53 +268,23 @@ export class StackWatcher extends EventEmitter {
   }
 
   /**
-   * Dispatch events for state scope changes (from the recursive stack directory watcher).
+   * Dispatch events for state scope changes.
    */
   private dispatchState(filename: string): void {
-    // Normalize path separators (Windows uses backslash)
     const normalized = filename.replace(/\\/g, '/');
 
-    // Normalize absolute path to relative
-    const rel = filename.startsWith(this.stackPath)
-      ? relative(this.stackPath, filename).replace(/\\/g, '/')
-      : normalized;
-
-    // Skip files outside our interests (logs, secrets, state/cmd, etc.)
-    if (
-      rel.startsWith('logs/') ||
-      rel.startsWith('state/secrets/') ||
-      rel.startsWith('state/cmd/') ||
-      rel === 'stack.yaml'
-    ) {
+    // Stack-level state.yaml (from the file watcher)
+    if (normalized === 'state.yaml') {
+      this.emit('state:change');
       return;
     }
 
-    // Stack-level state.yaml
-    if (rel === 'state.yaml') {
-      // Only emit if 'state' scope is active
-      if (this.watchers.has('state')) {
-        this.emit('state:change');
-      }
-      return;
-    }
+    // Substack file (from the substacks/ recursive watcher)
+    // filename is relative to substacks/ dir
+    const slashIdx = normalized.indexOf('/');
+    if (slashIdx === -1) return; // directory creation event, no file
 
-    // substacks/<name>/<rest...>
-    if (rel.startsWith('substacks/')) {
-      if (!this.watchers.has('state')) return;
-
-      const withoutPrefix = rel.slice('substacks/'.length);
-      // Must have at least one slash to identify substack name + file
-      const slashIdx = withoutPrefix.indexOf('/');
-      if (slashIdx === -1) return; // just a directory creation event
-
-      const substackName = withoutPrefix.slice(0, slashIdx);
-      const relPath = withoutPrefix; // relative to substacks/
-      this.emit('substack:change', substackName, relPath);
-      return;
-    }
-
-    // .env at stack root — but env scope has its own watcher, don't double-emit
-    // The state scope watcher also sees .env but we should NOT emit env:change
-    // from the state scope. The env scope watcher handles that.
+    const substackName = normalized.slice(0, slashIdx);
+    this.emit('substack:change', substackName, normalized);
   }
 }
