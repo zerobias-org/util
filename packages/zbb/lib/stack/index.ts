@@ -1,6 +1,7 @@
 export { Stack } from './Stack.js';
 export { StackManager } from './StackManager.js';
 export { StackEnvironment } from './StackEnvironment.js';
+export { StackWatcher } from './StackWatcher.js';
 
 export type {
   StackManifest,
