@@ -53,6 +53,14 @@ export class Stack extends EventEmitter {
   get secretsDir() { return join(this.path, 'state', 'secrets'); }
   get stackYamlPath() { return join(this.path, 'stack.yaml'); }
 
+  /**
+   * Returns the path to a substack directory within this stack.
+   * Does not check whether the directory exists.
+   */
+  substackDir(name: string): string {
+    return join(this.path, 'substacks', name);
+  }
+
   // ── Loading ─────────────────────────────────────────────────
 
   async load(): Promise<void> {
@@ -258,6 +266,24 @@ export class Stack extends EventEmitter {
     await mkdir(join(stackPath, 'logs'), { recursive: true });
     await mkdir(join(stackPath, 'state'), { recursive: true });
     await mkdir(join(stackPath, 'state', 'secrets'), { recursive: true });
+  }
+
+  /**
+   * Create substack directories for substacks that declare a state field.
+   * Both object substacks and collection substacks get an empty directory.
+   * Substacks without a state declaration are skipped.
+   * Called during stack add; state.yaml is created on first setState() call.
+   */
+  static async createSubstackDirectories(
+    stackPath: string,
+    manifest: StackManifest,
+  ): Promise<void> {
+    if (!manifest.substacks) return;
+    for (const [name, config] of Object.entries(manifest.substacks)) {
+      if (!config.state) continue;
+      const substackDir = join(stackPath, 'substacks', name);
+      await mkdir(substackDir, { recursive: true });
+    }
   }
 
   /**

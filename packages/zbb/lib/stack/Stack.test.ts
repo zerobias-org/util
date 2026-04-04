@@ -410,3 +410,79 @@ describe('setState idempotency', () => {
     assert.equal(changeCount, 0, 'idempotent regardless of key insertion order');
   });
 });
+
+describe('Stack.substackDir', () => {
+  it('substackDir returns correct path', () => {
+    const stack = new Stack('myhub', join(tmpDir, 'stacks'));
+    assert.equal(stack.substackDir('manager'), join(tmpDir, 'stacks', 'myhub', 'substacks', 'manager'));
+    assert.equal(stack.substackDir('alerts'), join(tmpDir, 'stacks', 'myhub', 'substacks', 'alerts'));
+  });
+});
+
+describe('Stack.createSubstackDirectories', () => {
+  it('creates dirs for substacks with state declarations', async () => {
+    const stackPath = join(tmpDir, 'mystack');
+    await mkdir(stackPath, { recursive: true });
+
+    const manifest = {
+      name: '@test/mystack',
+      version: '1.0.0',
+      substacks: {
+        manager: {
+          state: { pid: { type: 'number' as const } },
+        },
+        alerts: {
+          state: {
+            collection: true as const,
+            schema: { type: { type: 'string' as const } },
+          },
+        },
+      },
+    };
+
+    await Stack.createSubstackDirectories(stackPath, manifest);
+
+    const { stat } = await import('node:fs/promises');
+    const managerStat = await stat(join(stackPath, 'substacks', 'manager'));
+    assert.ok(managerStat.isDirectory());
+    const alertsStat = await stat(join(stackPath, 'substacks', 'alerts'));
+    assert.ok(alertsStat.isDirectory());
+  });
+
+  it('skips substacks without state declaration', async () => {
+    const stackPath = join(tmpDir, 'mystack2');
+    await mkdir(stackPath, { recursive: true });
+
+    const manifest = {
+      name: '@test/mystack',
+      version: '1.0.0',
+      substacks: {
+        web: {
+          services: ['nginx'],
+          // no state field
+        },
+      },
+    };
+
+    await Stack.createSubstackDirectories(stackPath, manifest);
+
+    const { existsSync } = await import('node:fs');
+    assert.equal(existsSync(join(stackPath, 'substacks', 'web')), false);
+  });
+
+  it('is a no-op when manifest has no substacks field', async () => {
+    const stackPath = join(tmpDir, 'mystack3');
+    await mkdir(stackPath, { recursive: true });
+
+    const manifest = {
+      name: '@test/mystack',
+      version: '1.0.0',
+    };
+
+    // Should not throw and should not create substacks dir
+    await Stack.createSubstackDirectories(stackPath, manifest);
+
+    const { existsSync } = await import('node:fs');
+    assert.equal(existsSync(join(stackPath, 'substacks')), false);
+  });
+});
