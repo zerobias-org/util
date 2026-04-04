@@ -391,3 +391,76 @@ describe('StackManager.remove — cascade', () => {
     assert.equal(stacks.length, 0);
   });
 });
+
+describe('StackManager substack directory creation', () => {
+  it('add creates substack dirs for manifest with state declarations', async () => {
+    const sourceDir = join(tmpDir, 'src-hub-node');
+    await createMockStackSource(sourceDir, {
+      name: '@zerobias-com/hub-node-stack',
+      version: '1.0.0',
+      substacks: {
+        manager: {
+          state: {
+            pid: { type: 'number' },
+            status: { type: 'enum', values: ['running', 'stopped'] },
+          },
+        },
+        alerts: {
+          state: {
+            collection: true,
+            schema: {
+              type: { type: 'string' },
+              severity: { type: 'enum', values: ['info', 'warn', 'error'] },
+            },
+          },
+        },
+      },
+    });
+
+    const mgr = new StackManager(slot);
+    await mgr.add(sourceDir);
+
+    const stackPath = join(slotDir, 'stacks', 'hub-node-stack');
+    assert.ok(existsSync(join(stackPath, 'substacks', 'manager')), 'manager substack dir should exist');
+    assert.ok(existsSync(join(stackPath, 'substacks', 'alerts')), 'alerts substack dir should exist');
+  });
+
+  it('add does not create substack dirs when no state declared', async () => {
+    const sourceDir = join(tmpDir, 'src-web');
+    await createMockStackSource(sourceDir, {
+      name: '@test/web-app',
+      version: '1.0.0',
+      substacks: {
+        nginx: {
+          services: ['nginx'],
+          // no state field
+        },
+      },
+    });
+
+    const mgr = new StackManager(slot);
+    await mgr.add(sourceDir);
+
+    const stackPath = join(slotDir, 'stacks', 'web-app');
+    assert.equal(existsSync(join(stackPath, 'substacks', 'nginx')), false, 'nginx dir should not exist — no state declared');
+  });
+
+  it('add works normally without substacks field (no regression)', async () => {
+    const sourceDir = join(tmpDir, 'src-plain');
+    await createMockStackSource(sourceDir, {
+      name: '@test/plain-stack',
+      version: '1.0.0',
+      env: {
+        PLAIN_PORT: { type: 'port' },
+      },
+    });
+
+    const mgr = new StackManager(slot);
+    const stack = await mgr.add(sourceDir);
+
+    assert.equal(stack.name, 'plain-stack');
+    const stackPath = join(slotDir, 'stacks', 'plain-stack');
+    assert.ok(existsSync(join(stackPath, 'stack.yaml')), 'stack.yaml should exist');
+    assert.equal(existsSync(join(stackPath, 'substacks')), false, 'substacks dir should not exist');
+  });
+});

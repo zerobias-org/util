@@ -102,6 +102,9 @@ export class StackManager {
     // Create directory tree
     await Stack.createDirectories(stackPath);
 
+    // Create substack directories for substacks with state declarations
+    await Stack.createSubstackDirectories(stackPath, manifest);
+
     // Allocate ports (reuses cached values from previous add if available)
     const ports = await this.allocatePortsCached(manifest, stackName);
 
