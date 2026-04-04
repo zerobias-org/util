@@ -7,12 +7,16 @@ export type {
   StackIdentity,
   DependencySpec,
   SubstackConfig,
+  StateFieldSchema,
+  CollectionStateConfig,
   LifecycleConfig,
   HealthCheckConfig,
   LogSourceConfig,
   SecretSchemaConfig,
   ImportAlias,
 } from '../config.js';
+
+export { isCollectionState } from '../config.js';
 
 export type {
   Resolution,

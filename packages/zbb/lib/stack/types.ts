@@ -9,6 +9,7 @@ export type {
   DependencySpec,
   SubstackConfig,
   StateFieldSchema,
+  CollectionStateConfig,
   LifecycleConfig,
   HealthCheckConfig,
   LogSourceConfig,

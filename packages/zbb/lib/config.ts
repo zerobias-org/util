@@ -72,17 +72,29 @@ export interface DependencySpec {
   ready_when?: Record<string, unknown>;
 }
 
+export interface StateFieldSchema {
+  type: 'string' | 'boolean' | 'enum' | 'url' | 'number';
+  values?: string[];
+}
+
+export interface CollectionStateConfig {
+  collection: true;
+  schema: Record<string, StateFieldSchema>;
+}
+
+export function isCollectionState(
+  state: Record<string, StateFieldSchema> | CollectionStateConfig | undefined,
+): state is CollectionStateConfig {
+  return state !== undefined && 'collection' in state && (state as CollectionStateConfig).collection === true;
+}
+
 export interface SubstackConfig {
   compose?: string;
   services?: string[];
   depends?: string[];
   exports?: string[];
   logs?: LogSourceConfig | Record<string, LogSourceConfig>;
-}
-
-export interface StateFieldSchema {
-  type: 'string' | 'boolean' | 'enum' | 'url' | 'number';
-  values?: string[];
+  state?: Record<string, StateFieldSchema> | CollectionStateConfig;
 }
 
 export interface LifecycleConfig {
