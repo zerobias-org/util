@@ -265,7 +265,7 @@ describe('StackManager.getStartOrder', () => {
 });
 
 describe('StackManager.start — live health verification', () => {
-  it('restarts a stack whose state is healthy but health check fails', async () => {
+  it('skips restart when state is healthy and health check passes', async () => {
     const sourceDir = join(tmpDir, 'src-app');
     await createMockStackSource(sourceDir, {
       name: '@test/app',

@@ -62,7 +62,7 @@ describe('Stack.load', () => {
 });
 
 describe('Stack.state', () => {
-  it('getState returns empty object when no state file', async () => {
+  it('getState returns initial state from state.yaml', async () => {
     const stacksDir = join(tmpDir, 'stacks');
     await createAddedStack(stacksDir, 'myapp');
 

@@ -143,15 +143,47 @@ export class StackWatcher extends EventEmitter {
       watchers.push(this.watchSubstacksDir(substacksDir));
     } else {
       // substacks/ doesn't exist yet — watch stack dir (non-recursive)
-      // to detect when substacks/ is created, then switch to narrow watcher
+      // to detect when substacks/ or state.yaml is created
+      let bootstrapClosed = false;
       const bootstrapWatcher = watch(this.stackPath, { recursive: false, persistent: false }, (_eventType, filename) => {
-        if (filename && filename.replace(/\\/g, '/') === 'substacks' && existsSync(substacksDir)) {
-          // substacks/ just appeared — close bootstrap watcher, start narrow one
+        if (!filename || bootstrapClosed) return;
+        const normalized = filename.replace(/\\/g, '/');
+
+        if (normalized === 'substacks' && existsSync(substacksDir)) {
+          // substacks/ just appeared — replace bootstrap with narrow watcher
+          bootstrapClosed = true;
           bootstrapWatcher.close();
           const idx = watchers.indexOf(bootstrapWatcher);
           if (idx !== -1) {
             watchers[idx] = this.watchSubstacksDir(substacksDir);
           }
+          // If state.yaml still doesn't exist, add a dedicated bootstrap for it
+          if (!existsSync(stateFile)) {
+            const stateBootstrap = watch(this.stackPath, { recursive: false, persistent: false }, (_et, fn) => {
+              if (fn && fn.replace(/\\/g, '/') === 'state.yaml' && existsSync(stateFile)) {
+                stateBootstrap.close();
+                const stateIdx = watchers.indexOf(stateBootstrap);
+                const narrowWatcher = watch(stateFile, { persistent: false }, () => {
+                  this.getDebouncedDispatch('state.yaml')('state.yaml');
+                });
+                narrowWatcher.on('error', (err) => this.emit('error', err));
+                if (stateIdx !== -1) {
+                  watchers[stateIdx] = narrowWatcher;
+                } else {
+                  watchers.push(narrowWatcher);
+                }
+              }
+            });
+            stateBootstrap.on('error', (err) => this.emit('error', err));
+            watchers.push(stateBootstrap);
+          }
+        } else if (normalized === 'state.yaml' && existsSync(stateFile)) {
+          // state.yaml appeared — start narrow file watcher for it
+          const narrowWatcher = watch(stateFile, { persistent: false }, () => {
+            this.getDebouncedDispatch('state.yaml')('state.yaml');
+          });
+          narrowWatcher.on('error', (err) => this.emit('error', err));
+          watchers.push(narrowWatcher);
         }
       });
       bootstrapWatcher.on('error', (err) => this.emit('error', err));
@@ -166,30 +198,29 @@ export class StackWatcher extends EventEmitter {
       });
       stateWatcher.on('error', (err) => this.emit('error', err));
       watchers.push(stateWatcher);
-    } else {
-      // state.yaml doesn't exist yet — watch stack dir (non-recursive) for it
-      // Reuse the bootstrap watcher if we already have one, otherwise create
-      const hasBootstrap = !existsSync(substacksDir);
-      if (!hasBootstrap) {
-        const stateBootstrap = watch(this.stackPath, { recursive: false, persistent: false }, (_eventType, filename) => {
-          if (filename && filename.replace(/\\/g, '/') === 'state.yaml' && existsSync(stateFile)) {
-            stateBootstrap.close();
-            const idx = watchers.indexOf(stateBootstrap);
-            const narrowWatcher = watch(stateFile, { persistent: false }, () => {
-              this.getDebouncedDispatch('state.yaml')('state.yaml');
-            });
-            narrowWatcher.on('error', (err) => this.emit('error', err));
-            if (idx !== -1) {
-              watchers[idx] = narrowWatcher;
-            } else {
-              watchers.push(narrowWatcher);
-            }
+    } else if (existsSync(substacksDir)) {
+      // substacks/ exists but state.yaml doesn't — need a separate bootstrap watcher
+      const stateBootstrap = watch(this.stackPath, { recursive: false, persistent: false }, (_eventType, filename) => {
+        if (filename && filename.replace(/\\/g, '/') === 'state.yaml' && existsSync(stateFile)) {
+          stateBootstrap.close();
+          const idx = watchers.indexOf(stateBootstrap);
+          const narrowWatcher = watch(stateFile, { persistent: false }, () => {
+            this.getDebouncedDispatch('state.yaml')('state.yaml');
+          });
+          narrowWatcher.on('error', (err) => this.emit('error', err));
+          if (idx !== -1) {
+            watchers[idx] = narrowWatcher;
+          } else {
+            watchers.push(narrowWatcher);
           }
-        });
-        stateBootstrap.on('error', (err) => this.emit('error', err));
-        watchers.push(stateBootstrap);
-      }
+        }
+      });
+      stateBootstrap.on('error', (err) => this.emit('error', err));
+      watchers.push(stateBootstrap);
     }
+    // When neither substacks/ nor state.yaml exist, the bootstrap watcher above
+    // (watching stackPath non-recursive) already handles both — state.yaml creation
+    // is detected there alongside substacks/ creation. No separate watcher needed.
 
     this.scopeWatchers.set('state', watchers);
   }

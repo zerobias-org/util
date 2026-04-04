@@ -212,6 +212,6 @@ export function isStackManifest(config: ProjectConfig | StackManifest): config i
 }
 
 export async function loadStackManifest(dir: string): Promise<StackManifest | null> {
-  const config = await loadYamlOrDefault<ProjectConfig & StackManifest>(join(dir, 'zbb.yaml'), {} as any);
-  return isStackManifest(config) ? config : null;
+  const config = await loadYamlOrDefault<Partial<StackManifest> & ProjectConfig>(join(dir, 'zbb.yaml'), {});
+  return isStackManifest(config) ? config as StackManifest : null;
 }

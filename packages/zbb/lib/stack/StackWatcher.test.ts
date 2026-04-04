@@ -175,6 +175,31 @@ describe('StackWatcher', () => {
     await eventPromise;
   });
 
+  it('watch("state") detects both substacks/ and state.yaml when neither exists at start', async () => {
+    // Create a stack path with NO substacks/ and NO state.yaml
+    const emptyStackPath = join(tmpDir, 'empty-stack');
+    await mkdir(emptyStackPath, { recursive: true });
+
+    watcher = new StackWatcher(emptyStackPath);
+    watcher.watch('state');
+    await delay(100);
+
+    // Create state.yaml — should be detected via bootstrap watcher
+    const statePromise = waitForEvent(watcher, 'state:change');
+    await writeFile(join(emptyStackPath, 'state.yaml'), 'status: healthy\n', 'utf-8');
+    await statePromise;
+
+    // Create substacks/ and a substack file — should be detected
+    await mkdir(join(emptyStackPath, 'substacks', 'node'), { recursive: true });
+    await delay(200); // allow bootstrap to swap in narrow watcher
+
+    const substackPromise = waitForEvent(watcher, 'substack:change');
+    await writeFile(join(emptyStackPath, 'substacks', 'node', 'state.yaml'), 'status: running\n', 'utf-8');
+    const [substackName, relPath] = await substackPromise;
+    assert.equal(substackName, 'node');
+    assert.equal(relPath, 'node/state.yaml');
+  });
+
   it('isWatching(scope) returns correct state per scope', () => {
     watcher = new StackWatcher(stackPath);
     assert.equal(watcher.isWatching('state'), false);

@@ -671,8 +671,8 @@ export class StackManager {
         try {
           await this.add(builtinPath);
           continue;
-        } catch (err: any) {
-          throw new Error(`Failed to add built-in stack '${depName}': ${err.message}`);
+        } catch (err: unknown) {
+          throw new Error(`Failed to add built-in stack '${depName}': ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
@@ -682,9 +682,9 @@ export class StackManager {
 
       try {
         await this.add(spec);
-      } catch (err: any) {
+      } catch (err: unknown) {
         throw new Error(
-          `Failed to auto-resolve dependency '${depName}' (${spec}): ${err.message}\n` +
+          `Failed to auto-resolve dependency '${depName}' (${spec}): ${err instanceof Error ? err.message : String(err)}\n` +
           `You can add it manually: zbb stack add <path-to-${depName}>`,
         );
       }
@@ -712,7 +712,7 @@ export class StackManager {
       const depStackYaml = join(this.stacksDir, imp.fromStack, 'stack.yaml');
       if (!existsSync(depStackYaml)) continue;
 
-      const depIdentity = await loadYamlOrDefault<StackIdentity>(depStackYaml, null as any);
+      const depIdentity = await loadYamlOrDefault<StackIdentity | null>(depStackYaml, null);
       if (!depIdentity?.source) continue;
 
       const depManifest = await loadStackManifest(depIdentity.source);
@@ -777,7 +777,7 @@ export class StackManager {
       if (!existsSync(envPath)) continue;
 
       const manifestPath = join(this.stacksDir, entry.name, 'manifest.yaml');
-      const manifest = await loadYamlOrDefault<Record<string, any>>(manifestPath, {});
+      const manifest = await loadYamlOrDefault<Record<string, Record<string, unknown>>>(manifestPath, {});
       for (const [_, meta] of Object.entries(manifest)) {
         if (meta?.type === 'port' && meta?.value) {
           used.add(parseInt(String(meta.value), 10));
