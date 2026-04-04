@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { stringify as yamlStringify } from 'yaml';
@@ -310,5 +310,103 @@ describe('Stack.runLifecycleQuiet', () => {
     await stack.load();
     const code = await stack.runLifecycleQuiet('health');
     assert.equal(code, 0);
+  });
+});
+
+describe('setState idempotency', () => {
+  it('skips write when state is unchanged', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    await createAddedStack(stacksDir, 'myapp', {
+      state: { status: 'running' },
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+
+    // First call with same data as on-disk state — sets initial state
+    let changeCount = 0;
+    stack.on('state:change', () => { changeCount++; });
+
+    // Set with different data — should write and emit
+    await stack.setState({ status: 'healthy' });
+    assert.equal(changeCount, 1);
+
+    const mtime1 = (await stat(stack.stateFile)).mtimeMs;
+
+    // Small delay to ensure mtime would differ if written
+    await new Promise(r => setTimeout(r, 10));
+
+    // Set with identical data — should NOT write or emit
+    await stack.setState({ status: 'healthy' });
+    assert.equal(changeCount, 1, 'no second event on identical state');
+
+    const mtime2 = (await stat(stack.stateFile)).mtimeMs;
+    assert.equal(mtime1, mtime2, 'file mtime unchanged on identical state');
+  });
+
+  it('writes when state has new field', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    await createAddedStack(stacksDir, 'myapp', {
+      state: {},
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+
+    let changeCount = 0;
+    stack.on('state:change', () => { changeCount++; });
+
+    await stack.setState({ a: 1 });
+    assert.equal(changeCount, 1);
+
+    await stack.setState({ b: 2 });
+    assert.equal(changeCount, 2);
+
+    const state = await stack.getState();
+    assert.equal(state.a, 1);
+    assert.equal(state.b, 2);
+  });
+
+  it('writes when existing field changes', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    await createAddedStack(stacksDir, 'myapp', {
+      state: {},
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+
+    let changeCount = 0;
+    stack.on('state:change', () => { changeCount++; });
+
+    await stack.setState({ status: 'running' });
+    assert.equal(changeCount, 1);
+
+    await stack.setState({ status: 'stopped' });
+    assert.equal(changeCount, 2);
+
+    const state = await stack.getState();
+    assert.equal(state.status, 'stopped');
+  });
+
+  it('handles key ordering differences (idempotent regardless of insertion order)', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    await createAddedStack(stacksDir, 'myapp', {
+      state: {},
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+
+    // Set state with keys in one order
+    await stack.setState({ b: 2, a: 1 });
+
+    let changeCount = 0;
+    stack.on('state:change', () => { changeCount++; });
+
+    // File is written by YAML serializer which may use different key order
+    // Re-setting with same values but different insertion order must be idempotent
+    await stack.setState({ a: 1, b: 2 });
+    assert.equal(changeCount, 0, 'idempotent regardless of key insertion order');
   });
 });

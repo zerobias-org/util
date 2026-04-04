@@ -14,6 +14,20 @@ import { StackEnvironment } from './StackEnvironment.js';
 import type { StackStatus } from './types.js';
 
 /**
+ * Produce a canonical JSON string that is identical regardless of object key insertion order.
+ * Recursively sorts all object keys, preserves array order.
+ */
+function stableStringify(obj: unknown): string {
+  if (obj === null || obj === undefined) return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
+  if (typeof obj === 'object') {
+    const sorted = Object.keys(obj as Record<string, unknown>).sort();
+    return '{' + sorted.map(k => JSON.stringify(k) + ':' + stableStringify((obj as Record<string, unknown>)[k])).join(',') + '}';
+  }
+  return JSON.stringify(obj);
+}
+
+/**
  * Represents one stack instance in a slot.
  */
 export class Stack extends EventEmitter {
@@ -85,6 +99,7 @@ export class Stack extends EventEmitter {
   async setState(partial: Record<string, unknown>): Promise<void> {
     const current = await this.getState();
     const merged = { ...current, ...partial };
+    if (stableStringify(merged) === stableStringify(current)) return;
     await saveYaml(this.stateFile, merged);
     this.emit('state:change', merged);
   }
