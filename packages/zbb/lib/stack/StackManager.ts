@@ -116,7 +116,7 @@ export class StackManager {
     const slotVars = {
       ...this.slot.getSlotEnvVars(),
       ZB_STACK: stackName,
-      STACK_NAME: `${this.slot.name}-${stackName}`,
+      STACK_NAME: stackName,
     };
 
     // Initialize env (builds manifest + .env)
