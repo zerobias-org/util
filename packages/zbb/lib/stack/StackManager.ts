@@ -51,7 +51,8 @@ export class StackManager {
     // Determine mode: dev (local path) or packaged (npm spec)
     // A package spec starts with @ or has no path separators and contains no . or /
     // Local paths start with . or / or are existing directories
-    const looksLikePath = source.startsWith('.') || source.startsWith('/') || source.startsWith('~');
+    const looksLikePath = source.startsWith('.') || source.startsWith('/') || source.startsWith('~')
+      || existsSync(source);  // Local directory takes precedence over package spec
     const isPackageSpec = !looksLikePath && PKG_SPEC_RE.test(source);
     let sourcePath: string;
     let mode: 'dev' | 'packaged';
@@ -111,8 +112,11 @@ export class StackManager {
     // Generate secrets (reuses cached values from previous add if available)
     const secrets = await this.generateSecrets(manifest, stackName);
 
-    // Get slot env vars
-    const slotVars = this.slot.getSlotEnvVars();
+    // Get slot env vars + stack-level vars
+    const slotVars = {
+      ...this.slot.getSlotEnvVars(),
+      ZB_STACK: stackName,
+    };
 
     // Initialize env (builds manifest + .env)
     await StackEnvironment.initialize(
