@@ -141,7 +141,6 @@ export class Slot extends EventEmitter {
       ZB_SLOT_STATE: this.stateDir,
       ZB_SLOT_TMP: this.tmpDir,
       ZB_STACKS_DIR: this.stacksDir,
-      STACK_NAME: this.name,
     };
   }
 
