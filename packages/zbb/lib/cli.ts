@@ -89,7 +89,7 @@ export async function main(argv: string[]): Promise<void> {
   try {
     await _main(argv);
   } catch (err: any) {
-    console.error(err.message);
+    console.error(err.stack ?? err.message);
     if (argv.includes('--verbose') || argv.includes('-v') || process.env.ZBB_VERBOSE === '1') {
       console.error(err.stack);
     }
