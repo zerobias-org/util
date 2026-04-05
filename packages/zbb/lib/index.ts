@@ -28,3 +28,18 @@ export { runPreflightChecks, formatPreflightResults, type CheckResult } from './
 
 // Gradle
 export { findGradleRoot, resolveStackAlias } from './gradle.js';
+
+// Stack
+export { Stack } from './stack/Stack.js';
+export { StackManager } from './stack/StackManager.js';
+export { StackEnvironment } from './stack/StackEnvironment.js';
+export { StackWatcher } from './stack/StackWatcher.js';
+export { isCollectionState } from './config.js';
+export type { StackManifestEntry } from './stack/types.js';
+export type {
+  StackManifest,
+  StackIdentity,
+  SubstackConfig,
+  StateFieldSchema,
+  CollectionStateConfig,
+} from './config.js';
