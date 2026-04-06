@@ -319,6 +319,81 @@ export class StackEnvironment extends EventEmitter {
     await writeFile(this.envPath, serializeEnv(this.env), 'utf-8');
   }
 
+  // ── Resolve (DNS + recalculate) ─────────────────────────────
+
+  /**
+   * Full environment resolution: DNS provisioning → recalculate.
+   * This is THE entry point for populating the environment.
+   * After resolve(), this.env is complete and .env is written.
+   */
+  async resolve(): Promise<void> {
+    // DNS provisioning — lookup TXT records and write to manifest
+    const resolveHost = this.get('SLOT_RESOLVE_HOST')
+      ?? this.schema.get('SLOT_RESOLVE_HOST')?.default;
+    if (resolveHost) {
+      const slotDir = join(this.stackDir, '..', '..');
+      const cachePath = join(slotDir, 'dns-cache.yml');
+
+      // Check TTL cache
+      let cached: { timestamp?: string; ttl?: number; values?: Record<string, string> } = {};
+      if (existsSync(cachePath)) {
+        cached = await loadYamlOrDefault(cachePath, {});
+        if (cached.timestamp && cached.ttl) {
+          const age = (Date.now() - new Date(cached.timestamp).getTime()) / 1000;
+          if (age < cached.ttl) {
+            // Cache still valid — apply cached values
+            if (cached.values) {
+              for (const [key, value] of Object.entries(cached.values)) {
+                const existing = this.manifest.get(key);
+                if (existing?.resolution === 'override') continue; // user override wins
+                this.manifest.set(key, {
+                  ...existing,
+                  resolution: 'dns' as any,
+                  value,
+                  source: 'dns',
+                });
+              }
+              await this.saveManifest();
+            }
+            await this.recalculate();
+            return;
+          }
+        }
+      }
+
+      // Fresh DNS lookup
+      try {
+        const { lookupDnsTxt } = await import('../env/DnsTxtResolver.js');
+        const dnsValues = await lookupDnsTxt(resolveHost);
+        if (dnsValues && Object.keys(dnsValues).length > 0) {
+          for (const [key, value] of Object.entries(dnsValues)) {
+            const existing = this.manifest.get(key);
+            if (existing?.resolution === 'override') continue; // user override wins
+            this.manifest.set(key, {
+              ...existing,
+              resolution: 'dns' as any,
+              value,
+              source: 'dns',
+            });
+          }
+          await this.saveManifest();
+
+          // Write cache
+          await saveYaml(cachePath, {
+            timestamp: new Date().toISOString(),
+            ttl: 30,
+            prefix: resolveHost,
+            values: dnsValues,
+          });
+        }
+      } catch {
+        // DNS failure is non-fatal — use whatever's in manifest
+      }
+    }
+
+    await this.recalculate();
+  }
+
   // ── Explain ─────────────────────────────────────────────────
 
   explain(key: string, schema?: Record<string, EnvVarDeclaration>): ExplainResult {
