@@ -196,6 +196,13 @@ export class Stack extends EventEmitter {
       if (npmrcSwap) {
         await this.restoreNpmrc(npmrcSwap);
       }
+      // After build: prune dangling images left by docker build tag reassignment
+      if (phase === 'build') {
+        try {
+          const { execSync: execSyncClean } = await import('node:child_process');
+          execSyncClean('docker image prune -f', { stdio: 'pipe' });
+        } catch { /* docker not available or no dangling images */ }
+      }
     }
   }
 
