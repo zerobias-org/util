@@ -115,15 +115,18 @@ export class StackEnvironment extends EventEmitter {
         type: decl.type ?? entry.type,
         values: decl.values ?? entry.values,
         description: decl.description ?? entry.description,
+        hidden: decl.hidden ?? entry.hidden,
       };
     }
     return entry;
   }
 
-  getManifest(): Record<string, StackManifestEntry> {
+  getManifest(showHidden = false): Record<string, StackManifestEntry> {
     const result: Record<string, StackManifestEntry> = {};
     for (const key of this.manifest.keys()) {
-      result[key] = this.getManifestEntry(key)!;
+      const entry = this.getManifestEntry(key)!;
+      if (!showHidden && entry.hidden) continue;
+      result[key] = entry;
     }
     return result;
   }
@@ -354,6 +357,7 @@ export class StackEnvironment extends EventEmitter {
             source: 'env',
             type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
             mask: decl.mask,
             description: decl.description,
           });
@@ -399,6 +403,7 @@ export class StackEnvironment extends EventEmitter {
             source: `file:${decl.file}`,
             type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
             mask: decl.mask,
             description: decl.description,
           });
@@ -439,6 +444,7 @@ export class StackEnvironment extends EventEmitter {
             source: 'schema',
             type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
             description: decl.description,
             mask: decl.mask,
           });
@@ -458,6 +464,7 @@ export class StackEnvironment extends EventEmitter {
               source: 'schema',
               type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
               description: decl.description,
               mask: decl.mask,
             });
@@ -470,6 +477,7 @@ export class StackEnvironment extends EventEmitter {
               source: 'schema',
               type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
               description: decl.description,
               mask: decl.mask,
             });

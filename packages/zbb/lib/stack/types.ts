@@ -45,6 +45,8 @@ export interface StackManifestEntry {
   description?: string;
   /** Valid values for enum type */
   values?: string[];
+  /** Hidden from UI env list by default */
+  hidden?: boolean;
 }
 
 // ── Import Spec (parsed) ────────────────────────────────────────────

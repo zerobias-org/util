@@ -22,6 +22,8 @@ export interface EnvVarDeclaration {
   value?: string;
   description?: string;
   mask?: boolean;
+  /** Hidden from UI env list by default — internal/runtime vars */
+  hidden?: boolean;
   generate?: string;
   source?: 'env' | 'cwd' | 'vault' | 'file';
   /** Vault KV v2 ref — "mount/path.field" (single field lookup). Requires source: vault. */
