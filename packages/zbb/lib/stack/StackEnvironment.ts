@@ -294,6 +294,7 @@ export class StackEnvironment extends EventEmitter {
             value,
             source: 'env',
             type: decl.type,
+            values: decl.values,
             mask: decl.mask,
             description: decl.description,
           });
@@ -313,6 +314,7 @@ export class StackEnvironment extends EventEmitter {
           value,
           source: 'cwd',
           type: decl.type,
+          values: decl.values,
           description: decl.description,
         });
       }
@@ -337,6 +339,7 @@ export class StackEnvironment extends EventEmitter {
             value,
             source: `file:${decl.file}`,
             type: decl.type,
+            values: decl.values,
             mask: decl.mask,
             description: decl.description,
           });
@@ -376,6 +379,7 @@ export class StackEnvironment extends EventEmitter {
             value: decl.default,
             source: 'schema',
             type: decl.type,
+            values: decl.values,
             description: decl.description,
             mask: decl.mask,
           });
@@ -394,6 +398,7 @@ export class StackEnvironment extends EventEmitter {
               default_formula: decl.default,
               source: 'schema',
               type: decl.type,
+            values: decl.values,
               description: decl.description,
               mask: decl.mask,
             });
@@ -405,6 +410,7 @@ export class StackEnvironment extends EventEmitter {
               formula: decl.default,
               source: 'schema',
               type: decl.type,
+            values: decl.values,
               description: decl.description,
               mask: decl.mask,
             });
@@ -422,6 +428,7 @@ export class StackEnvironment extends EventEmitter {
           formula: decl.value,
           source: 'schema',
           type: decl.type,
+          values: decl.values,
           description: decl.description,
           mask: decl.mask,
         });

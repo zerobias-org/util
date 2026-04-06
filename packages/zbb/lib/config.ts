@@ -14,8 +14,10 @@ export interface ToolRequirement {
 }
 
 export interface EnvVarDeclaration {
-  type: 'port' | 'string' | 'secret';
+  type: 'port' | 'string' | 'secret' | 'enum';
   default?: string;
+  /** Valid values for enum type — presented as selector in UI */
+  values?: string[];
   /** Live formula that recomputes when inputs change (unlike `default` which freezes). */
   value?: string;
   description?: string;
