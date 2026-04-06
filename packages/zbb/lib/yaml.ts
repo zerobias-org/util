@@ -11,7 +11,8 @@ export async function loadYaml<T = any>(filePath: string): Promise<T> {
 export async function loadYamlOrDefault<T = any>(filePath: string, defaultValue: T): Promise<T> {
   if (!existsSync(filePath)) return defaultValue;
   try {
-    return await loadYaml<T>(filePath);
+    const result = await loadYaml<T>(filePath);
+    return result ?? defaultValue;
   } catch {
     return defaultValue;
   }

@@ -1,252 +1,151 @@
 # zbb Stacks — User Guide
 
-> **Status:** Design draft. This document describes the target DX before implementation.
-> Open questions are marked with **[OPEN]** throughout.
+> **Status:** Implemented. See `CLAUDE.md` for development guide.
 
-Stacks are composable units of infrastructure that live inside zbb slots. They turn "clone repo, read wiki, set 20 env vars, pray" into `zbb stack add ./my-service && zbb start my-service`.
+Stacks are composable units of infrastructure that live inside zbb slots. They turn "clone repo, read wiki, set 20 env vars, pray" into `zbb stack add ./my-service && zbb stack start my-service`.
 
-## What Problem Does This Solve?
+## Why
 
-### Today
-
-A developer wants to work on a REST service that needs Postgres and Dana:
-
-1. Clone meta-repo, initialize submodules
-2. Figure out which branch each submodule should be on
-3. `zbb slot create local`
-4. `cd com/dana && zbb up` — wait for Gradle, schema apply, seed data
-5. `cd ../my-service` — manually wire env vars, hope nothing conflicts
-6. Discover you're missing a vault token, debug for 20 minutes
-7. CI? Rebuild all of that in a GitHub Action with 50 lines of YAML
-
-Knowledge of "Hub needs Dana needs Postgres" lives in tribal knowledge and Gradle task wiring. A new developer has no way to discover this except by failing.
-
-### With Stacks
+Today, "Hub needs Dana needs Postgres" lives in tribal knowledge and Gradle task wiring. Standing up a REST service + SQL locally or in CI is hard. With stacks:
 
 ```bash
 zbb slot create local
-zbb stack add ./my-service
-# Dana + Postgres pulled as packaged deps, ports allocated,
-# secrets generated, schema applied — automatically
-zbb start my-service
+zbb stack add ./my-service     # deps resolve automatically
+zbb stack start my-service     # postgres → dana → my-service, health-checked
 ```
 
-The gap between "I have source code" and "I have a running environment" collapses to one command that resolves the dependency tree.
+CI is the same commands with an ephemeral slot. The gap between "I have source code" and "I have a running environment" collapses to dependency resolution.
 
-CI is the same commands with an ephemeral slot. No special scripts.
+**Who benefits:**
 
-### Other Perspectives
-
-**Platform team** — publish a stack once, every consumer gets a working Dana without cloning the repo or understanding its internals.
-
-**Module developer** — `zbb stack add ./my-module` pulls Hub + Dana + Postgres as packaged deps. Developer writes module code, not infrastructure scripts.
-
-**Appliance** — a thin base that pulls packaged stacks. Ship the runtime, not the build system.
-
-**QA / staging** — `zbb stack add @zerobias-com/hub@1.2.3` gets an exact versioned environment. Reproducible across machines.
-
-**CI pipeline** — ephemeral slot, packaged stacks, run tests, destroy. No Dockerfile choreography.
+- **Developer** — `zbb stack add ./hub` pulls Dana + Postgres. Write code, not infra scripts.
+- **Platform team** — publish a stack once. Every consumer gets a working Dana without cloning the repo.
+- **CI pipeline** — ephemeral slot, packaged stacks, run tests, destroy. Same commands as local.
+- **QA** — `zbb stack add @zerobias-com/hub@1.2.3` gets an exact versioned environment.
+- **Appliance** — thin base that pulls packaged stacks. Ship the runtime, not the build system.
 
 ## Concepts
 
-### Slot (unchanged)
+### Slots and Stacks
 
-A slot is an isolated execution context — like Python's venv for infrastructure. It owns shared system resources:
+**Slot** = execution context (like venv). Owns shared system resources: port ranges (allocated like DHCP), secrets, state. Central storage (`~/.zbb/slots/`). Multiple slots exist; one active per terminal. Unchanged from today.
 
-- **Port range** — allocated like DHCP, no conflicts between slots
-- **Secrets** — generated per-slot (JWT keys, passwords, encryption keys)
-- **State** — logs, config, runtime data, temp files
-- **Environment** — all env vars resolved and persisted
-
-Multiple slots can exist. One is active per terminal. Slots persist across sessions.
-
-Everything from the existing `zbb slot` commands works the same way.
-
-### Stack
-
-A stack is a composable unit of functionality within a slot. It has:
-
-- **A manifest** — name, version, dependencies, imports, exports, env declarations
-- **On-disk assets** — compose files, scripts, config templates, source code (if dev)
-- **Runtime state** — allocated in the slot (ports, secrets, logs, process state)
-
-The key insight: **a stack is a template** (like a Docker image). **A slot instantiates it** (like a Docker container). The same `com/dana/` directory can be in two different slots — each with its own ports, secrets, and database.
+**Stack** = composable unit of functionality within a slot. Has a manifest (name, version, deps, imports, exports, env, lifecycle, state, logs, secrets). The key insight: **stack = template** (like a Docker image), **slot = instance** (like a Docker container). Same `com/dana/` directory in two slots → different ports, secrets, DBs.
 
 ### Packaged vs Dev
 
-Stacks have two modes:
+**Dev** — local directory with source code: `zbb stack add ./dana`
+**Packaged** — downloaded from registry (npm): auto-resolved as dependency
 
-**Packaged** — downloaded from a registry. Contains a manifest, compose files, and references to published images. No source code. Used when pulled as a dependency.
-
-```bash
-# Automatically pulled when hub declares depends: dana
-zbb stack add ./hub    # hub's dana dep resolves to @zerobias-com/dana@^1.2.0
-```
-
-**Dev** — pointed at a local directory. Has everything a packaged stack has, plus source code and build lifecycle commands (compile, test, etc.).
-
-```bash
-# Explicit local path = dev mode
-zbb stack add ./dana
-```
-
-Consumers don't know or care which mode a dependency is in. Dana exports the same `DANA_URL` whether it's a packaged Docker image or a from-source build. Hub just imports `dana.DANA_URL` either way.
-
-**[OPEN]** Can you switch a stack from packaged to dev (or vice versa) in place? Or do you remove and re-add?
+Consumers don't care which mode. Dana exports the same `DANA_URL` either way.
 
 ### Sub-stacks
 
-Stacks can contain sub-stacks. Hub has server, pkg-proxy, and events — each individually startable but sharing Hub's namespace and config.
+Stacks contain sub-stacks. Hub has server, pkg-proxy, events — individually startable:
 
 ```bash
-zbb start hub              # starts all sub-stacks (and dana if not running)
-zbb start hub:server       # starts just server (and dana if not running)
-zbb start hub:server hub:pkg-proxy   # starts two sub-stacks
+zbb stack start hub              # all sub-stacks + deps
+zbb stack start hub:server       # just server + deps
 ```
 
-Sub-stacks are discovered automatically when a stack is added — like `npm install` resolving the full tree. You don't manually add them.
+Sub-stacks discovered automatically on `stack add`. They declare their own exports, logs, and intra-stack dependencies.
 
-**[OPEN]** Can sub-stacks have their own exports that differ from the parent? E.g., `hub:server` exports `HUB_SERVER_URL` but `hub:pkg-proxy` exports `HUB_PKG_PROXY_URL`? Or do all exports live at the stack level?
-
-**[OPEN]** Can sub-stacks have intra-stack dependencies? E.g., `hub:events` depends on `hub:server`?
-
-### Dependencies
-
-Stacks declare named dependencies in their manifest:
+### Dependencies and Resolution
 
 ```yaml
 depends:
   dana: "@zerobias-com/dana@^1.2.0"
 ```
 
-When you add a stack, zbb resolves the dependency tree:
+`zbb stack add ./hub` checks the slot for dana. Found + compatible → bind. Not found → pull packaged version. Recurse for transitive deps. Like `npm install` for runtime environments.
 
-1. Check the slot — is `@zerobias-com/dana` already instantiated?
-2. **Yes, compatible version** — bind to it
-3. **Yes, incompatible version** — error with clear message
-4. **No** — pull the packaged version from registry, instantiate in slot
-5. Recurse for transitive dependencies
+**Bounds checking:** identity (name matches), version (semver range), exports (consumer's imports are satisfied). Fail fast.
 
-This is npm install for runtime environments.
+### Imports, Exports, Aliasing
 
-### Namespaced Imports/Exports
+Stacks explicitly declare exports (public API). Consumers import by dependency name:
 
-Stacks export named values. Consumers import them by dependency name.
-
-Dana's manifest:
 ```yaml
+# Dana exports
 exports: [DANA_URL, DANA_PORT, JWT_PUBLIC_KEY]
-```
 
-Hub's manifest:
-```yaml
+# Hub imports
 imports:
-  dana: [DANA_URL, DANA_PORT, JWT_PUBLIC_KEY]
+  dana:
+    - DANA_URL                     # → process.env.DANA_URL
+    - DANA_URL as PROXY_URL        # → process.env.PROXY_URL (no DANA_URL)
 ```
 
-Inside Hub's environment, imported values are available. **[OPEN]** As `DANA_URL` (bare, from the import declaration)? As `dana.DANA_URL` (namespaced)? Both? The ergonomics matter here — existing code reads `process.env.DANA_URL`, not `process.env.dana.DANA_URL`.
-
-**[OPEN]** Are all stack env vars implicitly available under the namespace, or only explicitly declared exports? Explicit is cleaner but more work to maintain. Implicit is convenient but leaky.
-
-### Bounds Checking
-
-When a stack resolves a dependency, it verifies:
-
-1. **Identity** — the instance's manifest `name` matches the declared package name
-2. **Version** — the instance's version satisfies the semver range
-3. **Exports** — the dependency actually exports everything the consumer imports
-
-Fail fast with clear messages. No silent runtime surprises.
+Rules:
+- Bare import → same name in consumer's env
+- Aliased import → only the alias appears. One var per import.
+- Two deps export same name, both imported bare → error at `stack add`. Must alias one.
+- Internal (non-exported) vars are encapsulated — invisible to consumers.
 
 ## Quick Start
 
-### Working on a Service (Dev)
+### Dev Workflow
 
 ```bash
-# Create a slot
+# 1. Create and enter a slot
 zbb slot create local
+zbb slot load local
+[zb:local]:~/zerobias$
 
-# Add your service — deps resolve automatically
-zbb stack add ./my-service
-#   Resolving dependencies...
-#     dana: @zerobias-com/dana@^1.2.0 — pulling packaged
-#       postgres: @zerobias-com/postgres@^17.0.0 — pulling packaged
-#   Allocating ports...
-#   Generating secrets...
-#   Done. 3 stacks in slot 'local'.
+# 2. Add stacks (resolves deps, allocates ports, generates secrets)
+zbb stack add ./dana              # dev mode — you have source
+zbb stack add ./hub               # finds dana already in slot, binds
 
-# Start everything
-zbb start my-service
-#   Starting postgres... healthy
-#   Starting dana... healthy (schema applied, seeded)
-#   Starting my-service... healthy
+# 3. Start
+zbb start hub                     # starts postgres → dana → hub, health-checked
 
-# Your service is running with all deps wired up
-curl http://localhost:$MY_SERVICE_PORT/health
+# 4. Work — cd hook scopes env to current stack
+cd com/hub
+[zb:local]:~/zerobias/com/hub$ echo $HUB_SERVER_PORT
+15004
+
+cd ../dana
+[zb:local]:~/zerobias/com/dana$ echo $DANA_PORT
+15001
 ```
 
-### Working on Hub (Dev) with Dana as Dependency
+If you're already in a loaded slot, `stack add` resolves and writes state to the slot. The cd hook picks up the stack env on your next directory change. `stack add` does NOT start anything — that's `zbb start`.
 
-```bash
-zbb slot create local
-zbb stack add ./dana         # dev mode — I want to modify dana too
-zbb stack add ./hub          # finds dana already in slot, binds to it
-zbb start hub
-```
-
-### CI Pipeline
+### CI Workflow
 
 ```bash
 zbb slot create --ephemeral --ttl 15m
-zbb stack add @zerobias-com/hub@2.1.0    # all deps pulled as packages
-zbb start hub
-npm test
-zbb slot delete $(zbb slot current)
+zbb slot load ci-run
+zbb stack add @zerobias-com/hub@2.1.0    # packaged deps auto-resolved
+zbb start hub && zbb test hub
 ```
 
-### Running Two Environments
+### Without a Subshell
 
 ```bash
-# Terminal 1
-zbb slot create dev
-zbb stack add ./hub
-zbb start hub
-# hub + dana running on ports 15000-15010
-
-# Terminal 2
-zbb slot create qa
-zbb stack add @zerobias-com/hub@2.0.0
-zbb start hub
-# hub + dana running on ports 15100-15110, completely isolated
+# Non-interactive — slot and stack as flags, no subshell needed
+zbb --slot local --stack hub start
+zbb --slot local --stack hub test
 ```
+
+`cd hub && zbb start` and `zbb start hub` are equivalent — cwd detection or explicit name.
 
 ## Stack Manifest
 
-The stack manifest is a YAML file at the root of a stack directory. **[OPEN]** Filename: `zbb-stack.yaml`? `stack.yaml`? Extend existing `zbb.yaml`?
-
-### Example: Dana
+The manifest is in `zbb.yaml` (extends current format with new fields). A `zbb.yaml` without stack fields works exactly like today.
 
 ```yaml
 name: "@zerobias-com/dana"
 version: "1.3.0"
 
-# What this stack provides to consumers
-exports:
-  - DANA_URL
-  - DANA_PORT
-  - JWT_PUBLIC_KEY
-  - PGHOST
-  - PGPORT
-
-# Dependencies — pulled if not already in slot
 depends:
   postgres: "@zerobias-com/postgres@^17.0.0"
 
-# Import from dependencies
+exports: [DANA_URL, DANA_PORT, JWT_PUBLIC_KEY]
+
 imports:
   postgres: [PGHOST, PGPORT, PGUSER, PGPASSWORD]
 
-# Sub-stacks (individually startable services)
 substacks:
   postgres:
     compose: test/docker-compose.yml
@@ -254,439 +153,113 @@ substacks:
   dana:
     compose: test/docker-compose.yml
     services: [dana, nginx]
-    depends: [postgres]    # intra-stack ordering
+    depends: [postgres]
 
-# Environment declarations (same as today's zbb.yaml env block)
 env:
   DANA_PORT:
     type: port
-  NGINX_HTTP_PORT:
-    type: port
-  NGINX_HTTPS_PORT:
-    type: port
-  PGPASSWORD:
-    type: secret
-    generate: base64:12
+  DANA_URL:
+    type: string
+    value: "http://localhost:${DANA_PORT}"
   JWT_PRIVATE_KEY:
     type: secret
     generate: rsa:2048
-  JWT_PUBLIC_KEY:
-    type: secret
-    generate: rsa_public:JWT_PRIVATE_KEY
-  ENCRYPTION_KEY:
-    type: secret
-    generate: hex:16
-  DANA_URL:
-    type: string
-    default: "http://localhost:${DANA_PORT}"
-  # ... remaining vars
-
-# Tool prerequisites
-require:
-  - tool: psql
-    check: "psql --version"
-    parse: "psql \\(PostgreSQL\\) (\\S+)"
-    version: ">=14"
-
-# Lifecycle hooks
-# [OPEN] Are these shell commands? References to scripts? Gradle tasks?
-lifecycle:
-  start: ...
-  stop: ...
-  health: ...
-  seed: ...       # post-start data seeding
-  build: ...      # dev mode only
-  test: ...       # dev mode only
-```
-
-### Example: Hub
-
-```yaml
-name: "@zerobias-com/hub"
-version: "2.1.0"
-
-exports:
-  - HUB_SERVER_URL
-  - WEBSOCKET_URL
-  - HUB_PKG_PROXY_URL
-
-depends:
-  dana: "@zerobias-com/dana@^1.2.0"
-
-imports:
-  dana: [DANA_URL, DANA_PORT, JWT_PUBLIC_KEY]
-
-substacks:
-  server:
-    compose: test/docker-compose.hub.yml
-    services: [hub-server]
-    exports: [HUB_SERVER_URL, WEBSOCKET_URL]
-  pkg-proxy:
-    compose: test/docker-compose.hub.yml
-    services: [hub-pkg-proxy]
-    exports: [HUB_PKG_PROXY_URL]
-  events:
-    compose: test/docker-compose.hub.yml
-    services: [hub-events]
-    depends: [server]    # intra-stack: events needs server running
-
-env:
-  HUB_SERVER_PORT:
-    type: port
-  HUB_EVENTS_PORT:
-    type: port
-  HUB_PKG_PROXY_PORT:
-    type: port
-  HUB_SERVER_URL:
-    type: string
-    default: "${dana.DANA_URL}/api/hub"
-  WEBSOCKET_URL:
-    type: string
-    default: "ws://localhost:${HUB_SERVER_PORT}"
   # ...
-```
 
-### Example: Postgres (Packaged, Leaf Dependency)
+state:
+  status:
+    type: enum
+    values: [starting, healthy, degraded, stopped, error]
+  schema_applied: { type: boolean }
+  seeded: { type: boolean }
+  endpoints:
+    api: { type: url }
 
-```yaml
-name: "@zerobias-com/postgres"
-version: "17.2.0"
+logs:
+  source: docker
+  container: "${STACK_NAME}-dana"
 
-exports:
-  - PGHOST
-  - PGPORT
-  - PGUSER
-  - PGPASSWORD
-  - PGDATABASE
+secrets:
+  connection_profile:
+    schema: connectionProfile.yml
+    discovery: auto
 
-# No depends — leaf node
-
-env:
-  PGHOST:
-    type: string
-    default: "localhost"
-  PGPORT:
-    type: port
-  PGUSER:
-    type: string
-    default: "postgres"
-  PGPASSWORD:
-    type: secret
-    generate: base64:12
-  PGDATABASE:
-    type: string
-    default: "zerobias"
-
-substacks:
-  postgres:
-    image: "postgres:17"
-    # [OPEN] Packaged stacks may reference images directly
-    # rather than compose files?
-```
-
-**[OPEN]** Does postgres even need to be a separate stack, or is it always owned by the stack that needs it (dana owns its postgres)? Making it shared enables the case where dana and another service share the same DB instance. Making it owned is simpler.
-
-## Command Reference
-
-### Stack Management
-
-```bash
-# Add a stack from local path (dev mode)
-zbb stack add ./dana
-zbb stack add ./hub
-
-# Add a stack from registry (packaged mode)
-zbb stack add @zerobias-com/dana@^1.2.0
-
-# Add with alias (multi-instance)
-zbb stack add ./dana --as dana-2
-
-# List stacks in current slot
-zbb stack list
-#   NAME              VERSION    MODE       DEPS         STATUS
-#   dana              1.3.0-dev  dev        postgres     running
-#   hub               2.1.0-dev  dev        dana         stopped
-#   postgres          17.2.0     packaged   —            running
-
-# Show stack details
-zbb stack info hub
-#   Name: @zerobias-com/hub
-#   Version: 2.1.0-dev
-#   Mode: dev (./hub)
-#   Depends: dana (@zerobias-com/dana, satisfied by dana@1.3.0-dev)
-#   Exports: HUB_SERVER_URL, WEBSOCKET_URL, HUB_PKG_PROXY_URL
-#   Sub-stacks: server, pkg-proxy, events
-#   Ports: HUB_SERVER_PORT=15004, HUB_EVENTS_PORT=15005, HUB_PKG_PROXY_PORT=15006
-
-# Remove a stack (reclaims ports, cleans state)
-zbb stack remove hub
-# [OPEN] What happens to stacks that depend on this one?
-
-# Update a packaged stack to newer version
-zbb stack update dana
-zbb stack update dana@1.3.0
-```
-
-### Lifecycle
-
-```bash
-# Start a stack (and its dependencies if not running)
-zbb start hub
-zbb start hub:server              # just one sub-stack
-zbb start hub:server hub:pkg-proxy  # multiple sub-stacks
-
-# Stop a stack (does NOT stop dependencies — others may need them)
-zbb stop hub
-zbb stop hub:events               # just one sub-stack
-
-# Restart
-zbb restart hub
-zbb restart hub:server
-
-# Status
-zbb status
-#   STACK             SUB-STACK    STATUS     PORTS
-#   postgres          postgres     running    15000
-#   dana              postgres     running    (shared)
-#   dana              dana         running    15001
-#   dana              nginx        running    15002,15003
-#   hub               server       running    15004
-#   hub               pkg-proxy    running    15006
-#   hub               events       stopped    15005
-
-# Logs (integrates with existing zbb logs)
-zbb logs show hub:server --follow
-zbb logs show dana --tail 100
-```
-
-**[OPEN]** `zbb stop dana` when hub is running — warn? error? force flag? SystemD would refuse unless you also stop hub.
-
-### Lifecycle as Contract
-
-This is a key concept: **the lifecycle is the abstraction boundary between stacks and build systems.**
-
-The stack manifest declares *what* — `build`, `test`, `gate`, `start`, `stop`, `health`. The implementation declares *how* — and that could be Gradle, npm scripts, a Makefile, a shell script, whatever. Consumers never see it.
-
-```yaml
-# Dana — Gradle-based TypeScript service
 lifecycle:
   build: ./gradlew build
   test: ./gradlew test
   gate: ./gradlew gate
   start: docker compose up -d
   stop: docker compose down
-  health: curl -sf http://localhost:${DANA_PORT}/health
-  seed: psql -f schema/seed.sql
-```
-
-```yaml
-# A Python service — completely different tooling, same interface
-lifecycle:
-  build: pip install -e .
-  test: pytest
-  start: uvicorn main:app --port ${PORT}
-  stop: kill $(cat .pid)
-  health: curl -sf http://localhost:${PORT}/health
-```
-
-```yaml
-# A Go appliance binary — yet another toolchain
-lifecycle:
-  build: go build -o dist/hub-manager ./cmd/manager
-  test: go test ./...
-  start: ./dist/hub-manager --port ${PORT}
-  health: curl -sf http://localhost:${PORT}/health
-```
-
-zbb doesn't care what's behind the lifecycle commands. It runs them, checks the health contract, reports pass/fail. This makes stacks composable across build systems, not just runtime systems.
-
-**Why this matters:**
-
-- **CI becomes stack-agnostic.** `zbb build hub && zbb test hub && zbb gate hub` — the pipeline doesn't know or care that it's Gradle underneath. Swap to a different build system, CI scripts don't change.
-- **SDLC pipelines compose.** `zbb gate hub` can run the gate for hub AND validate its deps are healthy. The dependency graph IS the pipeline graph.
-- **Health checks are contracts.** A packaged stack promises "I'm healthy when this endpoint returns 200." A dev stack promises the same. Consumers wait for the contract, not the implementation.
-- **Module SDLC gets this for free.** A module stack declares `build`, `test`, `gate`, `publish`. The build-tools Gradle plugins become lifecycle implementations behind the stack interface. `zbb build` in a module directory does the right thing without knowing it's Gradle underneath.
-- **Gradle is the most common lifecycle provider today, but it's an implementation detail.** The stack interface means any build system can participate.
-
-**[OPEN]** Lifecycle command format: plain shell commands (shown above)? Or structured with working directory, env overrides, timeout?
-
-```yaml
-lifecycle:
-  build:
-    command: ./gradlew build
-    cwd: .                    # relative to stack root
-    timeout: 300              # seconds
   health:
-    command: curl -sf http://localhost:${PORT}/health
-    interval: 2               # seconds between retries
-    timeout: 120              # total wait time
-    retries: 60
+    command: curl -sf http://localhost:${DANA_PORT}/health
+    interval: 2
+    timeout: 120
+  seed: psql -f schema/seed.sql
+  cleanup:
+    - docker compose down -v
+    - rm -rf ${ZB_SLOT_LOGS}/dana-*
+
+require:
+  - tool: psql
+    check: "psql --version"
+    parse: "psql \\(PostgreSQL\\) (\\S+)"
+    version: ">=14"
 ```
 
-**[OPEN]** Are lifecycle commands the same for packaged and dev? Packaged stacks probably don't have `build` or `test`. Maybe the manifest has `lifecycle` (always) and `dev_lifecycle` (dev mode only)?
-
-### Dev Lifecycle
-
-Dev stacks (added from a local path) have additional commands:
+## Command Reference
 
 ```bash
-# Build the stack's project (delegates to lifecycle.build)
-zbb build hub
+# Stack management
+zbb stack add ./dana                      # dev mode (local path)
+zbb stack add @zerobias-com/dana@^1.2.0   # packaged (registry)
+zbb stack add ./dana --as dana-2          # multi-instance alias
+zbb stack list                            # stacks in current slot
+zbb stack info hub                        # details, deps, exports, ports
+zbb stack remove hub                      # cleanup hooks, reclaim resources
+zbb stack update dana@1.3.0              # update packaged version
 
-# Run tests (delegates to lifecycle.test)
-zbb test hub
+# Lifecycle
+zbb start hub                  # start + deps, respects ready_when
+zbb start hub:server           # sub-stack only + deps
+zbb stop hub                   # stop (not deps — others may need them)
+zbb restart hub:server
+zbb status                     # reads state files, no docker ps
 
-# Full gate (delegates to lifecycle.gate)
-zbb gate hub
+# Dev lifecycle (delegates to manifest lifecycle commands)
+zbb build hub                  # → ./gradlew build (or whatever the stack declares)
+zbb test hub                   # → ./gradlew test
+zbb gate hub                   # → ./gradlew gate
 
-# Rebuild and restart (common workflow)
-zbb build hub && zbb restart hub:server
+# Env
+zbb env list                   # vars in current stack context
+zbb env explain DANA_URL       # full provenance: type, formula, resolution, source
+zbb env set LOG_LEVEL debug    # override → manifest → recalculates .env
+
+# Logs (routed via manifest declaration)
+zbb logs list                  # all sources across all stacks
+zbb logs show dana             # single source, no name needed
+zbb logs show hub:server       # sub-stack
+zbb logs show hub:node:app     # named source within sub-stack
+zbb logs show dana --follow
+
+# Secrets
+zbb secret create pg-local host=localhost port=${PGPORT}
+zbb secret list --stack sql-module
+zbb test sql-module            # discovers secrets, runs once per target
 ```
 
-**cwd shorthand:** `cd hub && zbb build` detects the stack from cwd — same as `zbb build hub` from anywhere.
+## Key Design Decisions
 
-## Slot Directory Structure (with Stacks)
+See [stacks-spec.md](stacks-spec.md) for detailed rationale. Summary:
 
-```
-~/.zbb/slots/local/
-  slot.yaml                    # slot metadata (unchanged)
-  .env                         # [OPEN] flat slot-level env? or removed in favor of per-stack?
-  manifest.yaml                # [OPEN] still global? or per-stack?
-  overrides.env                # user overrides (unchanged)
-
-  stacks/                      # NEW — per-stack runtime state
-    dana/
-      stack.yaml               # resolved manifest (exact version, mode, source path)
-      .env                     # dana's allocated env vars
-      manifest.yaml            # dana's var provenance
-      logs/                    # dana's log files
-      state/                   # dana's runtime state
-        secrets/               # dana's connection profiles
-    hub/
-      stack.yaml
-      .env
-      manifest.yaml
-      logs/
-      state/
-    postgres/
-      stack.yaml
-      .env
-      ...
-
-  config/                      # shared config (unchanged)
-  logs/                        # [OPEN] keep slot-level logs? or only per-stack?
-  state/                       # [OPEN] keep slot-level state? or only per-stack?
-```
-
-**[OPEN]** Big question: does the flat `.env` at slot root survive? Today every var from every project is merged into one file. With stacks, each stack could own its own `.env`. But then how do cross-stack references resolve? Options:
-
-- **Merged `.env` still exists** — assembled from all stack `.env` files + imports. This is what the shell sees.
-- **No merged file** — each stack's env is isolated, imports are resolved at start time.
-- **Both** — stacks own their vars, slot assembles a merged view for the shell.
-
-## Distribution
-
-Packaged stacks are published to npm registries (GitHub Packages, verdaccio).
-
-**[OPEN]** What's in the package?
-
-Likely:
-- Stack manifest (`zbb-stack.yaml` or equivalent)
-- Docker compose files
-- Config templates
-- Image references (e.g., `ghcr.io/zerobias-com/dana-app:1.3.0`)
-
-NOT:
-- Source code
-- Build artifacts
-- Node modules
-
-**[OPEN]** Is it literally an npm package (`npm publish`)? Or a new artifact type distributed via npm registry? An npm package is convenient — `package.json` already has name, version, dependencies. But a stack isn't a JS library. It's closer to a Helm chart.
-
-**[OPEN]** Could the `package.json` and stack manifest be the same file? Stack metadata as fields in package.json (like `bin`, `exports`, etc.)?
-
-**[OPEN]** Versioning: does a stack's version come from `package.json` (like today's zbb.yaml reads version from package.json)? Or from the stack manifest?
-
-## Migration from Current zbb.yaml
-
-Today's `zbb.yaml` files declare env vars and stack config in a flat namespace. The migration path:
-
-**[OPEN]** Several options:
-
-1. **Stack manifest replaces zbb.yaml** — new format, clean break
-2. **Stack manifest extends zbb.yaml** — add `exports`, `imports`, `depends` fields to existing format
-3. **Stack manifest is separate** — `zbb-stack.yaml` alongside `zbb.yaml`, zbb.yaml continues to work for projects that don't use stacks
-
-Option 3 feels right for incremental adoption. Existing projects keep working. New projects can opt into stacks.
-
-**[OPEN]** Can a project be both a "legacy" zbb.yaml project (flat env, no stacks) and participate in a stack-based slot? The slot would need to bridge the two models.
-
-## Auto-activation
-
-**[OPEN]** The `cd`-based auto-activation is mentioned in the design but needs fleshing out.
-
-Options:
-- **direnv integration** — `.envrc` files that call `zbb stack enter <name>`
-- **Shell hook** — zbb registers a `cd` hook (like nvm's auto-use)
-- **Explicit only** — `zbb stack enter hub` / `--stack hub` flag, no magic
-
-Explicit is simplest and most predictable. direnv is battle-tested. Shell hook is fragile.
-
-**[OPEN]** What does "entering" a stack mean exactly? Today `zbb slot load` spawns a subshell. Does `zbb stack enter` also spawn a subshell? Or just update the current shell's env? If it's just env updates, how do you "leave" a stack?
-
-## SystemD-like Properties
-
-Stacks with dependencies behave like SystemD units:
-
-- **Dependency ordering** — `zbb start hub` starts postgres, then dana, then hub (respecting `depends`)
-- **Health checks** — each stack/sub-stack declares a health check; dependencies must be healthy before dependents start
-- **Stop ordering** — reverse of start (hub stops before dana stops before postgres)
-
-**[OPEN]** Additional SystemD-like features to consider:
-- **Restart policies** — auto-restart on crash? Probably not for dev, maybe for packaged.
-- **Readiness vs liveness** — "started" vs "ready to accept connections"
-- **Timeout** — how long to wait for health before failing
-- **Conflict declarations** — "this stack cannot coexist with X" (probably not needed)
-
-## Open Questions Summary
-
-Collected from throughout this document:
-
-### Naming & Format
-- Stack manifest filename: `zbb-stack.yaml`? `stack.yaml`? Extend `zbb.yaml`?
-- Package format: npm tarball? New artifact type?
-- Version source: package.json? Stack manifest?
-
-### Namespace Mechanics
-- How do imported vars appear in the consumer's env? Bare (`DANA_URL`)? Qualified (`dana.DANA_URL`)? Both?
-- Are exports explicit only, or all env vars under namespace?
-
-### Composition
-- Can sub-stacks have their own exports?
-- Can sub-stacks have intra-stack dependencies?
-- Is postgres a shared stack or owned by its consumer?
-
-### Lifecycle
-- What happens when you stop a stack that others depend on?
-- Switch from packaged to dev in place, or remove + re-add?
-- Restart policies for packaged stacks?
-- Lifecycle command format: plain shell strings or structured (cwd, timeout, retries)?
-- Same lifecycle block for packaged and dev? Or separate `dev_lifecycle`?
-
-### State & Env
-- Does the flat slot-level `.env` survive, or only per-stack `.env`?
-- Where do cross-stack references resolve?
-- Slot-level vs stack-level logs and state directories?
-
-### Migration
-- How do existing zbb.yaml projects coexist with stacks?
-- Can a project participate in both models?
-
-### Activation
-- direnv? Shell hook? Explicit only?
-- What does "entering" a stack mean for the shell?
-
-### Distribution
-- What exactly goes in a packaged stack?
-- npm publish or custom artifact?
-- Can package.json and stack manifest merge?
+| Decision | Rationale |
+|----------|-----------|
+| Extend `zbb.yaml`, not new file | Incremental adoption. Existing files keep working. |
+| Bare imports, `as` for aliasing | Existing code reads `process.env.DANA_URL`. Dots aren't valid in env var names. |
+| Explicit exports only | Encapsulation. Stacks can refactor internals without breaking consumers. |
+| Lifecycle as contract | Build system is implementation detail. CI becomes stack-agnostic. |
+| Three-layer env (schema → manifest → .env) | Manifest is source of truth. `.env` is computed output. Full introspection via `env explain`. |
+| State: schema in manifest, YAML file on disk | File IS the interface. No SDK required. `yq`, bash, python, AI agents all work. |
+| cd hook + shell function | direnv-like env scoping. Shell function for `env set` sync. Non-interactive uses binary. |
+| Secrets = test matrix | Add a secret, get a test run. Stack lifecycle owns cleanup. |
+| npm for distribution | Infrastructure exists. Versioning, private registries, access control for free. |

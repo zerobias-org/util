@@ -950,10 +950,10 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
 //
 // setupFixtures: CLI-only fixture chain (no SQL)
 //   1. zbb dataloader -d .                    (load module artifacts)
-//   2. hub-node server node list --json        (get registered node ID)
-//   3. hub-node deployments create --module    (create deployment)
-//   4. hub-node server boundaries list --json  (get boundary ID)
-//   5. hub-node connections create             (create connection)
+//   2. hub-cli server node list --json        (get registered node ID)
+//   3. hub-cli deployments create --module    (create deployment)
+//   4. hub-cli server boundaries list --json  (get boundary ID)
+//   5. hub-cli connections create             (create connection)
 //
 // testHub: depends on setupFixtures, runs mocha with TEST_MODE=hub
 // ════════════════════════════════════════════════════════════
@@ -978,11 +978,20 @@ fun readPackageNameVersion(): Pair<String, String> {
  * Returns the raw JSON string for caller to parse.
  * Uses slot env (already in process.env via ZbbSlotProvider).
  */
+// Slot env for CLI commands — loaded once, cached
+val slotEnv: Map<String, String> by lazy {
+    if (com.zerobias.buildtools.util.ZbbSlotProvider.isInsideSlot()) {
+        com.zerobias.buildtools.util.ZbbSlotProvider.getSlotEnv()
+    } else {
+        emptyMap()
+    }
+}
+
 fun runCliJson(vararg command: String): String {
     return com.zerobias.buildtools.util.ExecUtils.execCapture(
         command = command.toList(),
         workingDir = project.projectDir,
-        environment = emptyMap(), // inherits Gradle process env (slot vars already set)
+        environment = slotEnv,
         throwOnError = true
     ).trim()
 }
@@ -1028,6 +1037,7 @@ val setupFixtures by tasks.registering {
             com.zerobias.buildtools.util.ExecUtils.exec(
                 command = listOf("zbb", "dataloader", moduleKey, moduleVersion),
                 workingDir = project.projectDir,
+                environment = slotEnv,
                 throwOnError = true
             )
         } else {
@@ -1043,20 +1053,21 @@ val setupFixtures by tasks.registering {
             com.zerobias.buildtools.util.ExecUtils.exec(
                 command = listOf("zbb", "dataloader", "-d", "."),
                 workingDir = project.projectDir,
+                environment = slotEnv,
                 throwOnError = true
             )
         }
 
         // ── Step 2: Get registered node ID (auto-register + start if needed) ─
         logger.lifecycle("setupFixtures: Step 2 — getting registered node ID")
-        var nodeListJson = runCliJson("hub-node", "--json", "server", "node", "list")
+        var nodeListJson = runCliJson("hub-cli", "--json", "server", "node", "list")
         var nodeId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(nodeListJson)?.groupValues?.get(1)
 
         if (nodeId == null) {
             // No node registered — register via CLI, set code
             logger.lifecycle("setupFixtures: No node found — auto-registering")
             val registerJson = runCliJson(
-                "hub-node", "--json", "server", "register", "--max-nodes", "1"
+                "hub-cli", "--json", "server", "register", "--max-nodes", "1"
             )
             val regCode = Regex(""""code"\s*:\s*"([^"]+)"""").find(registerJson)?.groupValues?.get(1)
                 ?: throw org.gradle.api.GradleException(
@@ -1066,8 +1077,9 @@ val setupFixtures by tasks.registering {
 
             // Set registration code in slot env so node picks it up on start
             com.zerobias.buildtools.util.ExecUtils.exec(
-                command = listOf("hub-node", "env", "set", "REGISTRATION_CODE", regCode),
+                command = listOf("hub-cli", "env", "set", "REGISTRATION_CODE", regCode),
                 workingDir = project.projectDir,
+                environment = slotEnv,
                 throwOnError = true
             )
         }
@@ -1075,8 +1087,9 @@ val setupFixtures by tasks.registering {
         // Always ensure node is running (idempotent — returns immediately if already up)
         logger.lifecycle("setupFixtures: Ensuring node is running")
         com.zerobias.buildtools.util.ExecUtils.exec(
-            command = listOf("hub-node", "node", "start"),
+            command = listOf("hub-cli", "node", "start"),
             workingDir = project.projectDir,
+            environment = slotEnv,
             throwOnError = true
         )
 
@@ -1086,7 +1099,7 @@ val setupFixtures by tasks.registering {
             var retries = 0
             while (retries < 30) {
                 Thread.sleep(2000)
-                nodeListJson = runCliJson("hub-node", "--json", "server", "node", "list")
+                nodeListJson = runCliJson("hub-cli", "--json", "server", "node", "list")
                 nodeId = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(nodeListJson)?.groupValues?.get(1)
                 if (nodeId != null) break
                 retries++
@@ -1097,7 +1110,7 @@ val setupFixtures by tasks.registering {
             if (nodeId == null) {
                 throw org.gradle.api.GradleException(
                     "setupFixtures: Node did not register after 60s.\n" +
-                    "Check hub-node logs: zbb logs show node"
+                    "Check hub-cli logs: zbb logs show node"
                 )
             }
         }
@@ -1106,7 +1119,7 @@ val setupFixtures by tasks.registering {
         // ── Step 3: Find or create deployment ─────────────────────────────
         logger.lifecycle("setupFixtures: Step 3 — deployment for $moduleKey@$moduleVersion on node $nodeId")
         val existingDeployJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf("hub-node", "--json", "server", "deployments", "list"),
+            command = listOf("hub-cli", "--json", "server", "deployments", "list"),
             workingDir = project.projectDir,
             environment = emptyMap(),
             throwOnError = false
@@ -1118,7 +1131,7 @@ val setupFixtures by tasks.registering {
             if (existingVersion != null && existingVersion != moduleVersion) {
                 logger.lifecycle("setupFixtures: Deployment version mismatch ($existingVersion → $moduleVersion), updating...")
                 runCliJson(
-                    "hub-node", "--json", "deployments", "update", deploymentId,
+                    "hub-cli", "--json", "deployments", "update", deploymentId,
                     "--module", "$moduleKey@$moduleVersion"
                 )
                 logger.lifecycle("setupFixtures: Updated Deployment ID = $deploymentId to $moduleKey@$moduleVersion")
@@ -1138,7 +1151,7 @@ val setupFixtures by tasks.registering {
         } else {
             logger.lifecycle("setupFixtures: Creating deployment")
             val deployJson = runCliJson(
-                "hub-node", "--json", "deployments", "create",
+                "hub-cli", "--json", "deployments", "create",
                 "--module", "$moduleKey@$moduleVersion",
                 "--node-id", nodeId
             )
@@ -1151,7 +1164,7 @@ val setupFixtures by tasks.registering {
 
         // ── Step 4: Get boundary ID ─────────────────────────────────────────
         logger.lifecycle("setupFixtures: Step 4 — getting boundary ID")
-        val boundaryListJson = runCliJson("hub-node", "--json", "server", "boundaries", "list")
+        val boundaryListJson = runCliJson("hub-cli", "--json", "server", "boundaries", "list")
         val boundaryId = run {
             val idMatch = Regex(""""id"\s*:\s*"([0-9a-f-]{36})"""").find(boundaryListJson)
                 ?: throw org.gradle.api.GradleException(
@@ -1166,7 +1179,7 @@ val setupFixtures by tasks.registering {
 
         // Check for existing connection on this deployment
         val existingConnJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf("hub-node", "--json", "connections", "list", "--deployment", deploymentId),
+            command = listOf("hub-cli", "--json", "connections", "list", "--deployment", deploymentId),
             workingDir = project.projectDir,
             environment = emptyMap(),
             throwOnError = false
@@ -1205,7 +1218,7 @@ val setupFixtures by tasks.registering {
                 val profileJson = profileKeys.joinToString(",") { """"$it":"file.$secretName.$it"""" }
 
                 // Get connectionProfileId from deployment
-                val deployGetJson = runCliJson("hub-node", "--json", "server", "deployments", "get", deploymentId)
+                val deployGetJson = runCliJson("hub-cli", "--json", "server", "deployments", "get", deploymentId)
                 val connProfileId = Regex(""""connectionProfileId"\s*:\s*"([0-9a-f-]{36})"""")
                     .find(deployGetJson)?.groupValues?.get(1)
                     ?: throw org.gradle.api.GradleException(
@@ -1214,7 +1227,7 @@ val setupFixtures by tasks.registering {
 
                 // Create Hub secret with file refs
                 val createSecretJson = runCliJson(
-                    "hub-node", "--json", "server", "secrets", "create",
+                    "hub-cli", "--json", "server", "secrets", "create",
                     "--name", "$secretName (file)",
                     "--connection-profile-id", connProfileId,
                     "--boundary-id", boundaryId,
@@ -1239,7 +1252,7 @@ val setupFixtures by tasks.registering {
             val connectionName = "$moduleName E2E"
 
             val connArgs = mutableListOf(
-                "hub-node", "--json", "connections", "create",
+                "hub-cli", "--json", "connections", "create",
                 "--deployment-id", deploymentId,
                 "--boundary-id", boundaryId,
                 "--name", connectionName,
@@ -1272,7 +1285,7 @@ val setupFixtures by tasks.registering {
         if (syncSecretName != null) {
             // Get secretId from the connection on this deployment
             val connListJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-                command = listOf("hub-node", "--json", "connections", "list", "--deployment", deploymentId),
+                command = listOf("hub-cli", "--json", "connections", "list", "--deployment", deploymentId),
                 workingDir = project.projectDir,
                 environment = emptyMap(),
                 throwOnError = false
@@ -1294,7 +1307,7 @@ val setupFixtures by tasks.registering {
                 val profileJson = "{$profileEntries}"
 
                 runCliJson(
-                    "hub-node", "--json", "server", "secrets", "update", hubSecretId,
+                    "hub-cli", "--json", "server", "secrets", "update", hubSecretId,
                     "--profile", profileJson,
                     "--draft", "false"
                 )
@@ -1308,11 +1321,11 @@ val setupFixtures by tasks.registering {
         // getTargetMetadata ensures deployment is running and connection is established
         logger.lifecycle("setupFixtures: Step 6 — ensuring target ready (TARGET_ID=$targetId)")
         val metadataJson = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf("hub-node", "--json", "server", "targets", "metadata", targetId),
+            command = listOf("hub-cli", "--json", "server", "targets", "metadata", targetId),
             workingDir = project.projectDir,
             throwOnError = true
         ).trim()
-        // hub-node may exit 0 but return a hub-level error in JSON
+        // hub-cli may exit 0 but return a hub-level error in JSON
         if (metadataJson.contains("\"err.not.found\"") || metadataJson.contains("\"statusCode\":404") || metadataJson.contains("\"statusCode\": 404")) {
             throw org.gradle.api.GradleException(
                 "setupFixtures: Target not ready — deployment not found on node.\n$metadataJson\n" +

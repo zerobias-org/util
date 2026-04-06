@@ -132,6 +132,68 @@ object ZbbSlotProvider {
         execZbb(listOf("zbb", "slot", "gc"))
     }
 
+    // ── Stack support ─────────────────────────────────────────────────
+
+    /**
+     * Get the active stack name from ZB_STACK env var.
+     * Throws if not inside a stack context.
+     */
+    fun requireActiveStack(): String {
+        return System.getenv("ZB_STACK")
+            ?: throw GradleException(
+                "No active stack. cd into a stack directory, or run:\n" +
+                "  zbb stack add <path>"
+            )
+    }
+
+    /**
+     * Get the active stack name, or null if not in a stack context.
+     */
+    fun activeStackName(): String? = System.getenv("ZB_STACK")
+
+    /**
+     * Read stack environment from the stack's .env file on disk.
+     * Source of truth — never reads from shell environment.
+     *
+     * Path: ~/.zbb/slots/$ZB_SLOT/stacks/$ZB_STACK/.env
+     */
+    fun getStackEnv(): Map<String, String> {
+        val slotDir = System.getenv("ZB_SLOT_DIR")
+            ?: throw GradleException("ZB_SLOT_DIR not set. Are you inside a loaded slot?")
+        val stackName = requireActiveStack()
+        val envFile = File(slotDir, "stacks/$stackName/.env")
+        if (!envFile.exists()) {
+            throw GradleException(
+                "Stack .env not found: ${envFile.absolutePath}\n" +
+                "Add the stack first: zbb stack add ."
+            )
+        }
+        return readEnvFile(envFile)
+    }
+
+    /**
+     * Get the stack's .env file path.
+     */
+    fun activeStackEnvFilePath(): String {
+        val slotDir = System.getenv("ZB_SLOT_DIR")
+            ?: throw GradleException("ZB_SLOT_DIR not set.")
+        val stackName = requireActiveStack()
+        return File(slotDir, "stacks/$stackName/.env").absolutePath
+    }
+
+    /**
+     * Compute the compose project name: ${ZB_SLOT}-${STACK_NAME}
+     * Reads STACK_NAME from the stack's .env on disk, not from shell.
+     * Unique per slot+stack combination — prevents container collisions.
+     */
+    fun composeProjectName(): String {
+        val slot = requireActiveSlot()
+        val stackEnv = getStackEnv()
+        val stackName = stackEnv["STACK_NAME"]
+            ?: throw GradleException("STACK_NAME not found in stack .env. Re-add the stack: zbb stack add .")
+        return "$slot-$stackName"
+    }
+
     // ── Internal ─────────────────────────────────────────────────────
 
     private fun getSlotsDir(): File {

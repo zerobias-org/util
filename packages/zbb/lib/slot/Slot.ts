@@ -6,6 +6,7 @@ import { SlotWatcher } from './SlotWatcher.js';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
 import { lookupDnsTxt as _lookupDnsTxt } from '../env/DnsTxtResolver.js';
 import { refreshVaultVars, type RefreshResult } from './refresh.js';
+import { StackManager } from '../stack/StackManager.js';
 
 /** Default DNS cache TTL in seconds when not available from DNS response */
 const DEFAULT_DNS_TTL = 30;
@@ -42,12 +43,15 @@ export interface SlotMeta {
  * file watching, and event propagation.
  *
  * Extends EventEmitter — emits:
- *   'env:change'        — env file modified
- *   'state:change'      — state file modified
- *   'deployment:change'  — deployment file modified (with filePath)
- *   'command:change'     — command file modified (with filePath)
- *   'ready'             — slot fully initialized
- *   'error'             — watcher error
+ *   'env:change'              — slot root .env modified (filePath)
+ *   'state:change'            — slot state file modified (filePath)
+ *   'deployment:change'       — deployment file modified (filePath)
+ *   'command:change'          — command file modified (filePath)
+ *   'stack:env:change'        — stack .env modified (stackName, filePath)
+ *   'stack:state:change'      — stack state.yaml modified (stackName, filePath)
+ *   'stack:manifest:change'   — stack manifest.yaml modified (stackName, filePath)
+ *   'ready'                   — slot fully initialized
+ *   'error'                   — watcher error
  */
 export class Slot extends EventEmitter {
   public readonly name: string;
@@ -56,6 +60,7 @@ export class Slot extends EventEmitter {
 
   private _meta: SlotMeta | null = null;
   private _watcher: SlotWatcher | null = null;
+  private _stacks: StackManager | null = null;
   private _initialized = false;
 
   constructor(name: string, slotsDir: string) {
@@ -111,6 +116,20 @@ export class Slot extends EventEmitter {
   get logsDir() { return join(this.path, 'logs'); }
   get stateDir() { return join(this.path, 'state'); }
   get tmpDir() { return join(this.path, 'state', 'tmp'); }
+  get stacksDir() { return join(this.path, 'stacks'); }
+
+  /** Whether this slot has any stacks */
+  get hasStacks(): boolean {
+    return existsSync(this.stacksDir);
+  }
+
+  /** Stack manager for this slot (lazy-initialized) */
+  get stacks(): StackManager {
+    if (!this._stacks) {
+      this._stacks = new StackManager(this);
+    }
+    return this._stacks;
+  }
 
   /** Env vars that expose slot directories */
   getSlotEnvVars(): Record<string, string> {
@@ -121,7 +140,7 @@ export class Slot extends EventEmitter {
       ZB_SLOT_LOGS: this.logsDir,
       ZB_SLOT_STATE: this.stateDir,
       ZB_SLOT_TMP: this.tmpDir,
-      STACK_NAME: this.name,
+      ZB_STACKS_DIR: this.stacksDir,
     };
   }
 
@@ -144,10 +163,17 @@ export class Slot extends EventEmitter {
   private _wireWatcherEvents(): void {
     if (!this._watcher) return;
 
-    // Propagate watcher events through the Slot with absolute paths
+    // Propagate slot-level watcher events with absolute paths
     for (const event of ['env:change', 'state:change', 'deployment:change', 'command:change']) {
       this._watcher.on(event, (relPath: string) => {
         this.emit(event, join(this.path, relPath));
+      });
+    }
+
+    // Propagate stack-level events with stack name + absolute path
+    for (const event of ['stack:env:change', 'stack:state:change', 'stack:manifest:change']) {
+      this._watcher.on(event, (stackName: string, relPath: string) => {
+        this.emit(event, stackName, join(this.path, relPath));
       });
     }
 
