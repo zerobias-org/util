@@ -108,6 +108,7 @@ interface ParsedArgs {
   force: boolean;
   verbose: boolean;
   check: boolean;
+  skipDocker: boolean;
   remaining: string[];
 }
 
@@ -118,6 +119,7 @@ function parseArgs(args: string[]): ParsedArgs {
     force: false,
     verbose: false,
     check: false,
+    skipDocker: false,
     remaining: [],
   };
 
@@ -141,6 +143,10 @@ function parseArgs(args: string[]): ParsedArgs {
         break;
       case '--check':
         result.check = true;
+        break;
+      case '--skipDocker':
+      case '--skip-docker':
+        result.skipDocker = true;
         break;
       default:
         result.remaining.push(args[i]);
@@ -219,6 +225,7 @@ export async function handleMonorepo(
     affectedOrdered: changes.affectedOrdered,
     config,
     verbose: parsed.verbose,
+    skipDocker: parsed.skipDocker,
   };
 
   switch (command) {
@@ -236,7 +243,25 @@ export async function handleMonorepo(
       test(ctx);
       break;
 
-    case 'gate':
+    case 'gate': {
+      // Registry guard: gate must not pass if locally-published registry packages are in use
+      const slotName = process.env.ZB_SLOT;
+      if (slotName) {
+        const { getZbbDir } = await import('../config.js');
+        const publishManifest = join(getZbbDir(), 'slots', slotName, 'stacks', 'registry', 'publishes.json');
+        if (existsSync(publishManifest)) {
+          const publishes = JSON.parse(readFileSync(publishManifest, 'utf-8'));
+          if (Array.isArray(publishes) && publishes.length > 0) {
+            console.error('Cannot write gate stamp — local registry packages in use:');
+            for (const pkg of publishes) {
+              console.error(`  ${pkg.name}@${pkg.version}`);
+            }
+            console.error('\nRun: zbb registry clear');
+            process.exit(1);
+          }
+        }
+      }
+
       if (parsed.check) {
         // --check mode: validate only, exit 0 or 1
         const valid = isStampValid(changes.affectedOrdered, graph, repoRoot, config);
@@ -257,6 +282,7 @@ export async function handleMonorepo(
       }
       gate(ctx);
       break;
+    }
 
     case 'publish':
       publish({

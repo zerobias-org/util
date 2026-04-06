@@ -31,6 +31,7 @@ export interface BuildContext {
   affectedOrdered: string[];
   config: MonorepoConfig;
   verbose?: boolean;
+  skipDocker?: boolean;
 }
 
 interface PhaseResult {
