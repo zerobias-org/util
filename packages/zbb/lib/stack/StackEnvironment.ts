@@ -218,6 +218,28 @@ export class StackEnvironment extends EventEmitter {
       }
     }
 
+    // Schema defaults (Layer 1) — lowest priority, only for vars not in manifest
+    for (const [key, decl] of this.schema) {
+      if (preResolved.has(key) || derivedVars.has(key)) continue;
+      if (decl.value !== undefined) {
+        // Live formula
+        const refs = extractRefs(decl.value);
+        if (refs.length === 0) {
+          preResolved.set(key, decl.value);
+        } else {
+          derivedVars.set(key, decl.value);
+        }
+      } else if (decl.default !== undefined) {
+        // Static default
+        const refs = extractRefs(decl.default);
+        if (refs.length === 0) {
+          preResolved.set(key, decl.default);
+        } else {
+          derivedVars.set(key, decl.default);
+        }
+      }
+    }
+
     // Resolve derived vars using topo-sort
     if (derivedVars.size > 0) {
       const { resolveAll } = await import('../env/Resolver.js');
