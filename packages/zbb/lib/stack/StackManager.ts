@@ -133,6 +133,22 @@ export class StackManager {
       sourcePath,
     );
 
+    // For dev mode, override *_IMAGE env vars to use local dev tags.
+    // Packaged stacks default to ghcr.io images; dev stacks use locally-built images.
+    if (mode === 'dev' && manifest.env) {
+      const stack = new Stack(stackName, this.stacksDir);
+      await stack.load();
+      for (const [key, decl] of Object.entries(manifest.env)) {
+        if (key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')) {
+          // Extract the local image name from the ghcr.io path: ghcr.io/org/name:tag → name:dev
+          const imageName = decl.default.split('/').pop()?.replace(/:.*$/, '') ?? key;
+          const localTag = `${imageName}:dev`;
+          stack.env.set(key, localTag);
+          console.log(`  [dev] ${key} = ${localTag}`);
+        }
+      }
+    }
+
     // Write stack identity
     const identity: StackIdentity = {
       name: manifest.name,

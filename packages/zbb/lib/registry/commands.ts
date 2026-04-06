@@ -345,6 +345,16 @@ async function handleInstall(args: string[], slot: Slot): Promise<void> {
     }
   }
 
+  // Back up package-lock.json before npm install — npm will rewrite resolved URLs
+  // to point at localhost (Verdaccio). We restore the original after to prevent
+  // accidentally committing localhost URLs that break CI.
+  const lockfilePath = join(targetPath, 'package-lock.json');
+  const lockfileBackup = join(targetPath, 'package-lock.json.zbb-backup');
+  if (existsSync(lockfilePath)) {
+    const { copyFile: cpFile } = await import('node:fs/promises');
+    await cpFile(lockfilePath, lockfileBackup);
+  }
+
   console.log(`Running npm install with local registry (${registryUrl})...`);
   const code = await exec(
     `npm install`,
@@ -355,6 +365,14 @@ async function handleInstall(args: string[], slot: Slot): Promise<void> {
   try { await unlink(projectNpmrc); } catch { /* ignore */ }
   if (hadProjectNpmrc) {
     await renameFile(backupNpmrc, projectNpmrc);
+  }
+
+  // Restore package-lock.json — npm install rewrites resolved URLs to point at
+  // localhost (Verdaccio). If this lockfile gets committed, CI breaks.
+  // We restore the original lockfile so the working tree stays clean.
+  if (existsSync(lockfileBackup)) {
+    await renameFile(lockfileBackup, lockfilePath);
+    console.log('Restored package-lock.json (localhost URLs removed)');
   }
 
   if (code !== 0) {

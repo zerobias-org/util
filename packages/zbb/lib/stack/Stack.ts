@@ -361,6 +361,16 @@ export class Stack extends EventEmitter {
     const sourcePath = this.identity.source || this.path;
     const swappedFiles: Array<{ path: string; backup: string }> = [];
 
+    // Back up package-lock.json — npm install (via Gradle workspaceInstall) will
+    // rewrite resolved URLs to point at localhost (Verdaccio). Restore after build
+    // to prevent accidentally committing localhost URLs that break CI.
+    const lockfilePath = join(sourcePath, 'package-lock.json');
+    const lockfileBackup = join(sourcePath, 'package-lock.json.zbb-backup');
+    if (existsSync(lockfilePath)) {
+      await copyFile(lockfilePath, lockfileBackup);
+      swappedFiles.push({ path: lockfilePath, backup: lockfileBackup });
+    }
+
     // Download tarballs of locally-published packages from Verdaccio.
     // These are passed to Gradle via ZBB_LOCAL_DEPS env var so the injectLocalDeps
     // task can copy them into the Docker context AFTER prepareDockerContext runs.
