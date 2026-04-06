@@ -263,6 +263,9 @@ export class StackEnvironment extends EventEmitter {
         } else {
           derivedVars.set(key, decl.default);
         }
+      } else if (process.env[key] !== undefined) {
+        // No schema default — inherit from process.env (bootstrap vars like ZB_SLOT_DIR)
+        preResolved.set(key, process.env[key]!);
       }
     }
 
@@ -300,7 +303,9 @@ export class StackEnvironment extends EventEmitter {
       const tempEnv = new StackEnvironment(this.stackDir);
       tempEnv.env = snapshot;
       for (const [key, resolver] of StackEnvironment.resolvers) {
-        if (preResolved.has(key)) continue;
+        // Only skip if user explicitly overrode this var — not if it came from schema/DNS
+        const entry = this.manifest.get(key);
+        if (entry?.resolution === 'override') continue;
         const value = resolver(tempEnv);
         if (value !== undefined) {
           preResolved.set(key, value);
