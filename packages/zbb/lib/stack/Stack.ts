@@ -14,6 +14,20 @@ import { StackEnvironment } from './StackEnvironment.js';
 import type { StackStatus } from './types.js';
 
 /**
+ * Produce a canonical JSON string that is identical regardless of object key insertion order.
+ * Recursively sorts all object keys, preserves array order.
+ */
+function stableStringify(obj: unknown): string {
+  if (obj === null || obj === undefined) return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
+  if (typeof obj === 'object') {
+    const sorted = Object.keys(obj as Record<string, unknown>).sort();
+    return '{' + sorted.map(k => JSON.stringify(k) + ':' + stableStringify((obj as Record<string, unknown>)[k])).join(',') + '}';
+  }
+  return JSON.stringify(obj);
+}
+
+/**
  * Represents one stack instance in a slot.
  */
 export class Stack extends EventEmitter {
@@ -38,6 +52,14 @@ export class Stack extends EventEmitter {
   get logsDir() { return join(this.path, 'logs'); }
   get secretsDir() { return join(this.path, 'state', 'secrets'); }
   get stackYamlPath() { return join(this.path, 'stack.yaml'); }
+
+  /**
+   * Returns the path to a substack directory within this stack.
+   * Does not check whether the directory exists.
+   */
+  substackDir(name: string): string {
+    return join(this.path, 'substacks', name);
+  }
 
   // ── Loading ─────────────────────────────────────────────────
 
@@ -85,6 +107,7 @@ export class Stack extends EventEmitter {
   async setState(partial: Record<string, unknown>): Promise<void> {
     const current = await this.getState();
     const merged = { ...current, ...partial };
+    if (stableStringify(merged) === stableStringify(current)) return;
     await saveYaml(this.stateFile, merged);
     this.emit('state:change', merged);
   }
@@ -243,6 +266,24 @@ export class Stack extends EventEmitter {
     await mkdir(join(stackPath, 'logs'), { recursive: true });
     await mkdir(join(stackPath, 'state'), { recursive: true });
     await mkdir(join(stackPath, 'state', 'secrets'), { recursive: true });
+  }
+
+  /**
+   * Create substack directories for substacks that declare a state field.
+   * Both object substacks and collection substacks get an empty directory.
+   * Substacks without a state declaration are skipped.
+   * Called during stack add; state.yaml is created on first setState() call.
+   */
+  static async createSubstackDirectories(
+    stackPath: string,
+    manifest: StackManifest,
+  ): Promise<void> {
+    if (!manifest.substacks) return;
+    for (const [name, config] of Object.entries(manifest.substacks)) {
+      if (!config.state) continue;
+      const substackDir = join(stackPath, 'substacks', name);
+      await mkdir(substackDir, { recursive: true });
+    }
   }
 
   /**

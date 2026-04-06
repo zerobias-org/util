@@ -47,10 +47,11 @@ async function _scanAll(repoRoot: string): Promise<ScannedVar[]> {
     }
   }
 
-  // 2. Walk for project zbb.yaml files
+  // 2. Walk for project zbb.yaml files (skip stack manifests — those have a 'name' field)
   const projectFiles = await findProjectConfigs(repoRoot);
   for (const filePath of projectFiles) {
-    const config = await loadYamlOrDefault<ProjectConfig>(filePath, {});
+    const config = await loadYamlOrDefault<ProjectConfig & { name?: string }>(filePath, {});
+    if (config.name) continue;  // Stack manifest — processed at stack add time, not slot create
     if (!config.env) continue;
 
     const source = relative(repoRoot, filePath);

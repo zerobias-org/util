@@ -51,7 +51,8 @@ export class StackManager {
     // Determine mode: dev (local path) or packaged (npm spec)
     // A package spec starts with @ or has no path separators and contains no . or /
     // Local paths start with . or / or are existing directories
-    const looksLikePath = source.startsWith('.') || source.startsWith('/') || source.startsWith('~');
+    const looksLikePath = source.startsWith('.') || source.startsWith('/') || source.startsWith('~')
+      || existsSync(source);  // Local directory takes precedence over package spec
     const isPackageSpec = !looksLikePath && PKG_SPEC_RE.test(source);
     let sourcePath: string;
     let mode: 'dev' | 'packaged';
@@ -102,14 +103,21 @@ export class StackManager {
     // Create directory tree
     await Stack.createDirectories(stackPath);
 
+    // Create substack directories for substacks with state declarations
+    await Stack.createSubstackDirectories(stackPath, manifest);
+
     // Allocate ports (reuses cached values from previous add if available)
     const ports = await this.allocatePortsCached(manifest, stackName);
 
     // Generate secrets (reuses cached values from previous add if available)
     const secrets = await this.generateSecrets(manifest, stackName);
 
-    // Get slot env vars
-    const slotVars = this.slot.getSlotEnvVars();
+    // Get slot env vars + stack-level vars
+    const slotVars = {
+      ...this.slot.getSlotEnvVars(),
+      ZB_STACK: stackName,
+      STACK_NAME: stackName,
+    };
 
     // Initialize env (builds manifest + .env)
     await StackEnvironment.initialize(
@@ -668,8 +676,8 @@ export class StackManager {
         try {
           await this.add(builtinPath);
           continue;
-        } catch (err: any) {
-          throw new Error(`Failed to add built-in stack '${depName}': ${err.message}`);
+        } catch (err: unknown) {
+          throw new Error(`Failed to add built-in stack '${depName}': ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
@@ -679,9 +687,9 @@ export class StackManager {
 
       try {
         await this.add(spec);
-      } catch (err: any) {
+      } catch (err: unknown) {
         throw new Error(
-          `Failed to auto-resolve dependency '${depName}' (${spec}): ${err.message}\n` +
+          `Failed to auto-resolve dependency '${depName}' (${spec}): ${err instanceof Error ? err.message : String(err)}\n` +
           `You can add it manually: zbb stack add <path-to-${depName}>`,
         );
       }
@@ -709,7 +717,7 @@ export class StackManager {
       const depStackYaml = join(this.stacksDir, imp.fromStack, 'stack.yaml');
       if (!existsSync(depStackYaml)) continue;
 
-      const depIdentity = await loadYamlOrDefault<StackIdentity>(depStackYaml, null as any);
+      const depIdentity = await loadYamlOrDefault<StackIdentity | null>(depStackYaml, null);
       if (!depIdentity?.source) continue;
 
       const depManifest = await loadStackManifest(depIdentity.source);
@@ -774,7 +782,7 @@ export class StackManager {
       if (!existsSync(envPath)) continue;
 
       const manifestPath = join(this.stacksDir, entry.name, 'manifest.yaml');
-      const manifest = await loadYamlOrDefault<Record<string, any>>(manifestPath, {});
+      const manifest = await loadYamlOrDefault<Record<string, Record<string, unknown>>>(manifestPath, {});
       for (const [_, meta] of Object.entries(manifest)) {
         if (meta?.type === 'port' && meta?.value) {
           used.add(parseInt(String(meta.value), 10));
