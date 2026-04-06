@@ -29,6 +29,21 @@ export class StackEnvironment extends EventEmitter {
   private env = new Map<string, string>();
   readonly stackDir: string;
 
+  /**
+   * Global resolver map. Resolvers provide computed values for env vars
+   * that cannot be expressed as simple ${VAR} formulas (need URL parsing,
+   * conditional logic, etc.). Checked by get() when key not in .env.
+   */
+  private static resolvers = new Map<string, (env: StackEnvironment) => string | undefined>();
+
+  static registerResolver(key: string, fn: (env: StackEnvironment) => string | undefined): void {
+    StackEnvironment.resolvers.set(key, fn);
+  }
+
+  static clearResolvers(): void {
+    StackEnvironment.resolvers.clear();
+  }
+
   constructor(stackDir: string) {
     super();
     this.stackDir = stackDir;
@@ -72,7 +87,10 @@ export class StackEnvironment extends EventEmitter {
   // ── Getting ─────────────────────────────────────────────────
 
   get(key: string): string | undefined {
-    return this.env.get(key);
+    const value = this.env.get(key);
+    if (value !== undefined) return value;
+    const resolver = StackEnvironment.resolvers.get(key);
+    return resolver ? resolver(this) : undefined;
   }
 
   getAll(showHidden = false): Record<string, string> {
