@@ -85,7 +85,7 @@ export class Stack extends EventEmitter {
       this.manifest = { name: this.name, version: this.identity.version };
     }
 
-    await this.env.load();
+    await this.env.resolve();
     this._initialized = true;
     this.emit('ready');
   }

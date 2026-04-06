@@ -29,6 +29,21 @@ export class StackEnvironment extends EventEmitter {
   private env = new Map<string, string>();
   readonly stackDir: string;
 
+  /**
+   * Global resolver map. Resolvers provide computed values for env vars
+   * that cannot be expressed as simple ${VAR} formulas (need URL parsing,
+   * conditional logic, etc.). Checked by get() when key not in .env.
+   */
+  private static resolvers = new Map<string, (env: StackEnvironment) => string | undefined>();
+
+  static registerResolver(key: string, fn: (env: StackEnvironment) => string | undefined): void {
+    StackEnvironment.resolvers.set(key, fn);
+  }
+
+  static clearResolvers(): void {
+    StackEnvironment.resolvers.clear();
+  }
+
   constructor(stackDir: string) {
     super();
     this.stackDir = stackDir;
@@ -37,21 +52,11 @@ export class StackEnvironment extends EventEmitter {
   private get envPath() { return join(this.stackDir, '.env'); }
   private get manifestPath() { return join(this.stackDir, 'manifest.yaml'); }
 
-  // ── Loading ─────────────────────────────────────────────────
-
-  async load(): Promise<void> {
-    if (existsSync(this.envPath)) {
-      this.env = parseEnvFile(await readFile(this.envPath, 'utf-8'));
-    }
-    if (existsSync(this.manifestPath)) {
-      const raw = await loadYamlOrDefault<Record<string, StackManifestEntry>>(this.manifestPath, {});
-      this.manifest = new Map(Object.entries(raw));
-    }
-
-    // Load schema (Layer 1) from zbb.yaml.
-    // Three-layer model: Schema (zbb.yaml) + Manifest (provenance) + .env (values).
-    // Schema is authoritative for type, values, description, formulas.
-    // stack.yaml source field tells us where zbb.yaml lives (packaged mode).
+  /**
+   * Load schema from zbb.yaml via stack.yaml source path.
+   * Called internally by resolve(). Not a public API.
+   */
+  private async loadSchema(): Promise<void> {
     const stackYamlPath = join(this.stackDir, 'stack.yaml');
     if (!existsSync(stackYamlPath)) {
       throw new Error(`stack.yaml not found at ${stackYamlPath} — StackEnvironment requires a stack context`);
@@ -69,14 +74,33 @@ export class StackEnvironment extends EventEmitter {
     this.schema = new Map(Object.entries(config.env));
   }
 
+  /**
+   * Load manifest from disk.
+   * Called internally by resolve(). Not a public API.
+   */
+  private async loadManifest(): Promise<void> {
+    if (existsSync(this.manifestPath)) {
+      const raw = await loadYamlOrDefault<Record<string, StackManifestEntry>>(this.manifestPath, {});
+      this.manifest = new Map(Object.entries(raw));
+    }
+  }
+
+
   // ── Getting ─────────────────────────────────────────────────
 
   get(key: string): string | undefined {
     return this.env.get(key);
   }
 
-  getAll(): Record<string, string> {
-    return Object.fromEntries(this.env);
+  getAll(showHidden = false): Record<string, string> {
+    if (showHidden) return Object.fromEntries(this.env);
+    const result: Record<string, string> = {};
+    for (const [key, value] of this.env) {
+      const decl = this.schema.get(key);
+      if (decl?.hidden) continue;
+      result[key] = value;
+    }
+    return result;
   }
 
   getMasked(key: string): string | undefined {
@@ -93,8 +117,9 @@ export class StackEnvironment extends EventEmitter {
     return result;
   }
 
-  list(): string[] {
-    return [...this.env.keys()].sort();
+  list(showHidden = false): string[] {
+    if (showHidden) return [...this.env.keys()].sort();
+    return [...this.env.keys()].filter(k => !this.schema.get(k)?.hidden).sort();
   }
 
   shouldMask(key: string): boolean {
@@ -115,15 +140,18 @@ export class StackEnvironment extends EventEmitter {
         type: decl.type ?? entry.type,
         values: decl.values ?? entry.values,
         description: decl.description ?? entry.description,
+        hidden: decl.hidden ?? entry.hidden,
       };
     }
     return entry;
   }
 
-  getManifest(): Record<string, StackManifestEntry> {
+  getManifest(showHidden = false): Record<string, StackManifestEntry> {
     const result: Record<string, StackManifestEntry> = {};
     for (const key of this.manifest.keys()) {
-      result[key] = this.getManifestEntry(key)!;
+      const entry = this.getManifestEntry(key)!;
+      if (!showHidden && entry.hidden) continue;
+      result[key] = entry;
     }
     return result;
   }
@@ -141,7 +169,7 @@ export class StackEnvironment extends EventEmitter {
       default_formula: existing?.formula ?? existing?.default_formula,
     } as StackManifestEntry);
     await this.saveManifest();
-    await this.recalculate();
+    await this.computeEnv();
     this.emit('change', { key, value });
   }
 
@@ -162,19 +190,15 @@ export class StackEnvironment extends EventEmitter {
       this.manifest.delete(key);
     }
     await this.saveManifest();
-    await this.recalculate();
+    await this.computeEnv();
     this.emit('change', { key, value: undefined });
   }
 
-  // ── Recalculate .env from manifest ──────────────────────────
-
   /**
-   * Recompute .env from manifest entries.
-   * Reads imported values from dependency stacks' .env files.
-   *
-   * @param slotStacksDir - Path to the slot's stacks/ directory (for reading dep .env files)
+   * Compute .env from manifest + schema + formulas + resolvers.
+   * Private — called by resolve() and set()/unset().
    */
-  async recalculate(slotStacksDir?: string): Promise<void> {
+  private async computeEnv(): Promise<void> {
     const preResolved = new Map<string, string>();
     const derivedVars = new Map<string, string>();
 
@@ -186,7 +210,8 @@ export class StackEnvironment extends EventEmitter {
 
         case 'imported': {
           // Read from dependency stack's .env
-          if (slotStacksDir && entry.from) {
+          const slotStacksDir = join(this.stackDir, '..');
+          if (entry.from) {
             const depEnvPath = join(slotStacksDir, entry.from, '.env');
             if (existsSync(depEnvPath)) {
               const depEnv = parseEnvFile(await readFile(depEnvPath, 'utf-8'));
@@ -198,6 +223,7 @@ export class StackEnvironment extends EventEmitter {
           break;
         }
 
+        case 'dns':
         case 'allocated':
         case 'generated':
         case 'inherited':
@@ -218,10 +244,43 @@ export class StackEnvironment extends EventEmitter {
       }
     }
 
+    // Schema defaults (Layer 1) — lowest priority, only for vars not in manifest
+    for (const [key, decl] of this.schema) {
+      if (preResolved.has(key) || derivedVars.has(key)) continue;
+      if (decl.value !== undefined) {
+        // Live formula
+        const refs = extractRefs(decl.value);
+        if (refs.length === 0) {
+          preResolved.set(key, decl.value);
+        } else {
+          derivedVars.set(key, decl.value);
+        }
+      } else if (decl.default !== undefined) {
+        // Static default
+        const refs = extractRefs(decl.default);
+        if (refs.length === 0) {
+          preResolved.set(key, decl.default);
+        } else {
+          derivedVars.set(key, decl.default);
+        }
+      } else if (process.env[key] !== undefined) {
+        // No schema default — inherit from process.env (bootstrap vars like ZB_SLOT_DIR)
+        preResolved.set(key, process.env[key]!);
+      }
+    }
+
     // Resolve derived vars using topo-sort
+    // Lookup includes preResolved + process.env (for framework vars like ZB_SLOT_DIR, ZB_STACK).
+    // process.env vars are available for formula resolution but NOT written to .env.
     if (derivedVars.size > 0) {
       const { resolveAll } = await import('../env/Resolver.js');
-      const resolved = resolveAll(derivedVars, preResolved);
+      const lookup = new Map(preResolved);
+      for (const [key, value] of Object.entries(process.env)) {
+        if (value !== undefined && !lookup.has(key)) {
+          lookup.set(key, value);
+        }
+      }
+      const resolved = resolveAll(derivedVars, lookup);
       for (const r of resolved) {
         preResolved.set(r.name, r.value);
         // Update manifest inputs
@@ -237,9 +296,106 @@ export class StackEnvironment extends EventEmitter {
       }
     }
 
+    // Run resolvers for vars not yet resolved (computed derivations like WEBSOCKET_URL).
+    // Resolvers can read preResolved via a temporary env snapshot.
+    if (StackEnvironment.resolvers.size > 0) {
+      const snapshot = new Map(preResolved);
+      const tempEnv = new StackEnvironment(this.stackDir);
+      tempEnv.env = snapshot;
+      for (const [key, resolver] of StackEnvironment.resolvers) {
+        // Only skip if user explicitly overrode this var — not if it came from schema/DNS
+        const entry = this.manifest.get(key);
+        if (entry?.resolution === 'override') continue;
+        const value = resolver(tempEnv);
+        if (value !== undefined) {
+          preResolved.set(key, value);
+          snapshot.set(key, value); // available to subsequent resolvers
+        }
+      }
+    }
+
     // Write .env
     this.env = preResolved;
     await writeFile(this.envPath, serializeEnv(this.env), 'utf-8');
+  }
+
+  // ── Resolve ─────────────────────────────────────────────────
+
+  /**
+   * THE entry point for environment resolution.
+   * Loads schema + manifest, runs DNS, computes .env, writes to disk.
+   * After resolve(), this.env is complete. No other method needed.
+   */
+  async resolve(): Promise<void> {
+    // 1. Load schema (once) and manifest from disk
+    if (this.schema.size === 0) await this.loadSchema();
+    await this.loadManifest();
+
+    // 2. DNS provisioning
+    // DNS provisioning — lookup TXT records and write to manifest
+    const resolveHost = this.get('SLOT_RESOLVE_HOST')
+      ?? this.schema.get('SLOT_RESOLVE_HOST')?.default;
+    if (resolveHost) {
+      const cachePath = join(this.stackDir, 'dns-cache.yml');
+
+      // Check TTL cache
+      let cached: { timestamp?: string; ttl?: number; values?: Record<string, string> } = {};
+      if (existsSync(cachePath)) {
+        cached = await loadYamlOrDefault(cachePath, {});
+        if (cached.timestamp && cached.ttl) {
+          const age = (Date.now() - new Date(cached.timestamp).getTime()) / 1000;
+          if (age < cached.ttl) {
+            // Cache still valid — apply cached values
+            if (cached.values) {
+              for (const [key, value] of Object.entries(cached.values)) {
+                const existing = this.manifest.get(key);
+                if (existing?.resolution === 'override') continue; // user override wins
+                this.manifest.set(key, {
+                  ...existing,
+                  resolution: 'dns',
+                  value,
+                  source: 'dns',
+                });
+              }
+              await this.saveManifest();
+            }
+            await this.computeEnv();
+            return;
+          }
+        }
+      }
+
+      // Fresh DNS lookup
+      try {
+        const { lookupDnsTxt } = await import('../env/DnsTxtResolver.js');
+        const dnsValues = await lookupDnsTxt(resolveHost);
+        if (dnsValues && Object.keys(dnsValues).length > 0) {
+          for (const [key, value] of Object.entries(dnsValues)) {
+            const existing = this.manifest.get(key);
+            if (existing?.resolution === 'override') continue; // user override wins
+            this.manifest.set(key, {
+              ...existing,
+              resolution: 'dns',
+              value,
+              source: 'dns',
+            });
+          }
+          await this.saveManifest();
+
+          // Write cache
+          await saveYaml(cachePath, {
+            timestamp: new Date().toISOString(),
+            ttl: 30,
+            prefix: resolveHost,
+            values: dnsValues,
+          });
+        }
+      } catch {
+        // DNS failure is non-fatal — use whatever's in manifest
+      }
+    }
+
+    await this.computeEnv();
   }
 
   // ── Explain ─────────────────────────────────────────────────
@@ -332,6 +488,7 @@ export class StackEnvironment extends EventEmitter {
             source: 'env',
             type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
             mask: decl.mask,
             description: decl.description,
           });
@@ -377,6 +534,7 @@ export class StackEnvironment extends EventEmitter {
             source: `file:${decl.file}`,
             type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
             mask: decl.mask,
             description: decl.description,
           });
@@ -417,6 +575,7 @@ export class StackEnvironment extends EventEmitter {
             source: 'schema',
             type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
             description: decl.description,
             mask: decl.mask,
           });
@@ -436,6 +595,7 @@ export class StackEnvironment extends EventEmitter {
               source: 'schema',
               type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
               description: decl.description,
               mask: decl.mask,
             });
@@ -448,6 +608,7 @@ export class StackEnvironment extends EventEmitter {
               source: 'schema',
               type: decl.type,
             values: decl.values,
+            hidden: decl.hidden,
               description: decl.description,
               mask: decl.mask,
             });
@@ -475,10 +636,10 @@ export class StackEnvironment extends EventEmitter {
     // Write manifest
     await saveYaml(join(stackDir, 'manifest.yaml'), Object.fromEntries(manifest));
 
-    // Create env instance, set manifest, recalculate
+    // Create env instance, set manifest, compute .env
     const env = new StackEnvironment(stackDir);
     env.manifest = manifest;
-    await env.recalculate(slotStacksDir);
+    await env.computeEnv();
 
     return env;
   }
