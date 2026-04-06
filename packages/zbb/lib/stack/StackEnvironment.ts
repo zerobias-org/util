@@ -252,9 +252,17 @@ export class StackEnvironment extends EventEmitter {
     }
 
     // Resolve derived vars using topo-sort
+    // Lookup includes preResolved + process.env (for framework vars like ZB_SLOT_DIR, ZB_STACK).
+    // process.env vars are available for formula resolution but NOT written to .env.
     if (derivedVars.size > 0) {
       const { resolveAll } = await import('../env/Resolver.js');
-      const resolved = resolveAll(derivedVars, preResolved);
+      const lookup = new Map(preResolved);
+      for (const [key, value] of Object.entries(process.env)) {
+        if (value !== undefined && !lookup.has(key)) {
+          lookup.set(key, value);
+        }
+      }
+      const resolved = resolveAll(derivedVars, lookup);
       for (const r of resolved) {
         preResolved.set(r.name, r.value);
         // Update manifest inputs
