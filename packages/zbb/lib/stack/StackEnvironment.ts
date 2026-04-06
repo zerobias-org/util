@@ -223,6 +223,7 @@ export class StackEnvironment extends EventEmitter {
           break;
         }
 
+        case 'dns':
         case 'allocated':
         case 'generated':
         case 'inherited':
@@ -351,7 +352,7 @@ export class StackEnvironment extends EventEmitter {
                 if (existing?.resolution === 'override') continue; // user override wins
                 this.manifest.set(key, {
                   ...existing,
-                  resolution: 'dns' as any,
+                  resolution: 'dns',
                   value,
                   source: 'dns',
                 });
@@ -374,7 +375,7 @@ export class StackEnvironment extends EventEmitter {
             if (existing?.resolution === 'override') continue; // user override wins
             this.manifest.set(key, {
               ...existing,
-              resolution: 'dns' as any,
+              resolution: 'dns',
               value,
               source: 'dns',
             });

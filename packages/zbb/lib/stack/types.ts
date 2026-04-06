@@ -26,7 +26,9 @@ export type Resolution =
   | 'inherited'
   | 'generated'
   | 'imported'
-  | 'default';
+  | 'default'
+  | 'dns'
+  | 'unset';
 
 export interface StackManifestEntry {
   resolution: Resolution;
