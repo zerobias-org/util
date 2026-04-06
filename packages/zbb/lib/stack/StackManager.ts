@@ -113,10 +113,12 @@ export class StackManager {
     const secrets = await this.generateSecrets(manifest, stackName);
 
     // Get slot env vars + stack-level vars
+    // STACK_NAME = slot name so all stacks share the same Docker compose project/network.
+    // ZB_STACK = individual stack name for stack-level identity.
     const slotVars = {
       ...this.slot.getSlotEnvVars(),
       ZB_STACK: stackName,
-      STACK_NAME: stackName,
+      STACK_NAME: this.slot.name,
     };
 
     // Initialize env (builds manifest + .env)

@@ -297,9 +297,10 @@ async function handleHeartbeat(slot: Slot, options?: { quiet?: boolean }): Promi
     const state = await stack.getState();
     const prevStatus = String(state.status);
 
-    // Skip stopped stacks — they're intentionally not running
-    if (prevStatus === 'stopped' || prevStatus === 'stopping') {
-      if (!quiet) console.log(`  \x1b[90m${stack.name} — stopped\x1b[0m`);
+    // Skip stopped/stopping stacks — intentionally not running
+    // Skip starting stacks — zbb's own start flow is managing the health check
+    if (prevStatus === 'stopped' || prevStatus === 'stopping' || prevStatus === 'starting') {
+      if (!quiet) console.log(`  \x1b[90m${stack.name} — ${prevStatus}\x1b[0m`);
       continue;
     }
 

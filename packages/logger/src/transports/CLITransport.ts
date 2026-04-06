@@ -28,12 +28,13 @@ export class CLITransport extends LoggerTransport {
       ? Number.parseInt(process.env.FORCE_COLOR, 10) || 1
       : chalk.level;
 
-    // Create new Chalk instance with forced color level (minimum level 1)
-    // This fixes the issue where chalk disables colors when stdout is redirected
-    const chalkConstructor = (chalk as any).constructor;
-    this.chalk = (chalkConstructor && colorLevel >= 0)
-      ? new chalkConstructor({ level: Math.max(colorLevel, 1) })
-      : chalk;
+    // Force color level on chalk instance.
+    // chalk 5.x: set .level directly on the default instance (no constructor needed)
+    // chalk 4.x: same approach works — .level is a writable property on both versions
+    this.chalk = chalk;
+    if (colorLevel >= 0) {
+      this.chalk.level = Math.max(colorLevel, 1) as 0 | 1 | 2 | 3;
+    }
   }
 
   /**
