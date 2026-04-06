@@ -4,8 +4,8 @@
  */
 
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, writeFile, rename, readdir, rm, copyFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
@@ -25,6 +25,11 @@ function stableStringify(obj: unknown): string {
     return '{' + sorted.map(k => JSON.stringify(k) + ':' + stableStringify((obj as Record<string, unknown>)[k])).join(',') + '}';
   }
   return JSON.stringify(obj);
+}
+
+interface NpmrcSwap {
+  files: Array<{ path: string; backup: string }>;
+  registryUrl?: string;
 }
 
 /**
@@ -157,25 +162,41 @@ export class Stack extends EventEmitter {
       return 0;
     }
 
-    // Handle cleanup as array
-    if (phase === 'cleanup' && Array.isArray(command)) {
-      for (const cmd of command) {
-        const code = await this.execCommand(String(cmd));
-        if (code !== 0) return code;
+    // For build phase: inject registry .npmrc if registry stack is running
+    let npmrcSwap: NpmrcSwap | null = null;
+    if (phase === 'build') {
+      npmrcSwap = await this.injectRegistryNpmrc();
+    }
+
+    try {
+      // Handle cleanup as array
+      if (phase === 'cleanup' && Array.isArray(command)) {
+        for (const cmd of command) {
+          const code = await this.execCommand(String(cmd));
+          if (code !== 0) return code;
+        }
+        return 0;
       }
-      return 0;
-    }
 
-    if (typeof command === 'string') {
-      return this.execCommand(command);
-    }
+      if (typeof command === 'string') {
+        // Must await so finally runs AFTER the command completes
+        const code = await this.execCommand(command);
+        return code;
+      }
 
-    // Structured command (e.g., health check)
-    if (phase === 'health' && typeof command === 'object') {
-      return this.runHealthCheck(command as HealthCheckConfig);
-    }
+      // Structured command (e.g., health check)
+      if (phase === 'health' && typeof command === 'object') {
+        const code = await this.runHealthCheck(command as HealthCheckConfig);
+        return code;
+      }
 
-    return this.execCommand(String(command));
+      const code = await this.execCommand(String(command));
+      return code;
+    } finally {
+      if (npmrcSwap) {
+        await this.restoreNpmrc(npmrcSwap);
+      }
+    }
   }
 
   /**
@@ -291,6 +312,139 @@ export class Stack extends EventEmitter {
    */
   execSubstackCommand(command: string): Promise<number> {
     return this.execCommand(command);
+  }
+
+  // ── Registry .npmrc injection ───────────────────────────────
+
+  /**
+   * If the registry stack is running, swap all .npmrc files in the stack's
+   * source tree with versions pointing at the local Verdaccio registry.
+   * This ensures `npm install` during Docker builds uses locally published packages.
+   * Returns swap info for restoration, or null if registry is not active.
+   */
+  private async injectRegistryNpmrc(): Promise<NpmrcSwap | null> {
+    console.log('  [registry] Checking for local packages to inject...');
+    // Check if registry stack exists and is healthy
+    const stacksDir = join(this.path, '..');
+    const registryEnvPath = join(stacksDir, 'registry', '.env');
+    const registryStatePath = join(stacksDir, 'registry', 'state.yaml');
+
+    if (!existsSync(registryEnvPath) || !existsSync(registryStatePath)) return null;
+
+    const { loadYamlOrDefault } = await import('../yaml.js');
+    const state = await loadYamlOrDefault<Record<string, unknown>>(registryStatePath, {});
+    if (state.status !== 'healthy') return null;
+
+    // Get registry URL
+    const registryEnv = readFileSync(registryEnvPath, 'utf-8');
+    let registryUrl = '';
+    let registryPort = '';
+    for (const line of registryEnv.split('\n')) {
+      const urlMatch = line.match(/^REGISTRY_URL=(.+)$/);
+      if (urlMatch) registryUrl = urlMatch[1];
+      const portMatch = line.match(/^REGISTRY_PORT=(.+)$/);
+      if (portMatch) registryPort = portMatch[1];
+    }
+    if (!registryUrl) return null;
+
+    // Read the publish manifest to know which packages were locally published
+    const publishManifestPath = join(stacksDir, 'registry', 'publishes.json');
+    let publishes: Array<{ name: string; version: string }> = [];
+    if (existsSync(publishManifestPath)) {
+      try {
+        publishes = JSON.parse(readFileSync(publishManifestPath, 'utf-8'));
+      } catch { /* ignore */ }
+    }
+
+    if (publishes.length === 0) return null; // Nothing locally published — no injection needed
+
+    const sourcePath = this.identity.source || this.path;
+    const swappedFiles: Array<{ path: string; backup: string }> = [];
+
+    // Download tarballs of locally-published packages from Verdaccio.
+    // These are passed to Gradle via ZBB_LOCAL_DEPS env var so the injectLocalDeps
+    // task can copy them into the Docker context AFTER prepareDockerContext runs.
+    const localDepsDir = join(sourcePath, '.zbb-local-deps');
+    await mkdir(localDepsDir, { recursive: true });
+
+    const localDeps: Array<{ name: string; version: string; tarball: string }> = [];
+    const { execSync } = await import('node:child_process');
+    for (const pkg of publishes) {
+      const shortName = pkg.name.split('/').pop()!;
+      const tarballName = `${shortName}-${pkg.version}.tgz`;
+      const tarballPath = join(localDepsDir, tarballName);
+
+      try {
+        execSync(
+          `curl -sf "${registryUrl}/${pkg.name}/-/${shortName}-${pkg.version}.tgz" -o "${tarballPath}"`,
+          { stdio: 'pipe' },
+        );
+        localDeps.push({ name: pkg.name, version: pkg.version, tarball: tarballPath });
+        console.log(`  [registry] Downloaded ${pkg.name}@${pkg.version} from Verdaccio`);
+      } catch {
+        console.log(`  [registry] Warning: could not download ${pkg.name}@${pkg.version} from Verdaccio`);
+      }
+    }
+
+    // Write manifest file for Gradle's injectLocalDeps task to pick up
+    if (localDeps.length > 0) {
+      await writeFile(join(localDepsDir, 'manifest.json'), JSON.stringify(localDeps, null, 2));
+    }
+
+    // Taint host node_modules so workspaceInstall re-fetches from Verdaccio.
+    // With the project .npmrc swapped to point at Verdaccio, npm install will
+    // pull the locally published version. Then npm pack includes it naturally,
+    // and the Docker build gets it without needing Gradle-side injection.
+    let tainted = false;
+    for (const pkg of publishes) {
+      const modDir = join(sourcePath, 'node_modules', pkg.name);
+      if (existsSync(modDir)) {
+        await rm(modDir, { recursive: true, force: true });
+        console.log(`  [registry] Tainted ${pkg.name} in node_modules (will reinstall from Verdaccio)`);
+        tainted = true;
+      }
+    }
+
+    // Invalidate Gradle build stamps so npm pack and docker build re-run.
+    // Without this, Gradle thinks outputs are up-to-date and skips re-packing.
+    if (tainted) {
+      const glob = await import('node:fs/promises');
+      const appDirs = await readdir(sourcePath, { withFileTypes: true });
+      for (const entry of appDirs) {
+        if (!entry.isDirectory()) continue;
+        const buildDir = join(sourcePath, entry.name, 'build');
+        if (!existsSync(buildDir)) continue;
+        for (const stamp of ['npm-pack.stamp', 'docker-image.stamp']) {
+          const stampPath = join(buildDir, stamp);
+          if (existsSync(stampPath)) {
+            await rm(stampPath);
+            console.log(`  [registry] Invalidated ${entry.name}/build/${stamp}`);
+          }
+        }
+      }
+    }
+
+    if (swappedFiles.length > 0) {
+      console.log(`  [registry] Injected local registry into ${swappedFiles.length} .npmrc file(s)`);
+    }
+
+    return { files: swappedFiles };
+  }
+
+  private async restoreNpmrc(swap: NpmrcSwap): Promise<void> {
+    for (const { path: filePath, backup } of swap.files) {
+      try {
+        await rename(backup, filePath);
+      } catch { /* ignore */ }
+    }
+    // Clean up downloaded tarballs
+    const localDepsDir = join(this.identity.source || this.path, '.zbb-local-deps');
+    if (existsSync(localDepsDir)) {
+      try { await rm(localDepsDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+    if (swap.files.length > 0) {
+      console.log(`  [registry] Restored ${swap.files.length} .npmrc file(s)`);
+    }
   }
 
   // ── Private ─────────────────────────────────────────────────

@@ -1,0 +1,72 @@
+storage: /verdaccio/storage
+
+auth:
+  htpasswd:
+    file: /verdaccio/conf/htpasswd
+    max_users: -1
+
+uplinks:
+  github-packages:
+    url: https://npm.pkg.github.com/
+    auth:
+      type: bearer
+      token_env: GITHUB_TOKEN
+    timeout: 30s
+    max_fails: 3
+    fail_timeout: 5m
+
+  zerobias-org:
+    url: https://pkg.zerobias.org/
+    auth:
+      type: bearer
+      token_env: ZB_TOKEN
+    timeout: 30s
+    max_fails: 3
+    fail_timeout: 5m
+
+  npmjs:
+    url: https://registry.npmjs.org/
+    timeout: 30s
+    max_fails: 3
+    fail_timeout: 5m
+
+publish:
+  allow_unpublish: true
+
+packages:
+  "@zerobias-com/*":
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: github-packages
+
+  "@zerobias-org/*":
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: zerobias-org
+
+  "@auditlogic/*":
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: github-packages
+
+  "**":
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: npmjs
+
+log:
+  type: stdout
+  format: pretty
+  level: warn
+
+web:
+  enable: true
+  title: "zbb local registry"
+
+middlewares:
+  audit:
+    enabled: false

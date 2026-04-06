@@ -163,6 +163,18 @@ async function _main(argv: string[]): Promise<void> {
     return handleStack(args.slice(1), slot);
   }
 
+  // Registry subcommands
+  if (command === 'registry') {
+    const slotName = process.env.ZB_SLOT;
+    if (!slotName) {
+      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+      process.exit(1);
+    }
+    const slot = await SlotManager.load(slotName);
+    const { handleRegistry } = await import('./registry/commands.js');
+    return handleRegistry(args.slice(1), slot);
+  }
+
   // Secret subcommands
   if (command === 'secret') return handleSecretCmd(args.slice(1));
 
@@ -270,6 +282,22 @@ async function _main(argv: string[]): Promise<void> {
 
     runGradle([alias, ...args.slice(1)]);
     return;
+  }
+
+  // Lifecycle commands (build, test, gate) — route through stack if in stack context
+  if (['build', 'test', 'gate'].includes(command) && process.env.ZB_SLOT) {
+    const slot = await SlotManager.load(process.env.ZB_SLOT);
+    const stackCtx = await detectStackContext(slot);
+    if (stackCtx) {
+      console.log(`Running ${command} for ${stackCtx.name}...`);
+      const code = await stackCtx.runLifecycle(command);
+      if (code !== 0) {
+        console.error(`${command} failed for ${stackCtx.name} (exit code ${code})`);
+        process.exit(code);
+      }
+      console.log(`${command} passed for ${stackCtx.name}`);
+      return;
+    }
   }
 
   // Everything else → gradle (resolve slot if loaded)
@@ -1055,6 +1083,7 @@ function printUsage(): void {
 Usage:
   zbb slot <create|load|list|info|delete|gc>          Slot management
   zbb stack <add|list|info|remove|update>             Stack management
+  zbb registry <start|stop|publish|install|list|clear|status>  Local npm registry
   zbb env <list|get|set|unset|reset|refresh|explain|diff>  Environment variables
   zbb secret <create|get|list|update|delete>          Secret management
   zbb logs <list|show|debug|info>                     Log viewer + log level control
@@ -1078,6 +1107,15 @@ Stack commands:
   zbb stack build <stack>                 Run stack's build command
   zbb stack test <stack>                  Run stack's test command
   zbb stack gate <stack>                  Run stack's gate command
+
+Registry commands:
+  zbb registry start                    Start the local Verdaccio registry
+  zbb registry stop                     Stop the registry
+  zbb registry publish [path]           Publish a package to the local registry
+  zbb registry install [stack]          npm install with local registry
+  zbb registry list                     List locally published packages
+  zbb registry clear [--all]            Clear local packages (--all = wipe cache)
+  zbb registry status                   Show registry status
 
 Secret commands:
   zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]
