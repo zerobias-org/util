@@ -43,6 +43,111 @@ interface PhaseResult {
 
 const isCI = process.env.CI === 'true';
 
+// ── Registry Integration ────────────────────────────────────────────
+
+interface RegistrySwap {
+  npmrcBackup?: string;
+  lockfileBackup?: string;
+  taintedPackages: string[];
+}
+
+/**
+ * If a zbb slot is loaded with locally-published registry packages,
+ * swap .npmrc to route through Verdaccio and taint node_modules.
+ */
+function injectRegistryForBuild(repoRoot: string): RegistrySwap {
+  const swap: RegistrySwap = { taintedPackages: [] };
+  const slotName = process.env.ZB_SLOT;
+  if (!slotName) return swap;
+
+  const { getZbbDir } = require('../config.js');
+  const slotsDir = join(getZbbDir(), 'slots', slotName, 'stacks');
+  const publishManifest = join(slotsDir, 'registry', 'publishes.json');
+  const registryEnvFile = join(slotsDir, 'registry', '.env');
+
+  if (!existsSync(publishManifest) || !existsSync(registryEnvFile)) return swap;
+
+  let publishes: Array<{ name: string; version: string }> = [];
+  try {
+    publishes = JSON.parse(readFileSync(publishManifest, 'utf-8'));
+  } catch { /* ignore */ }
+  if (publishes.length === 0) return swap;
+
+  // Read registry URL
+  let registryUrl = '';
+  let registryPort = '';
+  for (const line of readFileSync(registryEnvFile, 'utf-8').split('\n')) {
+    const urlMatch = line.match(/^REGISTRY_URL=(.+)$/);
+    if (urlMatch) registryUrl = urlMatch[1];
+    const portMatch = line.match(/^REGISTRY_PORT=(.+)$/);
+    if (portMatch) registryPort = portMatch[1];
+  }
+  if (!registryUrl) return swap;
+
+  // Swap .npmrc
+  const npmrcPath = join(repoRoot, '.npmrc');
+  const npmrcBackup = npmrcPath + '.zbb-backup';
+  if (existsSync(npmrcPath)) {
+    const { renameSync, writeFileSync } = require('node:fs');
+    renameSync(npmrcPath, npmrcBackup);
+    writeFileSync(npmrcPath, [
+      `@zerobias-com:registry=${registryUrl}`,
+      `@zerobias-org:registry=${registryUrl}`,
+      `@auditlogic:registry=${registryUrl}`,
+      `@auditmation:registry=${registryUrl}`,
+      `@devsupply:registry=${registryUrl}`,
+      `//localhost:${registryPort}/:_authToken=fake-local-token`,
+    ].join('\n') + '\n');
+    swap.npmrcBackup = npmrcBackup;
+    console.log('  [registry] Swapped .npmrc for local Verdaccio');
+  }
+
+  // Backup package-lock.json
+  const lockfile = join(repoRoot, 'package-lock.json');
+  const lockBackup = lockfile + '.zbb-backup';
+  if (existsSync(lockfile)) {
+    const { copyFileSync } = require('node:fs');
+    copyFileSync(lockfile, lockBackup);
+    swap.lockfileBackup = lockBackup;
+  }
+
+  // Taint node_modules for locally-published packages
+  for (const pkg of publishes) {
+    const modDir = join(repoRoot, 'node_modules', pkg.name);
+    if (existsSync(modDir)) {
+      rmSync(modDir, { recursive: true });
+      swap.taintedPackages.push(pkg.name);
+      console.log(`  [registry] Tainted ${pkg.name} (will reinstall from Verdaccio)`);
+    }
+  }
+
+  return swap;
+}
+
+/**
+ * Restore .npmrc and package-lock.json after build.
+ */
+function restoreRegistrySwap(swap: RegistrySwap, repoRoot: string): void {
+  if (swap.npmrcBackup) {
+    const npmrcPath = join(repoRoot, '.npmrc');
+    try {
+      const { renameSync } = require('node:fs');
+      if (existsSync(npmrcPath)) rmSync(npmrcPath);
+      renameSync(swap.npmrcBackup, npmrcPath);
+      console.log('  [registry] Restored .npmrc');
+    } catch { /* ignore */ }
+  }
+  if (swap.lockfileBackup) {
+    const lockfile = join(repoRoot, 'package-lock.json');
+    try {
+      const { renameSync } = require('node:fs');
+      if (existsSync(lockfile)) rmSync(lockfile);
+      renameSync(swap.lockfileBackup, lockfile);
+      console.log('  [registry] Restored package-lock.json');
+    } catch { /* ignore */ }
+  }
+}
+
 interface ScriptResult {
   status: 'passed' | 'skipped' | 'not-found' | 'failed';
   error?: string;
@@ -144,6 +249,12 @@ export function build(ctx: BuildContext): Map<string, Record<string, 'passed' | 
   const phases = config.buildPhases ?? ['lint', 'generate', 'validate', 'transpile'];
   const allTaskResults = new Map<string, Record<string, 'passed' | 'skipped' | 'not-found'>>();
 
+  // Registry injection: if slot is loaded with locally-published packages,
+  // swap .npmrc and taint node_modules so npm install picks up local versions
+  const registrySwap = injectRegistryForBuild(ctx.repoRoot);
+
+  try {
+
   for (const phase of phases) {
     // Collect packages that have this script
     const packagesWithPhase = affectedOrdered.filter(name => {
@@ -175,7 +286,121 @@ export function build(ctx: BuildContext): Map<string, Record<string, 'passed' | 
     }
   }
 
+  // Docker build phase — build images for affected packages that declare them
+  if (!ctx.skipDocker && config.images) {
+    const dockerPackages = affectedOrdered.filter(name => {
+      const pkg = graph.packages.get(name)!;
+      return config.images![pkg.relDir];
+    });
+
+    if (dockerPackages.length > 0) {
+      printPhaseHeader('docker', dockerPackages.length);
+
+      for (const name of dockerPackages) {
+        const pkg = graph.packages.get(name)!;
+        const imageConfig = config.images![pkg.relDir];
+        const shortName = pkg.name.replace(/^@[^/]+\//, '');
+        const imageTag = `${imageConfig.name}:dev`;
+        const contextDir = join(ctx.repoRoot, imageConfig.context);
+
+        if (!existsSync(contextDir)) {
+          console.log(`  ⚠ ${shortName}: Docker context not found at ${imageConfig.context}`);
+          continue;
+        }
+
+        // Prepare Docker context: npm pack → extract to context/package/
+        const packageDir = join(contextDir, 'package');
+
+        // Clean stale lockfile and package dir
+        const staleLock = join(contextDir, 'package-lock.json');
+        if (existsSync(staleLock)) rmSync(staleLock);
+        if (existsSync(packageDir)) rmSync(packageDir, { recursive: true });
+
+        process.stdout.write(`  ${shortName}: packing... `);
+        try {
+          // Run prepublish-standalone if available (resolves workspace deps for standalone install)
+          const prepubScript = join(ctx.repoRoot, 'node_modules', '@zerobias-org', 'devops-tools', 'scripts', 'prepublish-standalone.sh');
+          if (existsSync(prepubScript)) {
+            execFileSync('bash', [prepubScript, ctx.repoRoot, '--library'], {
+              cwd: pkg.dir,
+              stdio: 'pipe',
+              timeout: 120_000,
+            });
+          }
+
+          // npm pack
+          const tgzName = execFileSync('npm', ['pack', '--pack-destination', contextDir], {
+            cwd: pkg.dir,
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }).trim().split('\n').pop()!;
+
+          // Extract tarball
+          execFileSync('tar', ['xzf', tgzName, '-C', contextDir], {
+            cwd: contextDir,
+            stdio: 'pipe',
+          });
+
+          // Remove tarball
+          const tgzPath = join(contextDir, tgzName);
+          if (existsSync(tgzPath)) rmSync(tgzPath);
+
+          // Restore package.json if prepublish modified it
+          const backupPkg = join(pkg.dir, 'package.json.prepublish-backup');
+          if (existsSync(backupPkg)) {
+            const { renameSync } = require('node:fs');
+            renameSync(backupPkg, join(pkg.dir, 'package.json'));
+          }
+
+          process.stdout.write('building... ');
+
+          // Docker build
+          const npmToken = process.env.NPM_TOKEN ?? '';
+          const zbToken = process.env.ZB_TOKEN ?? '';
+
+          execFileSync('docker', [
+            'build',
+            '--progress=plain',
+            '-t', imageTag,
+            '--build-arg', `npm_token=${npmToken}`,
+            '--build-arg', `zb_token=${zbToken}`,
+            '.',
+          ], {
+            cwd: contextDir,
+            stdio: ctx.verbose ? 'inherit' : ['pipe', 'pipe', 'pipe'],
+            timeout: 600_000, // 10 min
+          });
+
+          console.log(`✓ ${imageTag}`);
+        } catch (error: any) {
+          console.log(`✗ failed`);
+          if (!ctx.verbose) {
+            const output = error.stderr?.toString() ?? error.stdout?.toString() ?? '';
+            if (output.trim()) console.log(output.trimEnd());
+          }
+          throw new Error(`Docker build failed for ${shortName}: ${error.message}`);
+        } finally {
+          // Restore prepublish backup if it still exists
+          const backupPkg = join(pkg.dir, 'package.json.prepublish-backup');
+          if (existsSync(backupPkg)) {
+            const { renameSync } = require('node:fs');
+            renameSync(backupPkg, join(pkg.dir, 'package.json'));
+          }
+        }
+      }
+
+      // Prune dangling images after Docker builds
+      try {
+        execFileSync('docker', ['image', 'prune', '-f'], { stdio: 'pipe' });
+      } catch { /* docker not available or no dangling images */ }
+    }
+  }
+
   return allTaskResults;
+
+  } finally {
+    restoreRegistrySwap(registrySwap, ctx.repoRoot);
+  }
 }
 
 // ── Test ─────────────────────────────────────────────────────────────
