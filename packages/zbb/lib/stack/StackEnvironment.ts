@@ -331,8 +331,7 @@ export class StackEnvironment extends EventEmitter {
     const resolveHost = this.get('SLOT_RESOLVE_HOST')
       ?? this.schema.get('SLOT_RESOLVE_HOST')?.default;
     if (resolveHost) {
-      const slotDir = join(this.stackDir, '..', '..');
-      const cachePath = join(slotDir, 'dns-cache.yml');
+      const cachePath = join(this.stackDir, 'dns-cache.yml');
 
       // Check TTL cache
       let cached: { timestamp?: string; ttl?: number; values?: Record<string, string> } = {};
