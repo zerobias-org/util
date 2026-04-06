@@ -75,8 +75,15 @@ export class StackEnvironment extends EventEmitter {
     return this.env.get(key);
   }
 
-  getAll(): Record<string, string> {
-    return Object.fromEntries(this.env);
+  getAll(showHidden = false): Record<string, string> {
+    if (showHidden) return Object.fromEntries(this.env);
+    const result: Record<string, string> = {};
+    for (const [key, value] of this.env) {
+      const decl = this.schema.get(key);
+      if (decl?.hidden) continue;
+      result[key] = value;
+    }
+    return result;
   }
 
   getMasked(key: string): string | undefined {
