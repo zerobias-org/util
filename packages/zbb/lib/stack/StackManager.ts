@@ -626,11 +626,14 @@ export class StackManager {
     // Derive a stable cache key from the tarball name (e.g., zerobias-com-dana-1.0.0.tgz)
     const extractDir = join(cacheDir, tgzName.replace(/\.tgz$/, ''));
 
-    // Extract if not already cached
-    if (!existsSync(join(extractDir, 'package', 'zbb.yaml')) && !existsSync(join(extractDir, 'zbb.yaml'))) {
-      await mkdir(extractDir, { recursive: true });
-      execSync(`tar xzf ${tgzPath} -C ${extractDir}`, { encoding: 'utf-8' });
+    // Always re-extract: remove stale extract dir and extract fresh from tarball.
+    // Previous logic skipped extraction if the dir existed, but stale/broken
+    // extractions from older versions would persist and cause manifest errors.
+    if (existsSync(extractDir)) {
+      await rm(extractDir, { recursive: true, force: true });
     }
+    await mkdir(extractDir, { recursive: true });
+    execSync(`tar xzf ${tgzPath} -C ${extractDir}`, { encoding: 'utf-8' });
 
     // npm pack extracts to a `package/` subdirectory
     const packageDir = join(extractDir, 'package');
