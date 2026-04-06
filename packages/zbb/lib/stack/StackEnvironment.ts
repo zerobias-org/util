@@ -87,10 +87,7 @@ export class StackEnvironment extends EventEmitter {
   // ── Getting ─────────────────────────────────────────────────
 
   get(key: string): string | undefined {
-    const value = this.env.get(key);
-    if (value !== undefined) return value;
-    const resolver = StackEnvironment.resolvers.get(key);
-    return resolver ? resolver(this) : undefined;
+    return this.env.get(key);
   }
 
   getAll(showHidden = false): Record<string, string> {
@@ -292,6 +289,22 @@ export class StackEnvironment extends EventEmitter {
             if (preResolved.has(ref)) inputs[ref] = preResolved.get(ref)!;
           }
           entry.inputs = inputs;
+        }
+      }
+    }
+
+    // Run resolvers for vars not yet resolved (computed derivations like WEBSOCKET_URL).
+    // Resolvers can read preResolved via a temporary env snapshot.
+    if (StackEnvironment.resolvers.size > 0) {
+      const snapshot = new Map(preResolved);
+      const tempEnv = new StackEnvironment(this.stackDir);
+      tempEnv.env = snapshot;
+      for (const [key, resolver] of StackEnvironment.resolvers) {
+        if (preResolved.has(key)) continue;
+        const value = resolver(tempEnv);
+        if (value !== undefined) {
+          preResolved.set(key, value);
+          snapshot.set(key, value); // available to subsequent resolvers
         }
       }
     }
