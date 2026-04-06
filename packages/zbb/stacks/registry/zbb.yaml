@@ -1,0 +1,56 @@
+name: "@zerobias-com/registry"
+version: "1.0.0"
+
+exports: [REGISTRY_URL, REGISTRY_PORT, REGISTRY_INTERNAL_URL]
+
+env:
+  REGISTRY_PORT:
+    type: port
+    description: Verdaccio HTTP port
+
+  REGISTRY_URL:
+    type: string
+    value: "http://localhost:${REGISTRY_PORT}"
+    description: Local npm registry URL (host-side)
+
+  REGISTRY_INTERNAL_URL:
+    type: string
+    value: "http://${STACK_NAME}-registry:4873"
+    description: Local npm registry URL (container-side, via Docker network)
+
+  GITHUB_TOKEN:
+    type: string
+    source: env
+    description: GitHub token for proxying npm.pkg.github.com
+
+  NPM_TOKEN:
+    type: string
+    source: env
+    description: Fallback GitHub token (aliases GITHUB_TOKEN)
+
+  ZB_TOKEN:
+    type: string
+    source: env
+    description: ZeroBias token for proxying pkg.zerobias.org
+
+state:
+  status:
+    type: enum
+    values: [starting, healthy, stopped, error]
+
+lifecycle:
+  start: >-
+    bash setup.sh &&
+    docker compose -f compose.yml -p ${STACK_NAME} up -d
+  stop: docker stop ${STACK_NAME}-registry 2>/dev/null; docker rm ${STACK_NAME}-registry 2>/dev/null; true
+  health:
+    command: "curl -sf http://localhost:${REGISTRY_PORT}/-/ping >/dev/null"
+    interval: 2
+    timeout: 30
+  cleanup:
+    - "docker stop ${STACK_NAME}-registry 2>/dev/null; docker rm ${STACK_NAME}-registry 2>/dev/null; true"
+    - "docker volume rm ${STACK_NAME}_verdaccio-storage 2>/dev/null; true"
+
+logs:
+  source: docker
+  container: "${STACK_NAME}-registry"

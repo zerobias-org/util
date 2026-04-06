@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/zbb",
   "description": "ZeroBias Build — Gradle wrapper + slot-based environment management",
-  "version": "0.3.11",
+  "version": "0.3.15",
   "type": "module",
   "bin": {
     "zbb": "bin/zbb.mjs"
@@ -46,7 +46,8 @@
   "files": [
     "bin",
     "lib",
-    "dist"
+    "dist",
+    "stacks"
   ],
   "engines": {
     "node": ">=22.0.0"

@@ -1,0 +1,20 @@
+services:
+  registry:
+    image: verdaccio/verdaccio:6
+    container_name: ${STACK_NAME}-registry
+    ports:
+      - "${REGISTRY_PORT}:4873"
+    environment:
+      VERDACCIO_PORT: 4873
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      NPM_TOKEN: ${NPM_TOKEN:-}
+      ZB_TOKEN: ${ZB_TOKEN:-}
+    volumes:
+      - verdaccio-storage:/verdaccio/storage
+      - ./config.yaml:/verdaccio/conf/config.yaml:ro
+      - ./htpasswd:/verdaccio/conf/htpasswd:ro
+    labels:
+      zerobias.slot: ${STACK_NAME}
+
+volumes:
+  verdaccio-storage:

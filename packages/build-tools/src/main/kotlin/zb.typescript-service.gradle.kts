@@ -251,8 +251,9 @@ tasks.register("prepareDockerContext") {
     outputs.dir(dockerContextDir)
 
     doFirst {
-        // Clean previous context
+        // Clean previous context and stale lockfile
         delete(dockerContextDir)
+        delete(imageDir.resolve("package-lock.json"))
 
         val tarball = imageDir.listFiles { f -> f.name.endsWith(".tgz") }?.firstOrNull()
             ?: throw GradleException("No tarball found — npmPack may have failed")
@@ -351,11 +352,73 @@ tasks.register("prepareDockerContext") {
     }
 }
 
+// Inject locally-published packages from zbb registry into the Docker context.
+// Reads ZBB_LOCAL_DEPS env var (JSON: [{name, version, tarball}]) set by zbb build.
+// Copies tarballs into package/local_deps/ and patches package.json to use file: refs.
+tasks.register("injectLocalDeps") {
+    group = "docker"
+    description = "Inject locally-published zbb registry packages into Docker context"
+
+    dependsOn("prepareDockerContext")
+
+    val dockerContextDir = projectDir.resolve(extension.dockerContext)
+    val packageDir = dockerContextDir.resolve("package")
+
+    doFirst {
+        // Read from file written by zbb (env vars don't reach the Gradle daemon)
+        val localDepsFile = projectDir.resolve("../.zbb-local-deps/manifest.json")
+        if (!localDepsFile.exists()) return@doFirst
+        val localDepsJson = localDepsFile.readText()
+        if (localDepsJson.isBlank()) return@doFirst
+
+        @Suppress("UNCHECKED_CAST")
+        val deps = (groovy.json.JsonSlurper().parseText(localDepsJson) as? List<Map<String, String>>) ?: return@doFirst
+        if (deps.isEmpty()) return@doFirst
+
+        val localDepsDir = packageDir.resolve("local_deps")
+        localDepsDir.mkdirs()
+
+        val packageJsonFile = packageDir.resolve("package.json")
+        val packageJson = groovy.json.JsonSlurper().parseText(packageJsonFile.readText()) as MutableMap<String, Any?>
+
+        @Suppress("UNCHECKED_CAST")
+        val dependencies = packageJson["dependencies"] as? MutableMap<String, String> ?: mutableMapOf()
+        @Suppress("UNCHECKED_CAST")
+        val overrides = packageJson["overrides"] as? MutableMap<String, Any?> ?: mutableMapOf()
+
+        for (dep in deps) {
+            val name = dep["name"] ?: continue
+            val tarball = dep["tarball"] ?: continue
+            val tarballFile = java.io.File(tarball)
+            if (!tarballFile.exists()) {
+                println("  [registry] Warning: tarball not found: $tarball")
+                continue
+            }
+
+            val destFile = localDepsDir.resolve(tarballFile.name)
+            tarballFile.copyTo(destFile, overwrite = true)
+
+            val fileRef = "file:local_deps/${tarballFile.name}"
+            if (dependencies.containsKey(name)) {
+                dependencies[name] = fileRef
+            }
+            if (overrides.containsKey(name)) {
+                overrides[name] = fileRef
+            }
+            println("  [registry] Injected $name → $fileRef")
+        }
+
+        packageJson["dependencies"] = dependencies
+        packageJson["overrides"] = overrides
+        packageJsonFile.writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(packageJson)))
+    }
+}
+
 tasks.register("dockerBuild") {
     group = "docker"
     description = "Build Docker image"
 
-    dependsOn("prepareDockerContext")
+    dependsOn("injectLocalDeps")
 
     val imageName = provider { "${extension.imageName}:${extension.imageTag}" }
     val dockerContextDir = projectDir.resolve(extension.dockerContext)
@@ -392,15 +455,25 @@ tasks.register("dockerBuild") {
             emptyList()
         }
 
-        ExecUtils.exec(
-            command = listOf(
-                "docker", "build",
-                "-t", image,
-                "--build-arg", "npm_token=${npmToken}",
-                "--build-arg", "zb_token=${zbToken}"
-            ) + dockerfileArgs + listOf("."),
-            workingDir = dockerContextDir
-        )
+        val networkArgs = emptyList<String>()
+
+        // Use ProcessBuilder with inheritIO for streaming output during build
+        val fullCommand = listOf(
+            "docker", "build",
+            "--progress=plain",
+            "-t", image,
+            "--build-arg", "npm_token=${npmToken}",
+            "--build-arg", "zb_token=${zbToken}"
+        ) + networkArgs + dockerfileArgs + listOf(".")
+
+        val dockerProcess = ProcessBuilder(fullCommand)
+            .directory(dockerContextDir)
+            .inheritIO()
+            .start()
+        val dockerExit = dockerProcess.waitFor()
+        if (dockerExit != 0) {
+            throw GradleException("Docker build failed (exit $dockerExit)")
+        }
 
         // Write stamp file so Gradle can track up-to-date state
         imageStamp.get().asFile.apply {
