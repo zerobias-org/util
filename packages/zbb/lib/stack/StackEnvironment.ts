@@ -52,21 +52,11 @@ export class StackEnvironment extends EventEmitter {
   private get envPath() { return join(this.stackDir, '.env'); }
   private get manifestPath() { return join(this.stackDir, 'manifest.yaml'); }
 
-  // ── Loading ─────────────────────────────────────────────────
-
-  async load(): Promise<void> {
-    if (existsSync(this.envPath)) {
-      this.env = parseEnvFile(await readFile(this.envPath, 'utf-8'));
-    }
-    if (existsSync(this.manifestPath)) {
-      const raw = await loadYamlOrDefault<Record<string, StackManifestEntry>>(this.manifestPath, {});
-      this.manifest = new Map(Object.entries(raw));
-    }
-
-    // Load schema (Layer 1) from zbb.yaml.
-    // Three-layer model: Schema (zbb.yaml) + Manifest (provenance) + .env (values).
-    // Schema is authoritative for type, values, description, formulas.
-    // stack.yaml source field tells us where zbb.yaml lives (packaged mode).
+  /**
+   * Load schema from zbb.yaml via stack.yaml source path.
+   * Called internally by resolve(). Not a public API.
+   */
+  private async loadSchema(): Promise<void> {
     const stackYamlPath = join(this.stackDir, 'stack.yaml');
     if (!existsSync(stackYamlPath)) {
       throw new Error(`stack.yaml not found at ${stackYamlPath} — StackEnvironment requires a stack context`);
@@ -83,6 +73,18 @@ export class StackEnvironment extends EventEmitter {
     }
     this.schema = new Map(Object.entries(config.env));
   }
+
+  /**
+   * Load manifest from disk.
+   * Called internally by resolve(). Not a public API.
+   */
+  private async loadManifest(): Promise<void> {
+    if (existsSync(this.manifestPath)) {
+      const raw = await loadYamlOrDefault<Record<string, StackManifestEntry>>(this.manifestPath, {});
+      this.manifest = new Map(Object.entries(raw));
+    }
+  }
+
 
   // ── Getting ─────────────────────────────────────────────────
 
@@ -167,7 +169,7 @@ export class StackEnvironment extends EventEmitter {
       default_formula: existing?.formula ?? existing?.default_formula,
     } as StackManifestEntry);
     await this.saveManifest();
-    await this.recalculate();
+    await this.computeEnv();
     this.emit('change', { key, value });
   }
 
@@ -188,19 +190,15 @@ export class StackEnvironment extends EventEmitter {
       this.manifest.delete(key);
     }
     await this.saveManifest();
-    await this.recalculate();
+    await this.computeEnv();
     this.emit('change', { key, value: undefined });
   }
 
-  // ── Recalculate .env from manifest ──────────────────────────
-
   /**
-   * Recompute .env from manifest entries.
-   * Reads imported values from dependency stacks' .env files.
-   *
-   * @param slotStacksDir - Path to the slot's stacks/ directory (for reading dep .env files)
+   * Compute .env from manifest + schema + formulas + resolvers.
+   * Private — called by resolve() and set()/unset().
    */
-  async recalculate(slotStacksDir?: string): Promise<void> {
+  private async computeEnv(): Promise<void> {
     const preResolved = new Map<string, string>();
     const derivedVars = new Map<string, string>();
 
@@ -212,7 +210,8 @@ export class StackEnvironment extends EventEmitter {
 
         case 'imported': {
           // Read from dependency stack's .env
-          if (slotStacksDir && entry.from) {
+          const slotStacksDir = join(this.stackDir, '..');
+          if (entry.from) {
             const depEnvPath = join(slotStacksDir, entry.from, '.env');
             if (existsSync(depEnvPath)) {
               const depEnv = parseEnvFile(await readFile(depEnvPath, 'utf-8'));
@@ -319,14 +318,19 @@ export class StackEnvironment extends EventEmitter {
     await writeFile(this.envPath, serializeEnv(this.env), 'utf-8');
   }
 
-  // ── Resolve (DNS + recalculate) ─────────────────────────────
+  // ── Resolve ─────────────────────────────────────────────────
 
   /**
-   * Full environment resolution: DNS provisioning → recalculate.
-   * This is THE entry point for populating the environment.
-   * After resolve(), this.env is complete and .env is written.
+   * THE entry point for environment resolution.
+   * Loads schema + manifest, runs DNS, computes .env, writes to disk.
+   * After resolve(), this.env is complete. No other method needed.
    */
   async resolve(): Promise<void> {
+    // 1. Load schema (once) and manifest from disk
+    if (this.schema.size === 0) await this.loadSchema();
+    await this.loadManifest();
+
+    // 2. DNS provisioning
     // DNS provisioning — lookup TXT records and write to manifest
     const resolveHost = this.get('SLOT_RESOLVE_HOST')
       ?? this.schema.get('SLOT_RESOLVE_HOST')?.default;
@@ -354,7 +358,7 @@ export class StackEnvironment extends EventEmitter {
               }
               await this.saveManifest();
             }
-            await this.recalculate();
+            await this.computeEnv();
             return;
           }
         }
@@ -390,7 +394,7 @@ export class StackEnvironment extends EventEmitter {
       }
     }
 
-    await this.recalculate();
+    await this.computeEnv();
   }
 
   // ── Explain ─────────────────────────────────────────────────
@@ -631,10 +635,10 @@ export class StackEnvironment extends EventEmitter {
     // Write manifest
     await saveYaml(join(stackDir, 'manifest.yaml'), Object.fromEntries(manifest));
 
-    // Create env instance, set manifest, recalculate
+    // Create env instance, set manifest, compute .env
     const env = new StackEnvironment(stackDir);
     env.manifest = manifest;
-    await env.recalculate(slotStacksDir);
+    await env.computeEnv();
 
     return env;
   }
