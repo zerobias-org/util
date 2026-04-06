@@ -9,6 +9,7 @@ export type {
   DependencySpec,
   SubstackConfig,
   StateFieldSchema,
+  CollectionStateConfig,
   LifecycleConfig,
   HealthCheckConfig,
   LogSourceConfig,
@@ -42,6 +43,8 @@ export interface StackManifestEntry {
   mask?: boolean;
   type?: string;
   description?: string;
+  /** Valid values for enum type */
+  values?: string[];
 }
 
 // ── Import Spec (parsed) ────────────────────────────────────────────

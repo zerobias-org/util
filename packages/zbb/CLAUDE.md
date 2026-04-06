@@ -1,174 +1,492 @@
-# zbb — Claude Development Guide
+# CLAUDE.md — @zerobias-org/zbb
 
-## Architecture
+**NOTE:** For best results, run Claude Code from the meta-repo root (`~/zerobias`) to ensure access to all platform context and cross-module documentation.
 
-zbb has two models that coexist:
+## Package Purpose
 
-### Legacy Slot Model (still active)
-- Flat `.env` + `overrides.env` + `manifest.yaml` at slot root
-- `SlotManager.create()` scans all `zbb.yaml` files, allocates ports, generates secrets
-- `SlotEnvironment` reads/writes these flat files
-- Used by Gradle tasks, old `zbb up/down`
+`@zerobias-org/zbb` is the ZeroBias slot/stack orchestrator CLI. It serves two roles:
 
-### Stacks Model (new)
-- Composable service units within slots: `zbb stack add ./dana && zbb stack start dana`
-- Per-stack `.env` + `manifest.yaml` + `state.yaml` under `stacks/<name>/`
-- Merged slot `.env` at root (projection of all stacks) for backward compat
-- `StackEnvironment` — three-layer model: schema (zbb.yaml) → manifest → .env
-- `StackManager` orchestrates add/remove/start/stop with topo-sorted deps
+1. **Slot/stack orchestrator** — manages named environment slots (isolated sets of env vars, ports, secrets, state) and the stacks (Docker Compose services) running inside them.
+2. **Gradle wrapper** — automatically detects the nearest Gradle subproject from cwd and prefixes task names, enabling `zbb build` to work from any directory in a multi-project Gradle repo.
 
-### Dependency Chain
+Current version: `0.3.x` (published to GitHub Packages as `@zerobias-org/zbb`).
+
+---
+
+## CLI Commands
+
+All commands are accessible via the `zbb` binary.
+
+### Global flag
+
 ```
-hub → dana → hydra-schema → postgres (built-in)
-file-service → dana + minio (built-in)
-platform → dana
+zbb --slot <name> <command>   Load slot env before running any command
 ```
 
-## Key Files
+### Slot management
 
-### Stack Core
-- `lib/stack/StackManager.ts` — Orchestration: add, remove, start, stop, dep resolution, port allocation, secret caching, merged env sync
-- `lib/stack/StackEnvironment.ts` — Three-layer env: initialize, recalculate, set/unset overrides, explain, import resolution
-- `lib/stack/Stack.ts` — Single instance: identity, env, state, lifecycle execution, health checks
-- `lib/stack/commands.ts` — CLI handlers + heartbeat monitor (background PID, shell alerts)
-- `lib/stack/types.ts` — StackManifestEntry, ImportSpec, ExplainResult, StackStatus
+```
+zbb slot create <name> [--ephemeral] [--ttl <duration>]
+zbb slot load <name>          Spawn a subshell with slot env injected
+zbb slot list                 Show all slots with status, ports, TTL
+zbb slot info <name>          Detailed slot info (ports, secrets, dirs)
+zbb slot delete <name>        Remove slot + associated Docker resources
+zbb slot gc                   Remove expired ephemeral slots
+```
 
-### Infrastructure
-- `lib/graph/toposort.ts` — Generic Kahn's algorithm for dependency ordering
-- `lib/shell/hook.sh` — cd hook (env scoping), heartbeat alerts (PROMPT_COMMAND), zbb wrapper
-- `stacks/postgres/` — Built-in postgres stack (compose + manifest)
-- `stacks/minio/` — Built-in MinIO stack (S3-compatible local storage)
+### Environment variables
 
-### Slot System (legacy + shared)
-- `lib/slot/Slot.ts` — Slot instance with stacks getter, watcher events (slot + stack level)
-- `lib/slot/SlotManager.ts` — Creates stacks/ dir on slot create
-- `lib/slot/SlotWatcher.ts` — Dispatches stack:env:change, stack:state:change, stack:manifest:change. Excludes logs/ paths.
-- `lib/slot/SlotEnvironment.ts` — Legacy flat env (unchanged, used by node-lib consumers)
+Must be run inside a loaded slot (`ZB_SLOT` must be set).
 
-### Config
-- `lib/config.ts` — StackManifest, DependencySpec, LifecycleConfig, HealthCheckConfig, etc. EnvVarDeclaration supports `source: file`, `source: cwd`. `loadStackManifest()`, `isStackManifest()`.
-- `lib/cli.ts` — Main router. Stack commands, --stack flag, env explain, heartbeat resume on slot load, clean error handling with --verbose.
+```
+zbb env list [--unmask]
+zbb env get <VAR>
+zbb env set <VAR> <value>
+zbb env unset <VAR>
+zbb env reset
+zbb env diff
+```
 
-## Stack Manifest Format (zbb.yaml)
+### Secrets
+
+```
+zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]
+zbb secret get <name> [key] [--json]
+zbb secret list [--module <key>]
+zbb secret update <name> [key=value ...]
+zbb secret delete <name>
+```
+
+### Logs
+
+```
+zbb logs list                           List log files and running containers
+zbb logs show <name> [--source local|docker|aws] [-n N] [-f]
+zbb logs debug <service>                Send SIGUSR2 to set log level DEBUG
+zbb logs info <service>                 Send SIGUSR1 to set log level INFO
+```
+
+### Stack aliases (delegated to Gradle)
+
+```
+zbb up       → stackUp
+zbb down     → stackDown
+zbb destroy  → stackDestroy
+zbb info     → stackInfo
+```
+
+### Other
+
+```
+zbb publish [--dry-run]         Publish all artifacts (Gradle)
+zbb publishRemote               Publish to GitHub Packages Maven
+zbb dataloader [args...]        Run platform dataloader with slot SQL env
+zbb <gradle-task> [args...]     Any Gradle task — auto-prefixed for subproject
+zbb --version
+zbb --help
+```
+
+---
+
+## Slot/Stack Model
+
+### Slots
+
+A **slot** is a named, persistent (or ephemeral) environment context stored at `~/.zbb/slots/<name>/`. Each slot contains:
+
+```
+~/.zbb/slots/<name>/
+  slot.yaml           Slot metadata (name, created, portRange, ephemeral, expires)
+  .env                Declared env vars (generated by slot create)
+  overrides.env       User overrides (written by zbb env set)
+  manifest.yaml       Var metadata (source, type, mask, allocated port, etc.)
+  config/             App-specific config files
+  logs/               Log files
+  state/              State directory
+    tmp/              Temporary state
+  stacks/             Stack directories (one per stack added to this slot)
+  dns-cache.yml       DNS TXT provisioning cache (TTL-based)
+```
+
+### Slot env priority
+
+Override > declared (.env) > resolver
+
+Resolvers are registered globally at startup via `SlotEnvironment.registerResolver(key, fn)`. They provide computed values that cannot be expressed as `${VAR}` references.
+
+### Slot var sources
+
+| Source | Meaning |
+|--------|---------|
+| `zbb` | Built-in slot path vars (`ZB_SLOT`, `ZB_SLOT_DIR`, etc.) |
+| `default` | Default value from zbb.yaml declaration |
+| `dns` | Provisioned from DNS TXT records (`_hub.<domain>`) |
+| `env` | Inherited from parent shell at slot create |
+| `override` | Set by user via `zbb env set` |
+| `resolver` | Computed by a registered resolver function |
+| `port` | Auto-allocated port |
+| `secret` | Generated secret |
+
+### Ephemeral slots
+
+Created with `--ephemeral [--ttl <duration>]`. Duration format: `30m`, `2h`, `1800` (seconds). Expired slots are GC'd automatically on `slot create` and `slot list`.
+
+### Stacks
+
+A **stack** is a Docker Compose application associated with a slot. Stack state lives at:
+
+```
+~/.zbb/slots/<name>/stacks/<stack-name>/
+  stack.yaml          Stack identity (name, version, mode, source, added)
+  state.yaml          Stack-level composite state
+  substacks/          Substack directories
+    <substack>/       Object substack (manager, node, ui, etc.)
+      state.yaml      Substack state file
+    <collection>/     Collection substack (alerts, etc.)
+      <id>.yml        One file per collection item
+  state/
+    cmd/              Command files watched by processes
+    secrets/
+    deployments/
+  logs/
+```
+
+### Slot env vars injected at load
+
+```
+ZB_SLOT           slot name
+ZB_SLOT_DIR       absolute path to slot directory
+ZB_SLOT_CONFIG    <slot>/config/
+ZB_SLOT_LOGS      <slot>/logs/
+ZB_SLOT_STATE     <slot>/state/
+ZB_SLOT_TMP       <slot>/state/tmp/
+STACK_NAME        same as ZB_SLOT (alias)
+```
+
+---
+
+## zbb.yaml / .zbb.yaml Config Files
+
+### Project config (`zbb.yaml` — per-module)
 
 ```yaml
-name: "@zerobias-com/dana"
-version: "1.0.0"
-depends:
-  hydra-schema:
-    package: "@zerobias-com/hydra-schema@^1.0.0"
-    ready_when: { status: healthy }
-exports: [DANA_URL, DANA_PORT, JWT_PUBLIC_KEY]
-imports:
-  hydra-schema: [PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE]
-substacks:
-  dana:
-    compose: test/docker-compose.dana.yml
-    services: [dana]
-  nginx:
-    compose: test/docker-compose.dana.yml
-    services: [nginx]
-    depends: [dana]
+inherit: true          # scan repo-wide zbb.yaml files (default: true)
+
 env:
-  DANA_PORT: { type: port }
-  DANA_URL: { type: string, value: "http://localhost:${DANA_PORT}" }
-  VAULT_TOKEN: { type: secret, source: file, file: "~/.vault-token", mask: true }
-state:
-  status: { type: enum, values: [starting, healthy, degraded, stopped, error] }
-lifecycle:
-  build: ./gradlew build
-  start: bash test/seed.sh && docker compose -f test/docker-compose.dana.yml -p ${STACK_NAME} up -d
-  stop: "docker stop ${STACK_NAME}-dana ${STACK_NAME}-nginx 2>/dev/null; true"
-  health: { command: "curl -sf http://localhost:${DANA_PORT}/dana/health >/dev/null", interval: 3, timeout: 30 }
-  seed: bash test/seed.sh
-  cleanup: ["docker stop ... ; docker rm ... ; true"]
-logs:
-  dana: { source: docker, container: "${STACK_NAME}-dana" }
+  MY_VAR:
+    type: string | port | secret
+    default: "value"          # can reference ${OTHER_VAR}
+    description: "..."
+    mask: true                # hide in zbb env list
+    generate: hex32           # auto-generate secret value
+    source: env               # inherit from parent shell
+    required: true            # error if missing from parent shell
+    deprecated: true
+    replacedBy: NEW_VAR
+
 require:
-  - { tool: docker, check: "docker --version", parse: "Docker version (\\S+),", version: ">=24" }
-ports: { range: [15000, 16000] }
-cleanse: [AWS_PROFILE, KUBECONFIG]
+  - tool: java
+    check: "java -version"
+    parse: "openjdk (?P<version>[\\d.]+)"
+    version: ">=21"
+    install: "sudo apt install openjdk-21-jdk"
+
+stack:
+  compose: docker-compose.yml   # or list of files
+  services: [svc1, svc2]
+  exec_hints:
+    - "docker exec -it myapp bash"
 ```
 
-## Env Resolution Precedence
+### Repo config (`.zbb.yaml` — repo root marker)
 
-1. Override (user set via `zbb env set`)
-2. Imported (from dependency stack)
-3. Inherited (from parent shell, `source: env`)
-4. File-sourced (`source: file`, e.g. ~/.vault-token)
-5. CWD-resolved (`source: cwd`, resolved to stack source dir)
-6. Generated (secrets)
-7. Allocated (ports — with host bind-test for availability)
-8. Derived (`value:` formula — recomputes when inputs change)
-9. Default (`default:` — frozen at add time)
+```yaml
+env:
+  SHARED_VAR:
+    type: string
+    default: "..."
 
-## Heartbeat Monitor
+require:
+  - tool: docker
+    check: "docker --version"
+    parse: "Docker version (?P<version>[\\d.]+)"
+    version: ">=24"
 
-- Background bash loop spawned on `stack start`, PID tracked at `state/heartbeat.pid`
-- Runs `zbb stack heartbeat --quiet` every 30s
-- Checks all non-stopped stacks, detects crash (healthy→error) and recovery (error→healthy)
-- Alerts written to `state/heartbeat-alerts.log`, displayed by shell PROMPT_COMMAND
-- Manual `zbb stack heartbeat` shows full health status for all stacks
-- `slot load` verifies health on entry, shows status
-- Stops on slot exit, resumes on slot re-enter
+ports:
+  range: [10000, 10999]
 
-## Slot Directory Structure (with stacks)
-
-```
-~/.zbb/slots/local/
-  slot.yaml                          # metadata
-  .env                               # merged projection of all stacks (for legacy consumers)
-  manifest.yaml                      # slot-level manifest
-  overrides.env                      # legacy user overrides
-  .zbb-bashrc                        # rcfile sourcing hook.sh
-
-  stacks/
-    postgres/
-      stack.yaml                     # identity (name, version, mode, source)
-      manifest.yaml                  # Layer 2: per-var provenance
-      .env                           # Layer 3: computed output
-      state.yaml                     # runtime state (status, seeded, etc.)
-      logs/
-      state/secrets/
-    hydra-schema/
-      ...
-    dana/
-      ...
-    hub/
-      ...
-
-  config/
-  logs/
-  state/
-    secrets/                         # cached secrets/ports across stack re-adds
-      dana.yaml
-      hub.yaml
-    heartbeat.pid                    # background monitor PID
-    heartbeat-alerts.log             # pending alerts for shell display
-    hub/                             # hub-node state (legacy)
+cleanse:
+  - SOME_VAR_TO_STRIP_FROM_PARENT
 ```
 
-## Testing
+### User config (`~/.zbb/config.yaml`)
+
+```yaml
+java:
+  home: /usr/lib/jvm/java-21-openjdk-amd64
+node:
+  version: "22"
+  manager: nvm
+slots:
+  dir: ~/.zbb/slots
+prompt: "[zb:{{slot}}]:\\w$ "
+skip_checks: [java, node]
+```
+
+---
+
+## DNS TXT Provisioning
+
+`slot.resolve()` queries `_hub.<domain>` TXT records for `KEY=value` pairs and merges them into the slot env with source `"dns"`. Never overwrites user or override values. Caches results to `dns-cache.yml` with a 30-second TTL.
+
+Configure the lookup host via `SLOT_RESOLVE_HOST` env var in `zbb.yaml`.
+
+---
+
+## Watcher Architecture
+
+`SlotWatcher` (in `lib/slot/SlotWatcher.ts`) watches the entire slot directory recursively using `node:fs.watch`. Each unique filename gets its own 100ms debounce timer.
+
+### Events emitted
+
+| Event | Trigger path |
+|-------|-------------|
+| `env:change` | `.env` or `overrides.env` at slot root |
+| `state:change` | `state/hub/state.yml` |
+| `deployment:change` | `state/deployments/*.yml` |
+| `command:change` | `state/cmd/*.yml` |
+| `file:change` | Any file (always emitted, relative path) |
+
+`Slot` re-emits all watcher events, converting relative paths to absolute. Consumers that need substack awareness parse the relative path from the `file:change` or `state:change` event payload.
+
+**v3.0 addition:** When substack state is present, `state:change` event payloads include the relative substack path, e.g.:
+
+```
+stacks/hub-node/substacks/node/state.yaml    → state:change (rel: substacks/node/state.yaml)
+stacks/hub-node/substacks/alerts/disk-full.yml → state:change (rel: substacks/alerts/disk-full.yml)
+```
+
+Consumers in node-lib parse the subpath to route to the appropriate handler. No new event types are added — consumers use the path to identify which substack changed.
+
+---
+
+## v3.0: Substack State
+
+### Overview
+
+v3.0 adds substack state declarations to the stack manifest. Each substack in `substacks:` can declare a `state` field describing the shape of its state. zbb owns persistence and watching; node-lib wraps the typed accessors.
+
+### SubstackConfig additions
+
+```typescript
+export interface SubstackConfig {
+  compose?: string;
+  services?: string[];
+  depends?: string[];
+  exports?: string[];
+  logs?: LogSourceConfig | Record<string, LogSourceConfig>;
+  state?: Record<string, StateFieldSchema> | CollectionStateConfig;  // NEW in v3.0
+}
+
+export interface CollectionStateConfig {
+  collection: true;
+  schema: Record<string, StateFieldSchema>;
+}
+```
+
+### Object substacks vs collection substacks
+
+**Object substack** (e.g., `manager`, `node`, `ui`) — single process, single state file:
+```
+substacks/{name}/state.yaml
+```
+
+**Collection substack** (e.g., `alerts`) — directory of identically-shaped YAML files. Each item is written as a separate file. The directory IS the state:
+```
+substacks/alerts/
+  disk-full.yml
+  cpu-spike.yml
+```
+
+The `collection: true` flag in `CollectionStateConfig` distinguishes these two layouts.
+
+### Directory creation
+
+`stack add` processes the manifest and creates substack directories:
+
+```
+stacks/{stack}/substacks/{substack}/
+```
+
+For object substacks, `state.yaml` is created (or exists). For collection substacks, the directory is the state — files are written directly into it by processes.
+
+### setState idempotency
+
+`Stack.setState()` in v3.0 performs a stringify comparison before writing. If the merged state is identical to the current state, the write and event emission are skipped:
+
+```typescript
+async setState(partial: Record<string, unknown>): Promise<void> {
+  const current = await this.getState();
+  const merged = { ...current, ...partial };
+  // Skip write + emit if unchanged
+  if (stableStringify(merged) === stableStringify(current)) return;
+  await saveYaml(this.stateFile, merged);
+  this.emit('state:change', merged);
+}
+```
+
+This prevents event storms when a process re-writes the same state (e.g., a health check confirming a process is still alive with no field changes).
+
+### Stack manifest example (hub-node-stack)
+
+```yaml
+name: "@zerobias-com/hub-node-stack"
+version: "1.0.0"
+
+state:
+  status:
+    type: enum
+    values: [starting, healthy, degraded, stopped, error]
+
+substacks:
+  manager:
+    state:
+      pid: { type: number }
+      status: { type: enum, values: [running, stopped] }
+      restart_in_progress: { type: boolean }
+      pending_version: { type: string }
+
+  node:
+    state:
+      pid: { type: number }
+      status: { type: enum, values: [online, disconnected, error, stopped] }
+      connected: { type: boolean }
+      node_id: { type: string }
+      node_name: { type: string }
+
+  ui:
+    state:
+      pid: { type: number }
+      status_label: { type: string }
+      alert_count: { type: number }
+
+  alerts:
+    state:
+      collection: true
+      schema:
+        type: { type: string }
+        severity: { type: enum, values: [info, warn, error, critical] }
+        message: { type: string }
+        raisedBy: { type: string }
+        timestamp: { type: string }
+        ttl: { type: number }
+```
+
+### Docker container env vars
+
+Containers bootstrap using three environment variables that all processes derive paths from:
+
+```dockerfile
+ARG SLOT_NAME=default
+ARG STACK_NAME=hub-node
+
+ENV ZB_SLOT=${SLOT_NAME}
+ENV ZB_SLOT_DIR=/home/zerobias/.zbb/slots/${SLOT_NAME}
+ENV ZB_STACK=${STACK_NAME}
+```
+
+Derived paths:
+- Stack dir: `${ZB_SLOT_DIR}/stacks/${ZB_STACK}/`
+- Object substack state: `${ZB_SLOT_DIR}/stacks/${ZB_STACK}/substacks/{name}/state.yaml`
+- Collection substack dir: `${ZB_SLOT_DIR}/stacks/${ZB_STACK}/substacks/alerts/`
+- Commands: `${ZB_SLOT_DIR}/stacks/${ZB_STACK}/state/cmd/`
+- Logs: `${ZB_SLOT_DIR}/stacks/${ZB_STACK}/logs/`
+
+---
+
+## Gradle Integration
+
+`zbb` acts as a smart Gradle wrapper:
+
+1. Walks up from cwd to find `gradlew` (Gradle root).
+2. Queries `projectPaths` Gradle task to discover all subprojects (cached in `.gradle/zbb-projects.json` keyed by `settings.gradle` mtime).
+3. Detects the current subproject from cwd and prefixes task names: `build` → `:mymodule:subproject:build`.
+4. Forwards all other args (flags, JVM options) unchanged.
+
+Java 21 is automatically set if not already correct — Gradle 8.10.2 breaks on Java 25+.
+
+---
+
+## Env Scanner
+
+`lib/env/Scanner.ts` walks a repo's `zbb.yaml` files and collects all `env:` declarations. Used by `slot create` to determine which vars to generate, allocate, or inherit.
+
+`lib/env/Resolver.ts` resolves `${VAR}` references in default values, using a pre-resolved map of ports, secrets, and slot vars.
+
+---
+
+## Source Layout
+
+```
+lib/
+  cli.ts                Main command router
+  cli-entry.ts          ESM entry point
+  config.ts             Config types and loaders (ProjectConfig, RepoConfig, UserConfig)
+  gradle.ts             Gradle wrapper logic (project detection, cache, execution)
+  yaml.ts               YAML read/write helpers
+  preflight.ts          Tool version checks
+  secret.ts             Secret subcommand handler
+  dataloader.ts         Dataloader subcommand
+  slot/
+    Slot.ts             Slot class (EventEmitter, load, resolve, DNS, watchers)
+    SlotEnvironment.ts  Env var management (declared, overrides, manifest, resolvers)
+    SlotManager.ts      Slot lifecycle (create, load, list, delete, gc)
+    SlotWatcher.ts      File watcher with path-based event dispatch
+    PortAllocator.ts    Port range allocation across slots
+    extend.ts           Extends slot from cwd zbb.yaml declarations
+    SecretGen.ts        Secret value generators
+    index.ts            Public exports
+  env/
+    Scanner.ts          Walks repo zbb.yaml files, collects declarations
+    Resolver.ts         Resolves ${VAR} references in defaults
+    DnsTxtResolver.ts   DNS TXT lookup for provisioning
+    index.ts            Public exports
+```
+
+---
+
+## Build Commands
 
 ```bash
-# Run all tests (98 tests)
-npm test
-
-# Run stack tests only
-node --import tsx/esm --test lib/graph/*.test.ts lib/stack/*.test.ts
-
-# TypeScript check
-npx tsc --noEmit
+# From org/util/packages/zbb/
+npm run build          # lint + tsc
+npm run transpile      # tsc -b only
+npm run lint           # eslint lib/**/*.ts
+npm run lint:fix       # eslint --fix
+npm run test           # node --import tsx/esm --test lib/**/*.test.ts
 ```
 
-## Key Design Decisions
+After build, the `dist/` directory contains compiled output. Published files include `bin/`, `lib/`, and `dist/`.
 
-- **Stack = template, slot = instance** — same dana stack in two slots gets different ports/secrets
-- **Lifecycle is a contract** — shell commands, build system agnostic. zbb doesn't care if it's Gradle, npm, or Go.
-- **Health check is zbb's job** — lifecycle.start does one thing, zbb verifies health after
-- **Merged slot .env for backward compat** — node-lib SlotEnvironment reads slot root .env unchanged
-- **Secrets cached per-slot** — removing and re-adding a stack reuses same UUIDs (idempotent seeds)
-- **Ports checked with bind-test** — avoids conflicts with external services (Docker Swarm, etc.)
-- **Watcher excludes logs** — no noise from log file writes. Logs are on-demand via `zbb logs show`.
-- **Each stack owns its own containers** — stop/cleanup only touches that stack's containers, never the shared network or other stacks
-- **Cascade on stop/remove** — stopping dana also stops hub, platform, etc. (reverse dep order)
+---
+
+## Quality Rules
+
+- **No `as any`** — fix the type, never cast around it.
+- **No fallbacks for slot-prescribed values** — if a value is missing from the slot, fail fast. Never derive or guess missing config.
+- **No `process.env` reads in callers** — use `slot.env.get(KEY)` or typed accessors from node-lib.
+- **No URL calculation** — URLs come from slot env, never derived from other values.
+- **Always compile before committing** — `npm run build` must pass. Never commit TS without `tsc` succeeding.
+- **No `maxLineLength` on ConsoleTransport** — wraps log lines, unreadable in TUI/Docker.
+- **Use node-lib functions** — never reimplement what `@zerobias-com/hub-node-lib` provides (typed accessors, AlertManager, batch writers).
+- **setState idempotency** — always use stringify comparison; never write unchanged state.
+
+---
+
+## Related Documentation
+
+- **[../../CLAUDE.md](../../CLAUDE.md)** — Meta-repo platform overview
+- **[../../Architecture.md](../../Architecture.md)** — Component relationships
+- **[~/zerobias/com/hub/CLAUDE.md](~/zerobias/com/hub/CLAUDE.md)** — Hub integration platform (primary consumer of zbb stacks)
+- **[~/zerobias/.planning/CLIENT-STATE.md](~/zerobias/.planning/CLIENT-STATE.md)** — Canonical spec for v3.0 substack state model
+- **[~/zerobias/.planning/designs/](~/zerobias/.planning/designs/)** — Design artifacts for active milestone

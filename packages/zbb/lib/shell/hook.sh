@@ -65,7 +65,11 @@ _zbb_scope_env() {
       local name
       name=$(grep -m1 '^name:' "$dir/zbb.yaml" 2>/dev/null | sed 's/^name:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
       if [ -n "$name" ]; then
-        stack_name="${name##*/}"
+        local candidate="${name##*/}"
+        # Only activate if this stack has been added to the slot
+        if [ -d "$stacks_dir/$candidate" ]; then
+          stack_name="$candidate"
+        fi
         break
       fi
     fi

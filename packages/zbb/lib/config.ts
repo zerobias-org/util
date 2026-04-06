@@ -14,8 +14,10 @@ export interface ToolRequirement {
 }
 
 export interface EnvVarDeclaration {
-  type: 'port' | 'string' | 'secret';
+  type: 'port' | 'string' | 'secret' | 'enum';
   default?: string;
+  /** Valid values for enum type — presented as selector in UI */
+  values?: string[];
   /** Live formula that recomputes when inputs change (unlike `default` which freezes). */
   value?: string;
   description?: string;
@@ -39,7 +41,6 @@ export interface StackConfig {
   compose?: string | string[];
   services?: string[];
   healthcheck?: Record<string, { container: string; timeout: number }>;
-  exec_hints?: string[];
 }
 
 export interface ProjectConfig {
@@ -72,17 +73,29 @@ export interface DependencySpec {
   ready_when?: Record<string, unknown>;
 }
 
+export interface StateFieldSchema {
+  type: 'string' | 'boolean' | 'enum' | 'url' | 'number';
+  values?: string[];
+}
+
+export interface CollectionStateConfig {
+  collection: true;
+  schema: Record<string, StateFieldSchema>;
+}
+
+export function isCollectionState(
+  state: Record<string, StateFieldSchema> | CollectionStateConfig | undefined,
+): state is CollectionStateConfig {
+  return state !== undefined && 'collection' in state && (state as CollectionStateConfig).collection === true;
+}
+
 export interface SubstackConfig {
   compose?: string;
   services?: string[];
   depends?: string[];
   exports?: string[];
   logs?: LogSourceConfig | Record<string, LogSourceConfig>;
-}
-
-export interface StateFieldSchema {
-  type: 'string' | 'boolean' | 'enum' | 'url' | 'number';
-  values?: string[];
+  state?: Record<string, StateFieldSchema> | CollectionStateConfig;
 }
 
 export interface LifecycleConfig {
@@ -200,6 +213,6 @@ export function isStackManifest(config: ProjectConfig | StackManifest): config i
 }
 
 export async function loadStackManifest(dir: string): Promise<StackManifest | null> {
-  const config = await loadYamlOrDefault<ProjectConfig & StackManifest>(join(dir, 'zbb.yaml'), {} as any);
-  return isStackManifest(config) ? config : null;
+  const config = await loadYamlOrDefault<Partial<StackManifest> & ProjectConfig>(join(dir, 'zbb.yaml'), {});
+  return isStackManifest(config) ? config as StackManifest : null;
 }

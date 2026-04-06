@@ -89,7 +89,7 @@ export async function main(argv: string[]): Promise<void> {
   try {
     await _main(argv);
   } catch (err: any) {
-    console.error(err.message);
+    console.error(err.stack ?? err.message);
     if (argv.includes('--verbose') || argv.includes('-v') || process.env.ZBB_VERBOSE === '1') {
       console.error(err.stack);
     }
@@ -266,25 +266,6 @@ async function _main(argv: string[]): Promise<void> {
     if (process.env.ZB_SLOT) {
       const slot = await SlotManager.load(process.env.ZB_SLOT);
       await prepareSlot(slot);
-    }
-
-    // Print exec_hints after successful stackUp
-    if (alias === 'stackUp') {
-      const repoRoot = findRepoRoot(process.cwd());
-      if (repoRoot) {
-        const projConfig = await loadProjectConfig(repoRoot);
-        const hints = projConfig.stack?.exec_hints;
-        if (hints && hints.length > 0) {
-          process.on('exit', (code) => {
-            if (code === 0) {
-              process.stdout.write('\nAccess running containers:\n');
-              for (const hint of hints) {
-                process.stdout.write(`  ${hint}\n`);
-              }
-            }
-          });
-        }
-      }
     }
 
     runGradle([alias, ...args.slice(1)]);

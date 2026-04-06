@@ -55,7 +55,20 @@ val slotEnv: Map<String, String> by lazy {
 }
 
 val envFilePath: String by lazy {
-    ZbbSlotProvider.activeEnvFilePath()
+    // Use stack .env if in a stack context, fall back to slot .env
+    if (ZbbSlotProvider.activeStackName() != null) {
+        ZbbSlotProvider.activeStackEnvFilePath()
+    } else {
+        ZbbSlotProvider.activeEnvFilePath()
+    }
+}
+
+val composeProject: String by lazy {
+    if (ZbbSlotProvider.activeStackName() != null) {
+        ZbbSlotProvider.composeProjectName()
+    } else {
+        slotName  // Legacy: slot name as compose project when no stack
+    }
 }
 
 // Inject slot env into all process-spawning task types
@@ -93,16 +106,15 @@ tasks.register("stackDown") {
     description = "Stop ${extension.serviceName}"
 
     doFirst {
-        val slot = slotName
         val composeFile = extension.composeFile
             ?: throw GradleException("composeFile not configured in zbStack extension")
 
-        println("Stopping ${extension.serviceName}: $slot")
+        println("Stopping ${extension.serviceName}: $composeProject")
         ExecUtils.execIgnoreErrors(
             command = listOf(
                 "docker", "compose",
                 "-f", composeFile.absolutePath,
-                "-p", slot,
+                "-p", composeProject,
                 "--env-file", envFilePath,
                 "stop", extension.serviceName
             ),
@@ -118,23 +130,22 @@ tasks.register("stackDestroy") {
     description = "Destroy ${extension.serviceName} stack"
 
     doFirst {
-        val slot = slotName
         val composeFile = extension.composeFile
             ?: throw GradleException("composeFile not configured in zbStack extension")
 
-        println("Destroying stack: $slot")
+        println("Destroying stack: $composeProject")
         ExecUtils.execIgnoreErrors(
             command = listOf(
                 "docker", "compose",
                 "-f", composeFile.absolutePath,
-                "-p", slot,
+                "-p", composeProject,
                 "--env-file", envFilePath,
                 "down", "-v"
             ),
             workingDir = composeFile.parentFile
         )
 
-        println("✓ Stack destroyed: $slot")
+        println("✓ Stack destroyed: $composeProject")
     }
 }
 

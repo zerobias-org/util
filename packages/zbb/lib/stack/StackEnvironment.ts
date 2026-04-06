@@ -25,6 +25,7 @@ const SENSITIVE_PATTERNS = [
  */
 export class StackEnvironment extends EventEmitter {
   private manifest = new Map<string, StackManifestEntry>();
+  private schema = new Map<string, EnvVarDeclaration>();
   private env = new Map<string, string>();
   readonly stackDir: string;
 
@@ -46,6 +47,26 @@ export class StackEnvironment extends EventEmitter {
       const raw = await loadYamlOrDefault<Record<string, StackManifestEntry>>(this.manifestPath, {});
       this.manifest = new Map(Object.entries(raw));
     }
+
+    // Load schema (Layer 1) from zbb.yaml.
+    // Three-layer model: Schema (zbb.yaml) + Manifest (provenance) + .env (values).
+    // Schema is authoritative for type, values, description, formulas.
+    // stack.yaml source field tells us where zbb.yaml lives (packaged mode).
+    const stackYamlPath = join(this.stackDir, 'stack.yaml');
+    if (!existsSync(stackYamlPath)) {
+      throw new Error(`stack.yaml not found at ${stackYamlPath} — StackEnvironment requires a stack context`);
+    }
+    const identity = await loadYamlOrDefault<{ source?: string }>(stackYamlPath, {});
+    const schemaDir = identity.source ?? this.stackDir;
+    const zbbYamlPath = join(schemaDir, 'zbb.yaml');
+    if (!existsSync(zbbYamlPath)) {
+      throw new Error(`zbb.yaml not found at ${zbbYamlPath} (source: ${schemaDir}) — Layer 1 schema is required`);
+    }
+    const config = await loadYamlOrDefault<{ env?: Record<string, EnvVarDeclaration> }>(zbbYamlPath, {});
+    if (!config.env) {
+      throw new Error(`zbb.yaml at ${zbbYamlPath} has no env declarations`);
+    }
+    this.schema = new Map(Object.entries(config.env));
   }
 
   // ── Getting ─────────────────────────────────────────────────
@@ -84,11 +105,27 @@ export class StackEnvironment extends EventEmitter {
   }
 
   getManifestEntry(key: string): StackManifestEntry | undefined {
-    return this.manifest.get(key);
+    const entry = this.manifest.get(key);
+    if (!entry) return undefined;
+    // Enrich with schema data — schema is authoritative for type, values, description
+    const decl = this.schema.get(key);
+    if (decl) {
+      return {
+        ...entry,
+        type: decl.type ?? entry.type,
+        values: decl.values ?? entry.values,
+        description: decl.description ?? entry.description,
+      };
+    }
+    return entry;
   }
 
   getManifest(): Record<string, StackManifestEntry> {
-    return Object.fromEntries(this.manifest);
+    const result: Record<string, StackManifestEntry> = {};
+    for (const key of this.manifest.keys()) {
+      result[key] = this.getManifestEntry(key)!;
+    }
+    return result;
   }
 
   // ── Setting (overrides) ─────────────────────────────────────
@@ -294,6 +331,7 @@ export class StackEnvironment extends EventEmitter {
             value,
             source: 'env',
             type: decl.type,
+            values: decl.values,
             mask: decl.mask,
             description: decl.description,
           });
@@ -313,6 +351,7 @@ export class StackEnvironment extends EventEmitter {
           value,
           source: 'cwd',
           type: decl.type,
+          values: decl.values,
           description: decl.description,
         });
       }
@@ -337,6 +376,7 @@ export class StackEnvironment extends EventEmitter {
             value,
             source: `file:${decl.file}`,
             type: decl.type,
+            values: decl.values,
             mask: decl.mask,
             description: decl.description,
           });
@@ -376,6 +416,7 @@ export class StackEnvironment extends EventEmitter {
             value: decl.default,
             source: 'schema',
             type: decl.type,
+            values: decl.values,
             description: decl.description,
             mask: decl.mask,
           });
@@ -394,6 +435,7 @@ export class StackEnvironment extends EventEmitter {
               default_formula: decl.default,
               source: 'schema',
               type: decl.type,
+            values: decl.values,
               description: decl.description,
               mask: decl.mask,
             });
@@ -405,6 +447,7 @@ export class StackEnvironment extends EventEmitter {
               formula: decl.default,
               source: 'schema',
               type: decl.type,
+            values: decl.values,
               description: decl.description,
               mask: decl.mask,
             });
@@ -422,6 +465,7 @@ export class StackEnvironment extends EventEmitter {
           formula: decl.value,
           source: 'schema',
           type: decl.type,
+          values: decl.values,
           description: decl.description,
           mask: decl.mask,
         });

@@ -157,6 +157,8 @@ const STACK_ALIASES: Record<string, string> = {
   down: 'stackDown',
   destroy: 'stackDestroy',
   info: 'stackInfo',
+  'exec:ui': 'execUi',
+  'exec:shell': 'execShell',
 };
 
 export function resolveStackAlias(command: string): string | null {
