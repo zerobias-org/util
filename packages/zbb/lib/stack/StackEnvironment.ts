@@ -100,8 +100,9 @@ export class StackEnvironment extends EventEmitter {
     return result;
   }
 
-  list(): string[] {
-    return [...this.env.keys()].sort();
+  list(showHidden = false): string[] {
+    if (showHidden) return [...this.env.keys()].sort();
+    return [...this.env.keys()].filter(k => !this.schema.get(k)?.hidden).sort();
   }
 
   shouldMask(key: string): boolean {
