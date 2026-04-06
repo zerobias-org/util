@@ -3,8 +3,8 @@
  * Runs npm scripts across packages in dependency order.
  */
 
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { MonorepoConfig } from '../config.js';
@@ -21,6 +21,87 @@ import {
   readGateStamp,
   validatePackageStamp,
 } from './GateStamp.js';
+
+// ── Build Cache ─────────────────────────────────────────────────────
+
+interface BuildCacheEntry {
+  sourceHash: string;
+  phases: Record<string, 'passed' | 'skipped' | 'not-found' | 'failed'>;
+}
+
+interface BuildCache {
+  packages: Record<string, BuildCacheEntry>;
+}
+
+function readBuildCache(repoRoot: string): BuildCache {
+  const cachePath = join(repoRoot, '.zbb-build-cache.json');
+  if (!existsSync(cachePath)) return { packages: {} };
+  try {
+    return JSON.parse(readFileSync(cachePath, 'utf-8'));
+  } catch { return { packages: {} }; }
+}
+
+function writeBuildCache(repoRoot: string, cache: BuildCache): void {
+  const cachePath = join(repoRoot, '.zbb-build-cache.json');
+  writeFileSync(cachePath, JSON.stringify(cache, null, 2) + '\n');
+}
+
+/**
+ * Check if a specific phase is cached for a package.
+ * Each phase is independently cached. Source hash change invalidates ALL phases.
+ * For dep-independent phases (lint), only the package's own hash matters.
+ * For dep-dependent phases (transpile), dep hashes must also match.
+ */
+function isPhaseCached(
+  name: string,
+  phase: string,
+  cache: BuildCache,
+  sourceHashes: Map<string, string>,
+  graph: DependencyGraph,
+  ignoreDeps?: boolean,
+): boolean {
+  const currentHash = sourceHashes.get(name);
+  if (!currentHash) return false;
+  const entry = cache.packages[name];
+  if (!entry) return false;
+  // Source changed → all phases invalidated
+  if (entry.sourceHash !== currentHash) return false;
+  // This specific phase must have passed
+  const phaseResult = entry.phases[phase];
+  if (phaseResult !== 'passed' && phaseResult !== 'skipped' && phaseResult !== 'not-found') return false;
+
+  if (ignoreDeps) return true;
+
+  // Check deps' hashes match their cached hashes
+  const pkg = graph.packages.get(name);
+  if (pkg) {
+    for (const dep of pkg.internalDeps) {
+      const depHash = sourceHashes.get(dep);
+      const depEntry = cache.packages[dep];
+      if (!depHash || !depEntry || depEntry.sourceHash !== depHash) return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Update a single phase result in the cache for a package.
+ * Preserves other phases. Updates sourceHash to current.
+ */
+function updatePhaseCache(
+  cache: BuildCache,
+  name: string,
+  phase: string,
+  status: 'passed' | 'skipped' | 'not-found' | 'failed',
+  sourceHash: string,
+): void {
+  if (!cache.packages[name] || cache.packages[name].sourceHash !== sourceHash) {
+    // New hash → reset all phases
+    cache.packages[name] = { sourceHash, phases: {} };
+  }
+  cache.packages[name].phases[phase] = status;
+}
 import { getCurrentBranch } from './ChangeDetector.js';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -211,52 +292,475 @@ function runNpmScript(
   }
 }
 
+function removeArtifacts(pkgDir: string): void {
+  for (const dir of ['dist', 'generated', 'build']) {
+    const target = join(pkgDir, dir);
+    if (existsSync(target)) rmSync(target, { recursive: true });
+  }
+  const buildInfo = join(pkgDir, 'tsconfig.tsbuildinfo');
+  if (existsSync(buildInfo)) rmSync(buildInfo);
+}
+
 function printPhaseHeader(phase: string, packageCount: number): void {
   console.log(`\n── ${phase} (${packageCount} package${packageCount === 1 ? '' : 's'}) ──`);
 }
 
-// ── Clean ────────────────────────────────────────────────────────────
+/**
+ * Run an npm script across packages concurrently, respecting dependency order.
+ * A package starts once all its internal deps (within the affected set) have completed.
+ * Logs ⏳ when spawning, ✓ on success, ✗ on failure.
+ */
+/**
+ * Run an npm script across packages concurrently, respecting dependency order.
+ * A package starts once all its internal deps (within the affected set) have completed.
+ * Uses in-place terminal updates: each package gets one line that updates from ⏳ → ✓/✗.
+ */
+async function runPhaseConcurrently(
+  packageNames: string[],
+  graph: DependencyGraph,
+  phase: string,
+  options?: { verbose?: boolean; config?: MonorepoConfig; repoRoot?: string; buildCache?: BuildCache; sourceHashes?: Map<string, string>; ignoreDeps?: boolean },
+): Promise<Map<string, 'passed' | 'skipped' | 'not-found' | 'failed'>> {
+  const results = new Map<string, 'passed' | 'skipped' | 'not-found' | 'failed'>();
+  const completed = new Set<string>();
+  const pending = new Set(packageNames);
+  const affectedSet = new Set(packageNames);
 
-export function clean(ctx: BuildContext): void {
-  const { graph, affectedOrdered, verbose } = ctx;
-  printPhaseHeader('clean', affectedOrdered.length);
-
-  for (const name of affectedOrdered) {
+  // Skip packages that don't have the script
+  for (const name of [...pending]) {
     const pkg = graph.packages.get(name)!;
-    const shortName = pkg.name.replace(/^@[^/]+\//, '');
+    const scriptBody = pkg.scripts[phase];
+    if (!scriptBody || !scriptBody.trim() || /^echo\s/.test(scriptBody.trim())) {
+      results.set(name, scriptBody ? 'skipped' : 'not-found');
+      completed.add(name);
+      pending.delete(name);
+    }
+  }
 
-    if (pkg.scripts.clean) {
-      process.stdout.write(`  ${shortName}... `);
-      runNpmScript(pkg, 'clean', { verbose });
-      console.log('done');
-    } else {
-      // Fallback: remove dist/ directory
-      const distDir = join(pkg.dir, 'dist');
-      if (existsSync(distDir)) {
-        rmSync(distDir, { recursive: true });
-        console.log(`  ${shortName}... removed dist/`);
-      } else {
-        console.log(`  ${shortName}... nothing to clean`);
+  // Check build cache — skip packages with matching source hash
+  if (options?.buildCache && options?.sourceHashes) {
+    for (const name of [...pending]) {
+      const hash = options.sourceHashes.get(name);
+      if (hash && isPhaseCached(name, phase, options.buildCache, options.sourceHashes!, graph, options.ignoreDeps)) {
+        results.set(name, 'passed');
+        completed.add(name);
+        pending.delete(name);
       }
     }
+  }
+
+  if (pending.size === 0) {
+    // All cached — show them and return
+    const nameLen = Math.max(...packageNames.map(n =>
+      graph.packages.get(n)!.name.replace(/^@[^/]+\//, '').length
+    ));
+    for (const name of packageNames) {
+      if (completed.has(name)) {
+        const short = graph.packages.get(name)!.name.replace(/^@[^/]+\//, '').padEnd(nameLen);
+        console.log(`  \x1b[34m◆ ${short} \x1b[90m(cached)\x1b[0m`);
+      }
+    }
+    return results;
+  }
+
+  function depsCompleted(name: string): boolean {
+    if (options?.ignoreDeps) return true;
+    const pkg = graph.packages.get(name)!;
+    for (const dep of pkg.internalDeps) {
+      if (affectedSet.has(dep) && !completed.has(dep)) return false;
+    }
+    return true;
+  }
+
+  let resolveWaiter: (() => void) | null = null;
+  function signal(): void { if (resolveWaiter) { resolveWaiter(); resolveWaiter = null; } }
+  function waitForSignal(): Promise<void> { return new Promise(r => { resolveWaiter = r; }); }
+
+  const inFlight = new Set<string>();
+  let failed = false;
+  let failError: Error | null = null;
+
+  // Track display state for in-place updates
+  // Each package in this phase gets a slot in the display list
+  const isTTY = process.stdout.isTTY;
+  const displayOrder: string[] = [];
+  const displayStatus = new Map<string, string>();
+  const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const activeSpinners = new Set<string>();
+  const startTimes = new Map<string, number>();
+  let spinnerIdx = 0;
+  let spinnerTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Calculate max short name length for alignment
+  const maxNameLen = Math.max(...packageNames.map(n =>
+    graph.packages.get(n)!.name.replace(/^@[^/]+\//, '').length
+  ));
+
+  function sn(name: string): string {
+    return graph.packages.get(name)!.name.replace(/^@[^/]+\//, '');
+  }
+
+  function pad(name: string): string {
+    return sn(name).padEnd(maxNameLen);
+  }
+
+  function elapsed(name: string): string {
+    const start = startTimes.get(name);
+    if (!start) return '';
+    const ms = Date.now() - start;
+    return `\x1b[90m${(ms / 1000).toFixed(1)}s\x1b[0m`;
+  }
+
+  function renderDisplay(): void {
+    if (!isTTY || displayOrder.length === 0) return;
+    process.stdout.write(`\x1b[${displayOrder.length}A`);
+    for (const name of displayOrder) {
+      process.stdout.write(`\x1b[2K${displayStatus.get(name) ?? ''}\n`);
+    }
+  }
+
+  function updateSpinners(): void {
+    spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
+    const frame = spinnerFrames[spinnerIdx];
+    for (const name of activeSpinners) {
+      displayStatus.set(name, `  \x1b[36m${frame} ${pad(name)} ${elapsed(name)}\x1b[0m`);
+    }
+    renderDisplay();
+  }
+
+  function startSpinnerTimer(): void {
+    if (!isTTY || spinnerTimer) return;
+    spinnerTimer = setInterval(updateSpinners, 80);
+  }
+
+  function stopSpinnerTimer(): void {
+    if (spinnerTimer) { clearInterval(spinnerTimer); spinnerTimer = null; }
+  }
+
+  function setFinalStatus(name: string, icon: string, color: string, suffix?: string): void {
+    activeSpinners.delete(name);
+    const time = suffix ?? elapsed(name);
+    const text = `  ${color}${icon} ${pad(name)}\x1b[0m ${time}`;
+    displayStatus.set(name, text);
+    if (isTTY) {
+      renderDisplay();
+    } else {
+      console.log(text);
+    }
+  }
+
+  function addToDisplay(name: string): void {
+    if (!displayOrder.includes(name)) {
+      displayOrder.push(name);
+      if (isTTY) process.stdout.write('\n');
+    }
+  }
+
+  function spawnOne(name: string): void {
+    inFlight.add(name);
+    startTimes.set(name, Date.now());
+    activeSpinners.add(name);
+    addToDisplay(name);
+    displayStatus.set(name, `  \x1b[36m${spinnerFrames[spinnerIdx]} ${pad(name)} ${elapsed(name)}\x1b[0m`);
+    startSpinnerTimer();
+    if (isTTY) renderDisplay();
+
+    const pkg = graph.packages.get(name)!;
+    const child = spawn('npm', ['run', phase], {
+      cwd: pkg.dir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, FORCE_COLOR: '1' },
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
+    child.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+    child.on('exit', (code) => {
+      inFlight.delete(name);
+      completed.add(name);
+
+      if (code === 0) {
+        results.set(name, 'passed');
+        setFinalStatus(name, '✓', '\x1b[32m');
+      } else {
+        results.set(name, 'failed');
+        setFinalStatus(name, '✗', '\x1b[31m');
+        // Print the actual build output (stdout has compiler errors, stderr has npm wrapper)
+        // Show stdout first (contains the real errors), then stderr if different
+        const output = [stdout.trim(), stderr.trim()].filter(Boolean).join('\n');
+        if (output) {
+          // Move past the display area before printing error details
+          console.log(`\n\x1b[31m── ${sn(name)}: ${phase} errors ──\x1b[0m`);
+          console.log(output);
+          console.log('');
+        }
+        failed = true;
+        failError = new Error(`${sn(name)}: "npm run ${phase}" failed (exit ${code})`);
+        // Mark this phase as failed in cache (preserves other phases like lint)
+        // Also invalidate this phase for all dependents
+        if (options?.buildCache && options?.sourceHashes) {
+          const hash = options.sourceHashes.get(name) ?? '';
+          updatePhaseCache(options.buildCache, name, phase, 'failed', hash);
+          const deps = graph.dependents.get(name);
+          if (deps) {
+            for (const dep of deps) {
+              const depHash = options.sourceHashes.get(dep) ?? '';
+              updatePhaseCache(options.buildCache, dep, phase, 'failed', depHash);
+            }
+          }
+          if (options.repoRoot) writeBuildCache(options.repoRoot, options.buildCache);
+        }
+      }
+      signal();
+    });
+
+    child.on('error', (err) => {
+      inFlight.delete(name);
+      completed.add(name);
+      results.set(name, 'failed');
+      setFinalStatus(name, '✗', '\x1b[31m');
+      failed = true;
+      failError = new Error(`${sn(name)}: spawn error: ${err.message}`);
+      signal();
+    });
+  }
+
+  // Pre-populate display — cached packages show ◆, pending show ◯
+  for (const name of packageNames) {
+    addToDisplay(name);
+    if (completed.has(name)) {
+      displayStatus.set(name, `  \x1b[34m◆ ${pad(name)} \x1b[90m(cached)\x1b[0m`);
+      if (!isTTY) console.log(`  \x1b[34m◆ ${pad(name)} \x1b[90m(cached)\x1b[0m`);
+    } else {
+      displayStatus.set(name, `  \x1b[90m◯ ${pad(name)}\x1b[0m`);
+    }
+  }
+  if (isTTY) renderDisplay();
+
+  // Main loop
+  while (pending.size > 0 || inFlight.size > 0) {
+    if (failed) { stopSpinnerTimer(); throw failError!; }
+
+    for (const name of [...pending]) {
+      if (depsCompleted(name)) {
+        pending.delete(name);
+        spawnOne(name);
+      }
+    }
+
+    if (inFlight.size > 0) {
+      await waitForSignal();
+    }
+  }
+
+  stopSpinnerTimer();
+  if (failed) throw failError!;
+  return results;
+}
+
+// ── Clean ────────────────────────────────────────────────────────────
+
+export async function clean(ctx: BuildContext): Promise<void> {
+  const { graph, affectedOrdered, config, verbose, repoRoot } = ctx;
+  printPhaseHeader('clean', affectedOrdered.length);
+
+  // Use the same concurrent runner — create a virtual "clean" phase
+  // that runs the clean script + removes standard artifacts
+  const completed = new Set<string>();
+  const pending = new Set(affectedOrdered);
+  const inFlight = new Set<string>();
+  const affectedSet = new Set(affectedOrdered);
+
+  let resolveWaiter: (() => void) | null = null;
+  function signal(): void { if (resolveWaiter) { resolveWaiter(); resolveWaiter = null; } }
+  function waitForSignal(): Promise<void> { return new Promise(r => { resolveWaiter = r; }); }
+
+  const isTTY = process.stdout.isTTY;
+  const displayOrder: string[] = [];
+  const displayStatus = new Map<string, string>();
+  const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const activeSpinners = new Set<string>();
+  let spinnerIdx = 0;
+  let spinnerTimer: ReturnType<typeof setInterval> | null = null;
+
+  const maxNameLen = Math.max(...affectedOrdered.map(n =>
+    graph.packages.get(n)!.name.replace(/^@[^/]+\//, '').length
+  ));
+
+  function sn(name: string): string {
+    return graph.packages.get(name)!.name.replace(/^@[^/]+\//, '');
+  }
+
+  function pad(name: string): string {
+    return sn(name).padEnd(maxNameLen);
+  }
+
+  function renderDisplay(): void {
+    if (!isTTY || displayOrder.length === 0) return;
+    process.stdout.write(`\x1b[${displayOrder.length}A`);
+    for (const name of displayOrder) {
+      process.stdout.write(`\x1b[2K${displayStatus.get(name) ?? ''}\n`);
+    }
+  }
+
+  function updateSpinners(): void {
+    spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
+    for (const name of activeSpinners) {
+      displayStatus.set(name, `  \x1b[36m${spinnerFrames[spinnerIdx]} ${pad(name)}\x1b[0m`);
+    }
+    renderDisplay();
+  }
+
+  function startSpinnerTimer(): void {
+    if (!isTTY || spinnerTimer) return;
+    spinnerTimer = setInterval(updateSpinners, 80);
+  }
+
+  function stopSpinnerTimer(): void {
+    if (spinnerTimer) { clearInterval(spinnerTimer); spinnerTimer = null; }
+  }
+
+  function depsCompleted(name: string): boolean {
+    const pkg = graph.packages.get(name)!;
+    for (const dep of pkg.internalDeps) {
+      if (affectedSet.has(dep) && !completed.has(dep)) return false;
+    }
+    return true;
+  }
+
+  // Pre-populate display
+  for (const name of affectedOrdered) {
+    displayOrder.push(name);
+    if (isTTY) process.stdout.write('\n');
+    displayStatus.set(name, depsCompleted(name)
+      ? `  \x1b[90m◯ ${pad(name)}\x1b[0m`
+      : `  \x1b[90m◯ ${pad(name)}\x1b[0m`);
+  }
+  if (isTTY) renderDisplay();
+
+  function spawnClean(name: string): void {
+    const pkg = graph.packages.get(name)!;
+    inFlight.add(name);
+    activeSpinners.add(name);
+    displayStatus.set(name, `  \x1b[36m${spinnerFrames[spinnerIdx]} ${pad(name)}\x1b[0m`);
+    startSpinnerTimer();
+    if (isTTY) renderDisplay();
+
+    if (pkg.scripts.clean) {
+      const child = spawn('npm', ['run', 'clean'], {
+        cwd: pkg.dir,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, FORCE_COLOR: '1' },
+      });
+
+      child.on('exit', () => {
+        removeArtifacts(pkg.dir);
+        inFlight.delete(name);
+        activeSpinners.delete(name);
+        completed.add(name);
+        displayStatus.set(name, `  \x1b[32m✓ ${pad(name)}\x1b[0m`);
+        if (isTTY) renderDisplay(); else console.log(`  \x1b[32m✓ ${pad(name)}\x1b[0m`);
+        signal();
+      });
+
+      child.on('error', () => {
+        removeArtifacts(pkg.dir);
+        inFlight.delete(name);
+        activeSpinners.delete(name);
+        completed.add(name);
+        displayStatus.set(name, `  \x1b[32m✓ ${pad(name)}\x1b[0m`);
+        if (isTTY) renderDisplay(); else console.log(`  \x1b[32m✓ ${pad(name)}\x1b[0m`);
+        signal();
+      });
+    } else {
+      removeArtifacts(pkg.dir);
+      inFlight.delete(name);
+      activeSpinners.delete(name);
+      completed.add(name);
+      displayStatus.set(name, `  \x1b[32m✓ ${pad(name)}\x1b[0m`);
+      if (isTTY) renderDisplay(); else console.log(`  \x1b[32m✓ ${pad(name)}\x1b[0m`);
+      signal();
+    }
+  }
+
+  while (pending.size > 0 || inFlight.size > 0) {
+    for (const name of [...pending]) {
+      if (depsCompleted(name)) {
+        pending.delete(name);
+        spawnClean(name);
+      }
+    }
+    if (inFlight.size > 0) {
+      await waitForSignal();
+    }
+  }
+
+  stopSpinnerTimer();
+
+  // Clean Docker context package/ directories
+  if (config.images) {
+    let dockerCleaned = 0;
+    for (const [dir, imageConfig] of Object.entries(config.images)) {
+      const contextDir = join(repoRoot, imageConfig.context);
+      const packageDir = join(contextDir, 'package');
+      if (existsSync(packageDir)) {
+        rmSync(packageDir, { recursive: true });
+        dockerCleaned += 1;
+      }
+      // Clean stale lockfiles in Docker context
+      const staleLock = join(contextDir, 'package-lock.json');
+      if (existsSync(staleLock)) rmSync(staleLock);
+    }
+    if (dockerCleaned > 0) {
+      console.log(`  [docker] Cleaned ${dockerCleaned} context(s)`);
+    }
+  }
+
+  // Clean root-level build artifacts
+  const rootCleanDirs = ['.nx', 'node_modules/.cache'];
+  let rootCleaned = 0;
+  for (const dir of rootCleanDirs) {
+    const target = join(repoRoot, dir);
+    if (existsSync(target)) {
+      rmSync(target, { recursive: true });
+      rootCleaned += 1;
+    }
+  }
+  // Clean zbb backup files and build cache
+  for (const file of ['.npmrc.zbb-backup', 'package-lock.json.zbb-backup', '.zbb-build-cache.json']) {
+    const target = join(repoRoot, file);
+    if (existsSync(target)) { rmSync(target); rootCleaned += 1; }
+  }
+  if (rootCleaned > 0) {
+    console.log(`\n  \x1b[90m[root] Cleaned ${rootCleaned} artifact(s)\x1b[0m`);
   }
 }
 
 // ── Build ────────────────────────────────────────────────────────────
 
-export function build(ctx: BuildContext): Map<string, Record<string, 'passed' | 'skipped' | 'not-found'>> {
+export async function build(ctx: BuildContext): Promise<Map<string, Record<string, 'passed' | 'skipped' | 'not-found'>>> {
   const { graph, affectedOrdered, config, verbose } = ctx;
-  const phases = config.buildPhases ?? ['lint', 'generate', 'validate', 'transpile'];
+  const phases = config.buildPhases ?? ['lint', 'generate', 'transpile'];
   const allTaskResults = new Map<string, Record<string, 'passed' | 'skipped' | 'not-found'>>();
 
   // Registry injection: if slot is loaded with locally-published packages,
   // swap .npmrc and taint node_modules so npm install picks up local versions
   const registrySwap = injectRegistryForBuild(ctx.repoRoot);
 
+  // Build cache: compute source hashes for affected packages
+  const buildCache = readBuildCache(ctx.repoRoot);
+  const sourceHashes = new Map<string, string>();
+  for (const name of affectedOrdered) {
+    const pkg = graph.packages.get(name)!;
+    sourceHashes.set(name, computeSourceHash(pkg, config));
+  }
+
   try {
 
   for (const phase of phases) {
-    // Collect packages that have this script
+    // Collect packages that have this script or a cache entry
     const packagesWithPhase = affectedOrdered.filter(name => {
       const pkg = graph.packages.get(name)!;
       const body = pkg.scripts[phase];
@@ -264,26 +768,27 @@ export function build(ctx: BuildContext): Map<string, Record<string, 'passed' | 
     });
 
     if (packagesWithPhase.length === 0) continue;
+
     printPhaseHeader(phase, packagesWithPhase.length);
 
-    for (const name of affectedOrdered) {
-      const pkg = graph.packages.get(name)!;
-      const shortName = pkg.name.replace(/^@[^/]+\//, '');
+    // Run packages concurrently, respecting dependency order.
+    // Lint doesn't depend on build outputs — all packages can lint concurrently.
+    const ignoreDeps = phase === 'lint';
+    const results = await runPhaseConcurrently(packagesWithPhase, graph, phase, {
+      verbose, config, repoRoot: ctx.repoRoot, buildCache, sourceHashes, ignoreDeps,
+    });
 
-      const { status } = runNpmScript(pkg, phase, { verbose });
-
-      // Track result
+    for (const [name, status] of results) {
       if (!allTaskResults.has(name)) allTaskResults.set(name, {});
       allTaskResults.get(name)![phase] = status === 'failed' ? 'skipped' : status;
 
-      if (status === 'passed') {
-        console.log(`  ✓ ${shortName}`);
-      } else if (status === 'not-found') {
-        // silent
-      } else if (status === 'skipped') {
-        // silent
+      // Write cache immediately per phase so passing results survive a later failure
+      const hash = sourceHashes.get(name);
+      if (hash) {
+        updatePhaseCache(buildCache, name, phase, status, hash);
       }
     }
+    writeBuildCache(ctx.repoRoot, buildCache);
   }
 
   // Docker build phase — build images for affected packages that declare them
@@ -521,7 +1026,7 @@ function syncCredentials(): void {
 
 // ── Gate (full pipeline with caching) ────────────────────────────────
 
-export function gate(ctx: BuildContext): void {
+export async function gate(ctx: BuildContext): Promise<void> {
   const { repoRoot, graph, affectedOrdered, config } = ctx;
 
   if (affectedOrdered.length === 0) {
@@ -582,7 +1087,7 @@ export function gate(ctx: BuildContext): void {
 
   if (needsBuild) {
     const buildCtx = { ...ctx, affectedOrdered: fullGatePackages };
-    const buildResults = build(buildCtx);
+    const buildResults = await build(buildCtx);
     for (const [k, v] of buildResults) taskResults.set(k, v);
   }
 
@@ -606,7 +1111,7 @@ export function gate(ctx: BuildContext): void {
 
   // Keep valid packages as-is in stamp (already cached)
   // Update packages that were rebuilt or retested
-  const phases = config.buildPhases ?? ['lint', 'generate', 'validate', 'transpile'];
+  const phases = config.buildPhases ?? ['lint', 'generate', 'transpile'];
   const testPhases = config.testPhases ?? ['test'];
 
   for (const name of [...fullGatePackages, ...testsChangedPackages]) {

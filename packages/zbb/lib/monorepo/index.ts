@@ -230,12 +230,12 @@ export async function handleMonorepo(
 
   switch (command) {
     case 'clean':
-      clean(ctx);
+      await clean(ctx);
       break;
 
     case 'build':
       install(repoRoot);
-      build(ctx);
+      await build(ctx);
       break;
 
     case 'test':
@@ -280,7 +280,7 @@ export async function handleMonorepo(
           process.exit(1);
         }
       }
-      gate(ctx);
+      await gate(ctx);
       break;
     }
 
