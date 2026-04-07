@@ -240,7 +240,7 @@ export async function handleMonorepo(
 
     case 'test':
       install(repoRoot);
-      test(ctx);
+      await test(ctx);
       break;
 
     case 'gate': {

@@ -81,6 +81,15 @@ export interface MonorepoConfig {
   images?: Record<string, MonorepoImageConfig>;
   /** GitHub repository (owner/repo) for workflow dispatch (default: auto-detected from git remote) */
   githubRepo?: string;
+  /** Test database provisioning via Neon branching */
+  testDatabase?: {
+    /** Database provider (currently only 'neon') */
+    provider: 'neon';
+    /** Neon parent branch to create ephemeral branches from */
+    parentBranch: string;
+    /** Workspace dirs whose tests need a database */
+    packages: string[];
+  };
   /** Extra preflight checks required before gate/test (e.g., Vault, DB connectivity) */
   gatePreflight?: ToolRequirement[];
 }

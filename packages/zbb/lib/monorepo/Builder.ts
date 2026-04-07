@@ -4,10 +4,10 @@
  */
 
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync, renameSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import type { MonorepoConfig } from '../config.js';
+import { type MonorepoConfig, getZbbDir } from '../config.js';
 import type { DependencyGraph, WorkspacePackage } from './Workspace.js';
 import {
   type GateStamp,
@@ -141,7 +141,6 @@ function injectRegistryForBuild(repoRoot: string): RegistrySwap {
   const slotName = process.env.ZB_SLOT;
   if (!slotName) return swap;
 
-  const { getZbbDir } = require('../config.js');
   const slotsDir = join(getZbbDir(), 'slots', slotName, 'stacks');
   const publishManifest = join(slotsDir, 'registry', 'publishes.json');
   const registryEnvFile = join(slotsDir, 'registry', '.env');
@@ -169,7 +168,7 @@ function injectRegistryForBuild(repoRoot: string): RegistrySwap {
   const npmrcPath = join(repoRoot, '.npmrc');
   const npmrcBackup = npmrcPath + '.zbb-backup';
   if (existsSync(npmrcPath)) {
-    const { renameSync, writeFileSync } = require('node:fs');
+    
     renameSync(npmrcPath, npmrcBackup);
     writeFileSync(npmrcPath, [
       `@zerobias-com:registry=${registryUrl}`,
@@ -187,7 +186,6 @@ function injectRegistryForBuild(repoRoot: string): RegistrySwap {
   const lockfile = join(repoRoot, 'package-lock.json');
   const lockBackup = lockfile + '.zbb-backup';
   if (existsSync(lockfile)) {
-    const { copyFileSync } = require('node:fs');
     copyFileSync(lockfile, lockBackup);
     swap.lockfileBackup = lockBackup;
   }
@@ -212,7 +210,6 @@ function restoreRegistrySwap(swap: RegistrySwap, repoRoot: string): void {
   if (swap.npmrcBackup) {
     const npmrcPath = join(repoRoot, '.npmrc');
     try {
-      const { renameSync } = require('node:fs');
       if (existsSync(npmrcPath)) rmSync(npmrcPath);
       renameSync(swap.npmrcBackup, npmrcPath);
       console.log('  [registry] Restored .npmrc');
@@ -221,7 +218,6 @@ function restoreRegistrySwap(swap: RegistrySwap, repoRoot: string): void {
   if (swap.lockfileBackup) {
     const lockfile = join(repoRoot, 'package-lock.json');
     try {
-      const { renameSync } = require('node:fs');
       if (existsSync(lockfile)) rmSync(lockfile);
       renameSync(swap.lockfileBackup, lockfile);
       console.log('  [registry] Restored package-lock.json');
@@ -237,7 +233,7 @@ interface ScriptResult {
 function runNpmScript(
   pkg: WorkspacePackage,
   script: string,
-  options?: { verbose?: boolean; allowFailure?: boolean; showOutput?: boolean },
+  options?: { verbose?: boolean; allowFailure?: boolean; showOutput?: boolean; env?: Record<string, string | undefined> },
 ): ScriptResult {
   // Check if the package has this script
   const scriptBody = pkg.scripts[script];
@@ -259,7 +255,7 @@ function runNpmScript(
     execFileSync('npm', ['run', script], {
       cwd: pkg.dir,
       stdio: inherit ? 'inherit' : ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '1' },
+      env: { ...process.env, FORCE_COLOR: '1', ...options?.env },
       timeout: 300_000, // 5 min per phase
     });
 
@@ -728,8 +724,8 @@ export async function clean(ctx: BuildContext): Promise<void> {
       rootCleaned += 1;
     }
   }
-  // Clean zbb backup files and build cache
-  for (const file of ['.npmrc.zbb-backup', 'package-lock.json.zbb-backup', '.zbb-build-cache.json']) {
+  // Clean zbb backup files, build cache, and gate stamp
+  for (const file of ['.npmrc.zbb-backup', 'package-lock.json.zbb-backup', '.zbb-build-cache.json', 'gate-stamp.json']) {
     const target = join(repoRoot, file);
     if (existsSync(target)) { rmSync(target); rootCleaned += 1; }
   }
@@ -749,11 +745,11 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
   // swap .npmrc and taint node_modules so npm install picks up local versions
   const registrySwap = injectRegistryForBuild(ctx.repoRoot);
 
-  // Build cache: compute source hashes for affected packages
+  // Build cache: compute source hashes for ALL packages (not just affected)
+  // so dependency hash checks work even when a dep isn't in the affected set
   const buildCache = readBuildCache(ctx.repoRoot);
   const sourceHashes = new Map<string, string>();
-  for (const name of affectedOrdered) {
-    const pkg = graph.packages.get(name)!;
+  for (const [name, pkg] of graph.packages) {
     sourceHashes.set(name, computeSourceHash(pkg, config));
   }
 
@@ -791,7 +787,7 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
     writeBuildCache(ctx.repoRoot, buildCache);
   }
 
-  // Docker build phase — build images for affected packages that declare them
+  // Docker build phase — build images concurrently
   if (!ctx.skipDocker && config.images) {
     const dockerPackages = affectedOrdered.filter(name => {
       const pkg = graph.packages.get(name)!;
@@ -800,104 +796,12 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
 
     if (dockerPackages.length > 0) {
       printPhaseHeader('docker', dockerPackages.length);
-
-      for (const name of dockerPackages) {
-        const pkg = graph.packages.get(name)!;
-        const imageConfig = config.images![pkg.relDir];
-        const shortName = pkg.name.replace(/^@[^/]+\//, '');
-        const imageTag = `${imageConfig.name}:dev`;
-        const contextDir = join(ctx.repoRoot, imageConfig.context);
-
-        if (!existsSync(contextDir)) {
-          console.log(`  ⚠ ${shortName}: Docker context not found at ${imageConfig.context}`);
-          continue;
-        }
-
-        // Prepare Docker context: npm pack → extract to context/package/
-        const packageDir = join(contextDir, 'package');
-
-        // Clean stale lockfile and package dir
-        const staleLock = join(contextDir, 'package-lock.json');
-        if (existsSync(staleLock)) rmSync(staleLock);
-        if (existsSync(packageDir)) rmSync(packageDir, { recursive: true });
-
-        process.stdout.write(`  ${shortName}: packing... `);
-        try {
-          // Run prepublish-standalone if available (resolves workspace deps for standalone install)
-          const prepubScript = join(ctx.repoRoot, 'node_modules', '@zerobias-org', 'devops-tools', 'scripts', 'prepublish-standalone.sh');
-          if (existsSync(prepubScript)) {
-            execFileSync('bash', [prepubScript, ctx.repoRoot, '--library'], {
-              cwd: pkg.dir,
-              stdio: 'pipe',
-              timeout: 120_000,
-            });
-          }
-
-          // npm pack
-          const tgzName = execFileSync('npm', ['pack', '--pack-destination', contextDir], {
-            cwd: pkg.dir,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-          }).trim().split('\n').pop()!;
-
-          // Extract tarball
-          execFileSync('tar', ['xzf', tgzName, '-C', contextDir], {
-            cwd: contextDir,
-            stdio: 'pipe',
-          });
-
-          // Remove tarball
-          const tgzPath = join(contextDir, tgzName);
-          if (existsSync(tgzPath)) rmSync(tgzPath);
-
-          // Restore package.json if prepublish modified it
-          const backupPkg = join(pkg.dir, 'package.json.prepublish-backup');
-          if (existsSync(backupPkg)) {
-            const { renameSync } = require('node:fs');
-            renameSync(backupPkg, join(pkg.dir, 'package.json'));
-          }
-
-          process.stdout.write('building... ');
-
-          // Docker build
-          const npmToken = process.env.NPM_TOKEN ?? '';
-          const zbToken = process.env.ZB_TOKEN ?? '';
-
-          execFileSync('docker', [
-            'build',
-            '--progress=plain',
-            '-t', imageTag,
-            '--build-arg', `npm_token=${npmToken}`,
-            '--build-arg', `zb_token=${zbToken}`,
-            '.',
-          ], {
-            cwd: contextDir,
-            stdio: ctx.verbose ? 'inherit' : ['pipe', 'pipe', 'pipe'],
-            timeout: 600_000, // 10 min
-          });
-
-          console.log(`✓ ${imageTag}`);
-        } catch (error: any) {
-          console.log(`✗ failed`);
-          if (!ctx.verbose) {
-            const output = error.stderr?.toString() ?? error.stdout?.toString() ?? '';
-            if (output.trim()) console.log(output.trimEnd());
-          }
-          throw new Error(`Docker build failed for ${shortName}: ${error.message}`);
-        } finally {
-          // Restore prepublish backup if it still exists
-          const backupPkg = join(pkg.dir, 'package.json.prepublish-backup');
-          if (existsSync(backupPkg)) {
-            const { renameSync } = require('node:fs');
-            renameSync(backupPkg, join(pkg.dir, 'package.json'));
-          }
-        }
-      }
+      await buildDockerImages(dockerPackages, graph, config, ctx);
 
       // Prune dangling images after Docker builds
       try {
         execFileSync('docker', ['image', 'prune', '-f'], { stdio: 'pipe' });
-      } catch { /* docker not available or no dangling images */ }
+      } catch { /* ignore */ }
     }
   }
 
@@ -908,6 +812,277 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
   }
 }
 
+// ── Docker Build (concurrent) ───────────────────────────────────────
+
+async function buildDockerImages(
+  packageNames: string[],
+  graph: DependencyGraph,
+  config: MonorepoConfig,
+  ctx: BuildContext,
+): Promise<void> {
+  const isTTY = process.stdout.isTTY;
+  const maxNameLen = Math.max(...packageNames.map(n =>
+    graph.packages.get(n)!.name.replace(/^@[^/]+\//, '').length
+  ));
+  const displayOrder: string[] = [];
+  const displayStatus = new Map<string, string>();
+  const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const activeSpinners = new Map<string, string>(); // name → current stage text
+  const startTimes = new Map<string, number>();
+  let spinnerIdx = 0;
+  let spinnerTimer: ReturnType<typeof setInterval> | null = null;
+
+  function sn(name: string): string { return graph.packages.get(name)!.name.replace(/^@[^/]+\//, ''); }
+  function pad(name: string): string { return sn(name).padEnd(maxNameLen); }
+  function elapsed(name: string): string {
+    const start = startTimes.get(name);
+    if (!start) return '';
+    return `\x1b[90m${((Date.now() - start) / 1000).toFixed(1)}s\x1b[0m`;
+  }
+
+  function renderDisplay(): void {
+    if (!isTTY || displayOrder.length === 0) return;
+    process.stdout.write(`\x1b[${displayOrder.length}A`);
+    for (const name of displayOrder) {
+      process.stdout.write(`\x1b[2K${displayStatus.get(name) ?? ''}\n`);
+    }
+  }
+
+  function updateSpinners(): void {
+    spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
+    for (const [name, stage] of activeSpinners) {
+      displayStatus.set(name, `  \x1b[36m${spinnerFrames[spinnerIdx]} ${pad(name)} ${stage} ${elapsed(name)}\x1b[0m`);
+    }
+    renderDisplay();
+  }
+
+  function startSpinnerTimer(): void {
+    if (!isTTY || spinnerTimer) return;
+    spinnerTimer = setInterval(updateSpinners, 80);
+  }
+  function stopSpinnerTimer(): void {
+    if (spinnerTimer) { clearInterval(spinnerTimer); spinnerTimer = null; }
+  }
+
+  // Pre-populate display
+  for (const name of packageNames) {
+    displayOrder.push(name);
+    if (isTTY) process.stdout.write('\n');
+    displayStatus.set(name, `  \x1b[90m◯ ${pad(name)}\x1b[0m`);
+  }
+  if (isTTY) renderDisplay();
+
+  let resolveWaiter: (() => void) | null = null;
+  function signal(): void { if (resolveWaiter) { resolveWaiter(); resolveWaiter = null; } }
+  function waitForSignal(): Promise<void> { return new Promise(r => { resolveWaiter = r; }); }
+
+  const inFlight = new Set<string>();
+  const completed = new Set<string>();
+  const pending = new Set(packageNames);
+  let failed = false;
+  let failError: Error | null = null;
+
+  function buildOne(name: string): void {
+    const pkg = graph.packages.get(name)!;
+    const imageConfig = config.images![pkg.relDir];
+    const imageTag = `${imageConfig.name}:dev`;
+    const contextDir = join(ctx.repoRoot, imageConfig.context);
+
+    inFlight.add(name);
+    startTimes.set(name, Date.now());
+    activeSpinners.set(name, 'packing');
+    startSpinnerTimer();
+    if (isTTY) renderDisplay();
+
+    // Run the entire pack + build pipeline in a child process to keep it non-blocking
+    const script = `
+      set -e
+      CONTEXT="${contextDir}"
+      PKG_DIR="${pkg.dir}"
+      REPO_ROOT="${ctx.repoRoot}"
+      IMAGE_TAG="${imageTag}"
+
+      # Clean context
+      rm -f "$CONTEXT/package-lock.json"
+      rm -rf "$CONTEXT/package"
+
+      # Prepublish standalone if available
+      PREPUB="$REPO_ROOT/node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.sh"
+      if [ -f "$PREPUB" ]; then
+        bash "$PREPUB" "$REPO_ROOT" --library 2>&1
+      fi
+
+      # Pack
+      TGZ=$(cd "$PKG_DIR" && npm pack --pack-destination "$CONTEXT" 2>/dev/null | tail -1)
+      tar xzf "$CONTEXT/$TGZ" -C "$CONTEXT"
+      rm -f "$CONTEXT/$TGZ"
+
+      # Restore prepublish backup
+      [ -f "$PKG_DIR/package.json.prepublish-backup" ] && mv "$PKG_DIR/package.json.prepublish-backup" "$PKG_DIR/package.json" || true
+
+      # Build
+      docker build --progress=plain \\
+        -t "$IMAGE_TAG" \\
+        --build-arg npm_token="${process.env.NPM_TOKEN ?? ''}" \\
+        --build-arg zb_token="${process.env.ZB_TOKEN ?? ''}" \\
+        . 2>&1
+
+      # Restore prepublish backup (in case build failed before restore)
+      [ -f "$PKG_DIR/package.json.prepublish-backup" ] && mv "$PKG_DIR/package.json.prepublish-backup" "$PKG_DIR/package.json" || true
+    `;
+
+    const child = spawn('bash', ['-c', script], {
+      cwd: contextDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: process.env,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let stage = 'packing';
+    child.stdout?.on('data', (d: Buffer) => {
+      stdout += d.toString();
+      // Detect stage transitions from output
+      if (stdout.includes('docker build') && stage === 'packing') {
+        stage = 'building';
+        activeSpinners.set(name, 'building');
+      }
+    });
+    child.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+    child.on('exit', (code) => {
+      inFlight.delete(name);
+      activeSpinners.delete(name);
+      completed.add(name);
+
+      if (code === 0) {
+        displayStatus.set(name, `  \x1b[32m✓ ${pad(name)} ${elapsed(name)}\x1b[0m`);
+        if (!isTTY) console.log(`  \x1b[32m✓ ${pad(name)} ${elapsed(name)}\x1b[0m`);
+      } else {
+        displayStatus.set(name, `  \x1b[31m✗ ${pad(name)} ${elapsed(name)}\x1b[0m`);
+        if (!isTTY) console.log(`  \x1b[31m✗ ${pad(name)} ${elapsed(name)}\x1b[0m`);
+        failed = true;
+        const output = [stdout.trim(), stderr.trim()].filter(Boolean).join('\n');
+        failError = new Error(`Docker build failed for ${sn(name)}`);
+        if (output) {
+          console.log(`\n\x1b[31m── ${sn(name)}: docker errors ──\x1b[0m`);
+          console.log(output);
+        }
+      }
+      if (isTTY) renderDisplay();
+      signal();
+    });
+
+    child.on('error', (err) => {
+      inFlight.delete(name);
+      activeSpinners.delete(name);
+      completed.add(name);
+      displayStatus.set(name, `  \x1b[31m✗ ${pad(name)}\x1b[0m`);
+      failed = true;
+      failError = new Error(`Docker build spawn error for ${sn(name)}: ${err.message}`);
+      if (isTTY) renderDisplay();
+      signal();
+    });
+  }
+
+  // All Docker builds can run concurrently (no inter-package deps for Docker)
+  for (const name of [...pending]) {
+    pending.delete(name);
+    buildOne(name);
+  }
+
+  // Wait for all to complete
+  while (inFlight.size > 0) {
+    await waitForSignal();
+    if (failed) { stopSpinnerTimer(); throw failError!; }
+  }
+
+  stopSpinnerTimer();
+  if (failed) throw failError!;
+}
+
+// ── Neon Database Branching ──────────────────────────────────────────
+
+interface NeonBranch {
+  branchId: string;
+  host: string;
+  password: string;
+  role: string;
+  database: string;
+}
+
+function neonCreateBranch(
+  apiKey: string,
+  projectId: string,
+  parentBranch: string,
+  branchName: string,
+  dbRole: string,
+  dbName: string,
+): NeonBranch {
+  const baseUrl = `https://console.neon.tech/api/v2/projects/${projectId}`;
+
+  // Step 1: Look up parent branch ID
+  const branchesOutput = execFileSync('curl', [
+    '-sf',
+    '-H', `Authorization: Bearer ${apiKey}`,
+    `${baseUrl}/branches`,
+  ], { encoding: 'utf-8', timeout: 30_000 });
+
+  const parentIdMatch = branchesOutput.match(
+    new RegExp(`"id"\\s*:\\s*"(br-[^"]+)"[^}]*?"name"\\s*:\\s*"${parentBranch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`)
+  ) ?? branchesOutput.match(
+    new RegExp(`"name"\\s*:\\s*"${parentBranch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^}]*?"id"\\s*:\\s*"(br-[^"]+)"`)
+  );
+  if (!parentIdMatch) {
+    throw new Error(`Parent branch '${parentBranch}' not found in project ${projectId}`);
+  }
+  const parentId = parentIdMatch[1];
+
+  // Step 2: Create branch
+  const createPayload = JSON.stringify({
+    branch: { name: branchName, parent_id: parentId },
+    endpoints: [{ type: 'read_write', suspend_timeout_seconds: 300 }],
+  });
+
+  const createOutput = execFileSync('curl', [
+    '-sf',
+    '-H', `Authorization: Bearer ${apiKey}`,
+    '-H', 'Content-Type: application/json',
+    '-X', 'POST',
+    '-d', createPayload,
+    `${baseUrl}/branches`,
+  ], { encoding: 'utf-8', timeout: 60_000 });
+
+  const branchId = createOutput.match(/"id"\s*:\s*"(br-[^"]+)"/)?.[1];
+  const host = createOutput.match(/"host"\s*:\s*"([^"]+)"/)?.[1];
+  if (!branchId || !host) {
+    throw new Error(`Failed to parse Neon branch response: ${createOutput.substring(0, 200)}`);
+  }
+
+  // Step 3: Get role password
+  const passwordOutput = execFileSync('curl', [
+    '-sf',
+    '-H', `Authorization: Bearer ${apiKey}`,
+    `${baseUrl}/branches/${branchId}/roles/${dbRole}/reveal_password`,
+  ], { encoding: 'utf-8', timeout: 30_000 });
+
+  const password = passwordOutput.match(/"password"\s*:\s*"([^"]+)"/)?.[1];
+  if (!password) {
+    throw new Error(`Failed to get password for role ${dbRole}`);
+  }
+
+  return { branchId, host, password, role: dbRole, database: dbName };
+}
+
+function neonDeleteBranch(apiKey: string, projectId: string, branchId: string): void {
+  execFileSync('curl', [
+    '-sf',
+    '-H', `Authorization: Bearer ${apiKey}`,
+    '-X', 'DELETE',
+    `https://console.neon.tech/api/v2/projects/${projectId}/branches/${branchId}`,
+  ], { encoding: 'utf-8', timeout: 30_000 });
+}
+
 // ── Test ─────────────────────────────────────────────────────────────
 
 export interface TestOutput {
@@ -915,8 +1090,8 @@ export interface TestOutput {
   failed: boolean;
 }
 
-export function test(ctx: BuildContext): TestOutput {
-  const { graph, affectedOrdered, config, verbose } = ctx;
+export async function test(ctx: BuildContext): Promise<TestOutput> {
+  const { graph, affectedOrdered, config, verbose, repoRoot } = ctx;
   const phases = config.testPhases ?? ['test'];
   const allTestResults = new Map<string, Record<string, TestSuiteEntry>>();
 
@@ -929,62 +1104,153 @@ export function test(ctx: BuildContext): TestOutput {
     });
   });
 
+  // Pre-populate results for packages without tests — mark as skipped
+  for (const name of affectedOrdered) {
+    if (!packagesWithTests.includes(name)) {
+      const pkg = graph.packages.get(name)!;
+      const testSuiteResults: Record<string, TestSuiteEntry> = {};
+      for (const suite of ['unit', 'integration', 'e2e']) {
+        testSuiteResults[suite] = { expected: 0, ran: 0, status: 'skipped' };
+      }
+      allTestResults.set(name, testSuiteResults);
+    }
+  }
+
   if (packagesWithTests.length === 0) {
     console.log('\n── test (0 packages) ──');
     console.log('  No packages with test scripts.');
     return { results: allTestResults, failed: false };
   }
 
+  // Neon database config
+  const dbConfig = config.testDatabase;
+  const dbPackageSet = new Set(dbConfig?.packages ?? []);
+  const needsNeon = dbConfig && dbConfig.provider === 'neon';
+
+  if (needsNeon) {
+    const apiKey = process.env.NEON_API_KEY;
+    const projectId = process.env.NEON_PROJECT_ID;
+    if (!apiKey || !projectId) {
+      console.error('\x1b[31mNeon test database required but NEON_API_KEY or NEON_PROJECT_ID not set.\x1b[0m');
+      console.error('Set from Vault: vault kv get operations-kv/neon/content');
+      process.exit(1);
+    }
+  }
+
   printPhaseHeader('test', packagesWithTests.length);
   let testsFailed = false;
 
-  for (const name of affectedOrdered) {
-    const pkg = graph.packages.get(name)!;
-    const shortName = pkg.name.replace(/^@[^/]+\//, '');
-    const testSuiteResults: Record<string, TestSuiteEntry> = {};
+  // Track all Neon branches for guaranteed cleanup
+  const neonBranches: Array<{ branchId: string; shortName: string }> = [];
+  const apiKey = process.env.NEON_API_KEY ?? '';
+  const projectId = process.env.NEON_PROJECT_ID ?? '';
 
-    // Count expected tests per suite
-    const suites = {
-      unit: join(pkg.dir, 'test', 'unit'),
-      integration: join(pkg.dir, 'test', 'integration'),
-      e2e: join(pkg.dir, 'test', 'e2e'),
-    };
+  try {
+    // Run all test packages concurrently — each DB package gets its own Neon branch
+    const testPromises: Array<Promise<void>> = [];
 
-    for (const [suite, dir] of Object.entries(suites)) {
-      const expected = countExpectedTests(dir);
-      testSuiteResults[suite] = {
-        expected,
-        ran: 0,
-        status: expected === 0 ? 'skipped' : 'not-run',
-      };
-    }
+    for (const name of affectedOrdered) {
+      const pkg = graph.packages.get(name)!;
+      const shortName = pkg.name.replace(/^@[^/]+\//, '');
+      const packageNeedsDb = needsNeon && dbPackageSet.has(pkg.relDir);
 
-    // Run test phases — always show output so devs see results
-    for (const phase of phases) {
-      console.log(`  ${shortName}: npm run ${phase}`);
-      const { status, error } = runNpmScript(pkg, phase, { showOutput: true, allowFailure: true });
-      if (status === 'passed') {
-        console.log(`  ✓ ${shortName}`);
-        // Mark all suites with tests as passed
-        for (const [suite, entry] of Object.entries(testSuiteResults)) {
-          if (entry.expected > 0) {
-            entry.ran = entry.expected;
-            entry.status = 'passed';
+      const promise = (async () => {
+        const testSuiteResults: Record<string, TestSuiteEntry> = {};
+
+        // Count expected tests per suite
+        for (const [suite, dir] of Object.entries({
+          unit: join(pkg.dir, 'test', 'unit'),
+          integration: join(pkg.dir, 'test', 'integration'),
+          e2e: join(pkg.dir, 'test', 'e2e'),
+        })) {
+          const expected = countExpectedTests(dir);
+          testSuiteResults[suite] = { expected, ran: 0, status: expected === 0 ? 'skipped' : 'not-run' };
+        }
+
+        // Create per-package Neon branch if needed
+        let branchId: string | null = null;
+        const pgEnv: Record<string, string> = {};
+
+        if (packageNeedsDb) {
+          const parentBranch = process.env.NEON_PARENT_BRANCH ?? dbConfig!.parentBranch;
+          const dbRole = process.env.NEON_DB_ROLE ?? 'neondb_owner';
+          const dbName = process.env.NEON_DB_NAME ?? 'zerobias';
+          const branchName = `zbb-${shortName}-${Date.now()}`;
+
+          console.log(`  \x1b[90m${shortName}: creating neon branch...\x1b[0m`);
+
+          try {
+            const neon = neonCreateBranch(apiKey, projectId, parentBranch, branchName, dbRole, dbName);
+            branchId = neon.branchId;
+            neonBranches.push({ branchId, shortName });
+
+            pgEnv.PGHOST = neon.host;
+            pgEnv.PGPORT = '5432';
+            pgEnv.PGUSER = neon.role;
+            pgEnv.PGPASSWORD = neon.password;
+            pgEnv.PGDATABASE = neon.database;
+            pgEnv.PGSSLMODE = 'require';
+
+            console.log(`  \x1b[90m${shortName}: branch ready (${neon.host})\x1b[0m`);
+          } catch (error: any) {
+            console.error(`  \x1b[31m✗ ${shortName}: failed to create neon branch\x1b[0m`);
+            console.error(`    ${error.message}`);
+            testsFailed = true;
+            allTestResults.set(name, testSuiteResults);
+            return;
           }
         }
-      } else if (status === 'failed') {
-        console.log(`  ✗ ${shortName} (test failures)`);
-        if (error) console.log(`    ${error.split('\n')[0]}`);
-        testsFailed = true;
-      } else {
-        // skipped or not-found
-        for (const entry of Object.values(testSuiteResults)) {
-          if (entry.status === 'not-run') entry.status = 'skipped';
+
+        // Run test phases with package-specific PG env
+        for (const phase of phases) {
+          console.log(`  ${shortName}: npm run ${phase}`);
+
+          // For DB packages, spawn with custom env (not process.env override)
+          const customEnv = packageNeedsDb ? { ...process.env, ...pgEnv } : undefined;
+
+          const { status, error } = runNpmScript(pkg, phase, {
+            showOutput: true,
+            allowFailure: true,
+            env: customEnv,
+          });
+
+          if (status === 'passed') {
+            console.log(`  \x1b[32m✓ ${shortName}\x1b[0m`);
+            for (const entry of Object.values(testSuiteResults)) {
+              if (entry.expected > 0) { entry.ran = entry.expected; entry.status = 'passed'; }
+            }
+          } else if (status === 'failed') {
+            console.log(`  \x1b[31m✗ ${shortName} (test failures)\x1b[0m`);
+            if (error) console.log(`    ${error.split('\n')[0]}`);
+            testsFailed = true;
+          } else {
+            for (const entry of Object.values(testSuiteResults)) {
+              if (entry.status === 'not-run') entry.status = 'skipped';
+            }
+          }
+        }
+
+        allTestResults.set(name, testSuiteResults);
+      })();
+
+      testPromises.push(promise);
+    }
+
+    await Promise.all(testPromises);
+
+  } finally {
+    // Always clean up ALL Neon branches
+    if (neonBranches.length > 0) {
+      console.log(`\n── neon cleanup ──`);
+      for (const { branchId, shortName } of neonBranches) {
+        try {
+          neonDeleteBranch(apiKey, projectId, branchId);
+          console.log(`  \x1b[32m✓\x1b[0m ${shortName}: branch deleted (${branchId})`);
+        } catch (err: any) {
+          console.error(`  \x1b[33m⚠\x1b[0m ${shortName}: failed to delete branch ${branchId}: ${err.message}`);
         }
       }
     }
-
-    allTestResults.set(name, testSuiteResults);
   }
 
   return { results: allTestResults, failed: testsFailed };
@@ -1053,15 +1319,15 @@ export async function gate(ctx: BuildContext): Promise<void> {
     switch (result) {
       case GateStampResult.VALID:
         validPackages.push(name);
-        console.log(`  ✓ ${shortName} — up to date, skipping`);
+        console.log(`  \x1b[32m✓\x1b[0m ${shortName} \x1b[32m— up to date, skipping\x1b[0m`);
         break;
       case GateStampResult.TESTS_CHANGED:
         testsChangedPackages.push(name);
-        console.log(`  ~ ${shortName} — tests changed, re-running tests only`);
+        console.log(`  \x1b[33m~\x1b[0m ${shortName} \x1b[33m— tests changed, re-running tests only\x1b[0m`);
         break;
       default:
         fullGatePackages.push(name);
-        console.log(`  ✗ ${shortName} — full gate needed`);
+        console.log(`  \x1b[31m✗\x1b[0m ${shortName} \x1b[31m— full gate needed\x1b[0m`);
     }
   }
 
@@ -1096,7 +1362,7 @@ export async function gate(ctx: BuildContext): Promise<void> {
 
   // Test: packages needing full gate + packages with only test changes
   const packagesToTest = [...fullGatePackages, ...testsChangedPackages];
-  const testOutput = test({ ...ctx, affectedOrdered: packagesToTest });
+  const testOutput = await test({ ...ctx, affectedOrdered: packagesToTest });
   const testResults = testOutput.results;
   const testsFailed = testOutput.failed;
 
@@ -1137,18 +1403,11 @@ export async function gate(ctx: BuildContext): Promise<void> {
     stamp.packages[name] = buildPackageStampEntry(pkg, config, allTasks, tests);
   }
 
-  writeGateStamp(repoRoot, stamp);
-
-  const skipped = validPackages.length;
-  const rebuilt = fullGatePackages.length;
-  const retested = testsChangedPackages.length;
-  console.log(`  ✓ gate-stamp.json written (${skipped} cached, ${rebuilt} rebuilt, ${retested} retested)`);
-
   // Print test summary
   let totalExpected = 0;
   let totalPassed = 0;
   for (const [, tests] of testResults) {
-    for (const [, entry] of Object.entries(tests)) {
+    for (const [, entry] of Object.entries(tests) as Array<[string, TestSuiteEntry]>) {
       if (entry.expected > 0) {
         totalExpected += entry.expected;
         totalPassed += entry.ran;
@@ -1160,7 +1419,15 @@ export async function gate(ctx: BuildContext): Promise<void> {
   }
 
   if (testsFailed) {
-    console.error('\nGate failed — test failures detected. Stamp written with current state.');
+    console.error('\n\x1b[31mGate failed — test failures detected. Stamp NOT written.\x1b[0m');
     process.exit(1);
   }
+
+  // Only write stamp if all tests passed
+  writeGateStamp(repoRoot, stamp);
+
+  const skipped = validPackages.length;
+  const rebuilt = fullGatePackages.length;
+  const retested = testsChangedPackages.length;
+  console.log(`  \x1b[32m✓ gate-stamp.json written (${skipped} cached, ${rebuilt} rebuilt, ${retested} retested)\x1b[0m`);
 }

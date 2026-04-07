@@ -154,6 +154,12 @@ async function _main(argv: string[]): Promise<void> {
   // Stack commands (up/down/destroy/info) still route to Gradle even in monorepos.
   const repoRoot = findRepoRoot(process.cwd());
   if (repoRoot && isMonorepoCommand(command) && isMonorepo(repoRoot)) {
+    // If a slot is loaded, resolve its env (Vault, DNS) and export to process.env
+    // so monorepo commands have access to slot-provided vars (e.g., NEON_API_KEY)
+    if (process.env.ZB_SLOT) {
+      const slot = await SlotManager.load(process.env.ZB_SLOT);
+      await prepareSlot(slot);
+    }
     return handleMonorepo(command, args.slice(1), repoRoot);
   }
 
