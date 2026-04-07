@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/module-test-client",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Wire protocol client for testing Hub modules — implements any module's generated interface via manifest-driven dynamic invocation",
   "type": "module",
   "main": "dist/index.js",
@@ -24,5 +24,16 @@
   ],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
+  },
+  "dependencies": {
+    "axios": "^1.13.5",
+    "yaml": "2.8.3"
+  },
+  "overrides": {
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.4",
+    "glob": ">=11",
+    "serialize-javascript": "7.0.5",
+    "yaml": "2.8.3"
   }
 }

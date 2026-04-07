@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/eslint-config",
-  "version": "1.0.35",
+  "version": "1.0.36",
   "description": "Zerobias organization eslint configuration",
   "type": "module",
   "main": "eslint.config.js",
@@ -24,5 +24,17 @@
   ],
   "files": [
     "eslint.config.js"
-  ]
+  ],
+  "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.53.0",
+    "@typescript-eslint/parser": "^8.53.0",
+    "eslint": "^10.1.0"
+  },
+  "overrides": {
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.4",
+    "glob": ">=11",
+    "serialize-javascript": "7.0.5",
+    "yaml": "2.8.3"
+  }
 }

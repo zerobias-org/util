@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-api-invoker-isomorphic",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "description": "Isomorphic Api Invoker",
   "type": "module",
   "main": "dist/src/index.js",
@@ -36,6 +36,17 @@
     "bom.json"
   ],
   "dependencies": {
-    "@zerobias-org/util-api-invoker-api": "^1.0.33"
+    "@zerobias-org/types-core-js": "^1.2.17",
+    "@zerobias-org/util-api-invoker-api": "^1.0.34",
+    "axios": "^1.13.5",
+    "form-data": "^4.0.0",
+    "qs": "^6.14.0"
+  },
+  "overrides": {
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.4",
+    "glob": ">=11",
+    "serialize-javascript": "7.0.5",
+    "yaml": "2.8.3"
   }
 }

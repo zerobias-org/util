@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/logger",
-  "version": "3.0.5",
+  "version": "3.0.6",
   "description": "ZeroBias Logger - standard logging for all services.",
   "type": "module",
   "main": "dist/src/index.js",
@@ -40,6 +40,16 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
-    "@zerobias-org/util-api-client-base": "^1.0.40"
+    "@zerobias-org/util-api-client-base": "^1.0.41",
+    "chalk": "^5.6.2",
+    "winston": "^3.2.0",
+    "winston-transport": "^4.9.0"
+  },
+  "overrides": {
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.4",
+    "glob": ">=11",
+    "serialize-javascript": "7.0.5",
+    "yaml": "2.8.3"
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-codegen",
   "description": "OpenAPI Generator for models and server apis",
-  "version": "2.0.43",
+  "version": "2.0.44",
   "type": "module",
   "author": "team@zerobias.com",
   "license": "ISC",
@@ -48,6 +48,13 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
-    "@zerobias-org/util-connector": "^1.0.36"
+    "@zerobias-org/util-connector": "^1.0.37"
+  },
+  "overrides": {
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.4",
+    "glob": ">=11",
+    "serialize-javascript": "7.0.5",
+    "yaml": "2.8.3"
   }
 }

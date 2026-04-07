@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-spectral-config",
   "description": "Zerobias spectral configuration options",
-  "version": "1.0.31",
+  "version": "1.0.32",
   "type": "module",
   "author": "team@zerobias.com",
   "license": "ISC",
@@ -21,7 +21,9 @@
     "registry": "https://pkg.zerobias.org/"
   },
   "dependencies": {
-    "@zerobias-org/eslint-config": "^1.0.35"
+    "@stoplight/json-ref-resolver": "^3.1.6",
+    "@zerobias-org/eslint-config": "^1.0.31",
+    "@zerobias-org/types-format-spectral-ruleset": "^1.0.37"
   },
   "files": [
     "index.js",
@@ -32,5 +34,12 @@
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"
+  },
+  "overrides": {
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.4",
+    "glob": ">=11",
+    "serialize-javascript": "7.0.5",
+    "yaml": "2.8.3"
   }
 }

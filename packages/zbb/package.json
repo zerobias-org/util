@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/zbb",
   "description": "ZeroBias Build — Gradle wrapper + slot-based environment management",
-  "version": "0.3.18",
+  "version": "0.3.19",
   "type": "module",
   "bin": {
     "zbb": "bin/zbb.mjs"
@@ -50,5 +50,16 @@
   ],
   "engines": {
     "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "semver": "^7.6.0",
+    "yaml": "2.8.3"
+  },
+  "overrides": {
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.4",
+    "glob": ">=11",
+    "serialize-javascript": "7.0.5",
+    "yaml": "2.8.3"
   }
 }

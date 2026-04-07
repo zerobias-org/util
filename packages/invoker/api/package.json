@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-api-invoker-api",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "description": "Api Invoker API",
   "type": "module",
   "main": "dist/index.js",
@@ -37,6 +37,14 @@
     "bom.json"
   ],
   "dependencies": {
-    "@zerobias-org/types-core-js": "^1.0.6"
+    "@zerobias-org/types-core-js": "^1.2.17",
+    "axios": "^1.13.5"
+  },
+  "overrides": {
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.4",
+    "glob": ">=11",
+    "serialize-javascript": "7.0.5",
+    "yaml": "2.8.3"
   }
 }
