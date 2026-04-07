@@ -791,6 +791,7 @@ val startModuleExec by tasks.registering {
     group = "docker"
     description = "Start module container and write connection details"
     dependsOn(buildImageExec)
+    onlyIf { !isInterface }
     outputs.file(layout.buildDirectory.file("module-container.json"))
     outputs.upToDateWhen { false } // Always start fresh container
     doLast {

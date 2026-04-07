@@ -15,7 +15,10 @@ export function prepareGradleEnv(): Record<string, string> {
   const env: Record<string, string> = { ...process.env as Record<string, string> };
 
   // Force Java 21 to avoid Gradle 8.10.2 issues with Java 25
-  env.JAVA_HOME = env.JAVA_HOME || '/usr/lib/jvm/java-21-openjdk-amd64';
+  const defaultJavaHome = platform() === 'darwin'
+    ? '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'
+    : '/usr/lib/jvm/java-21-openjdk-amd64';
+  env.JAVA_HOME = env.JAVA_HOME || defaultJavaHome;
 
   // Suppress Java 21 native access warnings
   const jvmArgs = '--enable-native-access=ALL-UNNAMED';
