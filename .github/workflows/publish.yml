@@ -59,7 +59,7 @@ jobs:
         with:
           url: ${{ secrets.VAULT_ADDR }}
           method: jwt
-          role: zerobias-org-devops-role
+          role: publishing-role
           path: gh-actions
           jwtGithubAudience: "https://github.com/zerobias-org"
           secrets: |
