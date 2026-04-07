@@ -1,13 +1,26 @@
 /**
  * Publisher for monorepo workspaces.
- * Handles version validation, npm publish, Docker workflow dispatch, and git tagging.
+ * Handles per-package change detection, version resolution, prepublish-standalone,
+ * npm publish, git tagging, and publish report output.
+ *
+ * This is monorepo-only. The existing non-monorepo publish flow is separate.
  */
 
-import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { execFileSync, execSync } from 'node:child_process';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { join, resolve } from 'node:path';
 import type { MonorepoConfig } from '../config.js';
+import { getZbbDir } from '../config.js';
 import type { DependencyGraph, WorkspacePackage } from './Workspace.js';
+import { getTransitiveDependents, sortByBuildOrder } from './Workspace.js';
 import {
   type GateStamp,
   GateStampResult,
@@ -25,64 +38,159 @@ interface PublishResult {
   name: string;
   version: string;
   previousVersion: string;
+  location: string;
   published: boolean;
   skipped?: string;
 }
 
-interface PublishOptions {
+export interface PublishOptions {
   dryRun: boolean;
   force: boolean;
   verbose: boolean;
   repoRoot: string;
   graph: DependencyGraph;
-  affectedOrdered: string[];
   config: MonorepoConfig;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
+// ── Git Helpers ──────────────────────────────────────────────────────
 
 function git(args: string[], cwd: string): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8' }).trim();
 }
 
-/**
- * Check if a specific version of a package is already published on the registry.
- */
-function isVersionPublished(
-  packageName: string,
-  version: string,
-  registry?: string,
-): boolean {
-  try {
-    const args = ['view', `${packageName}@${version}`, 'version'];
-    if (registry) args.push('--registry', registry);
-    const result = execFileSync('npm', args, { encoding: 'utf-8', timeout: 15_000 }).trim();
-    return result === version;
-  } catch {
-    // npm view exits non-zero if version doesn't exist
-    return false;
-  }
+function shortName(pkg: WorkspacePackage): string {
+  return pkg.name.replace(/^@[^/]+\//, '');
 }
 
+// ── Per-Package Change Detection ─────────────────────────────────────
+
 /**
- * Get the latest published version of a package from the registry.
+ * Find the last published git tag for a package.
+ * Tags follow the format: <shortName>@<version>
  */
-function getLatestPublishedVersion(
-  packageName: string,
-  registry?: string,
-): string | null {
+function getLastPublishedTag(pkg: WorkspacePackage, repoRoot: string): string | null {
+  const sn = shortName(pkg);
   try {
-    const args = ['view', packageName, 'version'];
-    if (registry) args.push('--registry', registry);
-    return execFileSync('npm', args, { encoding: 'utf-8', timeout: 15_000 }).trim() || null;
+    return execFileSync('git', ['describe', '--tags', '--abbrev=0', `--match=${sn}@*`], {
+      cwd: repoRoot,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
   } catch {
     return null;
   }
 }
 
 /**
- * Increment the patch version.
+ * Get files changed for a specific package directory since a git ref.
+ * Excludes docs and CI files.
  */
+function getChangedFilesSinceRef(
+  repoRoot: string,
+  ref: string,
+  pathFilter?: string,
+): string[] {
+  try {
+    const args = ['diff', '--name-only', `${ref}..HEAD`];
+    if (pathFilter) args.push('--', pathFilter);
+    const output = git(args, repoRoot);
+    if (!output) return [];
+    return output.split('\n').filter(f =>
+      !f.endsWith('.md') &&
+      !f.startsWith('.github/') &&
+      !f.startsWith('.claude/'),
+    );
+  } catch {
+    return [];
+  }
+}
+
+const STACK_TRIGGER_PATTERNS = ['zbb.yaml', '.zbb.yaml', 'test/'];
+
+/**
+ * Detect which packages need publishing based on per-package tag comparison.
+ * Returns packages in build order including transitive dependents.
+ */
+function detectPublishChanges(
+  repoRoot: string,
+  graph: DependencyGraph,
+): { changed: Set<string>; publishOrdered: string[] } {
+  const changed = new Set<string>();
+
+  // Check each package against its last published tag
+  for (const [name, pkg] of graph.packages) {
+    if (pkg.private) continue;
+
+    const lastTag = getLastPublishedTag(pkg, repoRoot);
+    if (!lastTag) {
+      // Never published — always include
+      changed.add(name);
+      continue;
+    }
+
+    const changedFiles = getChangedFilesSinceRef(repoRoot, lastTag, pkg.relDir);
+    if (changedFiles.length > 0) {
+      changed.add(name);
+    }
+  }
+
+  // Stack special case: check root trigger files
+  const stackPkg = findStackPackage(graph);
+  if (stackPkg && !changed.has(stackPkg.name)) {
+    const stackTag = getLastPublishedTag(stackPkg, repoRoot);
+    const ref = stackTag ?? 'HEAD~1';
+
+    for (const pattern of STACK_TRIGGER_PATTERNS) {
+      const files = getChangedFilesSinceRef(repoRoot, ref, pattern);
+      if (files.length > 0) {
+        changed.add(stackPkg.name);
+        break;
+      }
+    }
+  }
+
+  // Expand to transitive dependents
+  const affected = new Set(changed);
+  for (const name of changed) {
+    const deps = getTransitiveDependents(name, graph);
+    for (const dep of deps) {
+      if (!graph.packages.get(dep)?.private) {
+        affected.add(dep);
+      }
+    }
+  }
+
+  const publishOrdered = sortByBuildOrder(affected, graph);
+  return { changed, publishOrdered };
+}
+
+function findStackPackage(graph: DependencyGraph): WorkspacePackage | undefined {
+  for (const pkg of graph.packages.values()) {
+    if (pkg.relDir === 'stack') return pkg;
+  }
+  return undefined;
+}
+
+// ── Version Resolution ───────────────────────────────────────────────
+
+/**
+ * Get all published versions for a package in one call.
+ */
+function getPublishedVersions(packageName: string, registry?: string): Set<string> {
+  try {
+    const args = ['view', packageName, 'versions', '--json'];
+    if (registry) args.push('--registry', registry);
+    const output = execFileSync('npm', args, { encoding: 'utf-8', timeout: 30_000 }).trim();
+    const versions = JSON.parse(output);
+    // npm returns a string for single version, array for multiple
+    if (typeof versions === 'string') return new Set([versions]);
+    if (Array.isArray(versions)) return new Set(versions);
+    return new Set();
+  } catch {
+    return new Set();
+  }
+}
+
 function incrementPatch(version: string): string {
   const parts = version.split('.');
   if (parts.length !== 3) throw new Error(`Invalid semver: ${version}`);
@@ -92,40 +200,36 @@ function incrementPatch(version: string): string {
 
 /**
  * Resolve the version to publish:
- * - If the current version is NOT on the registry, use it
- * - If it IS on the registry, auto-patch-bump until we find an unpublished version
+ * - If the current version is NOT published, use it
+ * - If it IS published, auto-patch-bump until we find an unpublished version
  */
 function resolvePublishVersion(
   pkg: WorkspacePackage,
-  registry?: string,
+  publishedVersions: Set<string>,
 ): { version: string; bumped: boolean } {
   let version = pkg.version;
 
-  if (!isVersionPublished(pkg.name, version, registry)) {
+  if (!publishedVersions.has(version)) {
     return { version, bumped: false };
   }
 
-  // Version exists — auto-patch-bump
   let attempts = 0;
   while (attempts < 50) {
     version = incrementPatch(version);
-    if (!isVersionPublished(pkg.name, version, registry)) {
+    if (!publishedVersions.has(version)) {
       return { version, bumped: true };
     }
-
     attempts += 1;
   }
 
   throw new Error(`${pkg.name}: could not find unpublished version after 50 patch bumps from ${pkg.version}`);
 }
 
-/**
- * Write the resolved version to a package's package.json.
- */
+// ── Package.json Manipulation ────────────────────────────────────────
+
 function patchPackageJsonVersion(pkg: WorkspacePackage, newVersion: string): void {
   const pkgJsonPath = join(pkg.dir, 'package.json');
   const content = readFileSync(pkgJsonPath, 'utf-8');
-  // Replace version field precisely
   const updated = content.replace(
     /"version"\s*:\s*"[^"]+"/,
     `"version": "${newVersion}"`,
@@ -133,9 +237,6 @@ function patchPackageJsonVersion(pkg: WorkspacePackage, newVersion: string): voi
   writeFileSync(pkgJsonPath, updated);
 }
 
-/**
- * Update internal dependency references in a package's package.json.
- */
 function updateDependencyVersion(
   pkg: WorkspacePackage,
   depName: string,
@@ -149,7 +250,6 @@ function updateDependencyVersion(
   for (const section of ['dependencies', 'devDependencies', 'peerDependencies']) {
     if (pkgJson[section]?.[depName]) {
       const current = pkgJson[section][depName];
-      // Preserve range prefix (^, ~, etc.)
       const prefix = current.match(/^[^0-9]*/)?.[0] ?? '^';
       pkgJson[section][depName] = `${prefix}${newVersion}`;
       changed = true;
@@ -161,16 +261,100 @@ function updateDependencyVersion(
   }
 }
 
+// ── Prepublish-Standalone ────────────────────────────────────────────
+
 /**
- * Detect the GitHub repository from git remote.
+ * Backup package.json, run prepublish-standalone, return backup path.
  */
+function runPrepublishStandalone(pkg: WorkspacePackage, repoRoot: string, verbose: boolean): string {
+  const pkgJsonPath = join(pkg.dir, 'package.json');
+  const backupPath = pkgJsonPath + '.zbb-publish-backup';
+
+  // Backup current (versioned) package.json
+  copyFileSync(pkgJsonPath, backupPath);
+
+  try {
+    execFileSync('npx', ['prepublish-standalone'], {
+      cwd: pkg.dir,
+      stdio: verbose ? 'inherit' : ['pipe', 'pipe', 'pipe'],
+      env: process.env,
+      timeout: 120_000,
+    });
+  } catch (error: any) {
+    // Restore on failure
+    copyFileSync(backupPath, pkgJsonPath);
+    rmSync(backupPath);
+    throw new Error(`prepublish-standalone failed for ${pkg.name}: ${error.message}`);
+  }
+
+  return backupPath;
+}
+
+function restorePrepublishBackup(backupPath: string): void {
+  const pkgJsonPath = backupPath.replace('.zbb-publish-backup', '');
+  if (existsSync(backupPath)) {
+    copyFileSync(backupPath, pkgJsonPath);
+    rmSync(backupPath);
+  }
+}
+
+// ── Stack Artifact Handling ──────────────────────────────────────────
+
+function copyStackArtifacts(repoRoot: string): string[] {
+  const copied: string[] = [];
+  const stackDir = join(repoRoot, 'stack');
+
+  if (!existsSync(stackDir)) return copied;
+
+  // Copy zbb.yaml
+  const zbbYaml = join(repoRoot, 'zbb.yaml');
+  if (existsSync(zbbYaml)) {
+    copyFileSync(zbbYaml, join(stackDir, 'zbb.yaml'));
+    copied.push('stack/zbb.yaml');
+  }
+
+  // Copy .zbb.yaml
+  const dotZbbYaml = join(repoRoot, '.zbb.yaml');
+  if (existsSync(dotZbbYaml)) {
+    copyFileSync(dotZbbYaml, join(stackDir, '.zbb.yaml'));
+    copied.push('stack/.zbb.yaml');
+  }
+
+  // Copy test/ directory
+  const testDir = join(repoRoot, 'test');
+  if (existsSync(testDir)) {
+    const stackTestDir = join(stackDir, 'test');
+    mkdirSync(stackTestDir, { recursive: true });
+    cpSync(testDir, stackTestDir, { recursive: true });
+    copied.push('stack/test');
+  }
+
+  // Validate stack/zbb.yaml
+  const stackZbbYaml = join(stackDir, 'zbb.yaml');
+  if (existsSync(stackZbbYaml)) {
+    try {
+      const content = readFileSync(stackZbbYaml, 'utf-8');
+      // Simple YAML name field check — matches publish-hoisted validation
+      if (!content.includes('name:')) {
+        console.error('  ✗ stack/zbb.yaml missing required "name" field');
+        process.exit(1);
+      }
+    } catch (err: any) {
+      console.error(`  ✗ stack/zbb.yaml validation failed: ${err.message}`);
+      process.exit(1);
+    }
+  }
+
+  return copied;
+}
+
+// ── Docker Image Dispatch ────────────────────────────────────────────
+
 function detectGithubRepo(repoRoot: string): string | null {
   try {
     const remote = git(['remote', 'get-url', 'origin'], repoRoot);
-    // Handle SSH: git@github.com:owner/repo.git
     const sshMatch = remote.match(/github\.com[:/]([^/]+\/[^/.]+)/);
     if (sshMatch) return sshMatch[1];
-    // Handle HTTPS: https://github.com/owner/repo.git
     const httpsMatch = remote.match(/github\.com\/([^/]+\/[^/.]+)/);
     if (httpsMatch) return httpsMatch[1];
     return null;
@@ -179,98 +363,202 @@ function detectGithubRepo(repoRoot: string): string | null {
   }
 }
 
+function dispatchImageWorkflows(
+  results: PublishResult[],
+  config: MonorepoConfig,
+  graph: DependencyGraph,
+  repoRoot: string,
+  verbose: boolean,
+): void {
+  const images = config.images ?? {};
+  if (Object.keys(images).length === 0) return;
+
+  const githubRepo = config.githubRepo ?? detectGithubRepo(repoRoot);
+  if (!githubRepo) {
+    console.warn('  ⚠ could not detect GitHub repo — skipping image dispatch');
+    return;
+  }
+
+  const publishedWithImage = results.filter(r => {
+    if (!r.published) return false;
+    const pkg = graph.packages.get(r.name);
+    return pkg && images[pkg.relDir]?.workflow;
+  });
+
+  if (publishedWithImage.length === 0) return;
+
+  console.log('\n── image dispatch ──');
+  for (const result of publishedWithImage) {
+    const pkg = graph.packages.get(result.name)!;
+    const img = images[pkg.relDir];
+    process.stdout.write(`  ${img.name} (${img.workflow})... `);
+    try {
+      execFileSync('gh', [
+        'workflow', 'run', img.workflow!,
+        '--repo', githubRepo,
+        '-f', `version=${result.version}`,
+      ], {
+        cwd: repoRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 30_000,
+      });
+      console.log('\x1b[32m✓\x1b[0m');
+    } catch (error: any) {
+      console.log('\x1b[31m✗\x1b[0m');
+      if (verbose) {
+        console.error(`    ${error.stderr?.toString().slice(0, 300) ?? error.message}`);
+      }
+    }
+  }
+}
+
+// ── Publish Report ───────────────────────────────────────────────────
+
+function writePublishReport(results: PublishResult[], repoRoot: string): string {
+  const published = results
+    .filter(r => r.published)
+    .map(r => ({
+      name: r.name,
+      version: r.version,
+      location: r.location,
+    }));
+
+  const reportPath = '/tmp/published-packages.json';
+  writeFileSync(reportPath, JSON.stringify(published, null, 2) + '\n');
+  return reportPath;
+}
+
 // ── Main Publish Flow ────────────────────────────────────────────────
 
-export function publish(opts: PublishOptions): void {
-  const { dryRun, force, verbose, repoRoot, graph, affectedOrdered, config } = opts;
+export async function publish(opts: PublishOptions): Promise<void> {
+  const { dryRun, force, verbose, repoRoot, graph, config } = opts;
   const registry = config.registry;
 
-  // 1. Guard: must be on main
+  // ── 1. Branch guard ──
   const branch = getCurrentBranch(repoRoot);
-  if (branch !== 'main' && branch !== 'master' && !force) {
-    console.error(`Cannot publish from branch '${branch}'. Switch to main or use --force.`);
+  if (branch !== 'main' && branch !== 'master' && !force && !dryRun) {
+    console.error(`\nCannot publish from branch '${branch}'. Switch to main or use --force.`);
     process.exit(1);
   }
 
-  // 2. Validate gate stamp
-  console.log('\n── validate gate stamp ──');
-  const stamp = readGateStamp(repoRoot);
-  const invalidPackages: string[] = [];
-
-  for (const name of affectedOrdered) {
-    const pkg = graph.packages.get(name)!;
-    const result = validatePackageStamp(pkg, stamp, config);
-    const shortName = pkg.name.replace(/^@[^/]+\//, '');
-
-    if (result === GateStampResult.VALID) {
-      console.log(`  ✓ ${shortName}`);
-    } else {
-      console.log(`  ✗ ${shortName} (${result})`);
-      invalidPackages.push(name);
+  // ── 2. Registry guard ──
+  const slotName = process.env.ZB_SLOT;
+  if (slotName) {
+    const publishManifest = join(getZbbDir(), 'slots', slotName, 'stacks', 'registry', 'publishes.json');
+    if (existsSync(publishManifest)) {
+      const publishes = JSON.parse(readFileSync(publishManifest, 'utf-8'));
+      if (Array.isArray(publishes) && publishes.length > 0) {
+        console.error('\nCannot publish — local registry packages in use:');
+        for (const pkg of publishes) {
+          console.error(`  ${pkg.name}@${pkg.version}`);
+        }
+        console.error('Run: zbb registry clear');
+        process.exit(1);
+      }
     }
   }
 
-  if (invalidPackages.length > 0) {
+  // ── 3. Validate gate stamp ──
+  console.log('\n── validate gate stamp ──');
+  const stamp = readGateStamp(repoRoot);
+
+  // Gate stamp must exist
+  if (!stamp) {
+    console.error('  ✗ gate-stamp.json not found');
+    console.error('\nRun `zbb gate` and commit the stamp before publishing.');
+    process.exit(1);
+  }
+
+  // Validate all non-private packages in the stamp
+  let stampValid = true;
+  for (const [name, pkg] of graph.packages) {
+    if (pkg.private) continue;
+    const result = validatePackageStamp(pkg, stamp, config);
+    const sn = shortName(pkg);
+
+    if (result === GateStampResult.VALID) {
+      console.log(`  \x1b[32m✓\x1b[0m ${sn}`);
+    } else {
+      console.log(`  \x1b[31m✗\x1b[0m ${sn} (${result})`);
+      stampValid = false;
+    }
+  }
+
+  if (!stampValid && !force) {
     console.error(
       '\ngate-stamp.json is invalid for the above packages.\n' +
-      'Run `zbb gate` locally and commit the stamp before publishing.'
+      'Run `zbb gate` locally and commit the stamp before publishing.',
     );
     process.exit(1);
   }
 
-  // 3. Filter publishable packages
+  // ── 4. Per-package change detection ──
+  console.log('\n── detect changes ──');
+  const { changed, publishOrdered } = detectPublishChanges(repoRoot, graph);
+
+  // Filter out skipPublish packages
   const skipPublish = new Set(config.skipPublish ?? []);
-  const publishable = affectedOrdered.filter(name => {
+  const publishable = publishOrdered.filter(name => {
     const pkg = graph.packages.get(name)!;
-    if (pkg.private) return false;
-    if (skipPublish.has(pkg.relDir)) return false;
-    return true;
+    return !skipPublish.has(pkg.relDir);
   });
 
   if (publishable.length === 0) {
-    console.log('\nNothing to publish — all affected packages are private or skipped.');
+    console.log('  No packages have changed since their last published tag.');
     return;
   }
 
-  // 4. Version resolution
+  for (const name of publishable) {
+    const pkg = graph.packages.get(name)!;
+    const sn = shortName(pkg);
+    const isDirectChange = changed.has(name);
+    if (isDirectChange) {
+      console.log(`  \x1b[31m✗\x1b[0m ${sn} \x1b[31m— changed\x1b[0m`);
+    } else {
+      console.log(`  \x1b[33m~\x1b[0m ${sn} \x1b[33m— dependency changed\x1b[0m`);
+    }
+  }
+
+  // ── 5. Version resolution ──
   console.log('\n── version resolution ──');
   const versionMap = new Map<string, { version: string; bumped: boolean; previous: string }>();
 
   for (const name of publishable) {
     const pkg = graph.packages.get(name)!;
-    const shortName = pkg.name.replace(/^@[^/]+\//, '');
-    const { version, bumped } = resolvePublishVersion(pkg, registry);
+    const sn = shortName(pkg);
 
+    process.stdout.write(`  ${sn}: checking registry... `);
+    const publishedVersions = getPublishedVersions(pkg.name, registry);
+    const { version, bumped } = resolvePublishVersion(pkg, publishedVersions);
     versionMap.set(name, { version, bumped, previous: pkg.version });
 
     if (bumped) {
-      console.log(`  ${shortName}: ${pkg.version} → ${version} (auto-bumped, ${pkg.version} already published)`);
+      console.log(`${pkg.version} → ${version} (auto-bumped)`);
     } else {
-      console.log(`  ${shortName}: ${version}`);
+      console.log(version);
     }
   }
 
+  // ── Dry run exit ──
   if (dryRun) {
     console.log('\n── dry run ──');
     console.log('Would publish:');
     for (const name of publishable) {
       const info = versionMap.get(name)!;
       const pkg = graph.packages.get(name)!;
-      const shortName = pkg.name.replace(/^@[^/]+\//, '');
-      console.log(`  ${shortName}@${info.version}`);
+      console.log(`  ${shortName(pkg)}@${info.version}`);
     }
-
     const images = config.images ?? {};
     const imagePackages = publishable.filter(name => {
       const pkg = graph.packages.get(name)!;
-      return images[pkg.relDir];
+      return images[pkg.relDir]?.workflow;
     });
     if (imagePackages.length > 0) {
-      console.log('\nWould trigger Docker builds:');
+      console.log('\nWould trigger image builds:');
       for (const name of imagePackages) {
         const pkg = graph.packages.get(name)!;
         const img = images[pkg.relDir];
-        console.log(`  ${img.name} (workflow: ${img.workflow ?? 'N/A'})`);
+        console.log(`  ${img.name} → ${img.workflow}`);
       }
     }
 
@@ -278,18 +566,17 @@ export function publish(opts: PublishOptions): void {
     return;
   }
 
-  // 5. Patch versions in package.json files
+  // ── 6. Patch versions in package.json ──
   console.log('\n── patch versions ──');
   for (const name of publishable) {
     const pkg = graph.packages.get(name)!;
     const { version: newVersion } = versionMap.get(name)!;
 
-    // Patch this package's version
     if (newVersion !== pkg.version) {
       patchPackageJsonVersion(pkg, newVersion);
     }
 
-    // Update dependents' references
+    // Update dependents' references to this package
     const depNames = graph.dependents.get(name) ?? new Set();
     for (const depName of depNames) {
       const depPkg = graph.packages.get(depName);
@@ -300,10 +587,21 @@ export function publish(opts: PublishOptions): void {
   }
   console.log('  ✓ package.json files patched');
 
-  // 6. Build (if needed — ensure dist/ is fresh with new versions)
+  // ── 7. Stack artifact copy ──
+  const stackPkg = findStackPackage(graph);
+  let stackArtifacts: string[] = [];
+  if (stackPkg && publishable.includes(stackPkg.name)) {
+    console.log('\n── stack artifacts ──');
+    stackArtifacts = copyStackArtifacts(repoRoot);
+    if (stackArtifacts.length > 0) {
+      console.log(`  ✓ copied: ${stackArtifacts.join(', ')}`);
+    }
+  }
+
+  // ── 8. Build ──
   console.log('\n── build ──');
   install(repoRoot);
-  build({
+  await build({
     repoRoot,
     graph,
     affectedOrdered: publishable,
@@ -311,166 +609,177 @@ export function publish(opts: PublishOptions): void {
     verbose,
   });
 
-  // 7. npm publish
+  // ── 9. Prepublish-standalone ──
+  console.log('\n── prepublish-standalone ──');
+  const backupPaths: string[] = [];
+
+  for (const name of publishable) {
+    const pkg = graph.packages.get(name)!;
+    const sn = shortName(pkg);
+    process.stdout.write(`  ${sn}... `);
+    try {
+      const backupPath = runPrepublishStandalone(pkg, repoRoot, verbose);
+      backupPaths.push(backupPath);
+      console.log('✓');
+    } catch (error: any) {
+      console.log('FAILED');
+      console.error(`    ${error.message}`);
+      // Restore all backups on failure
+      for (const bp of backupPaths) restorePrepublishBackup(bp);
+      process.exit(1);
+    }
+  }
+
+  // ── 10. Git commit ──
+  console.log('\n── git commit ──');
+  const filesToStage: string[] = [];
+
+  // Stage gate stamp
+  if (existsSync(join(repoRoot, 'gate-stamp.json'))) {
+    // Update stamp with new versions
+    const currentStamp = readGateStamp(repoRoot);
+    if (currentStamp) {
+      currentStamp.timestamp = new Date().toISOString();
+      for (const name of publishable) {
+        const pkg = graph.packages.get(name)!;
+        const info = versionMap.get(name)!;
+        if (currentStamp.packages[name]) {
+          currentStamp.packages[name].version = info.version;
+          currentStamp.packages[name].sourceHash = computeSourceHash(pkg, config);
+        }
+      }
+      writeGateStamp(repoRoot, currentStamp);
+    }
+    filesToStage.push('gate-stamp.json');
+  }
+
+  // Stage package.json files (published packages + their dependents)
+  for (const name of publishable) {
+    const pkg = graph.packages.get(name)!;
+    filesToStage.push(join(pkg.relDir, 'package.json'));
+
+    const depNames = graph.dependents.get(name) ?? new Set();
+    for (const depName of depNames) {
+      const depPkg = graph.packages.get(depName);
+      if (depPkg) {
+        const relPath = join(depPkg.relDir, 'package.json');
+        if (!filesToStage.includes(relPath)) {
+          filesToStage.push(relPath);
+        }
+      }
+    }
+  }
+
+  // Stage stack artifacts
+  for (const artifact of stackArtifacts) {
+    filesToStage.push(artifact);
+  }
+
+  const versions = publishable.map(name => {
+    const pkg = graph.packages.get(name)!;
+    const info = versionMap.get(name)!;
+    return `${shortName(pkg)}@${info.version}`;
+  });
+
+  try {
+    git(['add', ...filesToStage], repoRoot);
+    git(['commit', '-m', `chore(release): publish ${versions.join(', ')}`], repoRoot);
+    console.log('  ✓ committed version bumps');
+  } catch (error: any) {
+    console.error(`  ✗ git commit failed: ${error.message}`);
+    // Restore all backups
+    for (const bp of backupPaths) restorePrepublishBackup(bp);
+    process.exit(1);
+  }
+
+  // ── 11. Git tag ──
+  for (const name of publishable) {
+    const pkg = graph.packages.get(name)!;
+    const info = versionMap.get(name)!;
+    const tag = `${shortName(pkg)}@${info.version}`;
+    try {
+      git(['tag', '-f', tag, '-m', `Published ${pkg.name} version ${info.version}`], repoRoot);
+    } catch { /* tag may already exist */ }
+  }
+  console.log(`  ✓ tagged ${publishable.length} packages`);
+
+  // ── 12. npm publish ──
   console.log('\n── publish ──');
   const results: PublishResult[] = [];
 
   for (const name of publishable) {
     const pkg = graph.packages.get(name)!;
-    const shortName = pkg.name.replace(/^@[^/]+\//, '');
+    const sn = shortName(pkg);
     const { version, previous } = versionMap.get(name)!;
 
-    process.stdout.write(`  ${shortName}@${version}... `);
+    process.stdout.write(`  ${sn}@${version}... `);
 
     try {
-      const publishArgs = ['publish'];
+      const publishArgs = ['publish', '--tag', 'latest'];
       if (registry) publishArgs.push('--registry', registry);
 
       execFileSync('npm', publishArgs, {
         cwd: pkg.dir,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: process.env,
-        timeout: 60_000,
+        timeout: 120_000,
       });
 
-      console.log('✓');
-      results.push({ name, version, previousVersion: previous, published: true });
+      console.log('\x1b[32m✓\x1b[0m');
+      results.push({ name, version, previousVersion: previous, location: pkg.dir, published: true });
     } catch (error: any) {
       const stderr = error.stderr?.toString() ?? '';
 
-      // Check if it's an "already exists" error (idempotent)
       if (stderr.includes('cannot publish over the previously published version')) {
         console.log('already published');
-        results.push({ name, version, previousVersion: previous, published: false, skipped: 'already published' });
+        results.push({ name, version, previousVersion: previous, location: pkg.dir, published: false, skipped: 'already published' });
       } else {
-        console.log('FAILED');
+        console.log('\x1b[31m✗ FAILED\x1b[0m');
         console.error(`    ${stderr.slice(0, 500)}`);
-        results.push({ name, version, previousVersion: previous, published: false, skipped: 'error' });
+        results.push({ name, version, previousVersion: previous, location: pkg.dir, published: false, skipped: 'error' });
       }
     }
   }
 
-  // 8. Docker image dispatch
-  const images = config.images ?? {};
-  const githubRepo = config.githubRepo ?? detectGithubRepo(repoRoot);
-  const imagePackages = results.filter(r => {
-    const pkg = graph.packages.get(r.name)!;
-    return r.published && images[pkg.relDir]?.workflow;
-  });
-
-  if (imagePackages.length > 0 && githubRepo) {
-    console.log('\n── docker image dispatch ──');
-    for (const result of imagePackages) {
-      const pkg = graph.packages.get(result.name)!;
-      const img = images[pkg.relDir];
-      const shortName = pkg.name.replace(/^@[^/]+\//, '');
-
-      process.stdout.write(`  ${img.name} (${img.workflow})... `);
-      try {
-        execFileSync('gh', [
-          'workflow', 'run', img.workflow!,
-          '--repo', githubRepo,
-          '-f', `version=${result.version}`,
-        ], {
-          cwd: repoRoot,
-          stdio: ['pipe', 'pipe', 'pipe'],
-          timeout: 30_000,
-        });
-        console.log('dispatched');
-      } catch (error: any) {
-        console.log('failed');
-        if (verbose) {
-          console.error(`    ${error.stderr?.toString().slice(0, 300) ?? error.message}`);
-        }
-      }
-    }
+  // ── 13. Restore package.json from prepublish-standalone backup ──
+  for (const bp of backupPaths) {
+    restorePrepublishBackup(bp);
   }
 
-  // 9. Git tag + commit
-  console.log('\n── git ──');
+  // ── 14. Git push ──
+  console.log('\n── git push ──');
+  try {
+    git(['push', '--follow-tags'], repoRoot);
+    console.log('  ✓ pushed to remote');
+  } catch (error: any) {
+    console.warn(`  ⚠ git push failed: ${error.message}`);
+    console.warn('    Run manually: git push --follow-tags');
+  }
+
+  // ── 15. Write publish report ──
+  const reportPath = writePublishReport(results, repoRoot);
+  console.log(`\nPUBLISHED_PACKAGES_FILE=${reportPath}`);
+
+  // ── 15b. Dispatch image build workflows ──
+  dispatchImageWorkflows(results, config, graph, repoRoot, verbose);
+
+  // ── 16. Summary ──
   const publishedResults = results.filter(r => r.published);
-
-  if (publishedResults.length > 0) {
-    // Create tags
-    for (const result of publishedResults) {
-      const pkg = graph.packages.get(result.name)!;
-      const shortName = pkg.name.replace(/^@[^/]+\//, '');
-      const tag = `${shortName}@${result.version}`;
-      try {
-        git(['tag', tag], repoRoot);
-      } catch { /* tag may already exist */ }
-    }
-
-    // Update gate stamp hashes post-publish
-    const currentStamp = readGateStamp(repoRoot);
-    if (currentStamp) {
-      currentStamp.timestamp = new Date().toISOString();
-      for (const result of publishedResults) {
-        const pkg = graph.packages.get(result.name)!;
-        if (currentStamp.packages[result.name]) {
-          currentStamp.packages[result.name].version = result.version;
-          currentStamp.packages[result.name].sourceHash = computeSourceHashForPublish(pkg, config);
-        }
-      }
-      writeGateStamp(repoRoot, currentStamp);
-    }
-
-    // Stage and commit
-    const filesToStage = ['gate-stamp.json'];
-    for (const result of publishedResults) {
-      const pkg = graph.packages.get(result.name)!;
-      filesToStage.push(join(pkg.relDir, 'package.json'));
-    }
-    // Also stage any dependents whose package.json was updated
-    for (const result of publishedResults) {
-      const depNames = graph.dependents.get(result.name) ?? new Set();
-      for (const depName of depNames) {
-        const depPkg = graph.packages.get(depName);
-        if (depPkg) {
-          const relPath = join(depPkg.relDir, 'package.json');
-          if (!filesToStage.includes(relPath)) {
-            filesToStage.push(relPath);
-          }
-        }
-      }
-    }
-
-    try {
-      git(['add', ...filesToStage], repoRoot);
-      const versions = publishedResults.map(r => {
-        const shortName = graph.packages.get(r.name)!.name.replace(/^@[^/]+\//, '');
-        return `${shortName}@${r.version}`;
-      });
-      git(['commit', '-m', `chore(release): publish ${versions.join(', ')}`], repoRoot);
-      console.log('  ✓ committed version bumps + gate stamp');
-    } catch (error: any) {
-      console.warn(`  ⚠ git commit failed: ${error.message}`);
-    }
-
-    // Push tags + commit
-    try {
-      git(['push', '--follow-tags'], repoRoot);
-      console.log('  ✓ pushed to remote');
-    } catch (error: any) {
-      console.warn(`  ⚠ git push failed: ${error.message}`);
-      console.warn('    Run manually: git push --follow-tags');
-    }
-  }
-
-  // 10. Summary
   console.log('\n── summary ──');
   console.log(`  Published: ${publishedResults.length}/${publishable.length}`);
   for (const result of results) {
-    const shortName = graph.packages.get(result.name)!.name.replace(/^@[^/]+\//, '');
-    const status = result.published ? '✓' : `✗ (${result.skipped})`;
+    const pkg = graph.packages.get(result.name)!;
+    const sn = shortName(pkg);
+    const status = result.published
+      ? `\x1b[32m✓\x1b[0m`
+      : `\x1b[31m✗\x1b[0m (${result.skipped})`;
     const bump = result.version !== result.previousVersion
       ? ` (${result.previousVersion} → ${result.version})`
       : '';
-    console.log(`  ${status} ${shortName}@${result.version}${bump}`);
+    console.log(`  ${status} ${sn}@${result.version}${bump}`);
   }
-}
 
-// Re-export for use in git operations
-function computeSourceHashForPublish(pkg: WorkspacePackage, config: MonorepoConfig): string {
-  return computeSourceHash(pkg, config);
+  if (publishedResults.length === 0) {
+    process.exit(1);
+  }
 }

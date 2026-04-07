@@ -17,9 +17,11 @@ import type { WorkspacePackage, DependencyGraph } from './Workspace.js';
 export enum GateStampResult {
   /** sourceHash + tasks + test counts all match — skip all gate tasks */
   VALID = 'VALID',
-  /** source OK but test count mismatch — need to re-run tests */
+  /** source OK but test file content changed — re-run tests only */
   TESTS_CHANGED = 'TESTS_CHANGED',
-  /** hash mismatch or task failure — full gate needed */
+  /** source OK but tests failed last run — re-run tests only */
+  TESTS_FAILED = 'TESTS_FAILED',
+  /** hash mismatch or build task failure — full gate needed */
   INVALID = 'INVALID',
   /** no entry for this package */
   MISSING = 'MISSING',
@@ -28,13 +30,14 @@ export enum GateStampResult {
 export interface TestSuiteEntry {
   expected: number;
   ran: number;
-  status: 'passed' | 'skipped' | 'not-run';
+  status: 'passed' | 'failed' | 'skipped' | 'not-run';
 }
 
 export interface PackageStampEntry {
   version: string;
   sourceHash: string;
-  tasks: Record<string, 'passed' | 'skipped' | 'not-found'>;
+  testHash: string;
+  tasks: Record<string, 'passed' | 'failed' | 'skipped' | 'not-found'>;
   tests: Record<string, TestSuiteEntry>;
 }
 
@@ -89,6 +92,34 @@ export function computeSourceHash(pkg: WorkspacePackage, config: MonorepoConfig)
 
   // Hash source directories
   for (const dirName of sourceDirs) {
+    const dir = join(pkg.dir, dirName);
+    if (!existsSync(dir)) continue;
+
+    const files = walkDir(dir).sort((a, b) => {
+      const relA = relative(pkg.dir, a);
+      const relB = relative(pkg.dir, b);
+      return relA.localeCompare(relB);
+    });
+
+    for (const filePath of files) {
+      const relPath = relative(pkg.dir, filePath);
+      digest.update(relPath);
+      digest.update(readFileSync(filePath));
+    }
+  }
+
+  return digest.digest('hex');
+}
+
+/**
+ * Compute SHA-256 hash of a package's test directories.
+ * Detects any change to test file content, not just added/removed test cases.
+ */
+export function computeTestHash(pkg: WorkspacePackage): string {
+  const digest = createHash('sha256');
+  const testDirs = ['test'];
+
+  for (const dirName of testDirs) {
     const dir = join(pkg.dir, dirName);
     if (!existsSync(dir)) continue;
 
@@ -187,33 +218,32 @@ export function validatePackageStamp(
     return GateStampResult.INVALID;
   }
 
-  // 2. Verify all tasks passed, were skipped, or not-found (package doesn't have that script)
-  for (const [, status] of Object.entries(entry.tasks)) {
+  // 2. Verify build tasks passed (separate test task failures from build failures)
+  const testPhaseSet = new Set(config.testPhases ?? ['test']);
+  let buildFailed = false;
+  let testTaskFailed = false;
+  for (const [task, status] of Object.entries(entry.tasks)) {
     if (status !== 'passed' && status !== 'skipped' && status !== 'not-found') {
-      return GateStampResult.INVALID;
+      if (testPhaseSet.has(task)) {
+        testTaskFailed = true;
+      } else {
+        buildFailed = true;
+      }
     }
   }
+  if (buildFailed) return GateStampResult.INVALID;
 
-  // 3. Verify test counts
-  const testSuites = getTestSuites(pkg);
-  for (const [suite, dir] of Object.entries(testSuites)) {
-    const currentExpected = countExpectedTests(dir);
-    if (currentExpected === 0) continue;
+  // 3. Verify test hash — any change to test file content triggers re-test
+  const currentTestHash = computeTestHash(pkg);
+  if (!entry.testHash || entry.testHash !== currentTestHash) {
+    return GateStampResult.TESTS_CHANGED;
+  }
 
-    const stampEntry = entry.tests[suite];
-    if (!stampEntry) return GateStampResult.TESTS_CHANGED;
-
-    // Skipped tests are valid — the package intentionally disables them
-    if (stampEntry.status === 'skipped') continue;
-
-    if (stampEntry.status !== 'passed') {
-      return GateStampResult.TESTS_CHANGED;
-    }
-    if (currentExpected !== stampEntry.expected) {
-      return GateStampResult.TESTS_CHANGED;
-    }
-    if (stampEntry.ran !== stampEntry.expected) {
-      return GateStampResult.TESTS_CHANGED;
+  // 4. If test task or test suites show failures, re-run tests only
+  if (testTaskFailed) return GateStampResult.TESTS_FAILED;
+  for (const [, entry_] of Object.entries(entry.tests)) {
+    if (entry_.expected > 0 && entry_.status !== 'passed' && entry_.status !== 'skipped') {
+      return GateStampResult.TESTS_FAILED;
     }
   }
 
@@ -261,12 +291,13 @@ export function isStampValid(
 export function buildPackageStampEntry(
   pkg: WorkspacePackage,
   config: MonorepoConfig,
-  taskResults: Record<string, 'passed' | 'skipped' | 'not-found'>,
+  taskResults: Record<string, 'passed' | 'failed' | 'skipped' | 'not-found'>,
   testResults: Record<string, TestSuiteEntry>,
 ): PackageStampEntry {
   return {
     version: pkg.version,
     sourceHash: computeSourceHash(pkg, config),
+    testHash: computeTestHash(pkg),
     tasks: taskResults,
     tests: testResults,
   };

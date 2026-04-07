@@ -285,13 +285,12 @@ export async function handleMonorepo(
     }
 
     case 'publish':
-      publish({
+      await publish({
         dryRun: parsed.dryRun,
         force: parsed.force,
         verbose: parsed.verbose,
         repoRoot,
         graph,
-        affectedOrdered: changes.affectedOrdered,
         config,
       });
       break;

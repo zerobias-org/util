@@ -288,6 +288,58 @@ function runNpmScript(
   }
 }
 
+/**
+ * Async version of runNpmScript for concurrent test execution.
+ * Buffers all output and returns it so the caller can print it as a block
+ * without interleaving with other packages.
+ */
+async function runNpmScriptAsync(
+  pkg: WorkspacePackage,
+  script: string,
+  options?: { allowFailure?: boolean; env?: Record<string, string | undefined> },
+): Promise<ScriptResult & { output: string }> {
+  const scriptBody = pkg.scripts[script];
+  if (!scriptBody) return { status: 'not-found', output: '' };
+
+  if (!scriptBody.trim() || /^echo\s/.test(scriptBody.trim())) {
+    return { status: 'skipped', output: '' };
+  }
+
+  const sn = pkg.name.replace(/^@[^/]+\//, '');
+
+  return new Promise((resolve) => {
+    const child = spawn('npm', ['run', script], {
+      cwd: pkg.dir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, FORCE_COLOR: '1', ...options?.env },
+    });
+
+    const chunks: string[] = [];
+    child.stdout.on('data', (data: Buffer) => chunks.push(data.toString()));
+    child.stderr.on('data', (data: Buffer) => chunks.push(data.toString()));
+
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+    }, 600_000); // 10 min timeout for tests
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const output = chunks.join('');
+
+      if (code === 0) {
+        resolve({ status: 'passed', output });
+      } else {
+        const msg = `${sn}: "npm run ${script}" failed (exit ${code})`;
+        if (options?.allowFailure) {
+          resolve({ status: 'failed', error: msg, output });
+        } else {
+          resolve({ status: 'failed', error: msg, output });
+        }
+      }
+    });
+  });
+}
+
 function removeArtifacts(pkgDir: string): void {
   for (const dir of ['dist', 'generated', 'build']) {
     const target = join(pkgDir, dir);
@@ -299,6 +351,19 @@ function removeArtifacts(pkgDir: string): void {
 
 function printPhaseHeader(phase: string, packageCount: number): void {
   console.log(`\n── ${phase} (${packageCount} package${packageCount === 1 ? '' : 's'}) ──`);
+}
+
+/** Parse mocha output for passing/failing/pending counts. */
+function parseMochaOutput(output: string): { passing: number; failing: number; pending: number } | null {
+  const passingMatch = output.match(/(\d+)\s+passing/);
+  const failingMatch = output.match(/(\d+)\s+failing/);
+  const pendingMatch = output.match(/(\d+)\s+pending/);
+  if (!passingMatch && !failingMatch) return null;
+  return {
+    passing: passingMatch ? parseInt(passingMatch[1], 10) : 0,
+    failing: failingMatch ? parseInt(failingMatch[1], 10) : 0,
+    pending: pendingMatch ? parseInt(pendingMatch[1], 10) : 0,
+  };
 }
 
 /**
@@ -787,21 +852,50 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
     writeBuildCache(ctx.repoRoot, buildCache);
   }
 
-  // Docker build phase — build images concurrently
+  // Docker build phase — build images concurrently, with caching
   if (!ctx.skipDocker && config.images) {
-    const dockerPackages = affectedOrdered.filter(name => {
+    const dockerPhase = 'docker';
+    const allDockerPackages = affectedOrdered.filter(name => {
       const pkg = graph.packages.get(name)!;
       return config.images![pkg.relDir];
     });
 
-    if (dockerPackages.length > 0) {
-      printPhaseHeader('docker', dockerPackages.length);
-      await buildDockerImages(dockerPackages, graph, config, ctx);
+    // Filter to only packages that need a Docker rebuild
+    const cachedDocker: string[] = [];
+    const dockerPackages = allDockerPackages.filter(name => {
+      if (isPhaseCached(name, dockerPhase, buildCache, sourceHashes, graph)) {
+        cachedDocker.push(name);
+        return false;
+      }
+      return true;
+    });
 
-      // Prune dangling images after Docker builds
-      try {
-        execFileSync('docker', ['image', 'prune', '-f'], { stdio: 'pipe' });
-      } catch { /* ignore */ }
+    if (allDockerPackages.length > 0) {
+      printPhaseHeader('docker', allDockerPackages.length);
+
+      for (const name of cachedDocker) {
+        const pkg = graph.packages.get(name)!;
+        const sn = pkg.name.replace(/^@[^/]+\//, '');
+        console.log(`  \x1b[34m◆ ${sn} \x1b[90m(cached)\x1b[0m`);
+      }
+
+      if (dockerPackages.length > 0) {
+        await buildDockerImages(dockerPackages, graph, config, ctx);
+
+        // Update cache for successful Docker builds
+        for (const name of dockerPackages) {
+          const hash = sourceHashes.get(name);
+          if (hash) {
+            updatePhaseCache(buildCache, name, dockerPhase, 'passed', hash);
+          }
+        }
+        writeBuildCache(ctx.repoRoot, buildCache);
+
+        // Prune dangling images after Docker builds
+        try {
+          execFileSync('docker', ['image', 'prune', '-f'], { stdio: 'pipe' });
+        } catch { /* ignore */ }
+      }
     }
   }
 
@@ -1087,6 +1181,8 @@ function neonDeleteBranch(apiKey: string, projectId: string, branchId: string): 
 
 export interface TestOutput {
   results: Map<string, Record<string, TestSuiteEntry>>;
+  failureOutputs: Map<string, string>;
+  parsedTotals: Map<string, { passing: number; failing: number; pending: number }>;
   failed: boolean;
 }
 
@@ -1094,6 +1190,8 @@ export async function test(ctx: BuildContext): Promise<TestOutput> {
   const { graph, affectedOrdered, config, verbose, repoRoot } = ctx;
   const phases = config.testPhases ?? ['test'];
   const allTestResults = new Map<string, Record<string, TestSuiteEntry>>();
+  const failureOutputs = new Map<string, string>();
+  const parsedTestTotals = new Map<string, { passing: number; failing: number; pending: number }>();
 
   // Collect packages that have test scripts
   const packagesWithTests = affectedOrdered.filter(name => {
@@ -1119,7 +1217,7 @@ export async function test(ctx: BuildContext): Promise<TestOutput> {
   if (packagesWithTests.length === 0) {
     console.log('\n── test (0 packages) ──');
     console.log('  No packages with test scripts.');
-    return { results: allTestResults, failed: false };
+    return { results: allTestResults, failureOutputs, parsedTotals: parsedTestTotals, failed: false };
   }
 
   // Neon database config
@@ -1145,11 +1243,93 @@ export async function test(ctx: BuildContext): Promise<TestOutput> {
   const apiKey = process.env.NEON_API_KEY ?? '';
   const projectId = process.env.NEON_PROJECT_ID ?? '';
 
+  // ── Display machinery (mirrors build phase) ──
+  const isTTY = process.stdout.isTTY;
+  const displayOrder: string[] = [];
+  const displayStatus = new Map<string, string>();
+  const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const activeSpinners = new Map<string, string>(); // name → label
+  const startTimes = new Map<string, number>();
+  let spinnerIdx = 0;
+  let spinnerTimer: ReturnType<typeof setInterval> | null = null;
+
+  const maxNameLen = Math.max(...packagesWithTests.map(n =>
+    graph.packages.get(n)!.name.replace(/^@[^/]+\//, '').length
+  ));
+
+  function snPad(name: string): string {
+    return graph.packages.get(name)!.name.replace(/^@[^/]+\//, '').padEnd(maxNameLen);
+  }
+
+  function testElapsed(name: string): string {
+    const start = startTimes.get(name);
+    if (!start) return '';
+    return `\x1b[90m${((Date.now() - start) / 1000).toFixed(1)}s\x1b[0m`;
+  }
+
+  function renderTestDisplay(): void {
+    if (!isTTY || displayOrder.length === 0) return;
+    process.stdout.write(`\x1b[${displayOrder.length}A`);
+    for (const name of displayOrder) {
+      process.stdout.write(`\x1b[2K${displayStatus.get(name) ?? ''}\n`);
+    }
+  }
+
+  function updateTestSpinners(): void {
+    spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
+    const frame = spinnerFrames[spinnerIdx];
+    for (const [name, label] of activeSpinners) {
+      const suffix = label ? ` \x1b[90m${label}\x1b[0m` : '';
+      displayStatus.set(name, `  \x1b[36m${frame} ${snPad(name)} ${testElapsed(name)}${suffix}\x1b[0m`);
+    }
+    renderTestDisplay();
+  }
+
+  function startTestSpinnerTimer(): void {
+    if (!isTTY || spinnerTimer) return;
+    spinnerTimer = setInterval(updateTestSpinners, 80);
+  }
+
+  function stopTestSpinnerTimer(): void {
+    if (spinnerTimer) { clearInterval(spinnerTimer); spinnerTimer = null; }
+  }
+
+  function addTestDisplay(name: string): void {
+    if (!displayOrder.includes(name)) {
+      displayOrder.push(name);
+      if (isTTY) process.stdout.write('\n');
+    }
+  }
+
+  function setTestStatus(name: string, icon: string, color: string, detail?: string): void {
+    activeSpinners.delete(name);
+    const time = testElapsed(name);
+    const suffix = detail ? ` ${detail}` : '';
+    const text = `  ${color}${icon} ${snPad(name)}\x1b[0m ${time}${suffix}`;
+    displayStatus.set(name, text);
+    if (isTTY) {
+      renderTestDisplay();
+    } else {
+      console.log(text);
+    }
+  }
+
+  function setSpinnerLabel(name: string, label: string): void {
+    activeSpinners.set(name, label);
+  }
+
+  // Pre-populate display — all packages start as ◯ (pending)
+  for (const name of packagesWithTests) {
+    addTestDisplay(name);
+    displayStatus.set(name, `  \x1b[90m◯ ${snPad(name)}\x1b[0m`);
+  }
+  if (isTTY) renderTestDisplay();
+
   try {
     // Run all test packages concurrently — each DB package gets its own Neon branch
     const testPromises: Array<Promise<void>> = [];
 
-    for (const name of affectedOrdered) {
+    for (const name of packagesWithTests) {
       const pkg = graph.packages.get(name)!;
       const shortName = pkg.name.replace(/^@[^/]+\//, '');
       const packageNeedsDb = needsNeon && dbPackageSet.has(pkg.relDir);
@@ -1167,6 +1347,11 @@ export async function test(ctx: BuildContext): Promise<TestOutput> {
           testSuiteResults[suite] = { expected, ran: 0, status: expected === 0 ? 'skipped' : 'not-run' };
         }
 
+        // Start spinner
+        startTimes.set(name, Date.now());
+        activeSpinners.set(name, '');
+        startTestSpinnerTimer();
+
         // Create per-package Neon branch if needed
         let branchId: string | null = null;
         const pgEnv: Record<string, string> = {};
@@ -1177,7 +1362,7 @@ export async function test(ctx: BuildContext): Promise<TestOutput> {
           const dbName = process.env.NEON_DB_NAME ?? 'zerobias';
           const branchName = `zbb-${shortName}-${Date.now()}`;
 
-          console.log(`  \x1b[90m${shortName}: creating neon branch...\x1b[0m`);
+          setSpinnerLabel(name, 'creating neon branch...');
 
           try {
             const neon = neonCreateBranch(apiKey, projectId, parentBranch, branchName, dbRole, dbName);
@@ -1191,37 +1376,50 @@ export async function test(ctx: BuildContext): Promise<TestOutput> {
             pgEnv.PGDATABASE = neon.database;
             pgEnv.PGSSLMODE = 'require';
 
-            console.log(`  \x1b[90m${shortName}: branch ready (${neon.host})\x1b[0m`);
+            setSpinnerLabel(name, `neon ready, running tests...`);
           } catch (error: any) {
-            console.error(`  \x1b[31m✗ ${shortName}: failed to create neon branch\x1b[0m`);
-            console.error(`    ${error.message}`);
+            setTestStatus(name, '✗', '\x1b[31m', `\x1b[31mfailed to create neon branch\x1b[0m`);
             testsFailed = true;
             allTestResults.set(name, testSuiteResults);
             return;
           }
+        } else {
+          setSpinnerLabel(name, 'running tests...');
         }
 
-        // Run test phases with package-specific PG env
+        // Run test phases with package-specific PG env (async for true concurrency)
+        const customEnv = packageNeedsDb ? { ...process.env, ...pgEnv } : undefined;
+
         for (const phase of phases) {
-          console.log(`  ${shortName}: npm run ${phase}`);
-
-          // For DB packages, spawn with custom env (not process.env override)
-          const customEnv = packageNeedsDb ? { ...process.env, ...pgEnv } : undefined;
-
-          const { status, error } = runNpmScript(pkg, phase, {
-            showOutput: true,
+          const { status, output } = await runNpmScriptAsync(pkg, phase, {
             allowFailure: true,
             env: customEnv,
           });
 
           if (status === 'passed') {
-            console.log(`  \x1b[32m✓ ${shortName}\x1b[0m`);
             for (const entry of Object.values(testSuiteResults)) {
               if (entry.expected > 0) { entry.ran = entry.expected; entry.status = 'passed'; }
             }
+            const total = Object.values(testSuiteResults).reduce((s, e) => s + e.expected, 0);
+            setTestStatus(name, '✓', '\x1b[32m', total > 0 ? `\x1b[90m${total} tests\x1b[0m` : undefined);
           } else if (status === 'failed') {
-            console.log(`  \x1b[31m✗ ${shortName} (test failures)\x1b[0m`);
-            if (error) console.log(`    ${error.split('\n')[0]}`);
+            const parsed = parseMochaOutput(output);
+            if (parsed) {
+              // Mark all suites as failed but record actual mocha counts
+              // mocha reports combined totals across all suites
+              for (const entry of Object.values(testSuiteResults)) {
+                if (entry.expected > 0) { entry.status = 'failed'; }
+              }
+              // Store parsed totals on the package for summary display
+              parsedTestTotals.set(name, parsed);
+              setTestStatus(name, '✗', '\x1b[31m', `\x1b[31m${parsed.failing} failing\x1b[0m`);
+            } else {
+              for (const entry of Object.values(testSuiteResults)) {
+                if (entry.expected > 0) { entry.status = 'failed'; entry.ran = 0; }
+              }
+              setTestStatus(name, '✗', '\x1b[31m', `\x1b[31mtest failures\x1b[0m`);
+            }
+            failureOutputs.set(name, output);
             testsFailed = true;
           } else {
             for (const entry of Object.values(testSuiteResults)) {
@@ -1239,6 +1437,8 @@ export async function test(ctx: BuildContext): Promise<TestOutput> {
     await Promise.all(testPromises);
 
   } finally {
+    stopTestSpinnerTimer();
+
     // Always clean up ALL Neon branches
     if (neonBranches.length > 0) {
       console.log(`\n── neon cleanup ──`);
@@ -1253,7 +1453,7 @@ export async function test(ctx: BuildContext): Promise<TestOutput> {
     }
   }
 
-  return { results: allTestResults, failed: testsFailed };
+  return { results: allTestResults, failureOutputs, parsedTotals: parsedTestTotals, failed: testsFailed };
 }
 
 // ── Install ──────────────────────────────────────────────────────────
@@ -1325,6 +1525,10 @@ export async function gate(ctx: BuildContext): Promise<void> {
         testsChangedPackages.push(name);
         console.log(`  \x1b[33m~\x1b[0m ${shortName} \x1b[33m— tests changed, re-running tests only\x1b[0m`);
         break;
+      case GateStampResult.TESTS_FAILED:
+        testsChangedPackages.push(name);
+        console.log(`  \x1b[31m✗\x1b[0m ${shortName} \x1b[31m— tests failed, re-running tests only\x1b[0m`);
+        break;
       default:
         fullGatePackages.push(name);
         console.log(`  \x1b[31m✗\x1b[0m ${shortName} \x1b[31m— full gate needed\x1b[0m`);
@@ -1364,6 +1568,8 @@ export async function gate(ctx: BuildContext): Promise<void> {
   const packagesToTest = [...fullGatePackages, ...testsChangedPackages];
   const testOutput = await test({ ...ctx, affectedOrdered: packagesToTest });
   const testResults = testOutput.results;
+  const testFailureOutputs = testOutput.failureOutputs;
+  const testParsedTotals = testOutput.parsedTotals;
   const testsFailed = testOutput.failed;
 
   // Write gate stamp — merge new results with cached valid packages
@@ -1385,7 +1591,7 @@ export async function gate(ctx: BuildContext): Promise<void> {
     const tasks = taskResults.get(name) ?? {};
     const tests = testResults.get(name) ?? {};
 
-    const allTasks: Record<string, 'passed' | 'skipped' | 'not-found'> = {};
+    const allTasks: Record<string, 'passed' | 'failed' | 'skipped' | 'not-found'> = {};
     for (const phase of [...phases, ...testPhases]) {
       allTasks[phase] = tasks[phase] ?? 'skipped';
     }
@@ -1400,17 +1606,53 @@ export async function gate(ctx: BuildContext): Promise<void> {
       }
     }
 
+    // Set test task status based on whether tests actually passed or failed
+    const hasTests = Object.values(tests).some((e: any) => e.expected > 0);
+    if (testFailureOutputs.has(name)) {
+      for (const tp of testPhases) { allTasks[tp] = 'failed'; }
+    } else if (hasTests) {
+      for (const tp of testPhases) { allTasks[tp] = 'passed'; }
+    }
+
+    // If this package failed tests, record actual mocha counts in the stamp
+    if (testFailureOutputs.has(name)) {
+      const parsed = testParsedTotals.get(name);
+      for (const [, entry] of Object.entries(tests) as Array<[string, TestSuiteEntry]>) {
+        if (entry.expected > 0) {
+          entry.status = 'failed';
+          // Use parsed mocha passing count if available
+          if (parsed) {
+            entry.ran = parsed.passing;
+            entry.expected = parsed.passing + parsed.failing;
+          }
+        }
+      }
+    }
+
     stamp.packages[name] = buildPackageStampEntry(pkg, config, allTasks, tests);
   }
 
-  // Print test summary
+  // Print test summary — use parsed mocha totals for failed packages, suite counts for passed
   let totalExpected = 0;
   let totalPassed = 0;
-  for (const [, tests] of testResults) {
-    for (const [, entry] of Object.entries(tests) as Array<[string, TestSuiteEntry]>) {
-      if (entry.expected > 0) {
-        totalExpected += entry.expected;
-        totalPassed += entry.ran;
+  for (const [name, tests] of testResults) {
+    if (testFailureOutputs.has(name)) {
+      const parsed = testParsedTotals.get(name);
+      if (parsed) {
+        totalExpected += parsed.passing + parsed.failing;
+        totalPassed += parsed.passing;
+      } else {
+        // Failed but couldn't parse — count expected but 0 passed
+        for (const [, entry] of Object.entries(tests) as Array<[string, TestSuiteEntry]>) {
+          if (entry.expected > 0) { totalExpected += entry.expected; }
+        }
+      }
+    } else {
+      for (const [, entry] of Object.entries(tests) as Array<[string, TestSuiteEntry]>) {
+        if (entry.expected > 0) {
+          totalExpected += entry.expected;
+          totalPassed += entry.ran;
+        }
       }
     }
   }
@@ -1418,16 +1660,70 @@ export async function gate(ctx: BuildContext): Promise<void> {
     console.log(`  Tests: ${totalPassed}/${totalExpected} passed`);
   }
 
+  // ── Gate summary ──
+  console.log('\n── gate summary ──');
+
+  // Show build results
+  for (const name of fullGatePackages) {
+    const pkg = graph.packages.get(name)!;
+    const sn = pkg.name.replace(/^@[^/]+\//, '');
+    const tasks = taskResults.get(name) ?? {};
+    const failedPhases = Object.entries(tasks).filter(([, s]) => s !== 'passed' && s !== 'skipped' && s !== 'not-found');
+    if (failedPhases.length > 0) {
+      console.log(`  \x1b[31m✗\x1b[0m ${sn}: build failed (${failedPhases.map(([p]) => p).join(', ')})`);
+    } else {
+      console.log(`  \x1b[32m✓\x1b[0m ${sn}: build passed`);
+    }
+  }
+
+  // Show test results — use failureOutputs as source of truth for failures
+  for (const name of packagesToTest) {
+    const pkg = graph.packages.get(name)!;
+    const sn = pkg.name.replace(/^@[^/]+\//, '');
+    const tests = testResults.get(name);
+    if (!tests) continue;
+
+    const suites = Object.entries(tests).filter(([, e]) => (e as TestSuiteEntry).expected > 0);
+    if (suites.length === 0) continue;
+
+    // Check failureOutputs as definitive source — if this package failed, it's in there
+    if (testFailureOutputs.has(name)) {
+      const parsed = testParsedTotals.get(name);
+      if (parsed) {
+        console.log(`  \x1b[31m✗\x1b[0m ${sn}: ${parsed.passing}/${parsed.passing + parsed.failing} passed (${parsed.failing} failing)`);
+      } else {
+        const total = suites.reduce((sum, [, e]) => sum + (e as TestSuiteEntry).expected, 0);
+        console.log(`  \x1b[31m✗\x1b[0m ${sn}: tests failed (${total} expected)`);
+      }
+    } else {
+      const total = suites.reduce((sum, [, e]) => sum + (e as TestSuiteEntry).expected, 0);
+      console.log(`  \x1b[32m✓\x1b[0m ${sn}: ${total} tests passed`);
+    }
+  }
+
+  // Show cached packages
+  if (validPackages.length > 0) {
+    console.log(`  \x1b[90m${validPackages.length} packages cached (unchanged)\x1b[0m`);
+  }
+
+  // Always write stamp — records testHash and status even on failure,
+  // so next run knows what changed vs what already failed
+  writeGateStamp(repoRoot, stamp);
+
   if (testsFailed) {
-    console.error('\n\x1b[31mGate failed — test failures detected. Stamp NOT written.\x1b[0m');
+    // Show full test output for each failed package
+    if (testFailureOutputs.size > 0) {
+      for (const [name, output] of testFailureOutputs) {
+        const pkg = graph.packages.get(name)!;
+        const sn = pkg.name.replace(/^@[^/]+\//, '');
+        console.log(`\n\x1b[31m── ${sn}: test output ──\x1b[0m`);
+        console.log(output.trimEnd());
+      }
+    }
+    console.log('\n  \x1b[32m✓ gate-stamp.json written\x1b[0m (with failures recorded)');
+    console.error('\n\x1b[31mGate failed — test failures detected.\x1b[0m');
     process.exit(1);
   }
 
-  // Only write stamp if all tests passed
-  writeGateStamp(repoRoot, stamp);
-
-  const skipped = validPackages.length;
-  const rebuilt = fullGatePackages.length;
-  const retested = testsChangedPackages.length;
-  console.log(`  \x1b[32m✓ gate-stamp.json written (${skipped} cached, ${rebuilt} rebuilt, ${retested} retested)\x1b[0m`);
+  console.log(`\n  \x1b[32m✓ gate-stamp.json written\x1b[0m`);
 }
