@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "branch": "main",
-  "timestamp": "2026-04-07T20:20:29.169Z",
+  "branch": "fix/java-home-macos",
+  "timestamp": "2026-04-07T21:20:53.116Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.9",
@@ -125,7 +125,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.20",
-      "sourceHash": "886d97c3381fd452308b50f064a04dfd19b2068e7d6f2f2f80764b83c194324b",
+      "sourceHash": "2b122754734c51f9c0df949bc923585a2f7e1d52c05c75bd1c6dccd025c79f2a",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
