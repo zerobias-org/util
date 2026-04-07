@@ -1,0 +1,457 @@
+{
+  "version": 1,
+  "branch": "feature/zbb-monorepo-support",
+  "timestamp": "2026-04-07T19:26:28.485Z",
+  "packages": {
+    "@zerobias-org/util-content-dev-schema": {
+      "version": "0.0.8",
+      "sourceHash": "6fd8bca681c0def9b8996fb8b67a779fe0afd165150300cfe5ceead8f4028d80",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/eslint-config": {
+      "version": "1.0.35",
+      "sourceHash": "6c058a52631fc724a363165326222f61b124549a62903cca058586581e62422b",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/module-test-client": {
+      "version": "1.0.2",
+      "sourceHash": "59aefac0918b0d3efc16d0d2a91b09a0ddf84f1ef33a1657744c4ac867f267b3",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/module-tester": {
+      "version": "1.0.8",
+      "sourceHash": "fd58c63943bddeb8512e6ece8b3ef0beaa329ea0efc53cb829c5c9470dadc956",
+      "testHash": "cde5b931c178ea511af07afca046a323dd387db237e7b7eff2eb3bb64a1f1c9c",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 55,
+          "ran": 55,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 10,
+          "ran": 10,
+          "status": "passed"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/zbb": {
+      "version": "0.3.18",
+      "sourceHash": "0958010a3c6b7178524b40bd50093863174cb1031727ee373355b1f90def05ed",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/util-api-invoker-api": {
+      "version": "1.0.33",
+      "sourceHash": "7593cda123b450ccefbd11b786681e2356d9f6a63ca1d466341e56c5a0f59ef0",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/util-spectral-config": {
+      "version": "1.0.31",
+      "sourceHash": "87401318309383f817d3454ca02a3670c8a17eeea6513d417d528499be5fe098",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/util-api-invoker-isomorphic": {
+      "version": "1.0.34",
+      "sourceHash": "1ba46f6c47e000e431ff58577584653fa1cb4b1b686c54d296fdcbabef5d7d3c",
+      "testHash": "d87ecf960dfafe908b8ab2ddade655c07c893d1ec7e162ab30c1509967501fd5",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 3,
+          "ran": 3,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/util-api-client-base": {
+      "version": "1.0.40",
+      "sourceHash": "08333bf01d37d2a83084e7d7c00796ddaf7513757b17d72a1f99aea266e7a526",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/logger": {
+      "version": "3.0.5",
+      "sourceHash": "77d79bc973c2dea141740e22244e565309f11b0328f1309f2c0d0399738eefe2",
+      "testHash": "b4e1f0819581aef73a80fd63c6e169141acb70170cc4adc6a1e9a377dd13c970",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 120,
+          "ran": 120,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/util-connector": {
+      "version": "1.0.36",
+      "sourceHash": "bee167fdb3d41e2617029674e0a211dcb7f704afa759b0e38f01e31be22eb884",
+      "testHash": "2bb646e7472ba501356498be2c59c152821649ad5150cf4ec3dbfe38df0167d6",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 1,
+          "ran": 1,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/util-codegen": {
+      "version": "2.0.43",
+      "sourceHash": "b06a22217c7b532475b4614e1a94b13094a0edfcc087ccba0bc504594850463f",
+      "testHash": "6ab005a96886d82f25a222cf56355f928bf5ab4340dbe36af6e7db5a7d7a7cb6",
+      "tasks": {
+        "lint": "skipped",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 6,
+          "ran": 6,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/util-collector": {
+      "version": "1.0.36",
+      "sourceHash": "0965f3351ec69096ec55d8757e67f28f0f228b591b19b7013a4d5cee3bc97290",
+      "testHash": "538007cc6c8a0c66415559ba2d3c2c8059f58b3476939056f98460ba5ca91647",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 1,
+          "ran": 1,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/data-utils": {
+      "version": "1.0.30",
+      "sourceHash": "cc743ada03389cb4aba0679213b7f2d1a4da7b04d85bd7a4bce2efa7c307d713",
+      "testHash": "853b146457fdd677eb3ed74a6bc579f44913967f663defd910246a5cbf9be5b0",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 1,
+          "ran": 1,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    },
+    "@zerobias-org/util-hub-module-utils": {
+      "version": "2.0.38",
+      "sourceHash": "802b756469d384237928559bc140811f5aa77e9c751910fe383eedfda04ddba6",
+      "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
+      "tasks": {
+        "lint": "passed",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 38,
+          "ran": 38,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      }
+    }
+  }
+}

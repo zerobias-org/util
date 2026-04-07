@@ -5,7 +5,7 @@
  *   zbb slot <create|load|list|info|delete|gc>  → slot management
  *   zbb env <list|get|set|unset|reset|diff>      → env var commands
  *   zbb logs <list|show>                          → log viewer
- *   zbb up|down|destroy|info                      → stack aliases → gradle
+ *   zbb stack <start|stop|add|remove|...>           → stack management
  *   zbb --version | --help                        → meta
  *   zbb <anything else>                           → gradle wrapper
  */
@@ -13,7 +13,7 @@
 import { SlotManager } from './slot/SlotManager.js';
 import type { Slot } from './slot/Slot.js';
 import { runPreflightChecks, formatPreflightResults } from './preflight.js';
-import { resolveStackAlias, runGradle } from './gradle.js';
+import { checkDeprecatedAlias, runGradle } from './gradle.js';
 import {
   findRepoRoot,
   loadProjectConfig,
@@ -23,6 +23,7 @@ import {
 } from './config.js';
 import { scanEnvDeclarations } from './env/Scanner.js';
 import { spawn } from 'node:child_process';
+import { isMonorepo, isMonorepoCommand, handleMonorepo } from './monorepo/index.js';
 import { handleStack, detectStackContext } from './stack/commands.js';
 
 /**
@@ -149,6 +150,19 @@ async function _main(argv: string[]): Promise<void> {
 
   const command = args[0];
 
+  // Monorepo commands: clean/build/test/gate/publish in npm workspace monorepos
+  // Stack commands (up/down/destroy/info) still route to Gradle even in monorepos.
+  const repoRoot = findRepoRoot(process.cwd());
+  if (repoRoot && isMonorepoCommand(command) && isMonorepo(repoRoot)) {
+    // If a slot is loaded, resolve its env (Vault, DNS) and export to process.env
+    // so monorepo commands have access to slot-provided vars (e.g., NEON_API_KEY)
+    if (process.env.ZB_SLOT) {
+      const slot = await SlotManager.load(process.env.ZB_SLOT);
+      await prepareSlot(slot);
+    }
+    return handleMonorepo(command, args.slice(1), repoRoot);
+  }
+
   // Slot subcommands
   if (command === 'slot') return handleSlot(args.slice(1));
 
@@ -190,64 +204,49 @@ async function _main(argv: string[]): Promise<void> {
     return handleDataloader(args.slice(1));
   }
 
-  // Destroy — slot-level: tear down ALL containers for this slot
-  if (command === 'destroy') {
-    const slotName = args[1] ?? process.env.ZB_SLOT;
+
+  // Run — execute a command or npm script with slot/stack env
+  if (command === 'run') {
+    const slotName = process.env.ZB_SLOT;
     if (!slotName) {
-      console.error('Usage: zbb destroy [slot-name]  (or run from inside a slot)');
+      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
       process.exit(1);
     }
     const slot = await SlotManager.load(slotName);
-    const stackName = slot.env.get('STACK_NAME') ?? slotName;
+    await prepareSlot(slot);
 
-    const { execSync } = await import('node:child_process');
-    console.log(`Destroying all containers for stack: ${stackName}`);
-    try {
-      // Stop and remove all containers with the stack name prefix
-      const containers = execSync(
-        `docker ps -a --filter "name=${stackName}-" --format "{{.Names}}"`,
-        { encoding: 'utf-8' }
-      ).trim();
-      if (containers) {
-        const names = containers.split('\n').filter(Boolean);
-        console.log(`  Stopping ${names.length} container(s): ${names.join(', ')}`);
-        execSync(`docker stop ${names.join(' ')}`, { stdio: 'inherit' });
-        execSync(`docker rm ${names.join(' ')}`, { stdio: 'inherit' });
-      } else {
-        console.log('  No containers found');
-      }
-
-      // Remove volumes with stack name prefix
-      const volumes = execSync(
-        `docker volume ls --filter "name=${stackName}_" --format "{{.Name}}"`,
-        { encoding: 'utf-8' }
-      ).trim();
-      if (volumes) {
-        const volNames = volumes.split('\n').filter(Boolean);
-        console.log(`  Removing ${volNames.length} volume(s): ${volNames.join(', ')}`);
-        execSync(`docker volume rm ${volNames.join(' ')}`, { stdio: 'inherit' });
-      }
-
-      // Remove networks with stack name prefix
-      const networks = execSync(
-        `docker network ls --filter "name=${stackName}_" --format "{{.Name}}"`,
-        { encoding: 'utf-8' }
-      ).trim();
-      if (networks) {
-        const netNames = networks.split('\n').filter(Boolean);
-        for (const net of netNames) {
-          try {
-            execSync(`docker network rm ${net}`, { stdio: 'inherit' });
-          } catch { /* network may still be in use briefly */ }
-        }
-      }
-
-      console.log(`✓ Stack destroyed: ${stackName}`);
-    } catch (error: any) {
-      console.error(`Failed to destroy stack: ${error.message}`);
+    const runArgs = args.slice(1);
+    if (runArgs.length === 0) {
+      console.error('Usage: zbb run <npm-script> [args...]');
+      console.error('       zbb run -- <command> [args...]');
       process.exit(1);
     }
-    return;
+
+    const { spawnSync } = await import('node:child_process');
+    let cmd: string;
+    let cmdArgs: string[];
+
+    if (runArgs[0] === '--') {
+      // Arbitrary command: zbb run -- node src/seed.js
+      cmdArgs = runArgs.slice(1);
+      if (cmdArgs.length === 0) {
+        console.error('No command specified after --');
+        process.exit(1);
+      }
+      cmd = cmdArgs[0];
+      cmdArgs = cmdArgs.slice(1);
+    } else {
+      // npm script: zbb run test:integration
+      cmd = 'npm';
+      cmdArgs = ['run', ...runArgs];
+    }
+
+    const result = spawnSync(cmd, cmdArgs, {
+      stdio: 'inherit',
+      env: process.env,
+      cwd: process.cwd(),
+    });
+    process.exit(result.status ?? 1);
   }
 
   // Publish — special handling for --dry-run flag conversion
@@ -272,15 +271,10 @@ async function _main(argv: string[]): Promise<void> {
     return;
   }
 
-  // Stack aliases → gradle
-  const alias = resolveStackAlias(command);
-  if (alias) {
-    if (process.env.ZB_SLOT) {
-      const slot = await SlotManager.load(process.env.ZB_SLOT);
-      await prepareSlot(slot);
-    }
-
-    runGradle([alias, ...args.slice(1)]);
+  // Deprecated stack aliases
+  const replacement = checkDeprecatedAlias(command);
+  if (replacement) {
+    console.log(`zbb ${command} no longer exists. Did you mean: ${replacement}`);
     return;
   }
 
@@ -1087,9 +1081,10 @@ Usage:
   zbb env <list|get|set|unset|reset|refresh|explain|diff>  Environment variables
   zbb secret <create|get|list|update|delete>          Secret management
   zbb logs <list|show|debug|info>                     Log viewer + log level control
+  zbb run <npm-script> [args...]                      Run npm script with slot/stack env
+  zbb run -- <command> [args...]                      Run arbitrary command with slot/stack env
   zbb dataloader [args...]                            Run dataloader with slot SQL env
   zbb publish [--dry-run]                             Publish all artifacts (Gradle)
-  zbb up|down|destroy|info                            Stack aliases (Gradle)
   zbb <gradle-task> [args...]                         Run Gradle task
   zbb --version                                       Show version
   zbb --help                                          Show this help
@@ -1116,6 +1111,13 @@ Registry commands:
   zbb registry list                     List locally published packages
   zbb registry clear [--all]            Clear local packages (--all = wipe cache)
   zbb registry status                   Show registry status
+
+Monorepo commands (when .zbb.yaml has monorepo.enabled: true):
+  zbb clean [--all]                        Clean build artifacts
+  zbb build [--all] [--verbose]            Build affected packages
+  zbb test [--all] [--verbose]             Test affected packages
+  zbb gate [--all] [--check]               Full pipeline + write gate-stamp.json
+  zbb publish [--dry-run] [--force]        Publish changed packages (main only)
 
 Secret commands:
   zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]

@@ -53,11 +53,53 @@ export interface ProjectConfig {
   inherit?: boolean;
 }
 
+export interface MonorepoImageConfig {
+  /** Directory containing Dockerfile (relative to repo root) */
+  context: string;
+  /** Image name on registry */
+  name: string;
+  /** GitHub workflow file to dispatch for image build */
+  workflow?: string;
+}
+
+export interface MonorepoConfig {
+  /** Enable monorepo mode (required when gradlew coexists with workspaces) */
+  enabled: boolean;
+  /** npm registry for publish (default: from .npmrc / publishConfig) */
+  registry?: string;
+  /** Source directories to hash per package (default: ["src"]) */
+  sourceDirs?: string[];
+  /** Additional source files to hash per package (default: ["tsconfig.json"]) */
+  sourceFiles?: string[];
+  /** Build phases — npm scripts to run in order (default: ["lint", "generate", "validate", "transpile"]) */
+  buildPhases?: string[];
+  /** Test phases — npm scripts to run (default: ["test"]) */
+  testPhases?: string[];
+  /** Workspace dirs to skip during publish (e.g., test packages) */
+  skipPublish?: string[];
+  /** Packages that produce Docker images, keyed by workspace dir name */
+  images?: Record<string, MonorepoImageConfig>;
+  /** GitHub repository (owner/repo) for workflow dispatch (default: auto-detected from git remote) */
+  githubRepo?: string;
+  /** Test database provisioning via Neon branching */
+  testDatabase?: {
+    /** Database provider (currently only 'neon') */
+    provider: 'neon';
+    /** Neon parent branch to create ephemeral branches from */
+    parentBranch: string;
+    /** Workspace dirs whose tests need a database */
+    packages: string[];
+  };
+  /** Extra preflight checks required before gate/test (e.g., Vault, DB connectivity) */
+  gatePreflight?: ToolRequirement[];
+}
+
 export interface RepoConfig {
   env?: Record<string, EnvVarDeclaration>;
   require?: ToolRequirement[];
   ports?: { range: [number, number] };
   cleanse?: string[];
+  monorepo?: MonorepoConfig;
 }
 
 export interface UserConfig {

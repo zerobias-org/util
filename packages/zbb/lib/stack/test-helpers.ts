@@ -53,6 +53,10 @@ export async function createMockStackSource(
   manifest: Record<string, unknown>,
 ): Promise<string> {
   await mkdir(tmpDir, { recursive: true });
+  // Ensure env declarations exist so StackEnvironment.loadSchema succeeds
+  if (!manifest.env) {
+    manifest = { ...manifest, env: { _PLACEHOLDER: { type: 'string', default: 'test' } } };
+  }
   await writeFile(
     join(tmpDir, 'zbb.yaml'),
     yamlStringify(manifest),
@@ -82,13 +86,32 @@ export async function createAddedStack(
   await mkdir(join(stackDir, 'state'), { recursive: true });
   await mkdir(join(stackDir, 'state', 'secrets'), { recursive: true });
 
+  // Determine source dir — create a zbb.yaml with env declarations if none provided
+  const sourceDir = options.sourceDir ?? options.identity?.source as string ?? join(stacksDir, `_src-${name}`);
+  if (!options.sourceDir && !options.identity?.source) {
+    await mkdir(sourceDir, { recursive: true });
+    const envDecls: Record<string, unknown> = {};
+    for (const key of Object.keys(options.env ?? {})) {
+      envDecls[key] = { type: 'string' };
+    }
+    // Ensure at least one env declaration so loadSchema doesn't fail
+    if (Object.keys(envDecls).length === 0) {
+      envDecls['_PLACEHOLDER'] = { type: 'string', default: 'test' };
+    }
+    await writeFile(
+      join(sourceDir, 'zbb.yaml'),
+      yamlStringify({ name: `@zerobias-com/${name}`, version: '1.0.0', env: envDecls }),
+      'utf-8',
+    );
+  }
+
   await writeFile(
     join(stackDir, 'stack.yaml'),
     yamlStringify(options.identity ?? {
       name: `@zerobias-com/${name}`,
       version: '1.0.0',
       mode: 'dev',
-      source: options.sourceDir ?? `/mock/${name}`,
+      source: sourceDir,
       added: new Date().toISOString(),
     }),
     'utf-8',

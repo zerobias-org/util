@@ -83,6 +83,7 @@ export function runPreflightChecks(
         ok: !!value,
         required: 'set',
         error: value ? undefined : `${req.tool} not set in environment`,
+        install: req.install,
       });
       continue;
     }

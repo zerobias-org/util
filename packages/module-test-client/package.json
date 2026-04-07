@@ -11,7 +11,6 @@
   "scripts": {
     "transpile": "tsc -b",
     "build": "npm run lint && npm run transpile",
-    "nx:build": "npm run lint && npm run transpile",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "clean": "rm -rf dist"
