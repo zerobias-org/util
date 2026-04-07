@@ -150,19 +150,21 @@ export function prefixArgs(args: string[], projectPath: string): string[] {
   });
 }
 
-// ── Stack Aliases ────────────────────────────────────────────────────
+// ── Deprecated Stack Aliases ─────────────────────────────────────────
 
-const STACK_ALIASES: Record<string, string> = {
-  up: 'stackUp',
-  down: 'stackDown',
-  destroy: 'stackDestroy',
-  info: 'stackInfo',
-  'exec:ui': 'execUi',
-  'exec:shell': 'execShell',
+const DEPRECATED_ALIASES: Record<string, string> = {
+  up: 'zbb stack start',
+  down: 'zbb stack stop',
+  destroy: 'zbb stack remove',
+  info: 'zbb stack info',
 };
 
-export function resolveStackAlias(command: string): string | null {
-  return STACK_ALIASES[command] ?? null;
+/**
+ * Check if a command is a deprecated stack alias.
+ * Returns the suggested replacement, or null if not a deprecated alias.
+ */
+export function checkDeprecatedAlias(command: string): string | null {
+  return DEPRECATED_ALIASES[command] ?? null;
 }
 
 // ── Execute ──────────────────────────────────────────────────────────

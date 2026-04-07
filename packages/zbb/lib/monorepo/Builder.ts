@@ -1000,19 +1000,21 @@ async function buildDockerImages(
       rm -f "$CONTEXT/package-lock.json"
       rm -rf "$CONTEXT/package"
 
-      # Prepublish standalone if available
+      # Prepublish standalone: run from package dir so it scans the right sources
       PREPUB="$REPO_ROOT/node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.sh"
+      BACKUP="$PKG_DIR/package.json.prepublish-backup"
       if [ -f "$PREPUB" ]; then
-        bash "$PREPUB" "$REPO_ROOT" --library 2>&1
+        (cd "$PKG_DIR" && bash "$PREPUB" "$REPO_ROOT" 2>&1)
       fi
 
-      # Pack
+      # Pack (includes prepublish-modified package.json with resolved deps)
       TGZ=$(cd "$PKG_DIR" && npm pack --pack-destination "$CONTEXT" 2>/dev/null | tail -1)
+
+      # Restore original package.json immediately after pack
+      [ -f "$BACKUP" ] && mv "$BACKUP" "$PKG_DIR/package.json" || true
+
       tar xzf "$CONTEXT/$TGZ" -C "$CONTEXT"
       rm -f "$CONTEXT/$TGZ"
-
-      # Restore prepublish backup
-      [ -f "$PKG_DIR/package.json.prepublish-backup" ] && mv "$PKG_DIR/package.json.prepublish-backup" "$PKG_DIR/package.json" || true
 
       # Build
       docker build --progress=plain \\
@@ -1020,9 +1022,6 @@ async function buildDockerImages(
         --build-arg npm_token="${process.env.NPM_TOKEN ?? ''}" \\
         --build-arg zb_token="${process.env.ZB_TOKEN ?? ''}" \\
         . 2>&1
-
-      # Restore prepublish backup (in case build failed before restore)
-      [ -f "$PKG_DIR/package.json.prepublish-backup" ] && mv "$PKG_DIR/package.json.prepublish-backup" "$PKG_DIR/package.json" || true
     `;
 
     const child = spawn('bash', ['-c', script], {
