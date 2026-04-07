@@ -202,6 +202,19 @@ export async function handleMonorepo(
 
   console.log(`Monorepo: ${packages.size} workspace packages`);
 
+  // publish has its own version-based change detection — skip git diff detection
+  if (command === 'publish') {
+    await publish({
+      dryRun: parsed.dryRun,
+      force: parsed.force,
+      verbose: parsed.verbose,
+      repoRoot,
+      graph,
+      config,
+    });
+    return;
+  }
+
   // gate and clean always run on all packages
   const forceAll = parsed.all || command === 'gate' || command === 'clean';
 
@@ -215,11 +228,9 @@ export async function handleMonorepo(
     return;
   }
 
-  if (changes.affectedOrdered.length > 0) {
-    const branch = getCurrentBranch(repoRoot);
-    console.log(`Branch: ${branch} | Base: ${changes.baseRef}`);
-    console.log(`Changed: ${changes.changed.size} | Affected: ${changes.affected.size}`);
-  }
+  const branch = getCurrentBranch(repoRoot);
+  console.log(`Branch: ${branch} | Base: ${changes.baseRef}`);
+  console.log(`Changed: ${changes.changed.size} | Affected: ${changes.affected.size}`);
 
   const ctx = {
     repoRoot,
@@ -285,17 +296,6 @@ export async function handleMonorepo(
       await gate(ctx);
       break;
     }
-
-    case 'publish':
-      await publish({
-        dryRun: parsed.dryRun,
-        force: parsed.force,
-        verbose: parsed.verbose,
-        repoRoot,
-        graph,
-        config,
-      });
-      break;
 
     default:
       console.error(`Unknown monorepo command: ${command}`);

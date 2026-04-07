@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "branch": "feature/zbb-monorepo-support",
-  "timestamp": "2026-04-07T19:26:28.485Z",
+  "branch": "main",
+  "timestamp": "2026-04-07T19:32:04.344Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.8",
@@ -125,7 +125,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.18",
-      "sourceHash": "0958010a3c6b7178524b40bd50093863174cb1031727ee373355b1f90def05ed",
+      "sourceHash": "41cc4b0e3dd728a21c6822b351eb2e2339fec12c13fc8a883790fe646099298f",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
