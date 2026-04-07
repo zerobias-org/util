@@ -180,17 +180,19 @@ export async function handleMonorepo(
   const repoConfig = await loadRepoConfig(repoRoot);
   const config = repoConfig.monorepo!;
 
-  // Run preflight checks
-  runMonorepoPreflight(command, config);
+  // Skip preflight checks for stamp-only validation (gate --check)
+  if (!(command === 'gate' && parsed.check)) {
+    runMonorepoPreflight(command, config);
 
-  // Also run repo-level preflight checks from .zbb.yaml
-  if (repoConfig.require && repoConfig.require.length > 0) {
-    const userConfig = await loadUserConfig();
-    const results = runPreflightChecks(repoConfig.require, userConfig.skip_checks);
-    const failed = results.filter(r => !r.ok);
-    if (failed.length > 0) {
-      console.log(formatPreflightResults(results));
-      process.exit(1);
+    // Also run repo-level preflight checks from .zbb.yaml
+    if (repoConfig.require && repoConfig.require.length > 0) {
+      const userConfig = await loadUserConfig();
+      const results = runPreflightChecks(repoConfig.require, userConfig.skip_checks);
+      const failed = results.filter(r => !r.ok);
+      if (failed.length > 0) {
+        console.log(formatPreflightResults(results));
+        process.exit(1);
+      }
     }
   }
 
