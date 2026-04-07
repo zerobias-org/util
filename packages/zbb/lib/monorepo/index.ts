@@ -200,8 +200,8 @@ export async function handleMonorepo(
 
   console.log(`Monorepo: ${packages.size} workspace packages`);
 
-  // gate always runs on all packages — caching inside gate handles skipping
-  const forceAll = parsed.all || command === 'gate';
+  // gate and clean always run on all packages
+  const forceAll = parsed.all || command === 'gate' || command === 'clean';
 
   const changes = detectChanges(repoRoot, graph, {
     all: forceAll,

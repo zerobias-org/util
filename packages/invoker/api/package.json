@@ -20,8 +20,7 @@
     "transpile": "tsc -b",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
-    "build": "npm run lint && npm run transpile",
-    "nx:build": "npm run lint && npm run transpile"
+    "build": "npm run lint && npm run transpile"
   },
   "author": "ZeroBias <support@zerobias.com>",
   "license": "UNLICENSED",

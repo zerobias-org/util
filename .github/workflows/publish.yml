@@ -13,12 +13,10 @@ permissions:
 
 env:
   ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
-  NPM_TOKEN: ${{ secrets.READ_TOKEN }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  READ_TOKEN: ${{ secrets.READ_TOKEN }}
-  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
   SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+  CI: true
 
 jobs:
   publish:
@@ -26,7 +24,87 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Publish Hoisted
-        uses: zerobias-org/devops/nx-actions/publish-hoisted@main
+      - name: Acquire cache
+        uses: actions/cache@v4
         with:
-          publishToken: ${{ secrets.GITHUB_TOKEN }}
+          path: .git
+          key: repo-git-folder
+
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci@neverfail.com"
+          git config --global user.name "@$GITHUB_ACTOR"
+
+      - name: Authenticate to Vault
+        id: vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: jwt
+          role: zerobias-org-devops-role
+          path: gh-actions
+          jwtGithubAudience: "https://github.com/zerobias-org"
+          secrets: |
+            operations-kv/data/ci/github writePackagesToken | NPM_TOKEN ;
+            operations-kv/data/ci/github readPackagesToken | READ_TOKEN ;
+
+      - name: Install dependencies
+        run: |
+          cp .npmrc $HOME/.npmrc
+          npm ci
+          npm install -g @zerobias-org/zbb@latest
+          npm install -g @zerobias-org/devops-tools@latest
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Publish
+        run: npx zbb publish
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Release Announcement
+        if: success()
+        uses: zerobias-org/devops/nx-actions/release-announcement@main
+        with:
+          packages-file: /tmp/published-packages.json
+          branch: ${{ github.ref_name }}
+          dist-tag: latest
+        env:
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+
+      - name: Slack Notification on failure
+        uses: slackapi/slack-github-action@v2.0.0
+        if: failure()
+        with:
+          webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":fire: util publish failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "text": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+                }
+              ]
+            }

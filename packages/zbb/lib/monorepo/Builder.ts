@@ -433,6 +433,12 @@ async function runPhaseConcurrently(
     return true;
   }
 
+  function pendingDeps(name: string): string[] {
+    if (options?.ignoreDeps) return [];
+    const pkg = graph.packages.get(name)!;
+    return pkg.internalDeps.filter(dep => affectedSet.has(dep) && !completed.has(dep)).map(sn);
+  }
+
   let resolveWaiter: (() => void) | null = null;
   function signal(): void { if (resolveWaiter) { resolveWaiter(); resolveWaiter = null; } }
   function waitForSignal(): Promise<void> { return new Promise(r => { resolveWaiter = r; }); }
@@ -595,7 +601,9 @@ async function runPhaseConcurrently(
       displayStatus.set(name, `  \x1b[34m◆ ${pad(name)} \x1b[90m(cached)\x1b[0m`);
       if (!isTTY) console.log(`  \x1b[34m◆ ${pad(name)} \x1b[90m(cached)\x1b[0m`);
     } else {
-      displayStatus.set(name, `  \x1b[90m◯ ${pad(name)}\x1b[0m`);
+      const blocked = pendingDeps(name);
+      const suffix = blocked.length > 0 ? ` \x1b[90m← waiting on ${blocked.join(', ')}\x1b[0m` : '';
+      displayStatus.set(name, `  \x1b[90m◯ ${pad(name)}${suffix}\x1b[0m`);
     }
   }
   if (isTTY) renderDisplay();
@@ -608,8 +616,13 @@ async function runPhaseConcurrently(
       if (depsCompleted(name)) {
         pending.delete(name);
         spawnOne(name);
+      } else if (isTTY) {
+        // Update waiting status with current blockers
+        const blocked = pendingDeps(name);
+        displayStatus.set(name, `  \x1b[90m◯ ${pad(name)} ← waiting on ${blocked.join(', ')}\x1b[0m`);
       }
     }
+    if (isTTY) renderDisplay();
 
     if (inFlight.size > 0) {
       await waitForSignal();

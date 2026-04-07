@@ -2,6 +2,9 @@ name: Pull Request
 
 on:
   pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -13,26 +16,122 @@ env:
   NPM_TOKEN: ${{ secrets.READ_TOKEN }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   READ_TOKEN: ${{ secrets.READ_TOKEN }}
-  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
-  SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
 
 jobs:
-  test:
-    name: Test
+  gate-check:
+    name: Gate Stamp Check
+    runs-on: ubuntu-latest
+    outputs:
+      stamp_valid: ${{ steps.check_stamp.outputs.valid }}
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cp .npmrc $HOME/.npmrc
+          npm ci
+          npm install -g @zerobias-org/zbb@latest
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Check gate stamp
+        id: check_stamp
+        run: |
+          if npx zbb gate --check; then
+            echo "valid=true" >> $GITHUB_OUTPUT
+          else
+            echo "valid=false" >> $GITHUB_OUTPUT
+          fi
+
+  gate-run:
+    name: Run Gate
+    needs: [gate-check]
+    if: needs.gate-check.outputs.stamp_valid == 'false'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Import Secrets
-        uses: hashicorp/vault-action@v2.4.3
+      - name: Acquire cache
+        uses: actions/cache@v4
         with:
-          method: jwt
-          url: ${{ secrets.VAULT_ADDR }}
-          role: publishing-role
-          path: gh-actions
-          secrets: |
-            operations-kv/data/ci/github platformUrl | PLATFORM_URL;
-            operations-kv/data/ci/github platformApiKey | PLATFORM_API_KEY;
+          path: .git
+          key: repo-git-folder
 
-      - name: Pull Request Hoisted
-        uses: zerobias-org/devops/nx-actions/pull-request-hoisted@main
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci@neverfail.com"
+          git config --global user.name "@$GITHUB_ACTOR"
+
+      - name: Install dependencies
+        run: |
+          cp .npmrc $HOME/.npmrc
+          npm ci
+          npm install -g @zerobias-org/zbb@latest
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Run zbb gate
+        run: npx zbb gate
+        env:
+          CI: 'true'
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Commit and push gate stamp
+        run: |
+          git add gate-stamp.json
+          if git diff --cached --quiet; then
+            echo "No changes to gate-stamp.json"
+          else
+            git commit -m "chore: update gate-stamp.json"
+            git push
+          fi
+
+      - name: Slack Notification on failure
+        uses: slackapi/slack-github-action@v2.0.0
+        if: failure()
+        with:
+          webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":fire: util pull request gate failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "text": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+                }
+              ]
+            }
