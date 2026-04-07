@@ -426,8 +426,9 @@ async function handleSlot(args: string[]): Promise<void> {
 
       // Set prompt
       const userConfig = await loadUserConfig();
-      const promptTemplate = userConfig.prompt ?? '[zb:{{slot}}]:\\w$ ';
-      shellEnv.PS1 = promptTemplate.replace('{{slot}}', slotName);
+      // Set slot prompt — replaces user@host with slot tag, keeps colored path
+      const promptTemplate = userConfig.prompt ?? '\\[\\033[01;36m\\][zb:{{slot}}]\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ ';
+      shellEnv.ZBB_PS1 = promptTemplate.replace('{{slot}}', slotName);
 
       // Generate rcfile that sources the hook
       const { join: pathJoin, dirname: pathDirname } = await import('node:path');
@@ -439,7 +440,17 @@ async function handleSlot(args: string[]): Promise<void> {
       const pkgRoot = pathJoin(thisDir, '..');
       const hookPath = pathJoin(pkgRoot, 'lib', 'shell', 'hook.sh');
       const rcFile = pathJoin(slot.path, '.zbb-bashrc');
-      writeFileSync(rcFile, `${shellEnv.PS1 ? `PS1='${shellEnv.PS1}'` : ''}\n[ -f "${hookPath}" ] && source "${hookPath}"\n`, 'utf-8');
+      // Source the user's normal bashrc first (for aliases, colors, etc.), then overlay zbb
+      const rcLines = [
+        '# Source user shell config for colors, aliases, etc.',
+        '[ -f /etc/bash.bashrc ] && source /etc/bash.bashrc',
+        '[ -f ~/.bashrc ] && source ~/.bashrc',
+        '',
+        '# zbb slot overrides',
+        '[ -n "$ZBB_PS1" ] && PS1="$ZBB_PS1"',
+        `[ -f "${hookPath}" ] && source "${hookPath}"`,
+      ].join('\n');
+      writeFileSync(rcFile, rcLines + '\n', 'utf-8');
 
       // Check stack health on slot load — show status, update stale state, start heartbeat
       if (slot.hasStacks) {

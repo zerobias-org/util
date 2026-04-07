@@ -4,6 +4,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { DependencyGraph, WorkspacePackage } from './Workspace.js';
 import { getTransitiveDependents, sortByBuildOrder } from './Workspace.js';
 
@@ -22,11 +24,16 @@ export interface ChangeDetectionResult {
 
 // ── Root-level files that trigger full rebuild ────────────────────────
 
-const ROOT_TRIGGER_FILES = new Set([
-  'package.json',
-  'package-lock.json',
+/** Root files that always invalidate all packages */
+const ROOT_TRIGGER_ALL = new Set([
   'tsconfig.json',
   '.zbb.yaml',
+]);
+
+/** Root files that need targeted analysis */
+const ROOT_TRIGGER_TARGETED = new Set([
+  'package.json',
+  'package-lock.json',
 ]);
 
 // ── Implementation ───────────────────────────────────────────────────
@@ -62,23 +69,33 @@ function resolveBaseRef(repoRoot: string, overrideBase?: string): string {
 }
 
 /**
- * Get the list of files changed between baseRef and HEAD.
+ * Get the list of files changed between baseRef and HEAD, including uncommitted changes.
  */
 function getChangedFiles(repoRoot: string, baseRef: string): string[] {
+  const files = new Set<string>();
+
+  // Committed changes: baseRef..HEAD
   try {
     const output = git(['diff', '--name-only', `${baseRef}...HEAD`], repoRoot);
-    if (!output) return [];
-    return output.split('\n').filter(Boolean);
+    if (output) for (const f of output.split('\n').filter(Boolean)) files.add(f);
   } catch {
-    // Three-dot diff may fail if baseRef isn't reachable; fall back to two-dot
     try {
       const output = git(['diff', '--name-only', baseRef, 'HEAD'], repoRoot);
-      if (!output) return [];
-      return output.split('\n').filter(Boolean);
-    } catch {
-      return [];
-    }
+      if (output) for (const f of output.split('\n').filter(Boolean)) files.add(f);
+    } catch { /* ignore */ }
   }
+
+  // Uncommitted changes: staged + unstaged working tree
+  try {
+    const output = git(['diff', '--name-only', 'HEAD'], repoRoot);
+    if (output) for (const f of output.split('\n').filter(Boolean)) files.add(f);
+  } catch { /* ignore */ }
+  try {
+    const output = git(['diff', '--name-only', '--cached'], repoRoot);
+    if (output) for (const f of output.split('\n').filter(Boolean)) files.add(f);
+  } catch { /* ignore */ }
+
+  return [...files];
 }
 
 /**
@@ -87,9 +104,10 @@ function getChangedFiles(repoRoot: string, baseRef: string): string[] {
 function mapFilesToPackages(
   changedFiles: string[],
   graph: DependencyGraph,
-): { changed: Set<string>; allAffected: boolean } {
+): { changed: Set<string>; allAffected: boolean; rootPkgChanged: boolean } {
   const changed = new Set<string>();
   let allAffected = false;
+  let rootPkgChanged = false;
 
   // Build a lookup: relDir → package name
   const dirToName = new Map<string, string>();
@@ -104,10 +122,16 @@ function mapFilesToPackages(
     // Skip gate-stamp.json itself
     if (file === 'gate-stamp.json') continue;
 
-    // Check if it's a root-level trigger file
-    if (!file.includes('/') && ROOT_TRIGGER_FILES.has(file)) {
-      allAffected = true;
-      continue;
+    // Check root-level trigger files
+    if (!file.includes('/')) {
+      if (ROOT_TRIGGER_ALL.has(file)) {
+        allAffected = true;
+        continue;
+      }
+      if (ROOT_TRIGGER_TARGETED.has(file)) {
+        rootPkgChanged = true;
+        continue;
+      }
     }
 
     // Map to a workspace package
@@ -119,7 +143,124 @@ function mapFilesToPackages(
     }
   }
 
-  return { changed, allAffected };
+  return { changed, allAffected, rootPkgChanged };
+}
+
+// ── Root package.json targeted analysis ─────────────────────────────
+
+/**
+ * Get the root package.json dependencies + overrides at a specific git ref.
+ */
+function getRootDepsAt(repoRoot: string, ref: string): { deps: Record<string, string>; overrides: Record<string, unknown> } {
+  try {
+    const content = git(['show', `${ref}:package.json`], repoRoot);
+    const pkg = JSON.parse(content);
+    return {
+      deps: { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) },
+      overrides: pkg.overrides ?? {},
+    };
+  } catch {
+    return { deps: {}, overrides: {} };
+  }
+}
+
+/**
+ * Find which root dependencies/overrides changed between baseRef and HEAD.
+ */
+function getChangedRootDeps(repoRoot: string, baseRef: string): Set<string> {
+  const old = getRootDepsAt(repoRoot, baseRef);
+  const current = getRootDepsAt(repoRoot, 'HEAD');
+  const changed = new Set<string>();
+
+  // Check deps: added, removed, or version changed
+  const allDepKeys = new Set([...Object.keys(old.deps), ...Object.keys(current.deps)]);
+  for (const key of allDepKeys) {
+    if (old.deps[key] !== current.deps[key]) {
+      changed.add(key);
+    }
+  }
+
+  // Check overrides: added, removed, or value changed
+  const allOverrideKeys = new Set([...Object.keys(old.overrides), ...Object.keys(current.overrides)]);
+  for (const key of allOverrideKeys) {
+    if (JSON.stringify(old.overrides[key]) !== JSON.stringify(current.overrides[key])) {
+      changed.add(key);
+    }
+  }
+
+  return changed;
+}
+
+/**
+ * Run prepublish-standalone --dry-run for a package and return its resolved root deps.
+ */
+function getResolvedRootDeps(pkg: WorkspacePackage, repoRoot: string): Set<string> {
+  const prepubScript = join(repoRoot, 'node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.js');
+  if (!existsSync(prepubScript)) return new Set();
+
+  try {
+    const output = execFileSync('node', [prepubScript, pkg.dir, repoRoot, '--dry-run'], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    // Parse "Dependencies that would be included:" section
+    const resolved = new Set<string>();
+    const depsMatch = output.match(/Dependencies that would be included:\n([\s\S]*?)(?:\n\n|\nOverrides|$)/);
+    if (depsMatch) {
+      for (const line of depsMatch[1].split('\n')) {
+        const match = line.match(/^\s+(\S+):/);
+        if (match) resolved.add(match[1]);
+      }
+    }
+    // Also parse overrides
+    const overridesMatch = output.match(/Overrides that would be included:\n([\s\S]*?)(?:\n\n|$)/);
+    if (overridesMatch) {
+      for (const line of overridesMatch[1].split('\n')) {
+        const match = line.match(/^\s+(\S+):/);
+        if (match) resolved.add(match[1]);
+      }
+    }
+    return resolved;
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Determine which packages are affected by root package.json changes.
+ * Only marks packages that actually use the changed root dependencies.
+ */
+function findPackagesAffectedByRootDeps(
+  repoRoot: string,
+  baseRef: string,
+  graph: DependencyGraph,
+): Set<string> {
+  const changedDeps = getChangedRootDeps(repoRoot, baseRef);
+  if (changedDeps.size === 0) return new Set();
+
+  console.log(`Root package.json changed — checking ${changedDeps.size} dep(s): ${[...changedDeps].join(', ')}`);
+
+  const affected = new Set<string>();
+  for (const [name, pkg] of graph.packages) {
+    const resolved = getResolvedRootDeps(pkg, repoRoot);
+    for (const dep of changedDeps) {
+      if (resolved.has(dep)) {
+        affected.add(name);
+        break;
+      }
+    }
+  }
+
+  if (affected.size > 0) {
+    const shortNames = [...affected].map(n => graph.packages.get(n)!.name.replace(/^@[^/]+\//, ''));
+    console.log(`  Affected by root dep changes: ${shortNames.join(', ')}`);
+  } else {
+    console.log('  No packages affected by root dep changes');
+  }
+
+  return affected;
 }
 
 /**
@@ -144,7 +285,7 @@ export function detectChanges(
   const baseRef = resolveBaseRef(repoRoot, options?.base);
   const changedFiles = getChangedFiles(repoRoot, baseRef);
 
-  const { changed, allAffected } = mapFilesToPackages(changedFiles, graph);
+  const { changed, allAffected, rootPkgChanged } = mapFilesToPackages(changedFiles, graph);
 
   if (allAffected) {
     const allNames = new Set(graph.packages.keys());
@@ -154,6 +295,14 @@ export function detectChanges(
       affectedOrdered: graph.buildOrder,
       baseRef,
     };
+  }
+
+  // If root package.json changed, do targeted analysis
+  if (rootPkgChanged) {
+    const rootAffected = findPackagesAffectedByRootDeps(repoRoot, baseRef, graph);
+    for (const name of rootAffected) {
+      changed.add(name);
+    }
   }
 
   // Expand changed to include transitive dependents
