@@ -385,7 +385,11 @@ async function handleSlot(args: string[]): Promise<void> {
       if (repoRoot) {
         const repoConfig = await loadRepoConfig(repoRoot);
 
-        const requirements: ToolRequirement[] = [...(repoConfig.require ?? [])];
+        // Filter requirements that apply to the 'slot' command
+        const requirements: ToolRequirement[] = (repoConfig.require ?? []).filter(r => {
+          if (!r.commands) return true;
+          return r.commands.includes('slot');
+        });
 
         const userConfig = await loadUserConfig();
         if (requirements.length > 0) {
