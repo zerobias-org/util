@@ -6,6 +6,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+// Sync `require` for use in ESM modules — needed because spawnLifecycleAndExit
+// is a sync `never`-returning function and we want to lazy-load Display.ts
+// without making the whole call chain async.
+const requireCJS = createRequire(import.meta.url);
 import type { MonorepoConfig, RepoConfig } from '../config.js';
 import { loadRepoConfig, loadUserConfig } from '../config.js';
 import { runPreflightChecks, formatPreflightResults } from '../preflight.js';
@@ -204,32 +210,57 @@ function lookupLifecycleCommand(
 }
 
 /**
- * Spawn a lifecycle command from the repo root, with stdio inherited and
- * monorepo flag passthrough appended (--all → -Pmonorepo.all=true, etc).
- * Exits with the command's exit code.
+ * Spawn a lifecycle command from the repo root with monorepo flag passthrough.
+ *
+ * For phases that produce per-task events (build, etc.), uses the project-centric
+ * MonorepoDisplay to render a live TTY table (Phase 2.7). For all other commands,
+ * falls back to inherited stdio.
+ *
+ * Exits with the command's exit code via process.exit (returns Promise<never>).
  */
-function spawnLifecycleAndExit(
+async function spawnLifecycleAndExit(
   repoRoot: string,
+  command: string,
   baseCommand: string,
   parsed: ParsedArgs,
-): never {
+): Promise<never> {
   const passthrough: string[] = [];
   if (parsed.all) passthrough.push('-Pmonorepo.all=true');
   if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
+  if (parsed.dryRun) passthrough.push('-PdryRun=true');
+  if (parsed.force) passthrough.push('-Pforce=true');
 
-  // The lifecycle command is a free-form shell string. Append our passthrough
-  // args at the end. The repo can use shell-quoting to ignore them if its
-  // command isn't gradle.
+  if (parsed.verbose) {
+    const args = passthrough.length > 0 ? ` ${passthrough.join(' ')}` : '';
+    console.log(`[zbb] lifecycle '${baseCommand}${args}'`);
+  }
+
+  // Use the project-centric display for commands that produce per-task events
+  // (build, test, gate). Skip for clean (single root task — no per-task events)
+  // and gate --check (fast file read — no point spinning up the display).
+  const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
+  const displayEligibleCommands = new Set(['build', 'test', 'gate']);
+  const isGateCheck = command === 'gate' && parsed.check;
+  const useDisplay =
+    displayEligibleCommands.has(command) &&
+    !isGateCheck &&
+    (process.stdout.isTTY || forceDisplay);
+  if (useDisplay) {
+    const parts = baseCommand.trim().split(/\s+/);
+    if (parts.length > 0 && !baseCommand.includes('|') && !baseCommand.includes('&&')) {
+      const cmd = parts[0];
+      const args = [...parts.slice(1), ...passthrough];
+      const { runWithDisplay } = requireCJS('./Display.js');
+      const code = await runWithDisplay(repoRoot, cmd, args);
+      process.exit(code);
+    }
+  }
+
+  // Fallback path: bash -c "<full command>"
   const fullCommand = passthrough.length > 0
     ? `${baseCommand} ${passthrough.join(' ')}`
     : baseCommand;
 
-  if (parsed.verbose) {
-    console.log(`[zbb] lifecycle '${fullCommand}'`);
-  }
-
-  // Use shell so the lifecycle string can include redirects, pipes, &&, etc.
-  // Mirrors how stack lifecycle commands are executed.
   const result = spawnSync('bash', ['-c', fullCommand], {
     cwd: repoRoot,
     stdio: 'inherit',
@@ -284,7 +315,7 @@ export async function handleMonorepo(
           }
         }
       }
-      spawnLifecycleAndExit(repoRoot, lifecycleCommand, parsed);
+      await spawnLifecycleAndExit(repoRoot, command, lifecycleCommand, parsed);
     }
   }
 

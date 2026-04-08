@@ -190,22 +190,74 @@ gradle.projectsEvaluated {
     // 1. Register fallback Exec tasks for subprojects that DON'T have their
     //    own build infrastructure. Subprojects with zb.typescript-service
     //    keep their existing npm* / dockerBuild tasks untouched.
+    //
+    //    Each fallback task declares inputs (source files) and outputs (a
+    //    stamp file written in doLast) so Gradle can skip up-to-date tasks
+    //    on subsequent runs. Without this, every `zbb build` re-runs every
+    //    npm script even when nothing changed.
     for ((pkgName, pkg) in packages) {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
         if (hasExistingBuildInfra(subproject)) continue  // defer to existing tasks
+
+        // Common input PATHS (always declared, regardless of existence at
+        // configuration time). Using project.fileTree() with optional means
+        // missing paths don't change the input set between runs — Gradle's
+        // up-to-date logic stays stable.
+        val srcDir = pkg.dir.resolve("src")
+        val packageJson = pkg.dir.resolve("package.json")
+        val tsconfigJson = pkg.dir.resolve("tsconfig.json")
+        val apiYml = pkg.dir.resolve("api.yml")
+        val generatedDir = pkg.dir.resolve("generated")
+
+        // FileTree wrappers handle missing-dir cases (empty tree). For
+        // single FILES, Gradle's input validation requires them to exist
+        // even with .optional(), so we only declare them if they're present.
+        fun fileTreeOf(dir: java.io.File) = subproject.fileTree(dir).matching { include("**/*") }
 
         for (phase in phases) {
             val scriptBody = pkg.scripts[phase]
             if (scriptBody.isNullOrBlank() || scriptBody.trimStart().startsWith("echo ")) {
                 continue
             }
+            val stampFile = pkg.dir.resolve("build/${phase}.stamp")
             subproject.tasks.register<Exec>(phase) {
                 group = "monorepo"
                 description = "Run `npm run $phase` for $pkgName"
                 workingDir = pkg.dir
                 commandLine = listOf("npm", "run", phase)
                 dependsOn(workspaceInstall)
+
+                // Directory inputs (always declared — empty FileTree if missing)
+                inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                // generated/ is only an input for transpile/test (the consumers
+                // of generated code). lint scans src/ only and would otherwise
+                // be invalidated whenever generate produces new output, since
+                // lint runs BEFORE generate in our canonical order.
+                if (phase == "transpile") {
+                    inputs.files(fileTreeOf(generatedDir)).withPropertyName("generatedFiles")
+                }
+
+                // Single-file inputs — only declare if the file exists today.
+                // (Gradle's input validation rejects optional missing files.)
+                if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
+                if (tsconfigJson.exists()) inputs.file(tsconfigJson).withPropertyName("tsconfigJson")
+                if (apiYml.exists()) inputs.file(apiYml).withPropertyName("apiYml")
+
+                // Phase-specific outputs (the actual artifacts npm produces)
+                when (phase) {
+                    "generate" -> outputs.dir(generatedDir).withPropertyName("generatedOut")
+                    "transpile" -> outputs.dir(pkg.dir.resolve("dist")).withPropertyName("distOut")
+                }
+                // Always write a stamp file in build/ so Gradle has a stable
+                // output marker even when the npm script produces nothing
+                // (e.g. lint).
+                outputs.file(stampFile).withPropertyName("phaseStamp")
+
+                doLast {
+                    stampFile.parentFile.mkdirs()
+                    stampFile.writeText("$phase completed at ${java.time.Instant.now()}\n")
+                }
             }
         }
 
@@ -214,12 +266,27 @@ gradle.projectsEvaluated {
             if (scriptBody.isNullOrBlank() || scriptBody.trimStart().startsWith("echo ")) {
                 continue
             }
+            val stampFile = pkg.dir.resolve("build/${testPhase}.stamp")
+            val testDir = pkg.dir.resolve("test")
             subproject.tasks.register<Exec>(testPhase) {
                 group = "monorepo"
                 description = "Run `npm run $testPhase` for $pkgName"
                 workingDir = pkg.dir
                 commandLine = listOf("npm", "run", testPhase)
                 dependsOn(workspaceInstall)
+
+                inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
+                inputs.files(fileTreeOf(generatedDir)).withPropertyName("generatedFiles")
+                if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
+                if (tsconfigJson.exists()) inputs.file(tsconfigJson).withPropertyName("tsconfigJson")
+
+                outputs.file(stampFile).withPropertyName("phaseStamp")
+
+                doLast {
+                    stampFile.parentFile.mkdirs()
+                    stampFile.writeText("$testPhase completed at ${java.time.Instant.now()}\n")
+                }
             }
         }
     }
@@ -249,18 +316,25 @@ gradle.projectsEvaluated {
     }
 
     // 3. Cross-phase ordering within a subproject (fallback Exec only).
-    //    zb.typescript-service handles its own ordering internally.
+    //    Canonical order: lint → generate → transpile → test
+    //    Use mustRunAfter (not dependsOn) so requesting just one phase
+    //    doesn't pull in the earlier ones.
     for ((_, pkg) in packages) {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
         if (hasExistingBuildInfra(subproject)) continue
+
+        val lint = subproject.tasks.findByName("lint")
+        val generate = subproject.tasks.findByName("generate")
         val transpile = subproject.tasks.findByName("transpile")
+        val test = subproject.tasks.findByName("test")
+
+        if (lint != null && generate != null) generate.mustRunAfter(lint)
         if (transpile != null) {
-            listOf("lint", "generate").forEach { earlierPhase ->
-                subproject.tasks.findByName(earlierPhase)?.let { transpile.mustRunAfter(it) }
-            }
-            subproject.tasks.findByName("test")?.mustRunAfter(transpile)
+            lint?.let { transpile.mustRunAfter(it) }
+            generate?.let { transpile.mustRunAfter(it) }
         }
+        if (test != null && transpile != null) test.mustRunAfter(transpile)
     }
 
     // 4. Wrap dockerBuild tasks (from zb.typescript-service) with the

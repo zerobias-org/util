@@ -127,6 +127,9 @@ generated
 !packages/build-tools/docs
 !packages/build-tools/docs/**
 
+# Kotlin compiler cache (build-tools)
+.kotlin/
+
 # codegen test outputs
 codegen/test/regression/output/
 
