@@ -645,7 +645,7 @@ export async function publish(opts: PublishOptions): Promise<void> {
         const info = versionMap.get(name)!;
         if (currentStamp.packages[name]) {
           currentStamp.packages[name].version = info.version;
-          currentStamp.packages[name].sourceHash = computeSourceHash(pkg, config, repoRoot);
+          currentStamp.packages[name].sourceHash = computeSourceHash(pkg, config);
         }
       }
       writeGateStamp(repoRoot, currentStamp);

@@ -828,7 +828,7 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
   const buildCache = readBuildCache(ctx.repoRoot);
   const sourceHashes = new Map<string, string>();
   for (const [name, pkg] of graph.packages) {
-    sourceHashes.set(name, computeSourceHash(pkg, config, ctx.repoRoot));
+    sourceHashes.set(name, computeSourceHash(pkg, config));
   }
 
   try {
