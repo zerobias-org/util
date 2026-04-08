@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "main",
-  "timestamp": "2026-04-08T05:44:21.223Z",
+  "timestamp": "2026-04-08T05:45:16.880Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.9",
@@ -143,8 +143,8 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.26",
-      "sourceHash": "449872e4ac181b42ae052b551facfa57d1f32400aa063e5ea96fd45a45a2a7b5",
+      "version": "0.3.27",
+      "sourceHash": "bffd316995f688e4477ad6437f4d57090d026c49c4e5d1aeace12501bba448a7",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
