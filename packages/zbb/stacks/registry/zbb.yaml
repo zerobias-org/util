@@ -18,15 +18,15 @@ env:
     value: "http://${STACK_NAME}-registry:4873"
     description: Local npm registry URL (container-side, via Docker network)
 
-  GITHUB_TOKEN:
-    type: string
-    source: env
-    description: GitHub token for proxying npm.pkg.github.com
-
   NPM_TOKEN:
     type: string
     source: env
-    description: Fallback GitHub token (aliases GITHUB_TOKEN)
+    description: GitHub Packages auth token (from .npmrc / shell)
+
+  GITHUB_TOKEN:
+    type: string
+    value: "${NPM_TOKEN}"
+    description: GitHub token for Verdaccio proxy — derived from NPM_TOKEN
 
   ZB_TOKEN:
     type: string

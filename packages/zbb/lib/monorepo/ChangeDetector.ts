@@ -314,6 +314,16 @@ export function detectChanges(
     }
   }
 
+  // Include packages with missing build artifacts (e.g. after clean).
+  // A package without dist/ needs to be rebuilt even if git shows no source changes.
+  for (const [name, pkg] of graph.packages) {
+    if (affected.has(name)) continue;
+    const distDir = join(pkg.dir, 'dist');
+    if (!existsSync(distDir)) {
+      affected.add(name);
+    }
+  }
+
   const affectedOrdered = sortByBuildOrder(affected, graph);
 
   return { changed, affected, affectedOrdered, baseRef };

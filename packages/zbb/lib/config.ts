@@ -27,11 +27,13 @@ export interface EnvVarDeclaration {
   /** Hidden from UI env list by default — internal/runtime vars */
   hidden?: boolean;
   generate?: string;
-  source?: 'env' | 'cwd' | 'vault' | 'file';
+  source?: 'env' | 'cwd' | 'vault' | 'file' | 'expression:jsonata';
   /** Vault KV v2 ref — "mount/path.field" (single field lookup). Requires source: vault. */
   vault?: string;
   /** File path to read value from. Supports ~ for homedir. Requires source: file. Falls back to env var or default. */
   file?: string;
+  /** JSONata expression. Env vars are available as $ENV_NAME. Requires source: expression:jsonata. */
+  expr?: string;
   /** When true, always re-fetch on `zbb env refresh` / `zbb publish`. Default: false. */
   refresh?: boolean;
   required?: boolean;
@@ -178,7 +180,7 @@ export interface StackManifest {
   version: string;
   depends?: Record<string, string | DependencySpec>;
   exports?: string[];
-  imports?: Record<string, (string | ImportAlias)[]>;
+  imports?: Record<string, (string | ImportAlias)[] | OptionalImport>;
   substacks?: Record<string, SubstackConfig>;
   env?: Record<string, EnvVarDeclaration>;
   state?: Record<string, StateFieldSchema>;
@@ -191,6 +193,11 @@ export interface StackManifest {
 export interface ImportAlias {
   from: string;
   as: string;
+}
+
+export interface OptionalImport {
+  optional: true;
+  vars: (string | ImportAlias)[];
 }
 
 export interface StackIdentity {

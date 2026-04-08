@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "branch": "main",
-  "timestamp": "2026-04-08T09:00:49.910Z",
+  "branch": "feat/zbb-stack-resolve",
+  "timestamp": "2026-04-08T13:41:03.717Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.9",
@@ -161,7 +161,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.30",
-      "sourceHash": "cd0bed1cbb02f5acc62ea135937ba9c067514378ea1fe69ed576d2691fc6a3bd",
+      "sourceHash": "1fa3ef97a49e0b1ab35c11ca5b382c5e1c3e14cc090012421a1ace649d86e2fa",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -189,6 +189,7 @@
         }
       },
       "rootDeps": {
+        "jsonata": "^2.0.0",
         "semver": "^7.6.0",
         "yaml": "\"2.8.3\"",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
