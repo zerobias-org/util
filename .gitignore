@@ -123,6 +123,10 @@ dist/
 docs
 generated
 
+# build-tools authored docs (override the unanchored "docs" rule above)
+!packages/build-tools/docs
+!packages/build-tools/docs/**
+
 # codegen test outputs
 codegen/test/regression/output/
 
