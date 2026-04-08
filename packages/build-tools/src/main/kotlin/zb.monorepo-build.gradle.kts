@@ -30,6 +30,7 @@
 
 import com.zerobias.buildtools.monorepo.MonorepoGraphService
 import com.zerobias.buildtools.monorepo.DockerSemaphore
+import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import org.gradle.api.tasks.Exec
 
 @Suppress("UNCHECKED_CAST")
@@ -46,12 +47,33 @@ val dockerSemaphore = gradle.sharedServices.registerIfAbsent(
     DockerSemaphore::class.java
 ) {
     parameters.maxConcurrent.set(dockerConcurrency)
-    // Per-build per-permit; Gradle's worker pool handles parallelism, the
-    // semaphore caps how many docker tasks can hold a permit at once.
     maxParallelUsages.set(dockerConcurrency)
 }
 
+// ── RegistryInjectionService — Verdaccio-aware npm install handling ──
+//
+// Detects whether the active zbb slot has a healthy local Verdaccio registry
+// stack with locally-published packages. If so, applies registry injection
+// (lockfile move, scoped registry env vars, taint, tarball download) before
+// workspaceInstall and restores in a finalizedBy task.
+//
+// Fixes 3 bugs from the legacy Stack.ts injectRegistryNpmrc — see the
+// RegistryInjectionService.kt class doc for details.
+
+val registryInjection = gradle.sharedServices.registerIfAbsent(
+    "registryInjection",
+    RegistryInjectionService::class.java
+) {
+    parameters.repoRoot.set(rootProject.layout.projectDirectory)
+}
+
 // ── workspaceInstall — npm install at the repo root ─────────────────
+//
+// Wraps npm install with optional registry injection: if a slot is loaded
+// with a healthy Verdaccio + locally-published packages, the inject step
+// fires (move lockfile, set scoped registry env vars, taint, download
+// tarballs). Restore runs in a finalizedBy task so the working tree is
+// always cleaned up, even on failure.
 
 val workspaceInstall = tasks.register<Exec>("workspaceInstall") {
     group = "monorepo"
@@ -64,8 +86,41 @@ val workspaceInstall = tasks.register<Exec>("workspaceInstall") {
     }
     outputs.dir(rootProject.file("node_modules"))
         .withPropertyName("nodeModules")
-    outputs.upToDateWhen { rootProject.file("node_modules").exists() }
+
+    usesService(registryInjection)
+
+    doFirst {
+        val service = registryInjection.get()
+        if (service.isActive) {
+            val overrides = service.apply { msg -> logger.lifecycle(msg) }
+            // Set scoped registry env vars on this Exec spec so npm sees them.
+            // doFirst runs BEFORE the actual exec, and Exec.environment is read
+            // at exec time — so this works.
+            for ((k, v) in overrides) {
+                environment[k] = v
+            }
+        }
+    }
+
+    // Without registry injection, skip when node_modules exists. With injection
+    // (taint), force re-run.
+    outputs.upToDateWhen {
+        if (registryInjection.get().isActive) false
+        else rootProject.file("node_modules").exists()
+    }
 }
+
+// Restore task: always runs after workspaceInstall (success OR failure)
+val workspaceInstallRestore = tasks.register("workspaceInstallRestore") {
+    group = "monorepo"
+    description = "Restore lockfile and clean tarballs after a registry-injected install"
+    usesService(registryInjection)
+    onlyIf { registryInjection.get().isActive }
+    doLast {
+        registryInjection.get().restore { msg -> logger.lifecycle(msg) }
+    }
+}
+workspaceInstall.configure { finalizedBy(workspaceInstallRestore) }
 
 // ── Root aggregator tasks (registered now, deps wired below) ────────
 
