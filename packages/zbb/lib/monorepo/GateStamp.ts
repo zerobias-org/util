@@ -159,16 +159,27 @@ export function computeSourceHash(pkg: WorkspacePackage, config: MonorepoConfig,
     }
   }
 
-  // Hash source directories
+  // Hash source directories — only git-tracked files to ensure consistency across environments
   for (const dirName of sourceDirs) {
     const dir = join(pkg.dir, dirName);
     if (!existsSync(dir)) continue;
 
-    const files = walkDir(dir).sort((a, b) => {
-      const relA = relative(pkg.dir, a);
-      const relB = relative(pkg.dir, b);
-      return relA.localeCompare(relB);
-    });
+    let files: string[];
+    try {
+      // Use git ls-files for deterministic results (ignores .gitignored files)
+      const output = execFileSync('git', ['ls-files', dirName], {
+        cwd: pkg.dir,
+        encoding: 'utf-8',
+      }).trim();
+      files = output ? output.split('\n').sort().map(f => join(pkg.dir, f)) : [];
+    } catch {
+      // Fallback to walkDir if not in a git repo
+      files = walkDir(dir).sort((a, b) => {
+        const relA = relative(pkg.dir, a);
+        const relB = relative(pkg.dir, b);
+        return relA.localeCompare(relB);
+      });
+    }
 
     for (const filePath of files) {
       const relPath = relative(pkg.dir, filePath);
