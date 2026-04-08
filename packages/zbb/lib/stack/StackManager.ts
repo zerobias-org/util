@@ -476,27 +476,8 @@ export class StackManager {
    * Parse import declarations from manifest into ImportSpec[].
    */
   resolveImports(manifest: StackManifest): ImportSpec[] {
-    const imports: ImportSpec[] = [];
-    if (!manifest.imports) return imports;
-
-    for (const [depName, vars] of Object.entries(manifest.imports)) {
-      for (const v of vars) {
-        if (typeof v === 'string') {
-          // Check for "VAR as ALIAS" syntax
-          const match = v.match(/^(\S+)\s+as\s+(\S+)$/);
-          if (match) {
-            imports.push({ varName: match[1], alias: match[2], fromStack: depName });
-          } else {
-            imports.push({ varName: v, fromStack: depName });
-          }
-        } else {
-          // ImportAlias object
-          imports.push({ varName: v.from, alias: v.as, fromStack: depName });
-        }
-      }
-    }
-
-    return imports;
+    if (!manifest.imports) return [];
+    return StackEnvironment.parseImports(manifest.imports);
   }
 
   // ── Private Helpers ─────────────────────────────────────────
@@ -802,7 +783,7 @@ export class StackManager {
       const manifestPath = join(this.stacksDir, entry.name, 'manifest.yaml');
       const manifest = await loadYamlOrDefault<Record<string, Record<string, unknown>>>(manifestPath, {});
       for (const [_, meta] of Object.entries(manifest)) {
-        if (meta?.type === 'port' && meta?.value) {
+        if (meta?.resolution === 'allocated' && meta?.value) {
           used.add(parseInt(String(meta.value), 10));
         }
       }

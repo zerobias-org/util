@@ -10,9 +10,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
+import jsonata from 'jsonata';
 import { extractRefs, interpolate } from '../env/Resolver.js';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
-import type { EnvVarDeclaration, StackManifest } from '../config.js';
+import type { EnvVarDeclaration, StackManifest, ImportAlias, OptionalImport } from '../config.js';
 import type { StackManifestEntry, Resolution, ExplainResult, ImportSpec } from './types.js';
 
 const SENSITIVE_PATTERNS = [
@@ -26,6 +27,7 @@ const SENSITIVE_PATTERNS = [
 export class StackEnvironment extends EventEmitter {
   private manifest = new Map<string, StackManifestEntry>();
   private schema = new Map<string, EnvVarDeclaration>();
+  private imports: ImportSpec[] = [];
   private env = new Map<string, string>();
   readonly stackDir: string;
 
@@ -67,11 +69,12 @@ export class StackEnvironment extends EventEmitter {
     if (!existsSync(zbbYamlPath)) {
       throw new Error(`zbb.yaml not found at ${zbbYamlPath} (source: ${schemaDir}) — Layer 1 schema is required`);
     }
-    const config = await loadYamlOrDefault<{ env?: Record<string, EnvVarDeclaration> }>(zbbYamlPath, {});
+    const config = await loadYamlOrDefault<Partial<StackManifest>>(zbbYamlPath, {});
     if (!config.env) {
       throw new Error(`zbb.yaml at ${zbbYamlPath} has no env declarations`);
     }
     this.schema = new Map(Object.entries(config.env));
+    this.imports = config.imports ? StackEnvironment.parseImports(config.imports) : [];
   }
 
   /**
@@ -141,6 +144,7 @@ export class StackEnvironment extends EventEmitter {
         values: decl.values ?? entry.values,
         description: decl.description ?? entry.description,
         hidden: decl.hidden ?? entry.hidden,
+        mask: decl.mask ?? entry.mask ?? decl.type === 'secret',
       };
     }
     return entry;
@@ -201,6 +205,7 @@ export class StackEnvironment extends EventEmitter {
   private async computeEnv(): Promise<void> {
     const preResolved = new Map<string, string>();
     const derivedVars = new Map<string, string>();
+    const expressionVars = new Map<string, string>(); // jsonata expressions
 
     for (const [key, entry] of this.manifest) {
       switch (entry.resolution) {
@@ -238,6 +243,12 @@ export class StackEnvironment extends EventEmitter {
           }
           break;
 
+        case 'expression':
+          if (entry.formula) {
+            expressionVars.set(key, entry.formula);
+          }
+          break;
+
         case 'default':
           if (entry.value !== undefined) preResolved.set(key, entry.value);
           break;
@@ -246,7 +257,12 @@ export class StackEnvironment extends EventEmitter {
 
     // Schema defaults (Layer 1) — lowest priority, only for vars not in manifest
     for (const [key, decl] of this.schema) {
-      if (preResolved.has(key) || derivedVars.has(key)) continue;
+      if (preResolved.has(key) || derivedVars.has(key) || expressionVars.has(key)) continue;
+      // Expression vars from schema (not yet in manifest — e.g. fresh resolve without stack add)
+      if (decl.source === 'expression:jsonata' && decl.expr) {
+        expressionVars.set(key, decl.expr);
+        continue;
+      }
       if (decl.value !== undefined) {
         // Live formula
         const refs = extractRefs(decl.value);
@@ -296,6 +312,25 @@ export class StackEnvironment extends EventEmitter {
       }
     }
 
+    // Evaluate jsonata expressions — all inputs should be resolved by now
+    if (expressionVars.size > 0) {
+      const bindings = Object.fromEntries(preResolved);
+      for (const [key, expr] of expressionVars) {
+        try {
+          const compiled = jsonata(expr);
+          const result = await compiled.evaluate(bindings);
+          if (result !== undefined) {
+            const value = String(result);
+            preResolved.set(key, value);
+            bindings[key] = value; // available to subsequent expressions
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`expression:jsonata error for ${key}: ${msg}`);
+        }
+      }
+    }
+
     // Run resolvers for vars not yet resolved (computed derivations like WEBSOCKET_URL).
     // Resolvers can read preResolved via a temporary env snapshot.
     if (StackEnvironment.resolvers.size > 0) {
@@ -322,6 +357,34 @@ export class StackEnvironment extends EventEmitter {
   // ── Resolve ─────────────────────────────────────────────────
 
   /**
+   * Parse imports block from zbb.yaml into ImportSpec[].
+   * Handles both array form (required) and object form (optional).
+   */
+  static parseImports(imports: Record<string, (string | ImportAlias)[] | OptionalImport>): ImportSpec[] {
+    const result: ImportSpec[] = [];
+    for (const [depName, entry] of Object.entries(imports)) {
+      const isOptional = !Array.isArray(entry) && entry && 'optional' in entry;
+      const vars = isOptional
+        ? (entry as OptionalImport).vars
+        : entry as (string | ImportAlias)[];
+
+      for (const v of vars) {
+        if (typeof v === 'string') {
+          const match = v.match(/^(\S+)\s+as\s+(\S+)$/);
+          if (match) {
+            result.push({ varName: match[1], alias: match[2], fromStack: depName, optional: isOptional || undefined });
+          } else {
+            result.push({ varName: v, fromStack: depName, optional: isOptional || undefined });
+          }
+        } else {
+          result.push({ varName: v.from, alias: v.as, fromStack: depName, optional: isOptional || undefined });
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
    * THE entry point for environment resolution.
    * Loads schema + manifest, runs DNS, computes .env, writes to disk.
    * After resolve(), this.env is complete. No other method needed.
@@ -331,7 +394,69 @@ export class StackEnvironment extends EventEmitter {
     if (this.schema.size === 0) await this.loadSchema();
     await this.loadManifest();
 
-    // 2. DNS provisioning
+    // 2. Re-evaluate imports from zbb.yaml — imports are live, not frozen at add-time
+    if (this.imports.length > 0) {
+      const slotStacksDir = join(this.stackDir, '..');
+      for (const imp of this.imports) {
+        const depEnvPath = join(slotStacksDir, imp.fromStack, '.env');
+        if (!existsSync(depEnvPath)) {
+          if (imp.optional) continue;
+        }
+        const localName = imp.alias ?? imp.varName;
+        // Don't overwrite user overrides
+        const existing = this.manifest.get(localName);
+        if (existing?.resolution === 'override') continue;
+
+        let value: string | undefined;
+        if (existsSync(depEnvPath)) {
+          const depEnv = parseEnvFile(await readFile(depEnvPath, 'utf-8'));
+          value = depEnv.get(imp.varName);
+        }
+        if (value !== undefined) {
+          this.manifest.set(localName, {
+            ...existing,
+            resolution: 'imported',
+            value,
+            from: imp.fromStack,
+            original_name: imp.alias ? imp.varName : undefined,
+          });
+        }
+      }
+      await this.saveManifest();
+    }
+
+    // 3. Reconcile schema with manifest — add entries for new schema vars
+    let manifestChanged = false;
+    // Read existing .env to recover values set outside manifest tracking
+    const existingEnv = existsSync(this.envPath)
+      ? parseEnvFile(await readFile(this.envPath, 'utf-8'))
+      : new Map<string, string>();
+
+    for (const [name, decl] of this.schema) {
+      if (this.manifest.has(name)) continue;
+      if (decl.source === 'expression:jsonata' && decl.expr) {
+        this.manifest.set(name, { resolution: 'expression', formula: decl.expr, source: 'expression:jsonata' });
+        manifestChanged = true;
+      } else if (decl.value) {
+        this.manifest.set(name, { resolution: 'derived', formula: decl.value, source: 'schema' });
+        manifestChanged = true;
+      } else if (decl.default !== undefined) {
+        const refs = extractRefs(decl.default);
+        if (refs.length === 0) {
+          this.manifest.set(name, { resolution: 'default', value: decl.default, source: 'schema' });
+        } else {
+          this.manifest.set(name, { resolution: 'derived', formula: decl.default, source: 'schema' });
+        }
+        manifestChanged = true;
+      } else if (existingEnv.has(name)) {
+        // Value exists in .env but not in manifest — recover as override
+        this.manifest.set(name, { resolution: 'override', value: existingEnv.get(name)!, set_by: 'recovered' });
+        manifestChanged = true;
+      }
+    }
+    if (manifestChanged) await this.saveManifest();
+
+    // 4. DNS provisioning
     // DNS provisioning — lookup TXT records and write to manifest
     const resolveHost = this.get('SLOT_RESOLVE_HOST')
       ?? this.schema.get('SLOT_RESOLVE_HOST')?.default;
@@ -449,7 +574,6 @@ export class StackEnvironment extends EventEmitter {
         resolution: 'inherited',
         value,
         source: 'slot',
-        type: 'string',
       });
     }
 
@@ -459,8 +583,6 @@ export class StackEnvironment extends EventEmitter {
         resolution: 'allocated',
         value: String(port),
         source: schema[name] ? 'schema' : 'allocated',
-        type: 'port',
-        description: schema[name]?.description,
       });
     }
 
@@ -471,9 +593,6 @@ export class StackEnvironment extends EventEmitter {
         value,
         generator: schema[name]?.generate,
         source: 'schema',
-        type: 'secret',
-        mask: true,
-        description: schema[name]?.description,
       });
     }
 
@@ -486,11 +605,6 @@ export class StackEnvironment extends EventEmitter {
             resolution: 'inherited',
             value,
             source: 'env',
-            type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-            mask: decl.mask,
-            description: decl.description,
           });
         } else if (decl.required) {
           throw new Error(`Required env var '${name}' not found in environment`);
@@ -507,9 +621,6 @@ export class StackEnvironment extends EventEmitter {
           resolution: 'inherited',
           value,
           source: 'cwd',
-          type: decl.type,
-          values: decl.values,
-          description: decl.description,
         });
       }
     }
@@ -532,11 +643,6 @@ export class StackEnvironment extends EventEmitter {
             resolution: 'inherited',
             value,
             source: `file:${decl.file}`,
-            type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-            mask: decl.mask,
-            description: decl.description,
           });
         } else if (decl.required) {
           throw new Error(`Required var '${name}' not found in file '${decl.file}' or environment`);
@@ -547,6 +653,10 @@ export class StackEnvironment extends EventEmitter {
     // Imports from dependency stacks
     for (const imp of imports) {
       const depEnvPath = join(slotStacksDir, imp.fromStack, '.env');
+      if (!existsSync(depEnvPath)) {
+        if (imp.optional) continue; // optional dep not present — skip, fall through to default
+        // Required import but no .env — still set manifest entry (value will be undefined)
+      }
       let value: string | undefined;
       if (existsSync(depEnvPath)) {
         const depEnv = parseEnvFile(await readFile(depEnvPath, 'utf-8'));
@@ -558,7 +668,6 @@ export class StackEnvironment extends EventEmitter {
         value,
         from: imp.fromStack,
         original_name: imp.alias ? imp.varName : undefined,
-        type: 'string',
       });
     }
 
@@ -573,15 +682,9 @@ export class StackEnvironment extends EventEmitter {
             resolution: 'default',
             value: decl.default,
             source: 'schema',
-            type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-            description: decl.description,
-            mask: decl.mask,
           });
         } else {
           // Default with refs — compute once now, freeze the result
-          // Collect all currently known values for interpolation
           const knownValues = new Map<string, string>();
           for (const [k, entry] of manifest) {
             if (entry.value !== undefined) knownValues.set(k, entry.value);
@@ -593,24 +696,13 @@ export class StackEnvironment extends EventEmitter {
               value: frozen,
               default_formula: decl.default,
               source: 'schema',
-              type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-              description: decl.description,
-              mask: decl.mask,
             });
           } catch {
             // If interpolation fails (ref not yet available), store as derived instead
-            // so recalculate() can resolve it
             manifest.set(name, {
               resolution: 'derived',
               formula: decl.default,
               source: 'schema',
-              type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-              description: decl.description,
-              mask: decl.mask,
             });
           }
         }
@@ -625,10 +717,18 @@ export class StackEnvironment extends EventEmitter {
           resolution: 'derived',
           formula: decl.value,
           source: 'schema',
-          type: decl.type,
-          values: decl.values,
-          description: decl.description,
-          mask: decl.mask,
+        });
+      }
+    }
+
+    // Expression vars (source: expression:jsonata)
+    for (const [name, decl] of Object.entries(schema)) {
+      if (manifest.has(name)) continue;
+      if (decl.source === 'expression:jsonata' && decl.expr) {
+        manifest.set(name, {
+          resolution: 'expression',
+          formula: decl.expr,
+          source: 'expression:jsonata',
         });
       }
     }
@@ -636,9 +736,10 @@ export class StackEnvironment extends EventEmitter {
     // Write manifest
     await saveYaml(join(stackDir, 'manifest.yaml'), Object.fromEntries(manifest));
 
-    // Create env instance, set manifest, compute .env
+    // Create env instance, set manifest + schema, compute .env
     const env = new StackEnvironment(stackDir);
     env.manifest = manifest;
+    env.schema = new Map(Object.entries(schema));
     await env.computeEnv();
 
     return env;

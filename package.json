@@ -45,6 +45,7 @@
     "@zerobias-org/types-core-js": "^1.2.17",
     "@zerobias-org/types-format-spectral-ruleset": "^1.0.37",
     "@zerobias-org/types-microsoft-js": "^1.0.34",
+    "@zerobias-org/zbb": "^0.3.15",
     "axios": "^1.13.5",
     "chalk": "^5.6.2",
     "change-case": "^5.0.0",

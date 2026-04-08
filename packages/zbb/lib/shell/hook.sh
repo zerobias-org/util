@@ -121,7 +121,7 @@ zbb() {
   case "$1" in
     env)
       case "$2" in
-        set|unset|reset)
+        set|unset|reset|resolve|refresh)
           _ZBB_FORCE_RELOAD=1
           _zbb_scope_env
           ;;

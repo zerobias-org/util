@@ -13,7 +13,7 @@ import type { ToolRequirement } from '../config.js';
 import { discoverWorkspaces, buildDependencyGraph } from './Workspace.js';
 import { detectChanges, getCurrentBranch } from './ChangeDetector.js';
 import { isStampValid, validateStamp, GateStampResult } from './GateStamp.js';
-import { clean, build, test, gate, install } from './Builder.js';
+import { clean, build, test, gate, install, injectRegistryForBuild, restoreRegistrySwap } from './Builder.js';
 import { publish } from './Publisher.js';
 
 // ── Detection ────────────────────────────────────────────────────────
@@ -259,15 +259,27 @@ export async function handleMonorepo(
       await clean(ctx);
       break;
 
-    case 'build':
-      install(repoRoot);
-      await build(ctx);
+    case 'build': {
+      const registrySwap = injectRegistryForBuild(repoRoot);
+      try {
+        install(repoRoot);
+        await build(ctx);
+      } finally {
+        restoreRegistrySwap(registrySwap, repoRoot);
+      }
       break;
+    }
 
-    case 'test':
-      install(repoRoot);
-      await test(ctx);
+    case 'test': {
+      const registrySwap = injectRegistryForBuild(repoRoot);
+      try {
+        install(repoRoot);
+        await test(ctx);
+      } finally {
+        restoreRegistrySwap(registrySwap, repoRoot);
+      }
       break;
+    }
 
     case 'gate': {
       // Registry guard: gate must not pass if locally-published registry packages are in use

@@ -127,7 +127,6 @@ const isCI = process.env.CI === 'true';
 // ── Registry Integration ────────────────────────────────────────────
 
 interface RegistrySwap {
-  npmrcBackup?: string;
   lockfileBackup?: string;
   taintedPackages: string[];
 }
@@ -136,7 +135,7 @@ interface RegistrySwap {
  * If a zbb slot is loaded with locally-published registry packages,
  * swap .npmrc to route through Verdaccio and taint node_modules.
  */
-function injectRegistryForBuild(repoRoot: string): RegistrySwap {
+export function injectRegistryForBuild(repoRoot: string): RegistrySwap {
   const swap: RegistrySwap = { taintedPackages: [] };
   const slotName = process.env.ZB_SLOT;
   if (!slotName) return swap;
@@ -153,36 +152,22 @@ function injectRegistryForBuild(repoRoot: string): RegistrySwap {
   } catch { /* ignore */ }
   if (publishes.length === 0) return swap;
 
-  // Read registry URL
+  // Read registry URL from slot
   let registryUrl = '';
-  let registryPort = '';
   for (const line of readFileSync(registryEnvFile, 'utf-8').split('\n')) {
     const urlMatch = line.match(/^REGISTRY_URL=(.+)$/);
     if (urlMatch) registryUrl = urlMatch[1];
-    const portMatch = line.match(/^REGISTRY_PORT=(.+)$/);
-    if (portMatch) registryPort = portMatch[1];
   }
   if (!registryUrl) return swap;
 
-  // Swap .npmrc
-  const npmrcPath = join(repoRoot, '.npmrc');
-  const npmrcBackup = npmrcPath + '.zbb-backup';
-  if (existsSync(npmrcPath)) {
-    
-    renameSync(npmrcPath, npmrcBackup);
-    writeFileSync(npmrcPath, [
-      `@zerobias-com:registry=${registryUrl}`,
-      `@zerobias-org:registry=${registryUrl}`,
-      `@auditlogic:registry=${registryUrl}`,
-      `@auditmation:registry=${registryUrl}`,
-      `@devsupply:registry=${registryUrl}`,
-      `//localhost:${registryPort}/:_authToken=fake-local-token`,
-    ].join('\n') + '\n');
-    swap.npmrcBackup = npmrcBackup;
-    console.log('  [registry] Swapped .npmrc for local Verdaccio');
+  // Set scoped registries via env vars — npm reads npm_config_@scope:registry
+  const scopes = ['zerobias-com', 'zerobias-org', 'auditlogic', 'auditmation', 'devsupply'];
+  for (const scope of scopes) {
+    process.env[`npm_config_@${scope}:registry`] = registryUrl;
   }
+  console.log(`  [registry] Routing scoped packages to local Verdaccio (${registryUrl})`);
 
-  // Backup package-lock.json
+  // Backup package-lock.json (npm install may rewrite it with Verdaccio URLs)
   const lockfile = join(repoRoot, 'package-lock.json');
   const lockBackup = lockfile + '.zbb-backup';
   if (existsSync(lockfile)) {
@@ -206,15 +191,13 @@ function injectRegistryForBuild(repoRoot: string): RegistrySwap {
 /**
  * Restore .npmrc and package-lock.json after build.
  */
-function restoreRegistrySwap(swap: RegistrySwap, repoRoot: string): void {
-  if (swap.npmrcBackup) {
-    const npmrcPath = join(repoRoot, '.npmrc');
-    try {
-      if (existsSync(npmrcPath)) rmSync(npmrcPath);
-      renameSync(swap.npmrcBackup, npmrcPath);
-      console.log('  [registry] Restored .npmrc');
-    } catch { /* ignore */ }
+export function restoreRegistrySwap(swap: RegistrySwap, repoRoot: string): void {
+  // Clear scoped registry env vars
+  const scopes = ['zerobias-com', 'zerobias-org', 'auditlogic', 'auditmation', 'devsupply'];
+  for (const scope of scopes) {
+    delete process.env[`npm_config_@${scope}:registry`];
   }
+
   if (swap.lockfileBackup) {
     const lockfile = join(repoRoot, 'package-lock.json');
     try {
@@ -803,7 +786,7 @@ export async function clean(ctx: BuildContext): Promise<void> {
     }
   }
   // Clean zbb backup files, build cache, and gate stamp
-  for (const file of ['.npmrc.zbb-backup', 'package-lock.json.zbb-backup', '.zbb-build-cache.json', 'gate-stamp.json']) {
+  for (const file of ['package-lock.json.zbb-backup', '.zbb-build-cache.json', 'gate-stamp.json']) {
     const target = join(repoRoot, file);
     if (existsSync(target)) { rmSync(target); rootCleaned += 1; }
   }
@@ -819,10 +802,6 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
   const phases = config.buildPhases ?? ['lint', 'generate', 'transpile'];
   const allTaskResults = new Map<string, Record<string, 'passed' | 'skipped' | 'not-found'>>();
 
-  // Registry injection: if slot is loaded with locally-published packages,
-  // swap .npmrc and taint node_modules so npm install picks up local versions
-  const registrySwap = injectRegistryForBuild(ctx.repoRoot);
-
   // Build cache: compute source hashes for ALL packages (not just affected)
   // so dependency hash checks work even when a dep isn't in the affected set
   const buildCache = readBuildCache(ctx.repoRoot);
@@ -830,8 +809,6 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
   for (const [name, pkg] of graph.packages) {
     sourceHashes.set(name, computeSourceHash(pkg, config));
   }
-
-  try {
 
   for (const phase of phases) {
     // Collect packages that have this script or a cache entry
@@ -913,10 +890,6 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
   }
 
   return allTaskResults;
-
-  } finally {
-    restoreRegistrySwap(registrySwap, ctx.repoRoot);
-  }
 }
 
 // ── Docker Build (concurrent) ───────────────────────────────────────

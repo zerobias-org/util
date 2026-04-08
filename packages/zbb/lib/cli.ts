@@ -204,7 +204,6 @@ async function _main(argv: string[]): Promise<void> {
     return handleDataloader(args.slice(1));
   }
 
-
   // Run — execute a command or npm script with slot/stack env
   if (command === 'run') {
     const slotName = process.env.ZB_SLOT;
@@ -798,6 +797,18 @@ async function handleEnv(args: string[]): Promise<void> {
       break;
     }
 
+    case 'resolve': {
+      if (stackCtx) {
+        await stackCtx.env.resolve();
+        console.log(`Resolved stack '${stackCtx.name}' environment.`);
+      } else {
+        const repoRoot = findRepoRoot(process.cwd());
+        await slot.resolve(repoRoot ?? undefined);
+        console.log(`Resolved slot '${slot.name}' environment.`);
+      }
+      break;
+    }
+
     case 'diff': {
       const slotEnv = slot.env.getAll();
       const parentKeys = new Set(Object.keys(process.env));
@@ -818,7 +829,7 @@ async function handleEnv(args: string[]): Promise<void> {
 
     default:
       console.error(`Unknown env command: ${sub}`);
-      console.error('Usage: zbb env <list|get|set|unset|reset|refresh|explain|diff>');
+      console.error('Usage: zbb env <list|get|set|unset|reset|resolve|refresh|explain|diff>');
       process.exit(1);
   }
 }
@@ -1106,7 +1117,7 @@ Usage:
   zbb slot <create|load|list|info|delete|gc>          Slot management
   zbb stack <add|list|info|remove|update>             Stack management
   zbb registry <start|stop|publish|install|list|clear|status>  Local npm registry
-  zbb env <list|get|set|unset|reset|refresh|explain|diff>  Environment variables
+  zbb env <list|get|set|unset|reset|resolve|refresh|explain|diff>  Environment variables
   zbb secret <create|get|list|update|delete>          Secret management
   zbb logs <list|show|debug|info>                     Log viewer + log level control
   zbb run <npm-script> [args...]                      Run npm script with slot/stack env
