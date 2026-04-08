@@ -753,8 +753,12 @@ object Prepublish {
         action: (File) -> Unit,
     ) {
         if (!root.exists()) return
+        // Only skip subdirectories whose name is in skipDirs — never skip the
+        // root directory itself even if its name matches (e.g. a package named
+        // "test/"). Mirrors the JS scanDirectory which only checks names of
+        // child entries, not the starting directory.
         root.walkTopDown()
-            .onEnter { dir -> dir.name !in skipDirs }
+            .onEnter { dir -> dir == root || dir.name !in skipDirs }
             .filter { it.isFile && extensions.any { ext -> it.name.endsWith(ext) } }
             .forEach { file ->
                 try {
