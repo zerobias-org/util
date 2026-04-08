@@ -756,7 +756,14 @@ export class StackEnvironment extends EventEmitter {
   // ── Private helpers ─────────────────────────────────────────
 
   private async saveManifest(): Promise<void> {
-    await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
+    const data = Object.fromEntries(this.manifest);
+    const { stringifyYaml } = await import('../yaml.js');
+    const newContent = stringifyYaml(data);
+    if (existsSync(this.manifestPath)) {
+      const existing = await readFile(this.manifestPath, 'utf-8');
+      if (existing === newContent) return;
+    }
+    await saveYaml(this.manifestPath, data);
   }
 }
 
