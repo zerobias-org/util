@@ -58,6 +58,17 @@ dependencies {
 
     // YAML manipulation (replaces yq CLI dependency)
     implementation("org.yaml:snakeyaml:2.2")
+
+    // JSON serialization for monorepo gate stamp (matches JS JSON.stringify byte-for-byte)
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
+
+    // Kotlin test runner
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 publishing {
