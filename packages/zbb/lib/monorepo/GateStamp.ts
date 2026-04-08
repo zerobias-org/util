@@ -81,10 +81,50 @@ function walkDir(dir: string): string[] {
 const resolvedRootDepsCache = new Map<string, string>();
 
 /**
- * Compute a hash of the root dependencies that a specific package resolves to.
- * Uses prepublish-standalone --dry-run to determine which root deps this package needs.
+ * Scan a package's source files for import/require statements and return the package names.
  */
-function getPackageRootDepsHash(pkg: WorkspacePackage, repoRoot: string): string {
+function scanImports(pkg: WorkspacePackage, config: MonorepoConfig): Set<string> {
+  const imports = new Set<string>();
+  const sourceDirs = config.sourceDirs ?? ['src'];
+
+  for (const dirName of sourceDirs) {
+    const dir = join(pkg.dir, dirName);
+    if (!existsSync(dir)) continue;
+
+    let files: string[];
+    try {
+      const output = execFileSync('git', ['ls-files', dirName], {
+        cwd: pkg.dir,
+        encoding: 'utf-8',
+      }).trim();
+      files = output ? output.split('\n').filter(f => /\.[tjm]sx?$/.test(f)).map(f => join(pkg.dir, f)) : [];
+    } catch {
+      continue;
+    }
+
+    for (const filePath of files) {
+      const content = readFileSync(filePath, 'utf-8');
+      // Match: import ... from 'pkg' / import 'pkg' / require('pkg')
+      const re = /(?:from\s+['"]|import\s+['"]|require\s*\(\s*['"])([^./'"@][^'"]*|@[^/'"]+\/[^'"]+)/g;
+      let m;
+      while ((m = re.exec(content)) !== null) {
+        // Extract bare package name (e.g. '@scope/pkg' or 'pkg' — not subpath)
+        const full = m[1];
+        const pkgName = full.startsWith('@') ? full.split('/').slice(0, 2).join('/') : full.split('/')[0];
+        imports.add(pkgName);
+      }
+    }
+  }
+
+  return imports;
+}
+
+/**
+ * Compute a hash of the root dependencies that a specific package actually imports.
+ * Scans source files for import statements and matches against root package.json.
+ * Purely file-based — deterministic across environments.
+ */
+function getPackageRootDepsHash(pkg: WorkspacePackage, repoRoot: string, config: MonorepoConfig): string {
   const cached = resolvedRootDepsCache.get(pkg.name);
   if (cached !== undefined) return cached;
 
@@ -95,46 +135,31 @@ function getPackageRootDepsHash(pkg: WorkspacePackage, repoRoot: string): string
   }
 
   const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf-8'));
-  const allRootDeps: Record<string, string> = {
+  const rootDeps: Record<string, string> = {
     ...(rootPkg.dependencies ?? {}),
     ...(rootPkg.devDependencies ?? {}),
   };
   const rootOverrides: Record<string, unknown> = rootPkg.overrides ?? {};
 
-  // Run prepublish-standalone --dry-run to find which root deps this package uses
-  const prepubScript = join(repoRoot, 'node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.js');
-  let resolvedDeps: Record<string, string> = {};
-  let resolvedOverrides: Record<string, unknown> = {};
+  // Scan source for imports, match against root deps
+  const imports = scanImports(pkg, config);
+  const matchedDeps: Record<string, string> = {};
+  const matchedOverrides: Record<string, unknown> = {};
 
-  if (existsSync(prepubScript)) {
-    try {
-      const output = execFileSync('node', [prepubScript, pkg.dir, repoRoot, '--dry-run'], {
-        encoding: 'utf-8',
-        timeout: 30_000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      // Parse resolved deps from dry-run output
-      const depsMatch = output.match(/Dependencies that would be included:\n([\s\S]*?)(?:\n\n|\nOverrides|$)/);
-      if (depsMatch) {
-        for (const line of depsMatch[1].split('\n')) {
-          const m = line.match(/^\s+(\S+):\s+(\S+)/);
-          if (m && allRootDeps[m[1]]) resolvedDeps[m[1]] = allRootDeps[m[1]];
-        }
-      }
-      const overridesMatch = output.match(/Overrides that would be included:\n([\s\S]*?)(?:\n\n|$)/);
-      if (overridesMatch) {
-        for (const line of overridesMatch[1].split('\n')) {
-          const m = line.match(/^\s+(\S+):/);
-          if (m && rootOverrides[m[1]]) resolvedOverrides[m[1]] = rootOverrides[m[1]];
-        }
-      }
-    } catch { /* prepublish failed — fall back to empty */ }
+  for (const imp of imports) {
+    if (rootDeps[imp] && !pkg.packageJson.dependencies?.[imp] && !pkg.packageJson.devDependencies?.[imp]) {
+      // This import comes from root, not from the package's own deps
+      matchedDeps[imp] = rootDeps[imp];
+    }
+    if (rootOverrides[imp]) {
+      matchedOverrides[imp] = rootOverrides[imp];
+    }
   }
 
   const digest = createHash('sha256');
-  digest.update(JSON.stringify(resolvedDeps));
-  digest.update(JSON.stringify(resolvedOverrides));
+  // Sort keys for determinism
+  digest.update(JSON.stringify(matchedDeps, Object.keys(matchedDeps).sort()));
+  digest.update(JSON.stringify(matchedOverrides, Object.keys(matchedOverrides).sort()));
   const hash = digest.digest('hex');
   resolvedRootDepsCache.set(pkg.name, hash);
   return hash;
@@ -147,7 +172,7 @@ export function computeSourceHash(pkg: WorkspacePackage, config: MonorepoConfig,
 
   // Include this package's resolved root deps in the hash
   if (repoRoot) {
-    digest.update(getPackageRootDepsHash(pkg, repoRoot));
+    digest.update(getPackageRootDepsHash(pkg, repoRoot, config));
   }
 
   // Hash individual source files
@@ -296,6 +321,10 @@ export function validatePackageStamp(
   // 1. Verify sourceHash — source code hasn't changed
   const currentHash = computeSourceHash(pkg, config, repoRoot);
   if (entry.sourceHash !== currentHash) {
+    const shortName = pkg.name.replace(/^@[^/]+\//, '');
+    console.log(`  [stamp] ${shortName}: sourceHash mismatch`);
+    console.log(`    stamp:   ${entry.sourceHash}`);
+    console.log(`    current: ${currentHash}`);
     return GateStampResult.INVALID;
   }
 
