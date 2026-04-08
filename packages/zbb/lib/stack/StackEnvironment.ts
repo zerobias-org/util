@@ -349,9 +349,17 @@ export class StackEnvironment extends EventEmitter {
       }
     }
 
-    // Write .env
+    // Write .env only if changed — avoids inotify storms from heartbeat/resolve cycles
     this.env = preResolved;
-    await writeFile(this.envPath, serializeEnv(this.env), 'utf-8');
+    const newContent = serializeEnv(this.env);
+    let changed = true;
+    if (existsSync(this.envPath)) {
+      const existing = await readFile(this.envPath, 'utf-8');
+      if (existing === newContent) changed = false;
+    }
+    if (changed) {
+      await writeFile(this.envPath, newContent, 'utf-8');
+    }
   }
 
   // ── Resolve ─────────────────────────────────────────────────
