@@ -180,6 +180,14 @@ export async function handleMonorepo(
   const repoConfig = await loadRepoConfig(repoRoot);
   const config = repoConfig.monorepo!;
 
+  // Apply repo-level cleanse to process.env so child processes (npm test, etc.)
+  // don't inherit unwanted env vars from parent shell or slot stacks.
+  if (repoConfig.cleanse && repoConfig.cleanse.length > 0) {
+    for (const varName of repoConfig.cleanse) {
+      delete process.env[varName];
+    }
+  }
+
   // Skip preflight checks for stamp-only validation (gate --check)
   if (!(command === 'gate' && parsed.check)) {
     runMonorepoPreflight(command, config);

@@ -167,6 +167,8 @@ export function computeSourceHash(pkg: WorkspacePackage, config: MonorepoConfig)
     }
 
     for (const filePath of files) {
+      // Skip files listed in git but not present on disk (sparse checkout, deleted, etc.)
+      if (!existsSync(filePath)) continue;
       const relPath = relative(pkg.dir, filePath);
       digest.update(relPath);
       digest.update(readFileSync(filePath));

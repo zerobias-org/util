@@ -444,11 +444,24 @@ async function handleSlot(args: string[]): Promise<void> {
       const pkgRoot = pathJoin(thisDir, '..');
       const hookPath = pathJoin(pkgRoot, 'lib', 'shell', 'hook.sh');
       const rcFile = pathJoin(slot.path, '.zbb-bashrc');
+
+      // Build cleanse unset commands — apply AFTER sourcing .bashrc so it can't re-export them
+      const cleanseList: string[] = [];
+      if (repoRoot) {
+        const repoConfig = await loadRepoConfig(repoRoot);
+        for (const varName of repoConfig.cleanse ?? []) {
+          cleanseList.push(`unset ${varName}`);
+        }
+      }
+
       // Source the user's normal bashrc first (for aliases, colors, etc.), then overlay zbb
       const rcLines = [
         '# Source user shell config for colors, aliases, etc.',
         '[ -f /etc/bash.bashrc ] && source /etc/bash.bashrc',
         '[ -f ~/.bashrc ] && source ~/.bashrc',
+        '',
+        '# zbb cleanse — strip vars that .bashrc may have re-exported',
+        ...cleanseList,
         '',
         '# zbb slot overrides',
         '[ -n "$ZBB_PS1" ] && PS1="$ZBB_PS1"',
