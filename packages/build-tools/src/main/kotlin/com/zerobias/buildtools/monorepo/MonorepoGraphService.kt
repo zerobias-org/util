@@ -8,6 +8,26 @@ import org.yaml.snakeyaml.Yaml
 import java.io.File
 
 /**
+ * Per-image config from `.zbb.yaml` `monorepo.images.<relDir>:` block.
+ *
+ * Example:
+ *   monorepo:
+ *     images:
+ *       server:
+ *         context: image/server
+ *         name: hub-server
+ *         workflow: server-image-publish.yml
+ */
+data class DockerImageConfig(
+    /** Path to the docker build context relative to repo root */
+    val context: String,
+    /** Image name (no tag) — final tag is "<name>:dev" during build */
+    val name: String,
+    /** Optional GitHub workflow file to dispatch after publish (e.g. "server-image-publish.yml") */
+    val workflow: String? = null,
+)
+
+/**
  * Configuration loaded from `.zbb.yaml` `monorepo:` block.
  *
  * Defaults match what `lib/monorepo/index.ts` provides when no config is set.
@@ -19,6 +39,8 @@ data class MonorepoConfig(
     val testPhases: List<String> = listOf("test"),
     val registry: String? = null,
     val skipPublish: Set<String> = emptySet(),
+    /** Map of package relDir → docker image config (only for packages that produce images). */
+    val images: Map<String, DockerImageConfig> = emptyMap(),
 )
 
 /**
@@ -32,6 +54,15 @@ fun loadMonorepoConfig(repoRoot: File): MonorepoConfig {
     return try {
         val yaml = Yaml().load<Map<String, Any?>>(zbbFile.readText())
         val mono = yaml["monorepo"] as? Map<String, Any?> ?: return MonorepoConfig()
+
+        val imagesRaw = (mono["images"] as? Map<String, Map<String, Any?>>) ?: emptyMap()
+        val images = imagesRaw.mapNotNull { (relDir, cfg) ->
+            val context = cfg["context"] as? String ?: return@mapNotNull null
+            val name = cfg["name"] as? String ?: return@mapNotNull null
+            val workflow = cfg["workflow"] as? String
+            relDir to DockerImageConfig(context = context, name = name, workflow = workflow)
+        }.toMap()
+
         MonorepoConfig(
             sourceFiles = (mono["sourceFiles"] as? List<String>) ?: listOf("tsconfig.json"),
             sourceDirs = (mono["sourceDirs"] as? List<String>) ?: listOf("src"),
@@ -39,6 +70,7 @@ fun loadMonorepoConfig(repoRoot: File): MonorepoConfig {
             testPhases = (mono["testPhases"] as? List<String>) ?: listOf("test"),
             registry = mono["registry"] as? String,
             skipPublish = ((mono["skipPublish"] as? List<String>) ?: emptyList()).toSet(),
+            images = images,
         )
     } catch (_: Exception) {
         MonorepoConfig()
