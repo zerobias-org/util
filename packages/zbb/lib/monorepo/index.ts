@@ -180,8 +180,9 @@ export async function handleMonorepo(
   const repoConfig = await loadRepoConfig(repoRoot);
   const config = repoConfig.monorepo!;
 
-  // Skip preflight checks for stamp-only validation (gate --check)
-  if (!(command === 'gate' && parsed.check)) {
+  // Skip preflight checks for stamp-only validation (gate --check) and publish
+  // (publish only needs Node + registry token, not full build toolchain)
+  if (command !== 'publish' && !(command === 'gate' && parsed.check)) {
     runMonorepoPreflight(command, config);
 
     // Also run repo-level preflight checks from .zbb.yaml
