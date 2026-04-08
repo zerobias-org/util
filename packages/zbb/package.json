@@ -52,7 +52,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "jsonata": "^2.1.0",
+    "jsonata": "^2.0.0",
     "semver": "^7.6.0",
     "yaml": "2.8.3"
   },
