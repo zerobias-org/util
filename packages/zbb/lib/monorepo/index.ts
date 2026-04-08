@@ -181,8 +181,13 @@ function gradleTaskFor(command: string, parsed: ParsedArgs): string | null {
   switch (command) {
     case 'gate':
       return parsed.check ? 'monorepoGateCheck' : 'monorepoGate';
-    // Phase 2.6+: build/test/clean/publish wired up after zb.monorepo-build
-    // and zb.monorepo-publish plugins are written.
+    case 'build':
+      return 'monorepoBuild';
+    case 'test':
+      return 'monorepoTest';
+    case 'clean':
+      return 'monorepoClean';
+    // publish wired up after zb.monorepo-publish plugin is written
     default:
       return null;
   }
