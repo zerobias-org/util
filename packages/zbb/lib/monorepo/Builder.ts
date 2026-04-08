@@ -1091,16 +1091,27 @@ async function buildDockerImages(
     });
   }
 
-  // All Docker builds can run concurrently (no inter-package deps for Docker)
-  for (const name of [...pending]) {
-    pending.delete(name);
-    buildOne(name);
+  // Limit docker concurrency to avoid resource contention.
+  // Each docker build runs `npm install` inside the container which is heavy on CPU/disk/network.
+  // Override via DOCKER_BUILD_CONCURRENCY env var. Default: 2.
+  const maxConcurrent = Math.max(1, parseInt(process.env.DOCKER_BUILD_CONCURRENCY ?? '2', 10));
+
+  // Schedule builds with concurrency cap
+  function tryStartMore(): void {
+    while (inFlight.size < maxConcurrent && pending.size > 0) {
+      const name = pending.values().next().value!;
+      pending.delete(name);
+      buildOne(name);
+    }
   }
 
-  // Wait for all to complete
-  while (inFlight.size > 0) {
+  tryStartMore();
+
+  // Wait for all to complete; start more as slots free up
+  while (inFlight.size > 0 || pending.size > 0) {
     await waitForSignal();
     if (failed) { stopSpinnerTimer(); throw failError!; }
+    tryStartMore();
   }
 
   stopSpinnerTimer();
