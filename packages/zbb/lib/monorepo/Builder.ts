@@ -167,7 +167,8 @@ export function injectRegistryForBuild(repoRoot: string): RegistrySwap {
   }
   console.log(`  [registry] Routing scoped packages to local Verdaccio (${registryUrl})`);
 
-  // Backup package-lock.json (npm install may rewrite it with Verdaccio URLs)
+  // Backup package-lock.json — npm install with Verdaccio routing rewrites URLs.
+  // Restore after build so the lockfile stays clean for git.
   const lockfile = join(repoRoot, 'package-lock.json');
   const lockBackup = lockfile + '.zbb-backup';
   if (existsSync(lockfile)) {
@@ -198,6 +199,7 @@ export function restoreRegistrySwap(swap: RegistrySwap, repoRoot: string): void 
     delete process.env[`npm_config_@${scope}:registry`];
   }
 
+  // Restore lockfile so git stays clean (Verdaccio URLs don't leak into commits)
   if (swap.lockfileBackup) {
     const lockfile = join(repoRoot, 'package-lock.json');
     try {
