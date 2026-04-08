@@ -96,20 +96,26 @@ tasks.register("monorepoGateCheck") {
 }
 
 // ── monorepoGate — full gate run + stamp write ──────────────────────
+//
+// monorepoGate depends on monorepoBuild + monorepoTest, then writes the
+// unified root gate-stamp.json by querying each per-subproject task's actual
+// state (executed/skipped/upToDate/failed) — no placeholder values.
 
-tasks.register("monorepoGate") {
+val monorepoGate = tasks.register("monorepoGate") {
     group = "monorepo"
     description = "Run gate for all affected packages and write the root gate-stamp.json"
-    // Phase 2.4 stub: full per-subproject task chain wiring will be added by
-    // zb.monorepo-build. For now, this task just regenerates the stamp from
-    // the current source state, assuming a previous gate run already passed.
+    // monorepoBuild + monorepoTest are added in zb.monorepo-build (when applied).
+    // Wire conditionally so this plugin works even if -build isn't applied.
+    rootProject.tasks.findByName("monorepoBuild")?.let { dependsOn(it) }
+    rootProject.tasks.findByName("monorepoTest")?.let { dependsOn(it) }
 
     doLast {
         val service = graphService.get()
         val packages = service.graph.packages
-        val affected = service.changeResult.affected
         val sourceFiles = service.config.sourceFiles
         val sourceDirs = service.config.sourceDirs
+        val phases = service.config.buildPhases
+        val testPhases = service.config.testPhases
 
         val branch = try {
             val proc = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD")
@@ -126,36 +132,64 @@ tasks.register("monorepoGate") {
             val sourceHash = SourceHasher.hashSources(pkg.dir, sourceFiles, sourceDirs)
             val testHash = SourceHasher.hashTests(pkg.dir)
 
-            // Resolve rootDeps via in-process Kotlin (no node subprocess)
             val rootDeps = try {
                 Prepublish.resolveRootDeps(pkg.dir, rootProject.projectDir)
             } catch (_: Exception) {
                 emptyMap()
             }
 
-            // Phase 2.4: tasks/tests are placeholder — full per-subproject
-            // result aggregation comes when zb.monorepo-build wires everything.
-            // For end-to-end validation, we mark all as "passed" if the package
-            // is NOT in the affected set (cached/clean state) or "skipped"
-            // otherwise.
-            val taskStatus = if (name in affected) "skipped" else "passed"
-            val tasks = linkedMapOf(
-                "lint" to taskStatus,
-                "generate" to taskStatus,
-                "transpile" to taskStatus,
-                "test" to "skipped",
+            // Look up the matching Gradle subproject for this npm package
+            val gradlePath = ":" + pkg.relDir.replace("/", ":")
+            val subproject = rootProject.findProject(gradlePath)
+
+            // Query real task state for each phase. The mapping:
+            //   not in graph / no script   → "not-found"
+            //   skipped (onlyIf, etc.)     → "skipped"
+            //   noSource                   → "skipped"
+            //   executed && no failure     → "passed"
+            //   executed && failure        → "failed"
+            //   upToDate                   → "passed"
+            val tasksMap = linkedMapOf<String, String>()
+            for (phase in phases) {
+                tasksMap[phase] = mapTaskState(subproject?.tasks?.findByName(phase))
+            }
+            for (testPhase in testPhases) {
+                tasksMap[testPhase] = mapTaskState(subproject?.tasks?.findByName(testPhase))
+            }
+
+            // Test suite entries: count expected from source files, derive
+            // ran/status from the test task's actual state. Mirrors what the
+            // existing zb.base writeGateStamp does — assumes "task passed" means
+            // "all expected tests in this suite passed".
+            val testSuiteDirs = linkedMapOf(
+                "unit" to java.io.File(pkg.dir, "test/unit"),
+                "integration" to java.io.File(pkg.dir, "test/integration"),
+                "e2e" to java.io.File(pkg.dir, "test/e2e"),
             )
-            val tests = linkedMapOf(
-                "unit" to TestSuiteEntry(0, 0, "skipped"),
-                "integration" to TestSuiteEntry(0, 0, "skipped"),
-                "e2e" to TestSuiteEntry(0, 0, "skipped"),
-            )
+            val testTask = subproject?.tasks?.findByName("test")
+            val testState = testTask?.state
+            val testRanSuccessfully = testState?.executed == true && testState.failure == null
+            val testSkipped = testState?.skipped == true || testTask == null
+
+            val tests = linkedMapOf<String, TestSuiteEntry>()
+            for ((suite, dir) in testSuiteDirs) {
+                val expected = SourceHasher.countExpectedTests(dir)
+                val (ran, status) = when {
+                    expected == 0 -> 0 to "skipped"
+                    testSkipped -> 0 to "skipped"
+                    testRanSuccessfully -> expected to "passed"
+                    testState?.failure != null -> 0 to "failed"
+                    testState?.upToDate == true -> expected to "passed"
+                    else -> 0 to "not-run"
+                }
+                tests[suite] = TestSuiteEntry(expected, ran, status)
+            }
 
             packageEntries[name] = PackageStampEntry(
                 version = pkg.version,
                 sourceHash = sourceHash,
                 testHash = testHash,
-                tasks = tasks,
+                tasks = tasksMap,
                 tests = tests,
                 rootDeps = rootDeps.takeIf { it.isNotEmpty() },
             )
@@ -170,5 +204,36 @@ tasks.register("monorepoGate") {
 
         GateStampIO.write(rootStampFile, stamp)
         logger.lifecycle("Wrote ${rootStampFile.name} with ${packageEntries.size} packages")
+    }
+}
+
+/**
+ * Map a Gradle Task to its corresponding gate-stamp status string.
+ * Mirrors how `zb.base writeGateStamp` and `lib/monorepo/Builder.ts` map states.
+ */
+fun mapTaskState(task: org.gradle.api.Task?): String {
+    if (task == null) return "not-found"
+    val state = task.state
+    return when {
+        state.skipped -> "skipped"
+        state.noSource -> "skipped"
+        state.failure != null -> "failed"
+        state.executed -> "passed"
+        state.upToDate -> "passed"
+        else -> "not-found"
+    }
+}
+
+// ── Wire monorepoGate to per-subproject tasks (deferred) ────────────
+//
+// monorepoBuild and monorepoTest are aggregator tasks added by zb.monorepo-build.
+// They handle the per-subproject task wiring internally (via dependsOn). So
+// just depending on monorepoBuild + monorepoTest pulls in the whole graph.
+// This deferred wiring picks up the aggregator tasks even if -build is applied
+// after this plugin in the build.gradle.kts file.
+gradle.projectsEvaluated {
+    monorepoGate.configure {
+        rootProject.tasks.findByName("monorepoBuild")?.let { dependsOn(it) }
+        rootProject.tasks.findByName("monorepoTest")?.let { dependsOn(it) }
     }
 }
