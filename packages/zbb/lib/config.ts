@@ -11,6 +11,8 @@ export interface ToolRequirement {
   parse: string;
   version: string;
   install?: string;
+  /** Commands this tool is required for. If omitted, applies to all commands. */
+  commands?: string[];
 }
 
 export interface EnvVarDeclaration {

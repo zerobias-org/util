@@ -473,7 +473,7 @@ export async function publish(opts: PublishOptions): Promise<void> {
   let stampValid = true;
   for (const [name, pkg] of graph.packages) {
     if (pkg.private) continue;
-    const result = validatePackageStamp(pkg, stamp, config);
+    const result = validatePackageStamp(pkg, stamp, config, repoRoot);
     const sn = shortName(pkg);
 
     if (result === GateStampResult.VALID) {
@@ -599,6 +599,7 @@ export async function publish(opts: PublishOptions): Promise<void> {
   }
 
   // ── 8. Build ──
+  // Skip docker — image publishing is a separate workflow
   console.log('\n── build ──');
   install(repoRoot);
   await build({
@@ -607,6 +608,7 @@ export async function publish(opts: PublishOptions): Promise<void> {
     affectedOrdered: publishable,
     config,
     verbose,
+    skipDocker: true,
   });
 
   // ── 9. Prepublish-standalone ──

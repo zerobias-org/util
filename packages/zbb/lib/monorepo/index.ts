@@ -184,10 +184,15 @@ export async function handleMonorepo(
   if (!(command === 'gate' && parsed.check)) {
     runMonorepoPreflight(command, config);
 
-    // Also run repo-level preflight checks from .zbb.yaml
+    // Repo-level preflight checks from .zbb.yaml
+    // Filter by command — only run checks that apply to this command
     if (repoConfig.require && repoConfig.require.length > 0) {
       const userConfig = await loadUserConfig();
-      const results = runPreflightChecks(repoConfig.require, userConfig.skip_checks);
+      const applicable = repoConfig.require.filter(r => {
+        if (!r.commands) return true; // no command filter — applies to all
+        return r.commands.includes(command);
+      });
+      const results = runPreflightChecks(applicable, userConfig.skip_checks);
       const failed = results.filter(r => !r.ok);
       if (failed.length > 0) {
         console.log(formatPreflightResults(results));
