@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "feat/zbb-stack-resolve",
-  "timestamp": "2026-04-08T13:41:03.717Z",
+  "timestamp": "2026-04-08T14:09:52.647Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.9",
@@ -161,7 +161,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.30",
-      "sourceHash": "1fa3ef97a49e0b1ab35c11ca5b382c5e1c3e14cc090012421a1ace649d86e2fa",
+      "sourceHash": "81437cb4e9ac657e878698089bbd9d968d9f1feb90ac18fd3c68ff408696fc28",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
