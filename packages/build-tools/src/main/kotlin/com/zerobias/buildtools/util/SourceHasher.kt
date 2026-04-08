@@ -2,6 +2,7 @@ package com.zerobias.buildtools.util
 
 import java.io.File
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * SHA-256 hashing for package source/test directories.
@@ -68,14 +69,20 @@ object SourceHasher {
     /**
      * Hash test directories. Tests are NOT git-restricted because test files may
      * include locally-generated fixtures that aren't committed but are part of the
-     * test surface. Falls back to recursive walk.
+     * test surface. Recursive walk, skipping `node_modules` and hidden dirs.
+     *
+     * Files are sorted using a locale-aware Collator (matching JS
+     * `String.localeCompare()` used by `lib/monorepo/GateStamp.ts`). This is
+     * critical for byte-equality with the TS path: bytes-wise sort produces
+     * different file order for mixed-case names like "AWSEbsClient.ts" vs
+     * "AwsEbsProducer.ts" in com/util/packages/aws-common.
      */
     fun hashTests(packageDir: File, testDirs: List<String> = listOf("test")): String {
         val digest = MessageDigest.getInstance("SHA-256")
         for (dirName in testDirs) {
             val dir = File(packageDir, dirName)
             if (!dir.exists()) continue
-            val files = walkFallback(dir, packageDir)
+            val files = walkSkippingHidden(dir, packageDir).sortedWith(LOCALE_COMPARE_ORDER)
             for (relPath in files) {
                 val absFile = File(packageDir, relPath)
                 if (!absFile.exists()) continue
@@ -85,6 +92,40 @@ object SourceHasher {
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
+
+    /**
+     * Walk a directory recursively, skipping `node_modules` and any directory
+     * starting with `.` (hidden). Mirrors the TS `walkDir()` in
+     * `lib/monorepo/GateStamp.ts`.
+     */
+    private fun walkSkippingHidden(dir: File, packageDir: File): List<String> {
+        if (!dir.exists()) return emptyList()
+        return dir.walkTopDown()
+            .onEnter { d -> d == dir || (d.name != "node_modules" && !d.name.startsWith(".")) }
+            .filter { it.isFile }
+            .map { it.relativeTo(packageDir).path }
+            .toList()
+    }
+
+    /**
+     * Comparator that mirrors JS `String.localeCompare()` for ASCII file paths.
+     *
+     * Two-key sort:
+     *   1. Primary: lowercase comparison (case-insensitive grouping). This makes
+     *      `AWSEbsClient.ts` and `AwsEbsClient.ts` adjacent.
+     *   2. Tiebreaker: natural byte-wise comparison (uppercase before lowercase
+     *      for the same letter, since 'A' (0x41) < 'a' (0x61)).
+     *
+     * java.text.Collator does NOT match JS localeCompare exactly because it
+     * treats punctuation like `-` and `.` differently — Collator ignores them
+     * for primary comparison, but JS localeCompare treats them as regular chars.
+     *
+     * This lowercase+naturalOrder approach matches JS for ASCII filenames,
+     * which is sufficient for our use case (TS source/test file names).
+     */
+    private val LOCALE_COMPARE_ORDER: Comparator<String> =
+        Comparator.comparing<String, String>({ it.lowercase(Locale.ROOT) })
+            .thenComparing(Comparator.naturalOrder())
 
     /**
      * Count expected test cases by scanning for `it(`, `it.only(`, `test(`

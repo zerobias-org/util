@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import type { MonorepoConfig, RepoConfig } from '../config.js';
 import { loadRepoConfig, loadUserConfig } from '../config.js';
 import { runPreflightChecks, formatPreflightResults } from '../preflight.js';
@@ -168,6 +168,69 @@ export function isMonorepoCommand(command: string): boolean {
   return MONOREPO_COMMANDS.has(command);
 }
 
+// ── Gradle routing layer (Phase 2.5) ────────────────────────────────
+
+/**
+ * Map a zbb command to the corresponding Gradle task name in the new
+ * `zb.monorepo-*` plugin set.
+ *
+ * Returns null if the command is not yet supported by the new Gradle path
+ * (caller falls through to the legacy TS implementation).
+ */
+function gradleTaskFor(command: string, parsed: ParsedArgs): string | null {
+  switch (command) {
+    case 'gate':
+      return parsed.check ? 'monorepoGateCheck' : 'monorepoGate';
+    // Phase 2.6+: build/test/clean/publish wired up after zb.monorepo-build
+    // and zb.monorepo-publish plugins are written.
+    default:
+      return null;
+  }
+}
+
+/**
+ * Check whether this repo is wired up to the new Gradle monorepo plugins.
+ * Looks for: gradlew at repo root + settings.gradle.kts that references
+ * `zb.monorepo-base` (the marker that the new plugins are applied).
+ */
+function repoSupportsGradleMonorepo(repoRoot: string): boolean {
+  const gradlew = join(repoRoot, 'gradlew');
+  if (!existsSync(gradlew)) return false;
+  const settingsFile = join(repoRoot, 'settings.gradle.kts');
+  if (!existsSync(settingsFile)) return false;
+  try {
+    const content = readFileSync(settingsFile, 'utf-8');
+    return content.includes('zb.monorepo-base');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Spawn `./gradlew <task>` from the repo root with the parsed args mapped
+ * into Gradle properties. Inherits stdio so the user sees gradle output
+ * directly. Exits with the gradle exit code.
+ *
+ * Returns only if the spawn fails to start (e.g. gradlew missing).
+ */
+function spawnGradleAndExit(repoRoot: string, task: string, parsed: ParsedArgs): never {
+  const gradleArgs: string[] = [task];
+  if (parsed.all) gradleArgs.push('-Pmonorepo.all=true');
+  if (parsed.base) gradleArgs.push(`-Pmonorepo.base=${parsed.base}`);
+
+  if (parsed.verbose) {
+    console.log(`[zbb] routing to gradle: ./gradlew ${gradleArgs.join(' ')}`);
+  }
+
+  const result = spawnSync(join(repoRoot, 'gradlew'), gradleArgs, {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  process.exit(result.status ?? 1);
+}
+
 /**
  * Main monorepo command handler.
  */
@@ -179,6 +242,42 @@ export async function handleMonorepo(
   const parsed = parseArgs(args);
   const repoConfig = await loadRepoConfig(repoRoot);
   const config = repoConfig.monorepo!;
+
+  // ── Phase 2.5 routing: prefer the new Gradle path unless legacy override ──
+  //
+  // ZBB_USE_LEGACY_MONOREPO=1 forces the original TS code path. Otherwise,
+  // if the repo has gradlew + a settings.gradle.kts that wires up the new
+  // zb.monorepo-* plugins, AND the command has a Gradle equivalent, route
+  // to gradle. The TS path remains as a fallback for unsupported commands.
+  const useLegacy = process.env.ZBB_USE_LEGACY_MONOREPO === '1';
+  if (!useLegacy && repoSupportsGradleMonorepo(repoRoot)) {
+    const task = gradleTaskFor(command, parsed);
+    if (task !== null) {
+      // Apply cleanse + preflight before spawning gradle (zbb owns those concerns)
+      if (repoConfig.cleanse && repoConfig.cleanse.length > 0) {
+        for (const varName of repoConfig.cleanse) {
+          delete process.env[varName];
+        }
+      }
+      if (!(command === 'gate' && parsed.check)) {
+        runMonorepoPreflight(command, config);
+        if (repoConfig.require && repoConfig.require.length > 0) {
+          const userConfig = await loadUserConfig();
+          const applicable = repoConfig.require.filter(r => {
+            if (!r.commands) return true;
+            return r.commands.includes(command);
+          });
+          const results = runPreflightChecks(applicable, userConfig.skip_checks);
+          const failed = results.filter(r => !r.ok);
+          if (failed.length > 0) {
+            console.log(formatPreflightResults(results));
+            process.exit(1);
+          }
+        }
+      }
+      spawnGradleAndExit(repoRoot, task, parsed);
+    }
+  }
 
   // Apply repo-level cleanse to process.env so child processes (npm test, etc.)
   // don't inherit unwanted env vars from parent shell or slot stacks.

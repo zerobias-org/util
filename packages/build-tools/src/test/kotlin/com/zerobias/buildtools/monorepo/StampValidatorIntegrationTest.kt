@@ -70,6 +70,21 @@ class StampValidatorIntegrationTest {
     }
 
     @Test
+    fun `aws-common testHash matches TS path hash`() {
+        assumeTrue(isAvailable, "com/util not present")
+        val pkgDir = File(comUtilRoot, "packages/aws-common")
+        assumeTrue(pkgDir.exists())
+
+        val computed = com.zerobias.buildtools.util.SourceHasher.hashTests(pkgDir)
+        // Known good hash from TS path (verified via dist/monorepo/GateStamp.js)
+        val expected = "4fe808281f438edd8fd93fb193e880aa3a9861ecde9aff6f359024a9c4384512"
+        assertEquals(expected, computed) {
+            "Kotlin hashTests diverges from TS computeTestHash for aws-common.\n" +
+            "  expected: $expected\n  kotlin:   $computed"
+        }
+    }
+
+    @Test
     fun `full validate() returns VALID for unmodified com-util stamp`() {
         assumeTrue(isAvailable, "com/util not present in environment")
 
