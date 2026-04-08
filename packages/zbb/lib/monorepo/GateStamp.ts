@@ -135,13 +135,27 @@ export function computeSourceHash(pkg: WorkspacePackage, config: MonorepoConfig)
   const sourceFiles = config.sourceFiles ?? ['tsconfig.json'];
   const sourceDirs = config.sourceDirs ?? ['src'];
 
-  // Hash individual source files
+  // Hash individual source files — only git-tracked files for consistency across environments.
+  // Files that exist locally but are gitignored (e.g. generated api.yml) would otherwise
+  // make the hash non-deterministic between local and CI.
   for (const name of sourceFiles) {
     const filePath = join(pkg.dir, name);
-    if (existsSync(filePath)) {
-      digest.update(name);
-      digest.update(readFileSync(filePath));
+    if (!existsSync(filePath)) continue;
+    let isTracked = false;
+    try {
+      const output = execFileSync('git', ['ls-files', '--error-unmatch', name], {
+        cwd: pkg.dir,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      isTracked = !!output.trim();
+    } catch {
+      // git ls-files --error-unmatch exits non-zero if not tracked
+      isTracked = false;
     }
+    if (!isTracked) continue;
+    digest.update(name);
+    digest.update(readFileSync(filePath));
   }
 
   // Hash source directories — only git-tracked files to ensure consistency across environments
