@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "branch": "fix/java-home-macos",
-  "timestamp": "2026-04-08T05:41:34.609Z",
+  "branch": "main",
+  "timestamp": "2026-04-08T05:44:21.223Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.9",
@@ -65,7 +65,7 @@
     },
     "@zerobias-org/module-test-client": {
       "version": "1.0.3",
-      "sourceHash": "21c8c70e3355773b61118edefad8c1d27ca1f4dac458b5492286db3cbf6c582f",
+      "sourceHash": "a78686c0b0a0ef2ed8f14f87fc198620912bd3789e762d66fb652c0754433c94",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -91,11 +91,19 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "axios": "^1.13.5",
+        "yaml": "\"2.8.3\"",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\""
       }
     },
     "@zerobias-org/module-tester": {
       "version": "1.0.9",
-      "sourceHash": "82e4ca33f033a7a196b6e376c3cb38e46e9911352216b9005556b51dfb5bd051",
+      "sourceHash": "81dc34cc31abc668848895a18c99a96c6c4bc9c550e230a0bdc2f2db4cd0b723",
       "testHash": "cde5b931c178ea511af07afca046a323dd387db237e7b7eff2eb3bb64a1f1c9c",
       "tasks": {
         "lint": "passed",
@@ -121,11 +129,22 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "axios": "^1.13.5",
+        "dockerode": "^4.0.0",
+        "get-port": "^7.1.0",
+        "uuid": "^13.0.0",
+        "yaml": "\"2.8.3\"",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\""
       }
     },
     "@zerobias-org/zbb": {
       "version": "0.3.26",
-      "sourceHash": "44a13d998a95327360872a3f307e60a463281cb75f5c082ae201c4bd03a55135",
+      "sourceHash": "449872e4ac181b42ae052b551facfa57d1f32400aa063e5ea96fd45a45a2a7b5",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -151,6 +170,14 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "semver": "^7.6.0",
+        "yaml": "\"2.8.3\"",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\""
       }
     },
     "@zerobias-org/util-api-invoker-api": {
@@ -245,7 +272,7 @@
     },
     "@zerobias-org/util-api-client-base": {
       "version": "1.0.41",
-      "sourceHash": "b63f83fe3dec991e85b40d52239f33640239355b28f933080d45671b85b7705a",
+      "sourceHash": "ae3b8677e668367817b8bd00834650c8bb6db6a924e5137060918d2c92c8715d",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -271,11 +298,20 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "^1.13.5",
+        "qs": "^6.14.0",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/logger": {
       "version": "3.0.6",
-      "sourceHash": "9b8a19fdbeb7d2eb35e98f3fa8240f0159038702ff854dd4caa85125833e704e",
+      "sourceHash": "ce0de4b2e7eed6d3654f70c892234cac00f130c35759c12284e090bc2c74bb19",
       "testHash": "b4e1f0819581aef73a80fd63c6e169141acb70170cc4adc6a1e9a377dd13c970",
       "tasks": {
         "lint": "passed",
@@ -301,6 +337,16 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "chalk": "^5.6.2",
+        "winston": "^3.2.0",
+        "winston-transport": "^4.9.0",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/util-connector": {
@@ -335,7 +381,7 @@
     },
     "@zerobias-org/util-codegen": {
       "version": "2.0.44",
-      "sourceHash": "f4e640389c2987416f05b614addba2425e5ac87847237a8d588bc7fce7705e09",
+      "sourceHash": "fe8bc18bad880d137759b47192419f179bf94a85db4bd91cab6cb44aca13e484",
       "testHash": "6ab005a96886d82f25a222cf56355f928bf5ab4340dbe36af6e7db5a7d7a7cb6",
       "tasks": {
         "lint": "skipped",
@@ -361,6 +407,15 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "^1.13.5",
+        "qs": "^6.14.0",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/util-collector": {
@@ -395,7 +450,7 @@
     },
     "@zerobias-org/data-utils": {
       "version": "1.0.31",
-      "sourceHash": "f48da88dac659d5d6afe207574d4ddf78f4eee24f53c1eeefd2ead3737862994",
+      "sourceHash": "45906e6781540338a260a735c9280ac482d8300380c113058037265efbb1bd02",
       "testHash": "853b146457fdd677eb3ed74a6bc579f44913967f663defd910246a5cbf9be5b0",
       "tasks": {
         "lint": "passed",
@@ -421,11 +476,20 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-org/module-interface-dataproducer-hub-sdk": "^1.2.32",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "jsonata": "^2.0.0",
+        "yaml": "\"2.8.3\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\""
       }
     },
     "@zerobias-org/util-hub-module-utils": {
       "version": "2.0.39",
-      "sourceHash": "fb716f6792ca53926d2b27a4639c5f7afdb19964f258fb97a50424cb61ada61f",
+      "sourceHash": "0d7982c3443ef8095dc5752e14f0f0769b09e749a89a6fbc1c0dc16fe9f7e66a",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
         "lint": "passed",
@@ -451,6 +515,20 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-amazon-js": "^1.0.35",
+        "@zerobias-org/types-core": "^1.0.22",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "@zerobias-org/types-microsoft-js": "^1.0.34",
+        "axios": "^1.13.5",
+        "change-case": "^5.0.0",
+        "jsonata": "^2.0.0",
+        "qs": "^6.14.0",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     }
   }
