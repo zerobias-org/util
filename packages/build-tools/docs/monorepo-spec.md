@@ -35,12 +35,16 @@ build-tools/src/main/kotlin/
   zb.monorepo-gate.gradle.kts        # gate stamp computation, validation, write
   zb.monorepo-publish.gradle.kts     # publish flow + Kotlin prepublish-standalone
   com/zerobias/buildtools/monorepo/
-    Workspace.kt                     # workspace discovery, dep graph, topo sort
+    Workspace.kt                     # workspace discovery, dep graph
     ChangeDetector.kt                # git diff → affected packages
-    GateStamp.kt                     # source/test hashing, stamp read/write/validate
     Prepublish.kt                    # Kotlin port of prepublish-standalone.js
     DockerSemaphore.kt               # BuildService capping docker concurrency
+    EventListener.kt                 # BuildEventListener emitting JSON-line events for zbb display
 ```
+
+**Note:** Gate stamp logic does NOT live in `monorepo/`. It already exists in
+`zb.base.gradle.kts` (`hashFiles`, `checkGateStamp`, `writeGateStamp`,
+`countExpectedTests`). Phase 2.1 updates that existing code in place — see §6.
 
 `-build`, `-gate`, `-publish` each transitively apply `-base`. Repos opt in by
 applying whichever subset they need; today every repo uses all four.
@@ -229,15 +233,43 @@ tasks. Tasks check `affectedSet.contains(project.path)` in `onlyIf {}`.
 ### "Waiting on deps" display
 The TS impl shows in-place TTY updates: each package gets one line that cycles
 spinner → check/cross. Pending packages display `← waiting on dep1, dep2`.
-Gradle's `--console=rich` already shows running tasks; the plugin should not
-reimplement TTY rendering. If users want the old display, they can run
-`./gradlew ... --console=rich` (default). Acceptable parity loss.
+
+**Decision (OQ7):** This display **stays in zbb's TS code** and is fed via a
+JSON-line event bridge from the Gradle plugin's `BuildEventListener`. The
+`zb.monorepo-base` plugin emits structured events; zbb tails them and feeds
+into the existing `Builder.runPhaseConcurrently` rendering loop. See §14 OQ7
+for the architecture.
 
 ---
 
 ## 6. Gate stamp
 
-**Source:** `lib/monorepo/GateStamp.ts`
+**Source (TS):** `lib/monorepo/GateStamp.ts`
+**Source (existing Kotlin):** `zb.base.gradle.kts` lines ~736-1000
+
+**Critical context:** `zb.base.gradle.kts` already contains a complete gate
+stamp implementation in Kotlin (`hashFiles`, `checkGateStamp`, `writeGateStamp`,
+`countExpectedTests`, `GateStampResult` enum). The TS code in
+`lib/monorepo/GateStamp.ts` is a **port of this existing Kotlin** (the source
+comment confirms "ported from zb.base.gradle.kts hashFiles"). Phase 2.1
+**updates the existing Kotlin** to match the TS-era improvements rather than
+writing new Kotlin code.
+
+**Diffs the TS code added that need backporting:**
+1. Use `git ls-files` instead of `walkTopDown` for source hashing (determinism
+   between local/CI — the critical fix made during TS development).
+2. Add `rootDeps` field to stamp entries (see §8 + §11), captured at write time
+   via in-process `Prepublish.kt`.
+3. Switch state model from `FULL/SOURCE/TESTS_CHANGED/INVALID` to
+   `VALID/TESTS_CHANGED/TESTS_FAILED/INVALID/MISSING` (richer failure modes).
+4. Replace regex-based JSON parsing with real JSON parse (use `kotlinx.serialization`
+   or similar — must be careful about preserving the exact byte format on write).
+5. Make `sourceFiles` and `sourceDirs` configurable from `.zbb.yaml`
+   `monorepo` block (today they're hardcoded `["api.yml", "tsconfig.json"]`
+   and `["src"]`).
+6. Change stamp scope: write a single unified `gate-stamp.json` at the **repo
+   root** with all packages (not per-project as today's Kotlin does). The root
+   stamp aggregator collects per-subproject contributions via Gradle Providers.
 
 ### File format
 `gate-stamp.json` at repo root, **committed to git**, written by `zbb gate`:
@@ -321,10 +353,10 @@ Detailed checks:
 ### Stamp write
 - Built after a successful gate run.
 - For each non-private package: `version`, `sourceHash`, `testHash`, `tasks`,
-  `tests`, plus `rootDeps` resolved via `prepublish-standalone --dry-run`
-  (Kotlin port in the new path).
-- Written as `JSON.stringify(stamp, null, 2) + '\n'`. The trailing newline matters
-  for byte-equality.
+  `tests`, plus `rootDeps` resolved via in-process Kotlin
+  `Prepublish.resolveRootDeps()` (no node subprocess — see §11).
+- Written as JSON with 2-space indent and a trailing newline. The trailing
+  newline matters for byte-equality with the TS path.
 
 ### Registry guard
 Before writing the stamp, check if a slot is loaded with locally-published
@@ -334,12 +366,23 @@ and is non-empty). If so, abort with an error pointing the user at
 includes Verdaccio-published artifacts, which would not reproduce on CI.
 
 ### Gradle mapping
-- `zb.monorepo-gate` registers a `WriteGateStampTask` (writes the JSON file) and
-  a `CheckGateStampTask` (validates without booting full gate).
-- Source hashing implemented in `GateStamp.kt`. Inputs declared via
-  `@InputFiles` (git-tracked source files), output is `gate-stamp.json`.
+- Per-subproject gate logic stays in `zb.base.gradle.kts` (updated, not
+  duplicated). Each subproject has its existing `gate` task; that task
+  contributes its `PackageStampEntry` (sourceHash, testHash, tasks, tests,
+  rootDeps) to a Provider.
+- `zb.monorepo-gate` adds at the root project level:
+  - `monorepoGate` — depends on `:*:gate` for all subprojects, then calls
+    a `WriteRootGateStampTask` that aggregates all per-subproject Providers
+    into a single `gate-stamp.json` at repo root.
+  - `monorepoGateCheck` — pure read task. Loads root `gate-stamp.json`,
+    validates each affected package against current source, exits 0/1.
+    Declares NO build dependencies — does not invoke gate or any other task.
+- Source hashing implemented (or rather, updated) in `zb.base`. Inputs
+  declared via `@InputFiles` (git-tracked source files), but the actual
+  hashing is custom because we need git-tracked-only semantics, not Gradle's
+  default file walker.
 - Hybrid approach (per Q3 decision): Gradle inputs/outputs handle in-build skip
-  decisions, AND the plugin writes the stamp file as a task output for CI's
+  decisions, AND the plugin writes `gate-stamp.json` as a task output for CI's
   pre-flight `gate --check` to read without booting Gradle.
 
 ---
@@ -619,16 +662,28 @@ doesn't exist.
 - No backup is written (we're not modifying source).
 
 ### Gradle mapping
-- `Prepublish.kt` in `build-tools` implements all the above.
-- A `PrepublishTask` per subproject, declared inputs:
+- `Prepublish.kt` in `build-tools` implements all the above as a plain Kotlin
+  class (not a Gradle task). It exposes a `resolve(serviceDir, rootDir,
+  options)` function returning a `PrepublishResult` data class with
+  `dependencies`, `overrides`, `addedDeps`, `missingDeps`.
+- Two callers consume `Prepublish.kt`:
+  1. **`PrepublishTask`** (per subproject, in `zb.monorepo-publish`) — calls
+     `Prepublish.resolve()` and writes the modified `package.json`. Used during
+     the publish flow.
+  2. **`zb.base writeGateStamp` task** — calls `Prepublish.resolveRootDeps()`
+     to capture the `rootDeps` snapshot in the gate stamp. In-process call,
+     no node subprocess.
+- `PrepublishTask` declared inputs:
   - All TS/JS source files (matching scan patterns)
   - All `.sh` files in `src/`, `scripts/`, root
   - All YAML files
   - Config files at root
   - `package.json` and root `package.json`
   - `node_modules/` (for binMap discovery — directory only, lazy)
-- Output: the modified `package.json` (and backup file).
-- Build cache friendly via declared inputs/outputs.
+- Output: the modified `package.json`.
+- Followed by `PublishPackageTask.finalizedBy(RestorePrepublishTask)` per OQ8.
+- The `.prepublish-backup` file is a side effect, not declared as a task
+  output (transient working file, gitignored).
 
 ### Critical: parity testing
 The Kotlin port is the highest-risk piece. Required test approach:
@@ -702,56 +757,143 @@ through phase 6, deleted in phase 7.
 
 ---
 
-## 14. Open implementation questions
+## 14. Resolved implementation decisions
 
-These are tactical questions to resolve when starting Phase 2:
+All 10 open questions resolved during Phase 1 design walkthrough.
 
-1. **Settings plugin and existing repos.** The settings plugin will add npm
-   packages as Gradle subprojects. Do existing repos have any `include(...)`
-   calls in their current `settings.gradle.kts` that would conflict? Audit
-   each of the 6 repos before phase 4.
+### OQ1 — Settings plugin replaces manual includes
+**Decision:** The settings plugin reads `package.json` workspaces and calls
+`include()` for every workspace package. Existing manual `include(...)` lines
+in `settings.gradle.kts` are deleted during each repo's migration PR. Curation
+moves to `private: true` (in package.json) or `monorepo.skipPublish` (in
+`.zbb.yaml`).
 
-2. **Subproject naming.** Gradle paths like `:packages:foo` vs `:foo` —
-   pick a convention. Recommendation: use `relDir` with `/` → `:`. So
-   `packages/dynamodb` becomes `:packages:dynamodb`.
+**Repo-specific notes:**
+- `com/util` has no `settings.gradle.kts` today — create one.
+- `com/fileservice` has a `settings.gradle.kts` but no `pluginManagement`
+  block — add one during its migration PR.
+- All other repos: replace existing `include(...)` block with the settings
+  plugin invocation.
 
-3. **Task names.** Gradle convention is camelCase (`monorepoGate`). zbb
-   shells out to `./gradlew :monorepoBuild` etc. Map zbb commands → Gradle
-   task names exactly once in the routing layer.
+### OQ2 — Subproject naming mirrors relDir
+**Decision:** Use `relDir` with `/` → `:`.
 
-4. **Build cache file.** Should we keep writing `.zbb-build-cache.json` for
-   parity testing during phase 4, or rely entirely on Gradle's build cache?
-   Recommendation: don't write it. Verify parity via gate-stamp + npm pack diff
-   instead.
+| relDir | Gradle path |
+|---|---|
+| `core` | `:core` |
+| `packages/dynamodb` | `:packages:dynamodb` |
+| `utils/query-builder` | `:utils:query-builder` |
+| `content/src/rbac` | `:content:src:rbac` |
 
-5. **Phase ordering across packages.** Today, ALL packages run lint, then ALL
-   run generate, then ALL run transpile. Gradle's default would be: each
-   package goes through its full task chain independently. Decide whether to
-   force phase-level barriers (`mustRunAfter`) or let Gradle interleave. The
-   user-visible output may differ.
+Matches what `com/platform` already does. Collision-free by construction.
 
-6. **Test result capture.** The TS impl parses mocha output for
-   passing/failing/pending counts. The Kotlin port needs the same — does Gradle
-   have a JUnit-style report we can capture from npm test runs? Probably need
-   to keep parsing mocha output.
+### OQ3 — Task names: per-subproject from zb.base, root from monorepo plugin
+**Decision:**
+- Per-subproject task names stay as-is from `zb.base`: `clean`, `lint`,
+  `compile`, `test`, `gate`, `writeGateStamp`, `publish`, etc.
+- Root-level orchestrator tasks added by `zb.monorepo-base`:
+  - `monorepoClean` → wires `:*:clean`
+  - `monorepoBuild` → wires `:*:build` (filtered by affected set)
+  - `monorepoTest` → wires `:*:test`
+  - `monorepoGate` → wires `:*:gate` + root-level stamp aggregator
+  - `monorepoGateCheck` → reads root stamp file, validates per-package, exits 0/1
+  - `monorepoPublish` → wires `:*:publish` + prepublish + stack copy + image dispatch
+- zbb routing layer maps zbb commands → Gradle tasks one-to-one.
 
-7. **Display fidelity.** The TS spinner display is nice but Gradle has its own
-   console rendering. Acceptable to lose the in-place "waiting on deps" text
-   and just rely on Gradle's task progress.
+**Critical sub-decision:** `zb.base` is **updated**, not duplicated. The new
+monorepo plugin does NOT register its own gate logic — it wires the existing
+`zb.base` gate task into a unified root stamp aggregator. The TS code in
+`lib/monorepo/GateStamp.ts` is essentially a port of the existing
+`zb.base.gradle.kts` Kotlin (the source comment confirms this). Phase 2.1
+backports the TS-era improvements into `zb.base` directly.
 
-8. **prepublish state file.** Today the `.prepublish-backup` file exists during
-   the publish run and is cleaned up after. Gradle tasks should declare it as
-   an output but treat it as transient. Use `@OutputFile` with cleanup in a
-   `doLast {}` or `Build.finalizedBy`.
+**Stamp scope decision:** Single unified `gate-stamp.json` at repo root only.
+Per-package stamps (today's `zb.base` per-project model) are deleted from
+existing repos during their migration PR.
 
-9. **Stamp invariant: rootDeps resolution timing.** rootDeps is resolved at
-   stamp WRITE time (after build artifacts exist) and validated against
-   current root `package.json` at stamp READ time. The Kotlin port must
-   preserve this — don't compute rootDeps lazily in validation.
+### OQ4 — Drop .zbb-build-cache.json
+**Decision:** Drop it entirely. Trust Gradle's up-to-date checks and build
+cache. Existing files in repos are deleted during migration PRs (already
+gitignored).
 
-10. **`zbb run` integration.** Users debugging Gradle directly should use
-    `zbb run -- ./gradlew <task>` to get slot env applied. Confirm `zbb run`
-    propagates the loaded slot env to the gradle subprocess.
+### OQ5 — Let Gradle interleave (no phase barriers)
+**Decision:** No artificial `mustRunAfter` between phases. Each subproject's
+task chain runs as soon as its internal deps are satisfied. Maximum parallelism.
+
+Parity validation (§13) compares **outcomes** (gate-stamp.json byte equality,
+tarball contents), not task execution order. Order will differ — that's expected
+and fine.
+
+### OQ6 — Parse mocha stdout for test counts
+**Decision:** Continue parsing mocha output for passing/failing/pending counts.
+Each test task captures stdout, runs the regex, attaches counts as a task
+output property. The root stamp aggregator reads these properties when writing
+gate-stamp.json. No package-level changes required.
+
+### OQ7 — Display stays in zbb via JSON-line event bridge
+**Decision:** The rich TTY display (per-package spinners, elapsed time,
+"waiting on deps", phase headers) **stays in zbb's TypeScript code** —
+specifically in `Builder.ts runPhaseConcurrently`. It does NOT get
+reimplemented in Kotlin or sacrificed to Gradle's console renderer.
+
+**The bridge architecture:**
+- `zb.monorepo-base` registers a `BuildEventListener` (Kotlin, ~50 lines)
+  subscribed to Gradle task lifecycle events.
+- For each event, write a JSON line to a side channel (e.g.
+  `/tmp/zbb-monorepo-events.jsonl`, or stderr line-prefixed).
+- Event format:
+  ```json
+  {"event":"phase_start","phase":"transpile","packages":["foo","bar"]}
+  {"event":"task_start","phase":"transpile","package":"foo","blockers":[]}
+  {"event":"task_done","phase":"transpile","package":"foo","status":"passed","durationMs":1234}
+  {"event":"phase_done","phase":"transpile","results":{"foo":"passed","bar":"cached"}}
+  ```
+- zbb spawns `./gradlew monorepo*`, tails the event stream, feeds events into
+  the existing `Builder.runPhaseConcurrently` display loop. The display code
+  stays mostly unchanged — only the input source changes from "spawn npm
+  process" to "consume next event".
+
+**Bonus deliverable:** `zbb monorepo timeline` command that pretty-prints the
+saved event stream post-hoc. Same data, different consumer.
+
+**Phase 7 cleanup notes:** Do NOT delete `Builder.ts runPhaseConcurrently`
+rendering code. Only the npm-spawning + scheduling parts go away. The display
+parts (spinner frames, color codes, in-place updates, "waiting on" text,
+pad/sn/elapsed helpers) stay forever.
+
+### OQ8 — Three tasks for prepublish lifecycle
+**Decision:** `PrepublishTask` + `PublishPackageTask` + `RestorePrepublishTask`,
+with `PublishPackageTask.finalizedBy(RestorePrepublishTask)`.
+
+- `RestorePrepublishTask` is **idempotent** — if no `.prepublish-backup` exists,
+  no-op. Crash-safe across runs (next run picks up any leftover backup).
+- The backup file is gitignored already (`*.prepublish-backup` in `.gitignore`).
+- Don't declare the backup as a `@OutputFile` for build cache purposes —
+  treat it as a side effect. Use `outputs.upToDateWhen { false }` if needed.
+
+### OQ9 — rootDeps resolved at write time, in-process Kotlin
+**Decision:** Resolve `rootDeps` at stamp WRITE time, validate at READ time.
+Match the TS design. **One refinement:** Kotlin port calls `Prepublish.kt`
+in-process (no `node` subprocess), making rootDeps resolution ~10x faster than
+TS. The TS path shells out to `prepublish-standalone.js --dry-run`; the Kotlin
+path calls a Kotlin function directly.
+
+`CheckGateStampTask` (the cheap CI pre-flight) only does string comparisons —
+no node_modules, no scanning, no Vault. Stays cheap.
+
+### OQ10 — `zbb run -- ./gradlew <task>` for Gradle debugging
+**Decision:** No code changes needed. `zbb run` already does the right thing:
+loads slot, calls `prepareSlot()` (resolves Vault + DNS, re-exports slot env to
+`process.env`), spawns the command with `stdio: 'inherit'`. Gradle gets a TTY
+and uses `--console=rich` automatically.
+
+**Caveat:** `prepareSlot()` does NOT apply cleanse. So `zbb run -- ./gradlew gate`
+runs without cleanse, while `zbb gate` (which routes through the monorepo
+handler) runs with cleanse. This is acceptable — `zbb run` is a debugging
+escape hatch, users explicitly opting out of the full monorepo flow.
+
+Document `zbb run -- ./gradlew <task>` as the recommended way to debug Gradle
+tasks directly (e.g. when triaging plugin issues during migration).
 
 ---
 
@@ -759,27 +901,28 @@ These are tactical questions to resolve when starting Phase 2:
 
 | TS file/function | New Kotlin location | Notes |
 |---|---|---|
-| `Workspace.discoverWorkspaces` | `Workspace.kt` | Settings plugin uses this to call `include()` |
+| `Workspace.discoverWorkspaces` | `Workspace.kt` (in `zb.monorepo-base`) | Settings plugin uses this to call `include()` |
 | `Workspace.buildDependencyGraph` | `Workspace.kt` | Exposed via `MonorepoGraphService` BuildService |
 | `Workspace.topologicalSort` | not needed | Gradle task graph handles this |
 | `Workspace.getTransitiveDependents` | `Workspace.kt` | Used by ChangeDetector |
 | `ChangeDetector.detectChanges` | `ChangeDetector.kt` | Computed once per build via BuildService |
-| `ChangeDetector.findPackagesAffectedByRootDeps` | `ChangeDetector.kt` | Calls Kotlin Prepublish in --dry-run mode |
-| `GateStamp.computeSourceHash` | `GateStamp.kt` | Must match exactly — used by gate-stamp file |
-| `GateStamp.computeTestHash` | `GateStamp.kt` | Same |
-| `GateStamp.validatePackageStamp` | `GateStamp.kt` | All 4 result states preserved |
-| `GateStamp.buildPackageStampEntry` | `GateStamp.kt` | rootDeps resolution at write time |
-| `GateStamp.readGateStamp` / `writeGateStamp` | `GateStamp.kt` | Byte-equal JSON output (trailing newline) |
-| `Builder.runPhaseConcurrently` | not needed | Gradle's task graph handles concurrency |
-| `Builder.buildDockerImages` | `DockerBuildTask.kt` + `DockerSemaphore.kt` | BuildService caps concurrency |
+| `ChangeDetector.findPackagesAffectedByRootDeps` | `ChangeDetector.kt` | Calls in-process Kotlin Prepublish (no node subprocess) |
+| `GateStamp.computeSourceHash` | **update `zb.base.hashFiles`** | Backport `git ls-files` semantics |
+| `GateStamp.computeTestHash` | **update `zb.base.hashFiles`** | Same |
+| `GateStamp.validatePackageStamp` | **update `zb.base.checkGateStamp`** | Switch to 5-state model (VALID/TESTS_CHANGED/TESTS_FAILED/INVALID/MISSING) |
+| `GateStamp.buildPackageStampEntry` | **update `zb.base.writeGateStamp`** | Add rootDeps via in-process Prepublish.resolveRootDeps() |
+| `GateStamp.readGateStamp` / `writeGateStamp` | **update `zb.base`** + new root aggregator in `zb.monorepo-gate` | Byte-equal JSON output. Per-subproject Provider feeds root aggregator |
+| `Builder.runPhaseConcurrently` (scheduling) | not needed | Gradle task graph handles concurrency |
+| `Builder.runPhaseConcurrently` (TTY display) | **stays in zbb TS** | Fed by JSON-line events from Kotlin BuildEventListener (OQ7) |
+| `Builder.buildDockerImages` | existing `zb.typescript` + new `DockerSemaphore.kt` BuildService | Cap concurrency, honor `DOCKER_BUILD_CONCURRENCY` |
 | `Builder.injectRegistryForBuild` / `restoreRegistrySwap` | stays in zbb | Slot/env concern, runs before Gradle invoke |
-| `Builder.clean` | `CleanTask.kt` | Removes dist/, generated/, build/, tsconfig.tsbuildinfo |
-| `Builder.build` | `BuildTask.kt` per subproject | dependsOn wired via dep graph |
-| `Builder.test` | `TestTask.kt` per subproject | Same |
-| `Builder.gate` | `GateTask.kt` orchestrating build+test+stamp | Phase orchestration |
-| `Publisher.publish` | `PublishTask.kt` per subproject | + `RootPublishTask` for stack artifacts |
-| `Publisher.copyStackArtifacts` | `CopyStackArtifactsTask.kt` | Force-overwrite |
-| `Publisher.dispatchImageWorkflows` | `DispatchImageWorkflowTask.kt` | After publish completes |
+| `Builder.clean` | existing `zb.base.clean` task + monorepoClean wiring | No new task needed |
+| `Builder.build` | existing `zb.base.build` task + monorepoBuild wiring | No new task needed |
+| `Builder.test` | existing `zb.base.test` task + monorepoTest wiring | No new task needed |
+| `Builder.gate` | existing `zb.base.gate` task + monorepoGate wiring | No new task needed |
+| `Publisher.publish` | new `PublishPackageTask` per subproject (in `zb.monorepo-publish`) + monorepoPublish root | Existing `zb.base.publish` is too coupled to old NX flow — replace |
+| `Publisher.copyStackArtifacts` | new `CopyStackArtifactsTask` (root-level) | Force-overwrite |
+| `Publisher.dispatchImageWorkflows` | new `DispatchImageWorkflowTask` (root-level) | After publish completes |
 | `prepublish-standalone.js scanImports` | `Prepublish.kt scanImports()` | All 3 import regexes |
 | `prepublish-standalone.js scanShellScripts` | `Prepublish.kt scanShellScripts()` | 4 shell regexes |
 | `prepublish-standalone.js extractScriptDependencies` | `Prepublish.kt extractScriptDeps()` | Uses binMap |
@@ -790,8 +933,8 @@ These are tactical questions to resolve when starting Phase 2:
 | `prepublish-standalone.js main` resolution | `Prepublish.kt resolve()` | Priority order preserved |
 | `index.ts handleMonorepo` cleanse | stays in zbb | Q5 decision |
 | `index.ts handleMonorepo` preflight | stays in zbb | Q5 decision |
-| `index.ts handleMonorepo` registry guard | stays in zbb (also enforced in plugin) | Belt and suspenders for safety |
-| `index.ts handleMonorepo` routing | new routing layer in `index.ts` | Q7 decision |
+| `index.ts handleMonorepo` registry guard | stays in zbb | Plugin trusts zbb did its job |
+| `index.ts handleMonorepo` routing | new routing layer in `index.ts` | Q7 decision; spawns Gradle, tails event stream |
 
 ---
 
