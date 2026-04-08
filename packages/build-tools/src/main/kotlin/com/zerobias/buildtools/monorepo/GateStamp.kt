@@ -242,13 +242,14 @@ class StampValidator(
     }
 
     /**
-     * Stable JSON stringify of an arbitrary value (for override comparison).
-     * Strings come back as-is; everything else is JSON. Used to compare
-     * stamp-stored override versions against current root pkg overrides
-     * (which can be strings, objects, etc — see TS validatePackageStamp).
+     * Match JS `JSON.stringify(value)` for any value.
+     *
+     * The TS path stores override values as `JSON.stringify(rootOverrides[name])`
+     * — so a string "^3.0.6" becomes the literal string `"^3.0.6"` (with quotes),
+     * an object becomes `{"key":"val"}`, etc. This must match exactly for the
+     * rootDeps drift check to compare correctly against the stored value.
      */
     private fun jsonStringify(value: Any?): String {
-        return if (value is String) value
-        else overrideJson.writeValueAsString(value)
+        return overrideJson.writeValueAsString(value)
     }
 }
