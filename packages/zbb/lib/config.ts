@@ -104,6 +104,17 @@ export interface RepoConfig {
   ports?: { range: [number, number] };
   cleanse?: string[];
   monorepo?: MonorepoConfig;
+  /**
+   * Optional lifecycle delegation. When present, zbb commands like `zbb build`,
+   * `zbb gate`, etc. spawn the corresponding lifecycle string instead of
+   * running the legacy TS monorepo flow. Mirrors the per-stack `lifecycle:`
+   * block in stack `zbb.yaml` files — declarative command delegation,
+   * controlled by the repo, not hardcoded in zbb.
+   *
+   * For monorepo flows: typically points at `./gradlew monorepo*` tasks from
+   * the new zb.monorepo-* Gradle plugins.
+   */
+  lifecycle?: LifecycleConfig;
 }
 
 export interface UserConfig {
@@ -150,6 +161,11 @@ export interface LifecycleConfig {
   build?: string;
   test?: string;
   gate?: string;
+  /** Cheap pre-flight check (e.g., `./gradlew monorepoGateCheck`). Used when
+   *  the user runs `zbb gate --check`. Falls back to `gate` if not defined. */
+  gateCheck?: string;
+  clean?: string;
+  publish?: string;
   start?: string;
   stop?: string;
   health?: string | HealthCheckConfig;

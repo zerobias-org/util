@@ -168,66 +168,69 @@ export function isMonorepoCommand(command: string): boolean {
   return MONOREPO_COMMANDS.has(command);
 }
 
-// ── Gradle routing layer (Phase 2.5) ────────────────────────────────
+// ── Lifecycle delegation (Phase 2.5 — declarative routing) ──────────
+//
+// If `.zbb.yaml` defines a `lifecycle:` block (mirroring the per-stack
+// `lifecycle:` in stack zbb.yaml files), zbb commands like `zbb build`,
+// `zbb gate`, etc. delegate to the lifecycle string instead of running
+// the legacy TS monorepo flow. zbb is just a wrapper — the repo controls
+// what each command actually runs.
+//
+// zbb still applies cleanse + preflight + slot env before spawning, since
+// those are wrapper concerns. Flag passthrough for `--all` and `--base` is
+// appended as Gradle properties (since the new monorepo plugins read them
+// as `-Pmonorepo.all=true` / `-Pmonorepo.base=<ref>`). For non-Gradle
+// lifecycle commands, the repo can ignore those flags.
 
 /**
- * Map a zbb command to the corresponding Gradle task name in the new
- * `zb.monorepo-*` plugin set.
- *
- * Returns null if the command is not yet supported by the new Gradle path
- * (caller falls through to the legacy TS implementation).
+ * Look up a lifecycle command in the repo config for the given zbb command.
+ * Returns the command string or null if no entry is defined.
  */
-function gradleTaskFor(command: string, parsed: ParsedArgs): string | null {
-  switch (command) {
-    case 'gate':
-      return parsed.check ? 'monorepoGateCheck' : 'monorepoGate';
-    case 'build':
-      return 'monorepoBuild';
-    case 'test':
-      return 'monorepoTest';
-    case 'clean':
-      return 'monorepoClean';
-    // publish wired up after zb.monorepo-publish plugin is written
-    default:
-      return null;
+function lookupLifecycleCommand(
+  repoConfig: RepoConfig,
+  command: string,
+  parsed: ParsedArgs,
+): string | null {
+  const lifecycle = repoConfig.lifecycle;
+  if (!lifecycle) return null;
+
+  // gate --check uses gateCheck if defined, else falls back to gate
+  if (command === 'gate' && parsed.check && lifecycle.gateCheck) {
+    return lifecycle.gateCheck;
   }
+
+  const value = (lifecycle as Record<string, unknown>)[command];
+  return typeof value === 'string' ? value : null;
 }
 
 /**
- * Check whether this repo is wired up to the new Gradle monorepo plugins.
- * Looks for: gradlew at repo root + settings.gradle.kts that references
- * `zb.monorepo-base` (the marker that the new plugins are applied).
+ * Spawn a lifecycle command from the repo root, with stdio inherited and
+ * monorepo flag passthrough appended (--all → -Pmonorepo.all=true, etc).
+ * Exits with the command's exit code.
  */
-function repoSupportsGradleMonorepo(repoRoot: string): boolean {
-  const gradlew = join(repoRoot, 'gradlew');
-  if (!existsSync(gradlew)) return false;
-  const settingsFile = join(repoRoot, 'settings.gradle.kts');
-  if (!existsSync(settingsFile)) return false;
-  try {
-    const content = readFileSync(settingsFile, 'utf-8');
-    return content.includes('zb.monorepo-base');
-  } catch {
-    return false;
-  }
-}
+function spawnLifecycleAndExit(
+  repoRoot: string,
+  baseCommand: string,
+  parsed: ParsedArgs,
+): never {
+  const passthrough: string[] = [];
+  if (parsed.all) passthrough.push('-Pmonorepo.all=true');
+  if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
 
-/**
- * Spawn `./gradlew <task>` from the repo root with the parsed args mapped
- * into Gradle properties. Inherits stdio so the user sees gradle output
- * directly. Exits with the gradle exit code.
- *
- * Returns only if the spawn fails to start (e.g. gradlew missing).
- */
-function spawnGradleAndExit(repoRoot: string, task: string, parsed: ParsedArgs): never {
-  const gradleArgs: string[] = [task];
-  if (parsed.all) gradleArgs.push('-Pmonorepo.all=true');
-  if (parsed.base) gradleArgs.push(`-Pmonorepo.base=${parsed.base}`);
+  // The lifecycle command is a free-form shell string. Append our passthrough
+  // args at the end. The repo can use shell-quoting to ignore them if its
+  // command isn't gradle.
+  const fullCommand = passthrough.length > 0
+    ? `${baseCommand} ${passthrough.join(' ')}`
+    : baseCommand;
 
   if (parsed.verbose) {
-    console.log(`[zbb] routing to gradle: ./gradlew ${gradleArgs.join(' ')}`);
+    console.log(`[zbb] lifecycle '${fullCommand}'`);
   }
 
-  const result = spawnSync(join(repoRoot, 'gradlew'), gradleArgs, {
+  // Use shell so the lifecycle string can include redirects, pipes, &&, etc.
+  // Mirrors how stack lifecycle commands are executed.
+  const result = spawnSync('bash', ['-c', fullCommand], {
     cwd: repoRoot,
     stdio: 'inherit',
     env: process.env,
@@ -248,17 +251,18 @@ export async function handleMonorepo(
   const repoConfig = await loadRepoConfig(repoRoot);
   const config = repoConfig.monorepo!;
 
-  // ── Phase 2.5 routing: prefer the new Gradle path unless legacy override ──
+  // ── Lifecycle delegation: prefer .zbb.yaml lifecycle when defined ──
   //
-  // ZBB_USE_LEGACY_MONOREPO=1 forces the original TS code path. Otherwise,
-  // if the repo has gradlew + a settings.gradle.kts that wires up the new
-  // zb.monorepo-* plugins, AND the command has a Gradle equivalent, route
-  // to gradle. The TS path remains as a fallback for unsupported commands.
+  // ZBB_USE_LEGACY_MONOREPO=1 forces the legacy TS code path. Otherwise,
+  // if `.zbb.yaml` defines a `lifecycle:` entry for this command, spawn
+  // the lifecycle command instead of the TS handler. The repo controls
+  // exactly what runs — zbb is just a wrapper that adds slot env + cleanse
+  // + preflight + flag passthrough.
   const useLegacy = process.env.ZBB_USE_LEGACY_MONOREPO === '1';
-  if (!useLegacy && repoSupportsGradleMonorepo(repoRoot)) {
-    const task = gradleTaskFor(command, parsed);
-    if (task !== null) {
-      // Apply cleanse + preflight before spawning gradle (zbb owns those concerns)
+  if (!useLegacy) {
+    const lifecycleCommand = lookupLifecycleCommand(repoConfig, command, parsed);
+    if (lifecycleCommand !== null) {
+      // Apply cleanse + preflight before spawning (zbb owns those concerns)
       if (repoConfig.cleanse && repoConfig.cleanse.length > 0) {
         for (const varName of repoConfig.cleanse) {
           delete process.env[varName];
@@ -280,7 +284,7 @@ export async function handleMonorepo(
           }
         }
       }
-      spawnGradleAndExit(repoRoot, task, parsed);
+      spawnLifecycleAndExit(repoRoot, lifecycleCommand, parsed);
     }
   }
 
