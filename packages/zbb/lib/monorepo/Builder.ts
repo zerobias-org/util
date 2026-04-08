@@ -828,7 +828,7 @@ export async function build(ctx: BuildContext): Promise<Map<string, Record<strin
   const buildCache = readBuildCache(ctx.repoRoot);
   const sourceHashes = new Map<string, string>();
   for (const [name, pkg] of graph.packages) {
-    sourceHashes.set(name, computeSourceHash(pkg, config));
+    sourceHashes.set(name, computeSourceHash(pkg, config, ctx.repoRoot));
   }
 
   try {
@@ -1526,7 +1526,7 @@ export async function gate(ctx: BuildContext): Promise<void> {
   for (const name of affectedOrdered) {
     const pkg = graph.packages.get(name)!;
     const shortName = pkg.name.replace(/^@[^/]+\//, '');
-    const result = validatePackageStamp(pkg, existingStamp, config);
+    const result = validatePackageStamp(pkg, existingStamp, config, ctx.repoRoot);
 
     switch (result) {
       case GateStampResult.VALID:
@@ -1641,7 +1641,7 @@ export async function gate(ctx: BuildContext): Promise<void> {
       }
     }
 
-    stamp.packages[name] = buildPackageStampEntry(pkg, config, allTasks, tests);
+    stamp.packages[name] = buildPackageStampEntry(pkg, config, allTasks, tests, ctx.repoRoot);
   }
 
   // Print test summary — use parsed mocha totals for failed packages, suite counts for passed

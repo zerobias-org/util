@@ -473,7 +473,7 @@ export async function publish(opts: PublishOptions): Promise<void> {
   let stampValid = true;
   for (const [name, pkg] of graph.packages) {
     if (pkg.private) continue;
-    const result = validatePackageStamp(pkg, stamp, config);
+    const result = validatePackageStamp(pkg, stamp, config, repoRoot);
     const sn = shortName(pkg);
 
     if (result === GateStampResult.VALID) {
@@ -645,7 +645,7 @@ export async function publish(opts: PublishOptions): Promise<void> {
         const info = versionMap.get(name)!;
         if (currentStamp.packages[name]) {
           currentStamp.packages[name].version = info.version;
-          currentStamp.packages[name].sourceHash = computeSourceHash(pkg, config);
+          currentStamp.packages[name].sourceHash = computeSourceHash(pkg, config, repoRoot);
         }
       }
       writeGateStamp(repoRoot, currentStamp);

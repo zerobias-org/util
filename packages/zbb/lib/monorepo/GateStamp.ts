@@ -7,6 +7,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { MonorepoConfig } from '../config.js';
@@ -76,10 +77,78 @@ function walkDir(dir: string): string[] {
  * Compute SHA-256 hash of a package's source files and directories.
  * Mirrors the Gradle `hashFiles()` function.
  */
-export function computeSourceHash(pkg: WorkspacePackage, config: MonorepoConfig): string {
+/** Cache for per-package resolved root deps — computed once per gate run */
+const resolvedRootDepsCache = new Map<string, string>();
+
+/**
+ * Compute a hash of the root dependencies that a specific package resolves to.
+ * Uses prepublish-standalone --dry-run to determine which root deps this package needs.
+ */
+function getPackageRootDepsHash(pkg: WorkspacePackage, repoRoot: string): string {
+  const cached = resolvedRootDepsCache.get(pkg.name);
+  if (cached !== undefined) return cached;
+
+  const rootPkgPath = join(repoRoot, 'package.json');
+  if (!existsSync(rootPkgPath)) {
+    resolvedRootDepsCache.set(pkg.name, '');
+    return '';
+  }
+
+  const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf-8'));
+  const allRootDeps: Record<string, string> = {
+    ...(rootPkg.dependencies ?? {}),
+    ...(rootPkg.devDependencies ?? {}),
+  };
+  const rootOverrides: Record<string, unknown> = rootPkg.overrides ?? {};
+
+  // Run prepublish-standalone --dry-run to find which root deps this package uses
+  const prepubScript = join(repoRoot, 'node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.js');
+  let resolvedDeps: Record<string, string> = {};
+  let resolvedOverrides: Record<string, unknown> = {};
+
+  if (existsSync(prepubScript)) {
+    try {
+      const output = execFileSync('node', [prepubScript, pkg.dir, repoRoot, '--dry-run'], {
+        encoding: 'utf-8',
+        timeout: 30_000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      // Parse resolved deps from dry-run output
+      const depsMatch = output.match(/Dependencies that would be included:\n([\s\S]*?)(?:\n\n|\nOverrides|$)/);
+      if (depsMatch) {
+        for (const line of depsMatch[1].split('\n')) {
+          const m = line.match(/^\s+(\S+):\s+(\S+)/);
+          if (m && allRootDeps[m[1]]) resolvedDeps[m[1]] = allRootDeps[m[1]];
+        }
+      }
+      const overridesMatch = output.match(/Overrides that would be included:\n([\s\S]*?)(?:\n\n|$)/);
+      if (overridesMatch) {
+        for (const line of overridesMatch[1].split('\n')) {
+          const m = line.match(/^\s+(\S+):/);
+          if (m && rootOverrides[m[1]]) resolvedOverrides[m[1]] = rootOverrides[m[1]];
+        }
+      }
+    } catch { /* prepublish failed — fall back to empty */ }
+  }
+
+  const digest = createHash('sha256');
+  digest.update(JSON.stringify(resolvedDeps));
+  digest.update(JSON.stringify(resolvedOverrides));
+  const hash = digest.digest('hex');
+  resolvedRootDepsCache.set(pkg.name, hash);
+  return hash;
+}
+
+export function computeSourceHash(pkg: WorkspacePackage, config: MonorepoConfig, repoRoot?: string): string {
   const digest = createHash('sha256');
   const sourceFiles = config.sourceFiles ?? ['tsconfig.json'];
   const sourceDirs = config.sourceDirs ?? ['src'];
+
+  // Include this package's resolved root deps in the hash
+  if (repoRoot) {
+    digest.update(getPackageRootDepsHash(pkg, repoRoot));
+  }
 
   // Hash individual source files
   for (const name of sourceFiles) {
@@ -206,6 +275,7 @@ export function validatePackageStamp(
   pkg: WorkspacePackage,
   stamp: GateStamp | null,
   config: MonorepoConfig,
+  repoRoot?: string,
 ): GateStampResult {
   if (!stamp) return GateStampResult.MISSING;
 
@@ -213,7 +283,7 @@ export function validatePackageStamp(
   if (!entry) return GateStampResult.MISSING;
 
   // 1. Verify sourceHash — source code hasn't changed
-  const currentHash = computeSourceHash(pkg, config);
+  const currentHash = computeSourceHash(pkg, config, repoRoot);
   if (entry.sourceHash !== currentHash) {
     return GateStampResult.INVALID;
   }
@@ -266,7 +336,7 @@ export function validateStamp(
   for (const name of affectedPackages) {
     const pkg = graph.packages.get(name);
     if (!pkg) continue;
-    results.set(name, validatePackageStamp(pkg, stamp, config));
+    results.set(name, validatePackageStamp(pkg, stamp, config, repoRoot));
   }
 
   return results;
@@ -293,10 +363,11 @@ export function buildPackageStampEntry(
   config: MonorepoConfig,
   taskResults: Record<string, 'passed' | 'failed' | 'skipped' | 'not-found'>,
   testResults: Record<string, TestSuiteEntry>,
+  repoRoot?: string,
 ): PackageStampEntry {
   return {
     version: pkg.version,
-    sourceHash: computeSourceHash(pkg, config),
+    sourceHash: computeSourceHash(pkg, config, repoRoot),
     testHash: computeTestHash(pkg),
     tasks: taskResults,
     tests: testResults,
