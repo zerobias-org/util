@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "main",
-  "timestamp": "2026-04-08T08:33:04.723Z",
+  "timestamp": "2026-04-08T08:33:39.417Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.9",
@@ -31,6 +31,13 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/eslint-config": {
@@ -61,6 +68,16 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@typescript-eslint/eslint-plugin": "^8.53.0",
+        "@typescript-eslint/parser": "^8.53.0",
+        "eslint": "^10.1.0",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/module-test-client": {
@@ -143,8 +160,8 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.26",
-      "sourceHash": "bd3ace8dadffe40fdd9256a0ff0b9aebae94e71fb959838ea4ad2bba79c60d7a",
+      "version": "0.3.27",
+      "sourceHash": "7bdb33e852fec65efef62f22c23d711035fef7f1e273172395946986daa47a3f",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -208,6 +225,14 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "^1.13.5",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/util-spectral-config": {
@@ -238,6 +263,16 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@stoplight/json-ref-resolver": "^3.1.6",
+        "@zerobias-org/eslint-config": "^1.0.31",
+        "@zerobias-org/types-format-spectral-ruleset": "^1.0.37",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/util-api-invoker-isomorphic": {
@@ -268,6 +303,16 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "^1.13.5",
+        "form-data": "^4.0.0",
+        "qs": "^6.14.0",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/util-api-client-base": {
@@ -377,6 +422,14 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "^1.13.5",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"2.8.3\""
       }
     },
     "@zerobias-org/util-codegen": {
@@ -446,6 +499,16 @@
           "ran": 0,
           "status": "skipped"
         }
+      },
+      "rootDeps": {
+        "@zerobias-com/platform-sdk": "^1.1.5",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "^1.13.5",
+        "csv-parse": "^6.0.0",
+        "yaml": "\"2.8.3\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\""
       }
     },
     "@zerobias-org/data-utils": {
