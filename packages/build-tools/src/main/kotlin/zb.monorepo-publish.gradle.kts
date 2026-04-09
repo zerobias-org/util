@@ -153,6 +153,7 @@ val publishPlan = tasks.register("publishPlan") {
     doLast {
         val service = graphService.get()
         val rootDir = rootProject.projectDir
+        val mapper = ObjectMapper().registerKotlinModule()
 
         val plan = PublishChangeDetector.detectChanges(
             repoRoot = rootDir,
@@ -161,7 +162,12 @@ val publishPlan = tasks.register("publishPlan") {
             registry = service.config.registry,
         )
 
+        // Always write the plan file (truncate if empty) so per-package
+        // tasks see the CURRENT plan, not a stale one from a prior run.
+        publishPlanFile.parentFile.mkdirs()
+
         if (plan.publishOrdered.isEmpty()) {
+            publishPlanFile.writeText("[]\n")
             logger.lifecycle("[publish] no packages have changes since their last published tag")
             return@doLast
         }
@@ -199,8 +205,6 @@ val publishPlan = tasks.register("publishPlan") {
         }
 
         // Write the plan to a side file so per-package tasks can read it
-        val mapper = ObjectMapper().registerKotlinModule()
-        publishPlanFile.parentFile.mkdirs()
         val planData = plan.publishOrdered.map { name ->
             mapOf(
                 "name" to name,
@@ -212,12 +216,101 @@ val publishPlan = tasks.register("publishPlan") {
     }
 }
 
+// ── dispatchImageWorkflows — trigger CI image builds for published packages ──
+
+val dispatchImageWorkflows = tasks.register("dispatchImageWorkflows") {
+    group = "monorepo"
+    description = "Dispatch GitHub workflow for each published package with an image config"
+
+    doLast {
+        if (publishDryRun) {
+            logger.lifecycle("[images] DRY RUN — skipping workflow dispatch")
+            return@doLast
+        }
+
+        val service = graphService.get()
+        val images = service.config.images
+        if (images.isEmpty()) {
+            logger.lifecycle("[images] no image configs defined — skipping dispatch")
+            return@doLast
+        }
+
+        // Read the publish plan to know which packages were actually published
+        if (!publishPlanFile.exists()) return@doLast
+        val planJson = publishPlanFile.readText()
+
+        // Detect GitHub repo from git remote
+        val githubRepo = detectGithubRepo(rootProject.projectDir)
+        if (githubRepo == null) {
+            logger.warn("[images] could not detect GitHub repo from git remote — skipping dispatch")
+            return@doLast
+        }
+
+        var dispatched = 0
+        for ((relDir, imageConfig) in images) {
+            val workflow = imageConfig.workflow ?: continue
+            // Find the package with this relDir
+            val pkg = service.graph.packages.values.find { it.relDir == relDir } ?: continue
+            // Only dispatch if this package was in the publish plan
+            if (!planJson.contains(pkg.name)) continue
+
+            val version = service.graph.packages[pkg.name]?.version ?: continue
+            logger.lifecycle("[images] dispatching ${imageConfig.name} (${workflow}) version=$version")
+
+            try {
+                val proc = ProcessBuilder(
+                    "gh", "workflow", "run", workflow,
+                    "--repo", githubRepo,
+                    "-f", "version=$version",
+                )
+                    .directory(rootProject.projectDir)
+                    .redirectErrorStream(false)
+                    .start()
+                val stderr = proc.errorStream.bufferedReader().readText()
+                val ok = proc.waitFor(30, java.util.concurrent.TimeUnit.SECONDS) && proc.exitValue() == 0
+                if (ok) {
+                    logger.lifecycle("[images]   ✓ ${imageConfig.name}")
+                    dispatched += 1
+                } else {
+                    logger.warn("[images]   ✗ ${imageConfig.name}: ${stderr.take(300)}")
+                }
+            } catch (e: Exception) {
+                logger.warn("[images]   ✗ ${imageConfig.name}: ${e.message}")
+            }
+        }
+        if (dispatched > 0) {
+            logger.lifecycle("[images] dispatched $dispatched workflow(s)")
+        }
+    }
+}
+
+fun detectGithubRepo(repoRoot: java.io.File): String? {
+    return try {
+        val proc = ProcessBuilder("git", "remote", "get-url", "origin")
+            .directory(repoRoot)
+            .redirectErrorStream(false)
+            .start()
+        val output = proc.inputStream.bufferedReader().readText().trim()
+        proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        // SSH: git@github.com:owner/repo.git
+        val sshMatch = Regex("""github\.com[:/]([^/]+/[^/.]+)""").find(output)
+        if (sshMatch != null) return sshMatch.groupValues[1]
+        // HTTPS: https://github.com/owner/repo.git
+        val httpsMatch = Regex("""github\.com/([^/]+/[^/.]+)""").find(output)
+        if (httpsMatch != null) return httpsMatch.groupValues[1]
+        null
+    } catch (_: Exception) {
+        null
+    }
+}
+
 // ── Root-level monorepoPublish (deps wired in projectsEvaluated) ──
 
 val monorepoPublish = tasks.register("monorepoPublish") {
     group = "monorepo"
     description = "Publish changed workspace packages (gated by publishGuard + publishPlan)"
     dependsOn(publishGuard, publishPlan)
+    finalizedBy(dispatchImageWorkflows)
 }
 
 // ── Per-subproject task wiring (after projectsEvaluated) ────────────
