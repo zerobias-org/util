@@ -150,7 +150,7 @@ export async function spawnLifecycleAndExit(
   }
 
   // Use the project-centric display for commands that produce per-task events
-  // (build, test, gate). Skip for clean (single root task — no per-task events)
+  // (build, test, gate). Skip clean (single root task — no per-task events)
   // and gate --check (fast file read — no point spinning up the display).
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate']);

@@ -174,25 +174,30 @@ tasks.register("monorepoClean") {
 
 /**
  * Returns true if this subproject already exposes its own build tasks
- * (via zb.typescript-service, a standalone build.gradle that applies
- * `java`/`kotlin`/etc., or any other plugin that registered the same
- * lifecycle task names we'd otherwise create). In that case we should
- * NOT register fallback Exec tasks — registering a `test` task on a
- * project that already has one (e.g. from `apply plugin: 'java'`)
- * fails evaluation with "Cannot add task 'test' as a task with that
- * name already exists".
+ * that would collide with the npm-script Exec tasks we'd otherwise
+ * register. Two known cases:
  *
- * The check looks for the zb.typescript-service marker first, and
- * falls back to checking whether ANY of the standard lifecycle phase
- * task names already exist on the subproject.
+ *   1. zb.typescript-service was applied — exposes npmTranspile et al.
+ *      Marker: presence of `npmTranspile`.
+ *   2. A standalone build.gradle applied `java`/`kotlin`/etc. — those
+ *      plugins register a `test` task that would collide with our
+ *      `register<Exec>("test")`. Marker: presence of `compileJava` or
+ *      `compileKotlin` (proves the plugin was applied; we can't just
+ *      check for `test` because the rootProject `id("base")` plugin
+ *      gives every subproject a `build`/`assemble`/`check`/`clean`
+ *      task but NOT a `test` task — only language plugins do).
+ *
+ * NOTE: do NOT broaden this check to include base-plugin task names
+ * like `build`, `clean`, `assemble`, or `check`. They are present on
+ * every subproject when the root applies `id("base")` and would cause
+ * us to incorrectly skip ALL subprojects.
  */
 fun hasExistingBuildInfra(subproject: org.gradle.api.Project): Boolean {
     if (subproject.tasks.findByName("npmTranspile") != null) return true
-    val phaseNames = setOf(
-        "lint", "generate", "compile", "transpile", "build",
-        "test", "clean", "publish", "copyDeps",
-    )
-    return phaseNames.any { subproject.tasks.findByName(it) != null }
+    if (subproject.tasks.findByName("compileJava") != null) return true
+    if (subproject.tasks.findByName("compileKotlin") != null) return true
+    if (subproject.tasks.findByName("compileGroovy") != null) return true
+    return false
 }
 
 gradle.projectsEvaluated {

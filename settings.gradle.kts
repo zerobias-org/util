@@ -54,6 +54,10 @@ buildscript {
                     ?: ""
             }
         }
+        // gradle-node-plugin (a transitive of build-tools) lives at the
+        // Gradle Plugin Portal, not Maven Central. Without this repo CI
+        // resolves build-tools fine but fails on the transitive dep.
+        gradlePluginPortal()
         mavenCentral()
     }
     dependencies {
