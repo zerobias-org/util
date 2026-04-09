@@ -174,11 +174,25 @@ tasks.register("monorepoClean") {
 
 /**
  * Returns true if this subproject already exposes its own build tasks
- * (via zb.typescript-service or similar), in which case we should NOT
- * register fallback Exec tasks.
+ * (via zb.typescript-service, a standalone build.gradle that applies
+ * `java`/`kotlin`/etc., or any other plugin that registered the same
+ * lifecycle task names we'd otherwise create). In that case we should
+ * NOT register fallback Exec tasks — registering a `test` task on a
+ * project that already has one (e.g. from `apply plugin: 'java'`)
+ * fails evaluation with "Cannot add task 'test' as a task with that
+ * name already exists".
+ *
+ * The check looks for the zb.typescript-service marker first, and
+ * falls back to checking whether ANY of the standard lifecycle phase
+ * task names already exist on the subproject.
  */
 fun hasExistingBuildInfra(subproject: org.gradle.api.Project): Boolean {
-    return subproject.tasks.findByName("npmTranspile") != null
+    if (subproject.tasks.findByName("npmTranspile") != null) return true
+    val phaseNames = setOf(
+        "lint", "generate", "compile", "transpile", "build",
+        "test", "clean", "publish", "copyDeps",
+    )
+    return phaseNames.any { subproject.tasks.findByName(it) != null }
 }
 
 gradle.projectsEvaluated {

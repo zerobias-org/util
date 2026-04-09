@@ -151,3 +151,4 @@ build/
 
 # zbb
 .zbb-build-cache.json
+.zbb-monorepo
