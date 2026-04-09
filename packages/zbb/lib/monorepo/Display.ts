@@ -384,29 +384,85 @@ export class MonorepoDisplay {
     //   completed failed:  "name 1.2s ✗"         (red)
     //   cached/up-to-date: "name ◆ cached"       (blue/dim)
     //   skipped:           "name · skipped"      (dim)
+    //
+    // Each step is also tagged with its plain-text width, used below to
+    // truncate the timeline so the rendered row fits in the terminal width
+    // and never wraps. Wrapping is catastrophic for the cursor-up render
+    // strategy: a wrapped line consumes multiple terminal rows but the
+    // cursor math only counts logical rows, so the cursor moves up too few
+    // rows and each render leaves orphaned content scrolling off-screen.
     const now = Date.now();
-    const stepParts = state.steps.map(s => {
+    const stepParts: Array<{ rendered: string; width: number }> = state.steps.map(s => {
       if (s.status === 'running') {
         // Clamp to >= 0 in case the JVM-emitted ts is slightly ahead of
         // the Node clock (cross-process clock skew).
         const elapsed = (Math.max(0, now - s.startedAt) / 1000).toFixed(1);
-        return `${COLOR.cyan}${s.name} ${elapsed}s${COLOR.reset}`;
+        const text = `${s.name} ${elapsed}s`;
+        return { rendered: `${COLOR.cyan}${text}${COLOR.reset}`, width: text.length };
       }
       const dur = s.durationMs != null ? `${(s.durationMs / 1000).toFixed(1)}s` : '?';
       if (s.status === 'failed') {
-        return `${COLOR.red}${s.name} ${dur} ✗${COLOR.reset}`;
+        const text = `${s.name} ${dur} ✗`;
+        return { rendered: `${COLOR.red}${text}${COLOR.reset}`, width: text.length };
       }
       if (s.status === 'skipped') {
-        return `${COLOR.dim}${s.name} skipped${COLOR.reset}`;
+        const text = `${s.name} skipped`;
+        return { rendered: `${COLOR.dim}${text}${COLOR.reset}`, width: text.length };
       }
       if (s.status === 'cached') {
-        return `${COLOR.blue}${s.name} ◆ cached${COLOR.reset}`;
+        const text = `${s.name} ◆ cached`;
+        return { rendered: `${COLOR.blue}${text}${COLOR.reset}`, width: text.length };
       }
       // passed
-      return `${COLOR.green}${s.name} ${dur} ✓${COLOR.reset}`;
+      const text = `${s.name} ${dur} ✓`;
+      return { rendered: `${COLOR.green}${text}${COLOR.reset}`, width: text.length };
     });
 
-    const timeline = stepParts.join(`  ${COLOR.dim}·${COLOR.reset}  `);
+    // Layout: "  <icon> <name>   <timeline>"
+    // Plain-text width of the prefix (icon + space + padded name + 3 spaces).
+    const prefixWidth = 2 + 1 + 1 + this.maxNameLen + 3;
+    const sepPlain = '  ·  ';
+    const sepRendered = `  ${COLOR.dim}·${COLOR.reset}  `;
+
+    // Reserve a small right margin so we never sit *exactly* at the terminal
+    // edge — some terminals auto-wrap on the last column even when the line
+    // is empty after it. Default to 120 cols if stdout has no columns info.
+    const maxCols = (process.stdout.columns ?? 120) - 1;
+    const budget = Math.max(20, maxCols - prefixWidth);
+
+    // Greedily emit step pills until we'd overflow `budget`. If we have to
+    // drop steps, append a dim "+N more" suffix so the user knows.
+    let timeline = '';
+    let used = 0;
+    let included = 0;
+    for (const part of stepParts) {
+      const sepW = included === 0 ? 0 : sepPlain.length;
+      if (used + sepW + part.width > budget) break;
+      if (included > 0) timeline += sepRendered;
+      timeline += part.rendered;
+      used += sepW + part.width;
+      included += 1;
+    }
+    const dropped = stepParts.length - included;
+    if (dropped > 0) {
+      const suffix = ` +${dropped}`;
+      // Trim earlier pills if needed to fit the suffix
+      while (used + sepPlain.length + suffix.length > budget && included > 0) {
+        // Strip trailing pill+sep — easier to just rebuild than parse ANSI
+        timeline = '';
+        used = 0;
+        included -= 1;
+        for (let i = 0; i < included; i += 1) {
+          const part = stepParts[i];
+          const sepW = i === 0 ? 0 : sepPlain.length;
+          if (i > 0) timeline += sepRendered;
+          timeline += part.rendered;
+          used += sepW + part.width;
+        }
+      }
+      if (included > 0) timeline += sepRendered;
+      timeline += `${COLOR.dim}+${dropped}${COLOR.reset}`;
+    }
 
     return `  ${iconColor}${icon} ${namePad}${COLOR.reset}   ${timeline}`;
   }

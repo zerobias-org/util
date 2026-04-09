@@ -251,6 +251,43 @@ block to load the build-tools jar via `flatDir` (pointing at `build/libs/`),
 then calls `Workspace.discoverWorkspaces()` directly. The user manually
 rebuilds the jar after editing build-tools (`./gradlew jar`).
 
+**1a. Repos with per-package `apply(plugin = "zb.typescript-service")`**
+
+Hit while migrating com/hydra-service. The settings buildscript loads
+`build-tools-*.jar` via `flatDir/files()` which has **no transitives**. Since
+Gradle uses parent-first classloading, when a subproject's buildscript loads
+`build-tools` via Maven, the build-tools classes are already in the parent
+(settings) classloader — and the parent looks for transitive classes like
+`com.github.gradle.node.NodeExtension` which don't exist there.
+
+Symptom: `NoClassDefFoundError: com/github/gradle/node/NodeExtension` at
+`zb.typescript-service.gradle.kts:53` (the `node { ... }` block).
+
+Fix: in the repo's `settings.gradle.kts` buildscript block, add
+`gradlePluginPortal()` to the repos and explicitly classpath the missing
+transitives:
+
+```kotlin
+buildscript {
+    repositories {
+        // ... existing repos
+        gradlePluginPortal()  // node-gradle-plugin lives here
+        mavenCentral()
+    }
+    dependencies {
+        // ... existing build-tools classpath
+        // build-tools' transitive runtime deps (flatDir doesn't expose them)
+        classpath("com.github.node-gradle:gradle-node-plugin:7.1.0")
+        classpath("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
+        classpath("org.yaml:snakeyaml:2.2")
+    }
+}
+```
+
+Apply this to every repo that has per-package gradle files using
+`zb.typescript-service` (currently: dana, fileservice, hub, hydra-service,
+platform). com/util pilot doesn't need it because no per-package gradle files.
+
 **2. Registry injection bug fixes**
 
 The legacy `lib/stack/Stack.ts injectRegistryNpmrc` has 3 bugs that we
