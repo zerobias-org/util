@@ -11,7 +11,7 @@ version = run {
     val token = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
     if (token.isEmpty()) return@run "$baseVersion.0"
 
-    val repoUrl = "https://maven.pkg.github.com/zerobias-com/util"
+    val repoUrl = "https://maven.pkg.github.com/zerobias-org/util"
     val metadataUrl = "$repoUrl/com/zerobias/build-tools/maven-metadata.xml"
     try {
         val url = uri(metadataUrl).toURL()
@@ -75,9 +75,9 @@ publishing {
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/zerobias-com/util")
+            url = uri("https://maven.pkg.github.com/zerobias-org/util")
             credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: "zerobias-com"
+                username = System.getenv("GITHUB_ACTOR") ?: "zerobias-org"
                 password = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
             }
         }
