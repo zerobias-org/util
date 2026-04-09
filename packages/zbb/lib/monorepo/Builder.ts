@@ -4,7 +4,7 @@
  */
 
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync, renameSync, copyFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { type MonorepoConfig, getZbbDir } from '../config.js';
@@ -127,7 +127,6 @@ const isCI = process.env.CI === 'true';
 // ── Registry Integration ────────────────────────────────────────────
 
 interface RegistrySwap {
-  lockfileBackup?: string;
   taintedPackages: string[];
 }
 
@@ -167,14 +166,6 @@ export function injectRegistryForBuild(repoRoot: string): RegistrySwap {
   }
   console.log(`  [registry] Routing scoped packages to local Verdaccio (${registryUrl})`);
 
-  // Backup package-lock.json (npm install may rewrite it with Verdaccio URLs)
-  const lockfile = join(repoRoot, 'package-lock.json');
-  const lockBackup = lockfile + '.zbb-backup';
-  if (existsSync(lockfile)) {
-    copyFileSync(lockfile, lockBackup);
-    swap.lockfileBackup = lockBackup;
-  }
-
   // Taint node_modules for locally-published packages
   for (const pkg of publishes) {
     const modDir = join(repoRoot, 'node_modules', pkg.name);
@@ -189,22 +180,13 @@ export function injectRegistryForBuild(repoRoot: string): RegistrySwap {
 }
 
 /**
- * Restore .npmrc and package-lock.json after build.
+ * Clear registry routing after build.
  */
 export function restoreRegistrySwap(swap: RegistrySwap, repoRoot: string): void {
   // Clear scoped registry env vars
   const scopes = ['zerobias-com', 'zerobias-org', 'auditlogic', 'auditmation', 'devsupply'];
   for (const scope of scopes) {
     delete process.env[`npm_config_@${scope}:registry`];
-  }
-
-  if (swap.lockfileBackup) {
-    const lockfile = join(repoRoot, 'package-lock.json');
-    try {
-      if (existsSync(lockfile)) rmSync(lockfile);
-      renameSync(swap.lockfileBackup, lockfile);
-      console.log('  [registry] Restored package-lock.json');
-    } catch { /* ignore */ }
   }
 }
 
@@ -786,7 +768,7 @@ export async function clean(ctx: BuildContext): Promise<void> {
     }
   }
   // Clean zbb backup files, build cache, and gate stamp
-  for (const file of ['package-lock.json.zbb-backup', '.zbb-build-cache.json', 'gate-stamp.json']) {
+  for (const file of ['.zbb-build-cache.json', 'gate-stamp.json']) {
     const target = join(repoRoot, file);
     if (existsSync(target)) { rmSync(target); rootCleaned += 1; }
   }
