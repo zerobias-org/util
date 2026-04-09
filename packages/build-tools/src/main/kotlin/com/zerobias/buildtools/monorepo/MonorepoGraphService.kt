@@ -8,7 +8,7 @@ import org.yaml.snakeyaml.Yaml
 import java.io.File
 
 /**
- * Per-image config from `.zbb.yaml` `monorepo.images.<relDir>:` block.
+ * Per-image config from `zbb.yaml` `monorepo.images.<relDir>:` block.
  *
  * Example:
  *   monorepo:
@@ -28,9 +28,9 @@ data class DockerImageConfig(
 )
 
 /**
- * Configuration loaded from `.zbb.yaml` `monorepo:` block.
+ * Configuration loaded from `zbb.yaml` `monorepo:` block.
  *
- * Defaults match what `lib/monorepo/index.ts` provides when no config is set.
+ * Defaults match what the legacy TS path used to provide when no config was set.
  */
 data class MonorepoConfig(
     val sourceFiles: List<String> = listOf("tsconfig.json"),
@@ -44,12 +44,12 @@ data class MonorepoConfig(
 )
 
 /**
- * Read `.zbb.yaml` from the repo root and return the parsed monorepo config.
+ * Read `zbb.yaml` from the repo root and return the parsed monorepo config.
  * Returns defaults if the file is missing or has no `monorepo:` block.
  */
 @Suppress("UNCHECKED_CAST")
 fun loadMonorepoConfig(repoRoot: File): MonorepoConfig {
-    val zbbFile = File(repoRoot, ".zbb.yaml")
+    val zbbFile = File(repoRoot, "zbb.yaml")
     if (!zbbFile.exists()) return MonorepoConfig()
     return try {
         val yaml = Yaml().load<Map<String, Any?>>(zbbFile.readText())

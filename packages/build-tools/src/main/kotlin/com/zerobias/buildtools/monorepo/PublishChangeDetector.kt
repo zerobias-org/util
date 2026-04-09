@@ -10,7 +10,7 @@ import java.io.File
  *   2. If no tag → never published → always include
  *   3. If tag found → git diff since that tag for the package's dir
  *   4. Filter out docs (.md) and CI (.github/, .claude/) changes
- *   5. Stack package: also check root trigger files (zbb.yaml, .zbb.yaml, test/)
+ *   5. Stack package: also check root trigger files (zbb.yaml, test/)
  *   6. Expand to transitive dependents
  *
  * Then version resolution per package:
@@ -35,7 +35,7 @@ object PublishChangeDetector {
         val bumped: Boolean,
     )
 
-    private val STACK_TRIGGER_PATTERNS = listOf("zbb.yaml", ".zbb.yaml", "test/")
+    private val STACK_TRIGGER_PATTERNS = listOf("zbb.yaml", "test/")
 
     /**
      * Detect which packages need publishing and resolve their versions.

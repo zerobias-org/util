@@ -47,7 +47,7 @@ class StampValidatorIntegrationTest {
         // (sourceFiles defaults to [tsconfig.json], sourceDirs to [src])
         val computedHash = SourceHasher.hashSources(
             packageDir = pkgDir,
-            // From com/util/.zbb.yaml monorepo block
+            // From com/util/zbb.yaml monorepo block
             sourceFiles = listOf("tsconfig.json", "api.yml", "package.json"),
             sourceDirs = listOf("src"),
         )
@@ -98,7 +98,7 @@ class StampValidatorIntegrationTest {
         val rootPkg: Map<String, Any?> = mapper.readValue(rootPkgFile)
 
         val validator = StampValidator(
-            // From com/util/.zbb.yaml monorepo block
+            // From com/util/zbb.yaml monorepo block
             sourceFiles = listOf("tsconfig.json", "api.yml", "package.json"),
             sourceDirs = listOf("src"),
             testPhases = setOf("test"),

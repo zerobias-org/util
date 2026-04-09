@@ -34,7 +34,7 @@ object ChangeDetector {
     private val mapper = ObjectMapper().registerKotlinModule()
 
     /** Root files that always invalidate ALL packages */
-    private val ROOT_TRIGGER_ALL = setOf("tsconfig.json", ".zbb.yaml")
+    private val ROOT_TRIGGER_ALL = setOf("tsconfig.json", "zbb.yaml")
 
     /** Root files that need targeted analysis (which packages use the changed deps?) */
     private val ROOT_TRIGGER_TARGETED = setOf("package.json", "package-lock.json")

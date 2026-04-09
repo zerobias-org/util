@@ -66,9 +66,18 @@ export interface MonorepoImageConfig {
   workflow?: string;
 }
 
+/**
+ * Monorepo orchestration block, consumed by the Gradle plugins
+ * (zb.monorepo-base/-build/-gate/-publish via MonorepoGraphService.kt).
+ *
+ * Phase 3: zbb's TS layer no longer reads this directly — the legacy
+ * Builder.ts/Publisher.ts code that consumed enabled/gatePreflight/
+ * testDatabase has been deleted. The fields below are still parsed by
+ * Gradle. Repos that need test-database provisioning should write a
+ * shell wrapper around `./gradlew monorepoGate` and reference it from
+ * `lifecycle.gate` instead.
+ */
 export interface MonorepoConfig {
-  /** Enable monorepo mode (required when gradlew coexists with workspaces) */
-  enabled: boolean;
   /** npm registry for publish (default: from .npmrc / publishConfig) */
   registry?: string;
   /** Source directories to hash per package (default: ["src"]) */
@@ -85,17 +94,6 @@ export interface MonorepoConfig {
   images?: Record<string, MonorepoImageConfig>;
   /** GitHub repository (owner/repo) for workflow dispatch (default: auto-detected from git remote) */
   githubRepo?: string;
-  /** Test database provisioning via Neon branching */
-  testDatabase?: {
-    /** Database provider (currently only 'neon') */
-    provider: 'neon';
-    /** Neon parent branch to create ephemeral branches from */
-    parentBranch: string;
-    /** Workspace dirs whose tests need a database */
-    packages: string[];
-  };
-  /** Extra preflight checks required before gate/test (e.g., Vault, DB connectivity) */
-  gatePreflight?: ToolRequirement[];
 }
 
 export interface RepoConfig {
@@ -248,13 +246,15 @@ export function getUserConfigPath(): string {
 }
 
 /**
- * Walk up from startDir looking for .zbb.yaml (repo root marker).
- * Also checks for gradlew as fallback repo root indicator.
+ * Walk up from startDir looking for zbb.yaml (the merged single-file
+ * config — Phase 3 model). Falls back to gradlew as a repo root
+ * indicator for non-zbb repos that still want the smart Gradle wrapper
+ * behaviour. Returns null if neither marker is found.
  */
 export function findRepoRoot(startDir: string): string | null {
   let dir = startDir;
   while (true) {
-    if (existsSync(join(dir, '.zbb.yaml'))) return dir;
+    if (existsSync(join(dir, 'zbb.yaml'))) return dir;
     if (existsSync(join(dir, 'gradlew'))) return dir;
     const parent = resolve(dir, '..');
     if (parent === dir) return null;
@@ -270,7 +270,10 @@ export async function loadUserConfig(): Promise<UserConfig> {
 }
 
 export async function loadRepoConfig(repoRoot: string): Promise<RepoConfig> {
-  return loadYamlOrDefault<RepoConfig>(join(repoRoot, '.zbb.yaml'), {});
+  // Phase 3: the merged single-file config lives at repoRoot/zbb.yaml.
+  // The same file is also a stack manifest — see loadStackManifest below.
+  // Both functions parse different field subsets of the same file.
+  return loadYamlOrDefault<RepoConfig>(join(repoRoot, 'zbb.yaml'), {});
 }
 
 export async function loadProjectConfig(projectDir: string): Promise<ProjectConfig> {
