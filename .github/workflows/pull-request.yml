@@ -17,10 +17,10 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   READ_TOKEN: ${{ secrets.READ_TOKEN }}
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
-  # Phase 3: ephemeral slot for this CI run. The bootstrap step in
-  # gate-run creates the slot, adds the cwd's stack, and (in CI mode)
-  # snapshots Vault-injected secrets as overrides.
-  ZB_SLOT: ci-${{ github.run_id }}-${{ github.run_attempt }}
+  # NOTE: ZB_SLOT is intentionally NOT set at workflow level — gate-check
+  # is slot-less and the published zbb version eagerly loads ZB_SLOT if it
+  # sees it set, which fails when no bootstrap step has run. ZB_SLOT is
+  # set per-job below only on jobs that actually bootstrap a slot.
 
 jobs:
   gate-check:
@@ -79,6 +79,8 @@ jobs:
     needs: [gate-check]
     if: needs.gate-check.outputs.stamp_valid == 'false'
     runs-on: ubuntu-latest
+    env:
+      ZB_SLOT: ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Acquire cache

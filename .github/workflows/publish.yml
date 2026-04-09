@@ -17,13 +17,14 @@ env:
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
   SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
   CI: true
-  # Phase 3: ephemeral slot for this CI publish run.
-  ZB_SLOT: ci-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
+    env:
+      # Phase 3: ephemeral slot for this CI publish run.
+      ZB_SLOT: ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Acquire cache
