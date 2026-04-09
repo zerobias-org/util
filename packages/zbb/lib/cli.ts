@@ -34,36 +34,20 @@ import {
 import { handleStack, detectStackContext } from './stack/commands.js';
 
 /**
- * Extend slot from cwd context: walk up to find repo root (.zbb.yaml/gradlew),
- * scan zbb.yaml declarations, add missing vars to slot, re-export to process.env.
- * Returns the repo root path, or null if no project context found.
- */
-async function extendSlotFromCwd(slot: Slot): Promise<string | null> {
-  const repoRoot = findRepoRoot(process.cwd());
-  if (!repoRoot) return null;
-
-  const { extendSlot } = await import('./slot/extend.js');
-  const result = await extendSlot(slot, repoRoot);
-  if (result.extended) {
-    console.log(`Extended slot with ${result.addedVars.length} new var(s): ${result.addedVars.join(', ')}`);
-    const newEnv = slot.env.getAll();
-    for (const varName of result.addedVars) {
-      if (newEnv[varName]) process.env[varName] = newEnv[varName];
-    }
-  }
-  return repoRoot;
-}
-
-/**
- * Full slot preparation: extend + resolve (DNS + vault) + re-export to process.env.
+ * Full slot preparation: resolve (DNS + vault) + re-export to process.env.
  * Shared by: slot load, --slot flag, publish, gate, testHub, and all Gradle commands.
+ *
+ * Phase 3: there is no longer a "lazy slot extension" step. Slot env
+ * vars come from explicitly added stacks (`zbb stack add <path>`), not
+ * from a cwd-driven repo scan. The user owns when each stack joins the
+ * slot.
  *
  * @param slot - Loaded slot instance
  * @param options.fatal - If true, vault errors abort (exit 1). Default: false (warnings only).
- * @returns repo root path, or null
+ * @returns repo root path (from findRepoRoot of cwd), or null
  */
 async function prepareSlot(slot: Slot, options?: { fatal?: boolean }): Promise<string | null> {
-  const repoRoot = await extendSlotFromCwd(slot);
+  const repoRoot = findRepoRoot(process.cwd());
 
   // Run resolve: DNS + vault
   const vaultResult = await slot.resolve(repoRoot ?? undefined);

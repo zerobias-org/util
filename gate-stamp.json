@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "feature/zbb-monorepo-gradle-migration",
-  "timestamp": "2026-04-09T07:52:51.084Z",
+  "timestamp": "2026-04-09T16:10:49.830Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.9",
@@ -160,8 +160,8 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.30",
-      "sourceHash": "4d9110a4ac188bf9d698da380a670573d917544ae51bd061e2c4de3207739a1e",
+      "version": "0.3.31",
+      "sourceHash": "3d7d7265bbb4977999c7389e88e5cff2b1e21f42816a452b54e889e7753fbcaa",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
