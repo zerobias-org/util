@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "branch": "feat/zbb-stack-resolve",
-  "timestamp": "2026-04-08T14:09:52.647Z",
+  "branch": "feature/zbb-monorepo-gradle-migration",
+  "timestamp": "2026-04-09T07:52:51.084Z",
   "packages": {
     "@zerobias-org/util-content-dev-schema": {
       "version": "0.0.9",
@@ -161,7 +161,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.30",
-      "sourceHash": "81437cb4e9ac657e878698089bbd9d968d9f1feb90ac18fd3c68ff408696fc28",
+      "sourceHash": "4d9110a4ac188bf9d698da380a670573d917544ae51bd061e2c4de3207739a1e",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
