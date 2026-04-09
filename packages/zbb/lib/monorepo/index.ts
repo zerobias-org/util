@@ -33,6 +33,7 @@ const LIFECYCLE_COMMANDS = new Set([
   'test',
   'gate',
   'publish',
+  'dockerBuild',
 ]);
 
 export function isLifecycleCommand(command: string): boolean {
@@ -153,7 +154,7 @@ export async function spawnLifecycleAndExit(
   // (build, test, gate). Skip clean (single root task — no per-task events)
   // and gate --check (fast file read — no point spinning up the display).
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
-  const displayEligibleCommands = new Set(['build', 'test', 'gate']);
+  const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
     displayEligibleCommands.has(command) &&

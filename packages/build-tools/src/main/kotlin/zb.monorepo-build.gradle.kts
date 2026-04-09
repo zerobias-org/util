@@ -30,7 +30,10 @@
 
 import com.zerobias.buildtools.monorepo.MonorepoGraphService
 import com.zerobias.buildtools.monorepo.DockerSemaphore
+import com.zerobias.buildtools.monorepo.PrepublishLockService
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
+import com.zerobias.buildtools.monorepo.SubstackDockerConfig
+import com.zerobias.buildtools.util.ExecUtils
 import org.gradle.api.tasks.Exec
 
 @Suppress("UNCHECKED_CAST")
@@ -49,6 +52,19 @@ val dockerSemaphore = gradle.sharedServices.registerIfAbsent(
     parameters.maxConcurrent.set(dockerConcurrency)
     maxParallelUsages.set(dockerConcurrency)
 }
+
+// ── PrepublishLockService — serializes prepublish-standalone across pkgs ──
+//
+// `prepublish-standalone.sh` mutates package.json in place. Two npmPack tasks
+// running concurrently in different subprojects would race on each other's
+// reads/writes, so npmPack acquires this max-1 lock for the brief
+// "backup → prepublish → npm pack → restore" window. Other parts of the
+// dockerBuild pipeline (context prep, docker build) run concurrently.
+
+val prepublishLock = gradle.sharedServices.registerIfAbsent(
+    "prepublishLock",
+    PrepublishLockService::class.java
+) {}
 
 // ── RegistryInjectionService — Verdaccio-aware npm install handling ──
 //
@@ -136,6 +152,15 @@ val monorepoTest = tasks.register("monorepoTest") {
     dependsOn(monorepoBuild)
 }
 
+// monorepoDockerBuild is intentionally separate from monorepoBuild — `zbb build`
+// stays fast and doesn't fork docker. `zbb dockerBuild` runs this directly,
+// and `monorepoGate` adds it to the gate chain so CI gets a clean image stamp.
+val monorepoDockerBuild = tasks.register("monorepoDockerBuild") {
+    group = "monorepo"
+    description = "Build Docker images for all affected dockerized workspace packages"
+    dependsOn(monorepoBuild)
+}
+
 tasks.register("monorepoClean") {
     group = "monorepo"
     description = "Clean all workspace packages (dist/, generated/, build/, tsbuildinfo)"
@@ -162,30 +187,26 @@ tasks.register("monorepoClean") {
 
 // ── Per-subproject task wiring ──────────────────────────────────────
 //
-// Detection: if a subproject already has its own tasks (typically from
-// applying zb.typescript-service in a per-package build.gradle.kts), use
-// those. Otherwise register fallback Exec tasks that run npm scripts.
+// All TypeScript packages are handled by the auto-registered fallback Exec
+// tasks below — there's no longer a separate per-package convention plugin.
+// The Docker pipeline (npmPack/prepareDockerContext/injectLocalDeps/
+// dockerBuild) is registered for any package whose substack declares a
+// `docker:` block in zbb.yaml.
 //
-// Detection signal: presence of `npmTranspile` task → existing infrastructure
-// is in use. zb.typescript-service registers npmInstall, npmGenerate, npmLint,
-// npmTranspile, npmBuild, npmPack, prepareDockerContext, injectLocalDeps,
-// dockerBuild — and names `tasks.named("build") { dependsOn(npmBuild, dockerBuild) }`.
-// We just depend on those.
+// Subprojects that already apply a JVM language plugin (java/kotlin/groovy)
+// are skipped — their existing `test`/`compileJava`/etc. tasks would collide
+// with our `register<Exec>("test")` fallback. This is the codegen path.
 
 /**
  * Returns true if this subproject already exposes its own build tasks
  * that would collide with the npm-script Exec tasks we'd otherwise
- * register. Two known cases:
- *
- *   1. zb.typescript-service was applied — exposes npmTranspile et al.
- *      Marker: presence of `npmTranspile`.
- *   2. A standalone build.gradle applied `java`/`kotlin`/etc. — those
- *      plugins register a `test` task that would collide with our
- *      `register<Exec>("test")`. Marker: presence of `compileJava` or
- *      `compileKotlin` (proves the plugin was applied; we can't just
- *      check for `test` because the rootProject `id("base")` plugin
- *      gives every subproject a `build`/`assemble`/`check`/`clean`
- *      task but NOT a `test` task — only language plugins do).
+ * register. Currently this means a JVM language plugin is applied:
+ * the `test` task from java/kotlin/groovy plugins would clash with our
+ * `register<Exec>("test")`. Marker: presence of `compileJava` or
+ * `compileKotlin` (proves the plugin was applied; we can't just
+ * check for `test` because the rootProject `id("base")` plugin
+ * gives every subproject a `build`/`assemble`/`check`/`clean`
+ * task but NOT a `test` task — only language plugins do).
  *
  * NOTE: do NOT broaden this check to include base-plugin task names
  * like `build`, `clean`, `assemble`, or `check`. They are present on
@@ -193,7 +214,6 @@ tasks.register("monorepoClean") {
  * us to incorrectly skip ALL subprojects.
  */
 fun hasExistingBuildInfra(subproject: org.gradle.api.Project): Boolean {
-    if (subproject.tasks.findByName("npmTranspile") != null) return true
     if (subproject.tasks.findByName("compileJava") != null) return true
     if (subproject.tasks.findByName("compileKotlin") != null) return true
     if (subproject.tasks.findByName("compileGroovy") != null) return true
@@ -312,23 +332,17 @@ gradle.projectsEvaluated {
 
     // 2. Wire per-package dependsOn across subprojects based on the npm dep graph.
     //    Lint is parallel-safe (doesn't depend on other packages' build outputs).
-    //    For subprojects with existing infrastructure, wire npmTranspile/npmGenerate
-    //    instead of our fallback names.
     val crossProjectPhases = phases.filter { it != "lint" } + testPhases
     for ((_, pkg) in packages) {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
-        val usesExisting = hasExistingBuildInfra(subproject)
 
         for (phase in crossProjectPhases) {
-            val taskName = if (usesExisting) phaseToExistingName(phase) else phase
-            val task = subproject.tasks.findByName(taskName) ?: continue
+            val task = subproject.tasks.findByName(phase) ?: continue
             for (depName in pkg.internalDeps) {
                 val depPath = service.packageNameToGradlePath[depName] ?: continue
                 val depProject = rootProject.findProject(depPath) ?: continue
-                val depUsesExisting = hasExistingBuildInfra(depProject)
-                val depTaskName = if (depUsesExisting) phaseToExistingName(phase) else phase
-                val depTask = depProject.tasks.findByName(depTaskName) ?: continue
+                val depTask = depProject.tasks.findByName(phase) ?: continue
                 task.dependsOn(depTask)
             }
         }
@@ -356,26 +370,50 @@ gradle.projectsEvaluated {
         if (test != null && transpile != null) test.mustRunAfter(transpile)
     }
 
-    // 4. Wrap dockerBuild tasks (from zb.typescript-service) with the
-    //    DockerSemaphore so concurrent docker builds are capped.
+    // 4. Register Docker build tasks for subprojects whose short-name appears
+    //    in the dockerized map (from zbb.yaml `substacks.<name>.docker:`).
+    //    Per-subproject tasks: npmPack → prepareDockerContext → injectLocalDeps → dockerBuild.
+    //
+    //    Each chain is gated by:
+    //      - prepublishLock (max 1 across the build) for the npmPack window
+    //      - dockerSemaphore (max DOCKER_BUILD_CONCURRENCY) for the docker build window
+    //
+    //    Inputs/outputs declare stamps so Gradle can skip up-to-date docker
+    //    builds when nothing changed.
+    val dockerized = service.dockerizedPackages
     for ((_, pkg) in packages) {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
-        val dockerBuild = subproject.tasks.findByName("dockerBuild") ?: continue
-        dockerBuild.usesService(dockerSemaphore)
+        if (hasExistingBuildInfra(subproject)) continue
+
+        // Lookup by package short-name (last segment of relDir). Hydra:
+        //   pkg.relDir = "app" → shortName = "app"
+        // matched against substacks.<name>.docker.package = "app".
+        val shortName = pkg.relDir.substringAfterLast("/")
+        val dockerCfg: SubstackDockerConfig = dockerized[shortName] ?: continue
+
+        registerDockerTasksForPackage(
+            subproject = subproject,
+            pkg = pkg,
+            packages = packages,
+            dockerCfg = dockerCfg,
+            repoRoot = rootProject.projectDir,
+            workspaceInstall = workspaceInstall,
+            prepublishLock = prepublishLock,
+            dockerSemaphore = dockerSemaphore,
+        )
     }
 
     // 5. Wire monorepoBuild and monorepoTest to depend on the affected subprojects.
-    //    For subprojects with existing infrastructure, depend on `build`
-    //    (which zb.typescript-service wires to npmBuild + dockerBuild). For
-    //    fallback subprojects, depend on each fallback phase task.
+    //    Subprojects with a JVM language plugin (codegen) expose `build` as
+    //    the aggregator; pure-npm subprojects use the per-phase fallback tasks
+    //    we registered above.
     val affected = service.changeResult.affected
     monorepoBuild.configure {
         for (pkgName in affected) {
             val gradlePath = service.packageNameToGradlePath[pkgName] ?: continue
             val subproject = rootProject.findProject(gradlePath) ?: continue
             if (hasExistingBuildInfra(subproject)) {
-                // zb.typescript-service exposes `build` as the aggregator
                 subproject.tasks.findByName("build")?.let { dependsOn(it) }
             } else {
                 for (phase in phases) {
@@ -388,26 +426,355 @@ gradle.projectsEvaluated {
         for (pkgName in affected) {
             val gradlePath = service.packageNameToGradlePath[pkgName] ?: continue
             val subproject = rootProject.findProject(gradlePath) ?: continue
-            // Test runs the npm `test` script (zb.typescript-service doesn't
-            // provide a test task, so we always use the Exec we register
-            // OR fall through if the subproject defines one some other way).
             for (testPhase in testPhases) {
                 subproject.tasks.findByName(testPhase)?.let { dependsOn(it) }
             }
         }
     }
+
+    // monorepoDockerBuild depends only on dockerBuild tasks for affected
+    // subprojects whose short-name is in the dockerized map. Non-dockerized
+    // packages contribute nothing — the aggregator is a no-op for them.
+    monorepoDockerBuild.configure {
+        for (pkgName in affected) {
+            val gradlePath = service.packageNameToGradlePath[pkgName] ?: continue
+            val subproject = rootProject.findProject(gradlePath) ?: continue
+            subproject.tasks.findByName("dockerBuild")?.let { dependsOn(it) }
+        }
+    }
 }
 
 /**
- * Map a generic phase name to its zb.typescript-service equivalent.
- *   "lint"      → "npmLint"
- *   "generate"  → "npmGenerate"
- *   "transpile" → "npmTranspile"
- *   anything else → unchanged
+ * Register the per-package Docker pipeline (npmPack → prepareDockerContext →
+ * injectLocalDeps → dockerBuild) for a workspace package whose substack
+ * declares a `docker:` block in zbb.yaml.
+ *
+ * Ports the previously zb.typescript-service-only Docker logic into Path A
+ * so packages no longer need a per-subproject build.gradle.kts to ship a
+ * Docker image — the substack manifest is the source of truth.
+ *
+ * Layout assumptions (matching legacy behavior):
+ *   - npm pack runs in the package dir (`pkg.dir`).
+ *   - prepublish-standalone.sh lives at `repoRoot/node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.sh`.
+ *   - The docker context dir is `repoRoot/<dockerCfg.context>`.
+ *   - Internal workspace deps are auto-bundled from the workspace graph
+ *     (no per-package config needed) — replaces the legacy
+ *     `extension.workspaceDeps` map.
+ *
+ * Each task declares a stamp file output so Gradle's up-to-date check works.
  */
-fun phaseToExistingName(phase: String): String = when (phase) {
-    "lint" -> "npmLint"
-    "generate" -> "npmGenerate"
-    "transpile" -> "npmTranspile"
-    else -> phase
+fun registerDockerTasksForPackage(
+    subproject: org.gradle.api.Project,
+    pkg: com.zerobias.buildtools.monorepo.WorkspacePackage,
+    packages: Map<String, com.zerobias.buildtools.monorepo.WorkspacePackage>,
+    dockerCfg: SubstackDockerConfig,
+    repoRoot: java.io.File,
+    workspaceInstall: org.gradle.api.tasks.TaskProvider<Exec>,
+    prepublishLock: org.gradle.api.provider.Provider<PrepublishLockService>,
+    dockerSemaphore: org.gradle.api.provider.Provider<DockerSemaphore>,
+) {
+    val pkgDir = pkg.dir
+    val dockerContextDir = repoRoot.resolve(dockerCfg.context)
+    val packageDir = dockerContextDir.resolve("package")
+    val imageTag = "${dockerCfg.image}:dev"
+
+    // Internal deps that need to be bundled into the Docker image as
+    // file:local_deps/*.tgz references. Resolved automatically from the
+    // workspace dep graph rather than a hand-maintained map.
+    val internalDepDirs: List<java.io.File> = pkg.internalDeps
+        .mapNotNull { depName -> packages[depName]?.dir }
+
+    // ── npmPack ────────────────────────────────────────────────────────
+    val npmPack = subproject.tasks.register("npmPack") {
+        group = "docker"
+        description = "Run prepublish-standalone and npm pack for ${pkg.name}"
+        dependsOn(workspaceInstall)
+        // Ensure transpile has run so dist/ is fresh inside the tarball.
+        subproject.tasks.findByName("transpile")?.let { dependsOn(it) }
+        usesService(prepublishLock)
+
+        inputs.files(subproject.fileTree(pkgDir.resolve("src")).matching { include("**/*") })
+            .withPropertyName("srcFiles")
+        inputs.files(subproject.fileTree(pkgDir.resolve("generated")).matching { include("**/*") })
+            .withPropertyName("generatedFiles")
+        inputs.files(subproject.fileTree(pkgDir.resolve("dist")).matching { include("**/*") })
+            .withPropertyName("distFiles")
+        if (pkgDir.resolve("package.json").exists()) {
+            inputs.file(pkgDir.resolve("package.json")).withPropertyName("packageJson")
+        }
+
+        val packStamp = subproject.layout.buildDirectory.file("npm-pack.stamp")
+        outputs.file(packStamp)
+
+        doFirst {
+            // Clean any leftover tarballs in the docker context dir
+            dockerContextDir.listFiles { f -> f.name.endsWith(".tgz") }?.forEach { it.delete() }
+
+            val packageJson = pkgDir.resolve("package.json")
+            val packageJsonBackup = pkgDir.resolve("package.json.gradle-bak")
+            val prepublishScript = repoRoot.resolve("node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.sh")
+
+            try {
+                if (prepublishScript.exists()) {
+                    // Back up package.json preserving timestamps so Gradle caching
+                    // isn't invalidated by the prepublish in-place mutation.
+                    ExecUtils.exec(
+                        command = listOf("cp", "-a", packageJson.absolutePath, packageJsonBackup.absolutePath),
+                        workingDir = pkgDir
+                    )
+                    println("Running prepublish-standalone for ${pkg.name}...")
+                    ExecUtils.exec(
+                        command = listOf("bash", prepublishScript.absolutePath),
+                        workingDir = pkgDir
+                    )
+                } else {
+                    println("WARNING: prepublish-standalone.sh not found at ${prepublishScript.absolutePath} — Docker image may be missing dependencies")
+                }
+
+                println("Running npm pack for ${pkg.name}...")
+                dockerContextDir.mkdirs()
+                ExecUtils.exec(
+                    command = listOf("npm", "pack", "--pack-destination", dockerContextDir.absolutePath),
+                    workingDir = pkgDir
+                )
+            } finally {
+                // Always restore the original package.json with preserved timestamps
+                if (packageJsonBackup.exists()) {
+                    ExecUtils.exec(
+                        command = listOf("mv", packageJsonBackup.absolutePath, packageJson.absolutePath),
+                        workingDir = pkgDir
+                    )
+                }
+            }
+
+            packStamp.get().asFile.apply {
+                parentFile.mkdirs()
+                writeText("packed at ${java.time.Instant.now()}")
+            }
+        }
+    }
+
+    // ── prepareDockerContext ───────────────────────────────────────────
+    val prepareDockerContext = subproject.tasks.register("prepareDockerContext") {
+        group = "docker"
+        description = "Extract npm pack tarball into Docker build context for ${pkg.name}"
+        dependsOn(npmPack)
+
+        inputs.file(subproject.layout.buildDirectory.file("npm-pack.stamp"))
+        outputs.dir(packageDir)
+
+        doFirst {
+            // Clean previous context and stale lockfile
+            packageDir.deleteRecursively()
+            dockerContextDir.resolve("package-lock.json").delete()
+
+            val tarball = dockerContextDir.listFiles { f -> f.name.endsWith(".tgz") }?.firstOrNull()
+                ?: throw GradleException("No tarball found in ${dockerContextDir.absolutePath} — npmPack may have failed")
+
+            println("Extracting ${tarball.name}...")
+            ExecUtils.exec(
+                command = listOf("tar", "-xzf", tarball.name),
+                workingDir = dockerContextDir
+            )
+            tarball.delete()
+
+            // Bundle internal workspace deps into the docker context as
+            // file:local_deps/*.tgz references. Auto-detected from the
+            // workspace graph (replaces the legacy hand-maintained
+            // typescript-service `workspaceDeps` map).
+            if (internalDepDirs.isNotEmpty()) {
+                val localDepsDir = packageDir.resolve("local_deps")
+                localDepsDir.mkdirs()
+
+                val packageJsonFile = packageDir.resolve("package.json")
+                var packageJsonText = packageJsonFile.readText()
+
+                for (wsProjectDir in internalDepDirs) {
+                    val wsPackageJson = wsProjectDir.resolve("package.json")
+                    if (!wsPackageJson.exists()) continue
+
+                    val wsPackageJsonObj = groovy.json.JsonSlurper().parseText(wsPackageJson.readText()) as Map<*, *>
+                    val wsName = wsPackageJsonObj["name"] as? String ?: continue
+                    val wsVersion = wsPackageJsonObj["version"] as? String ?: continue
+
+                    // Only bundle if this is actually a dependency in the packed package.json
+                    if (!packageJsonText.contains("\"$wsName\"")) continue
+
+                    val wsPrepublishScript = repoRoot.resolve("node_modules/@zerobias-org/devops-tools/scripts/prepublish-standalone.sh")
+                    val wsPackageJsonBackup = wsProjectDir.resolve("package.json.gradle-bak")
+
+                    if (wsPrepublishScript.exists()) {
+                        ExecUtils.exec(
+                            command = listOf("cp", "-a", wsPackageJson.absolutePath, wsPackageJsonBackup.absolutePath),
+                            workingDir = wsProjectDir
+                        )
+                        try {
+                            ExecUtils.exec(
+                                command = listOf("bash", wsPrepublishScript.absolutePath, repoRoot.absolutePath, "--library"),
+                                workingDir = wsProjectDir
+                            )
+                        } catch (e: Exception) {
+                            if (wsPackageJsonBackup.exists()) {
+                                ExecUtils.exec(
+                                    command = listOf("mv", wsPackageJsonBackup.absolutePath, wsPackageJson.absolutePath),
+                                    workingDir = wsProjectDir
+                                )
+                            }
+                            println("  ⚠ prepublish-standalone failed for $wsName, using as-is")
+                        }
+                    }
+
+                    println("Packing local workspace dep: $wsName")
+                    try {
+                        ExecUtils.exec(
+                            command = listOf("npm", "pack", "--pack-destination", localDepsDir.absolutePath),
+                            workingDir = wsProjectDir
+                        )
+                    } finally {
+                        if (wsPackageJsonBackup.exists()) {
+                            ExecUtils.exec(
+                                command = listOf("mv", wsPackageJsonBackup.absolutePath, wsPackageJson.absolutePath),
+                                workingDir = wsProjectDir
+                            )
+                        }
+                    }
+
+                    val wsTarball = localDepsDir.listFiles { f ->
+                        f.name.endsWith(".tgz") && !f.name.startsWith(".")
+                    }?.sortedByDescending { it.lastModified() }?.firstOrNull()
+
+                    if (wsTarball != null) {
+                        packageJsonText = packageJsonText.replace(
+                            "\"$wsName\": \"$wsVersion\"",
+                            "\"$wsName\": \"file:./local_deps/${wsTarball.name}\""
+                        )
+                        println("  ✓ Bundled $wsName → local_deps/${wsTarball.name}")
+                    }
+                }
+
+                packageJsonFile.writeText(packageJsonText)
+            }
+
+            println("✓ Docker context prepared at: $packageDir")
+        }
+    }
+
+    // ── injectLocalDeps ────────────────────────────────────────────────
+    val injectLocalDeps = subproject.tasks.register("injectLocalDeps") {
+        group = "docker"
+        description = "Inject locally-published zbb registry packages into Docker context for ${pkg.name}"
+        dependsOn(prepareDockerContext)
+
+        doFirst {
+            // Read from file written by zbb (env vars don't reach the Gradle daemon)
+            val localDepsFile = repoRoot.resolve(".zbb-local-deps/manifest.json")
+            if (!localDepsFile.exists()) return@doFirst
+            val localDepsJson = localDepsFile.readText()
+            if (localDepsJson.isBlank()) return@doFirst
+
+            @Suppress("UNCHECKED_CAST")
+            val deps = (groovy.json.JsonSlurper().parseText(localDepsJson) as? List<Map<String, String>>) ?: return@doFirst
+            if (deps.isEmpty()) return@doFirst
+
+            val localDepsDir = packageDir.resolve("local_deps")
+            localDepsDir.mkdirs()
+
+            val packageJsonFile = packageDir.resolve("package.json")
+            @Suppress("UNCHECKED_CAST")
+            val packageJson = groovy.json.JsonSlurper().parseText(packageJsonFile.readText()) as MutableMap<String, Any?>
+
+            @Suppress("UNCHECKED_CAST")
+            val dependencies = packageJson["dependencies"] as? MutableMap<String, String> ?: mutableMapOf()
+            @Suppress("UNCHECKED_CAST")
+            val overrides = packageJson["overrides"] as? MutableMap<String, Any?> ?: mutableMapOf()
+
+            for (dep in deps) {
+                val name = dep["name"] ?: continue
+                val tarball = dep["tarball"] ?: continue
+                val tarballFile = java.io.File(tarball)
+                if (!tarballFile.exists()) {
+                    println("  [registry] Warning: tarball not found: $tarball")
+                    continue
+                }
+
+                val destFile = localDepsDir.resolve(tarballFile.name)
+                tarballFile.copyTo(destFile, overwrite = true)
+
+                val fileRef = "file:local_deps/${tarballFile.name}"
+                if (dependencies.containsKey(name)) {
+                    dependencies[name] = fileRef
+                }
+                if (overrides.containsKey(name)) {
+                    overrides[name] = fileRef
+                }
+                println("  [registry] Injected $name → $fileRef")
+            }
+
+            packageJson["dependencies"] = dependencies
+            packageJson["overrides"] = overrides
+            packageJsonFile.writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(packageJson)))
+        }
+    }
+
+    // ── dockerBuild ────────────────────────────────────────────────────
+    subproject.tasks.register("dockerBuild") {
+        group = "docker"
+        description = "Build Docker image $imageTag for ${pkg.name}"
+        dependsOn(injectLocalDeps)
+        usesService(dockerSemaphore)
+
+        // Inputs: the prepared context (output of prepareDockerContext) +
+        // the Dockerfile / start.sh / .npmrc next to it.
+        inputs.dir(packageDir)
+        inputs.files(subproject.fileTree(dockerContextDir) {
+            include("Dockerfile", "GradleDockerfile", "start.sh", ".npmrc")
+        })
+
+        val imageStamp = subproject.layout.buildDirectory.file("docker-image.stamp")
+        outputs.file(imageStamp)
+
+        doFirst {
+            println("Building Docker image: $imageTag")
+            println("Context: $dockerContextDir")
+
+            val npmToken = System.getenv("NPM_TOKEN") ?: ""
+            val zbToken = System.getenv("ZB_TOKEN") ?: ""
+            if (npmToken.isEmpty() || zbToken.isEmpty()) {
+                println("WARNING: NPM_TOKEN or ZB_TOKEN not set - Docker build may fail")
+            }
+
+            val gradleDockerfile = dockerContextDir.resolve("GradleDockerfile")
+            val dockerfileArgs = if (gradleDockerfile.exists()) {
+                println("Using GradleDockerfile")
+                listOf("-f", "GradleDockerfile")
+            } else {
+                println("Using default Dockerfile")
+                emptyList()
+            }
+
+            val fullCommand = listOf(
+                "docker", "build",
+                "--progress=plain",
+                "-t", imageTag,
+                "--build-arg", "npm_token=${npmToken}",
+                "--build-arg", "zb_token=${zbToken}"
+            ) + dockerfileArgs + listOf(".")
+
+            val dockerProcess = ProcessBuilder(fullCommand)
+                .directory(dockerContextDir)
+                .inheritIO()
+                .start()
+            val dockerExit = dockerProcess.waitFor()
+            if (dockerExit != 0) {
+                throw GradleException("Docker build failed (exit $dockerExit)")
+            }
+
+            imageStamp.get().asFile.apply {
+                parentFile.mkdirs()
+                writeText("$imageTag built at ${java.time.Instant.now()}")
+            }
+
+            println("✓ Docker image built: $imageTag")
+        }
+    }
 }

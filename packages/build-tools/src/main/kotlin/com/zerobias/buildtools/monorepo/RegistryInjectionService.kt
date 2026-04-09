@@ -195,7 +195,7 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
             }
         }
 
-        // Write the manifest.json that zb.typescript-service injectLocalDeps reads
+        // Write the manifest.json that the per-package injectLocalDeps task reads
         if (downloaded.isNotEmpty()) {
             val manifestFile = File(tarballsDir, "manifest.json")
             manifestFile.writeText(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(downloaded))

@@ -104,10 +104,12 @@ tasks.register("monorepoGateCheck") {
 val monorepoGate = tasks.register("monorepoGate") {
     group = "monorepo"
     description = "Run gate for all affected packages and write the root gate-stamp.json"
-    // monorepoBuild + monorepoTest are added in zb.monorepo-build (when applied).
-    // Wire conditionally so this plugin works even if -build isn't applied.
+    // monorepoBuild + monorepoTest + monorepoDockerBuild are added in
+    // zb.monorepo-build (when applied). Wire conditionally so this plugin
+    // works even if -build isn't applied.
     rootProject.tasks.findByName("monorepoBuild")?.let { dependsOn(it) }
     rootProject.tasks.findByName("monorepoTest")?.let { dependsOn(it) }
+    rootProject.tasks.findByName("monorepoDockerBuild")?.let { dependsOn(it) }
 
     doLast {
         val service = graphService.get()
@@ -155,6 +157,14 @@ val monorepoGate = tasks.register("monorepoGate") {
             }
             for (testPhase in testPhases) {
                 tasksMap[testPhase] = mapTaskState(subproject?.tasks?.findByName(testPhase))
+            }
+            // dockerBuild is recorded only for packages whose substack declares
+            // a `docker:` block — for everyone else the entry is omitted (not
+            // "skipped"), because docker is opt-in and "skipped" would imply
+            // we tried and chose not to run it.
+            val isDockerized = service.dockerizedPackages.containsKey(pkg.relDir.substringAfterLast("/"))
+            if (isDockerized) {
+                tasksMap["dockerBuild"] = mapTaskState(subproject?.tasks?.findByName("dockerBuild"))
             }
 
             // Test phase override: TS Builder.ts only sets test = "passed" if

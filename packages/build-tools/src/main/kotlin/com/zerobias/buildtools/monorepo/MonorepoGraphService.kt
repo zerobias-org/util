@@ -28,6 +28,31 @@ data class DockerImageConfig(
 )
 
 /**
+ * Per-substack docker build config from `zbb.yaml` `substacks.<name>.docker:`.
+ *
+ * Marks a substack as producing a Docker image during `zbb build`/`gate`/`dockerBuild`.
+ * The `package` field selects which workspace package the image is built from
+ * (must match the last segment of a workspace package's relDir).
+ *
+ * Example:
+ *   substacks:
+ *     hydra-service:
+ *       compose: ...
+ *       docker:
+ *         package: app
+ *         image: hydra-app
+ *         context: image/server
+ */
+data class SubstackDockerConfig(
+    /** Workspace package short-name (last segment of relDir) that this image is built from */
+    val pkg: String,
+    /** Docker image name (no tag) — final tag is "<image>:dev" during local build */
+    val image: String,
+    /** Path to the docker build context relative to repo root */
+    val context: String,
+)
+
+/**
  * Configuration loaded from `zbb.yaml` `monorepo:` block.
  *
  * Defaults match what the legacy TS path used to provide when no config was set.
@@ -41,6 +66,8 @@ data class MonorepoConfig(
     val skipPublish: Set<String> = emptySet(),
     /** Map of package relDir → docker image config (only for packages that produce images). */
     val images: Map<String, DockerImageConfig> = emptyMap(),
+    /** Map of substack name → docker build config (only for substacks with a `docker:` block). */
+    val substacksDocker: Map<String, SubstackDockerConfig> = emptyMap(),
 )
 
 /**
@@ -53,9 +80,9 @@ fun loadMonorepoConfig(repoRoot: File): MonorepoConfig {
     if (!zbbFile.exists()) return MonorepoConfig()
     return try {
         val yaml = Yaml().load<Map<String, Any?>>(zbbFile.readText())
-        val mono = yaml["monorepo"] as? Map<String, Any?> ?: return MonorepoConfig()
+        val mono = yaml["monorepo"] as? Map<String, Any?>
 
-        val imagesRaw = (mono["images"] as? Map<String, Map<String, Any?>>) ?: emptyMap()
+        val imagesRaw = (mono?.get("images") as? Map<String, Map<String, Any?>>) ?: emptyMap()
         val images = imagesRaw.mapNotNull { (relDir, cfg) ->
             val context = cfg["context"] as? String ?: return@mapNotNull null
             val name = cfg["name"] as? String ?: return@mapNotNull null
@@ -63,14 +90,26 @@ fun loadMonorepoConfig(repoRoot: File): MonorepoConfig {
             relDir to DockerImageConfig(context = context, name = name, workflow = workflow)
         }.toMap()
 
+        // Parse top-level substacks: each entry may have a `docker:` block declaring
+        // a buildable image. Substacks without `docker:` are runtime-only and ignored.
+        val substacksRaw = (yaml["substacks"] as? Map<String, Map<String, Any?>>) ?: emptyMap()
+        val substacksDocker = substacksRaw.mapNotNull { (substackName, substackCfg) ->
+            val docker = substackCfg["docker"] as? Map<String, Any?> ?: return@mapNotNull null
+            val pkg = docker["package"] as? String ?: return@mapNotNull null
+            val image = docker["image"] as? String ?: return@mapNotNull null
+            val context = docker["context"] as? String ?: return@mapNotNull null
+            substackName to SubstackDockerConfig(pkg = pkg, image = image, context = context)
+        }.toMap()
+
         MonorepoConfig(
-            sourceFiles = (mono["sourceFiles"] as? List<String>) ?: listOf("tsconfig.json"),
-            sourceDirs = (mono["sourceDirs"] as? List<String>) ?: listOf("src"),
-            buildPhases = (mono["buildPhases"] as? List<String>) ?: listOf("lint", "generate", "transpile"),
-            testPhases = (mono["testPhases"] as? List<String>) ?: listOf("test"),
-            registry = mono["registry"] as? String,
-            skipPublish = ((mono["skipPublish"] as? List<String>) ?: emptyList()).toSet(),
+            sourceFiles = (mono?.get("sourceFiles") as? List<String>) ?: listOf("tsconfig.json"),
+            sourceDirs = (mono?.get("sourceDirs") as? List<String>) ?: listOf("src"),
+            buildPhases = (mono?.get("buildPhases") as? List<String>) ?: listOf("lint", "generate", "transpile"),
+            testPhases = (mono?.get("testPhases") as? List<String>) ?: listOf("test"),
+            registry = mono?.get("registry") as? String,
+            skipPublish = ((mono?.get("skipPublish") as? List<String>) ?: emptyList()).toSet(),
             images = images,
+            substacksDocker = substacksDocker,
         )
     } catch (_: Exception) {
         MonorepoConfig()
@@ -128,6 +167,25 @@ abstract class MonorepoGraphService : BuildService<MonorepoGraphService.Params> 
     /** Reverse: npm package name → Gradle subproject path */
     val packageNameToGradlePath: Map<String, String> by lazy {
         gradlePathToPackageName.entries.associate { (path, name) -> name to path }
+    }
+
+    /**
+     * Map of workspace package short-name (last segment of relDir) →
+     * SubstackDockerConfig of the substack that builds an image from it.
+     *
+     * Empty if no substack declares a `docker:` block. The short-name lookup
+     * lets `zb.monorepo-build` cheaply ask "should I register dockerBuild for
+     * this subproject?" without re-walking the substacks map.
+     *
+     * If two substacks reference the same package (which would be an error),
+     * the last one wins — a future validation pass should reject this.
+     */
+    val dockerizedPackages: Map<String, SubstackDockerConfig> by lazy {
+        val byShortName = mutableMapOf<String, SubstackDockerConfig>()
+        for ((_, dockerCfg) in config.substacksDocker) {
+            byShortName[dockerCfg.pkg] = dockerCfg
+        }
+        byShortName.toMap()
     }
 
     /** Is this Gradle subproject in the affected set for the current invocation? */
