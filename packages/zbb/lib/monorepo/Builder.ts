@@ -984,8 +984,8 @@ async function buildDockerImages(
       tar xzf "$CONTEXT/$TGZ" -C "$CONTEXT"
       rm -f "$CONTEXT/$TGZ"
 
-      # Build
-      docker build --progress=plain \\
+      # Build (--no-cache after clean ensures dep version bumps take effect)
+      docker build --progress=plain --no-cache \\
         -t "$IMAGE_TAG" \\
         --build-arg npm_token="${process.env.NPM_TOKEN ?? ''}" \\
         --build-arg zb_token="${process.env.ZB_TOKEN ?? ''}" \\
