@@ -143,7 +143,7 @@ val monorepoGate = tasks.register("monorepoGate") {
             val subproject = rootProject.findProject(gradlePath)
 
             // Query real task state for each phase. The mapping:
-            //   not in graph / no script   → "not-found"
+            //   not in graph / no script   → "skipped" (matches TS Builder.ts:1592)
             //   skipped (onlyIf, etc.)     → "skipped"
             //   noSource                   → "skipped"
             //   executed && no failure     → "passed"
@@ -157,6 +157,20 @@ val monorepoGate = tasks.register("monorepoGate") {
                 tasksMap[testPhase] = mapTaskState(subproject?.tasks?.findByName(testPhase))
             }
 
+            // Test phase override: TS Builder.ts only sets test = "passed" if
+            // hasTests (any per-suite expected count > 0). If countExpectedTests
+            // returns 0 across all suites (e.g. aws-common has flat test/ instead
+            // of test/unit/), TS leaves test as "skipped" even when the script
+            // actually ran. Mirror that for parity.
+            val totalExpectedTests = listOf("unit", "integration", "e2e").sumOf { suite ->
+                SourceHasher.countExpectedTests(java.io.File(pkg.dir, "test/$suite"))
+            }
+            if (totalExpectedTests == 0) {
+                for (testPhase in testPhases) {
+                    tasksMap[testPhase] = "skipped"
+                }
+            }
+
             // Test suite entries: count expected from source files, derive
             // ran/status from the test task's actual state. Mirrors what the
             // existing zb.base writeGateStamp does — assumes "task passed" means
@@ -168,19 +182,26 @@ val monorepoGate = tasks.register("monorepoGate") {
             )
             val testTask = subproject?.tasks?.findByName("test")
             val testState = testTask?.state
-            val testRanSuccessfully = testState?.executed == true && testState.failure == null
-            val testSkipped = testState?.skipped == true || testTask == null
+            // upToDate check MUST come before skipped (state.upToDate is a
+            // subset of state.skipped — same bug we fixed in mapTaskState).
+            val testPassedOrCached = testState != null && (
+                testState.upToDate ||
+                (testState.executed && testState.failure == null)
+            )
+            val testFailed = testState?.failure != null
+            val testSkipped = testTask == null || (
+                testState != null && testState.skipped && !testState.upToDate
+            )
 
             val tests = linkedMapOf<String, TestSuiteEntry>()
             for ((suite, dir) in testSuiteDirs) {
                 val expected = SourceHasher.countExpectedTests(dir)
                 val (ran, status) = when {
                     expected == 0 -> 0 to "skipped"
+                    testFailed -> 0 to "failed"
+                    testPassedOrCached -> expected to "passed"
                     testSkipped -> 0 to "skipped"
-                    testRanSuccessfully -> expected to "passed"
-                    testState?.failure != null -> 0 to "failed"
-                    testState?.upToDate == true -> expected to "passed"
-                    else -> 0 to "not-run"
+                    else -> 0 to "skipped"
                 }
                 tests[suite] = TestSuiteEntry(expected, ran, status)
             }
@@ -209,18 +230,25 @@ val monorepoGate = tasks.register("monorepoGate") {
 
 /**
  * Map a Gradle Task to its corresponding gate-stamp status string.
- * Mirrors how `zb.base writeGateStamp` and `lib/monorepo/Builder.ts` map states.
+ *
+ * Important: Gradle's `state.upToDate` is a SUBSET of `state.skipped` — an
+ * up-to-date task has BOTH flags true. We must check `upToDate` first so
+ * cached tasks map to "passed" (semantically they succeeded), not "skipped".
+ *
+ * Null tasks (no script defined for that phase) map to "skipped" — matches
+ * the legacy TS path which uses `tasks[phase] ?? 'skipped'` when writing the
+ * stamp (Builder.ts line 1592).
  */
 fun mapTaskState(task: org.gradle.api.Task?): String {
-    if (task == null) return "not-found"
+    if (task == null) return "skipped"  // matches TS: missing → skipped in stamp
     val state = task.state
     return when {
-        state.skipped -> "skipped"
-        state.noSource -> "skipped"
         state.failure != null -> "failed"
-        state.executed -> "passed"
-        state.upToDate -> "passed"
-        else -> "not-found"
+        state.upToDate -> "passed"      // cached / up-to-date = succeeded
+        state.executed -> "passed"      // actually ran successfully
+        state.noSource -> "skipped"     // explicit no-source
+        state.skipped -> "skipped"      // other skip reasons (onlyIf, etc.)
+        else -> "skipped"
     }
 }
 

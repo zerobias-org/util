@@ -153,6 +153,20 @@ async function _main(argv: string[]): Promise<void> {
   // Monorepo commands: clean/build/test/gate/publish in npm workspace monorepos
   // Stack commands (up/down/destroy/info) still route to Gradle even in monorepos.
   const repoRoot = findRepoRoot(process.cwd());
+
+  // `zbb monorepo verify-parity` — diff legacy TS path vs new Gradle path
+  if (command === 'monorepo' && args[1] === 'verify-parity') {
+    if (!repoRoot) {
+      console.error('Not inside a repo (no .zbb.yaml found)');
+      process.exit(1);
+    }
+    const { verifyParity } = await import('./monorepo/VerifyParity.js');
+    const verbose = args.includes('--verbose') || args.includes('-v');
+    const gateOnly = args.includes('--gate-only');
+    const code = await verifyParity(repoRoot, { verbose, gateOnly });
+    process.exit(code);
+  }
+
   if (repoRoot && isMonorepoCommand(command) && isMonorepo(repoRoot)) {
     // If a slot is loaded, resolve its env (Vault, DNS) and export to process.env
     // so monorepo commands have access to slot-provided vars (e.g., NEON_API_KEY)
