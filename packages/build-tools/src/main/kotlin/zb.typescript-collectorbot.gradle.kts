@@ -215,10 +215,50 @@ tasks.named("testDirect") {
 }
 
 // ════════════════════════════════════════════════════════════
-// PUBLISH phase — npm publish
+// PUBLISH phase — npm publish with version patching & promotion
 // ════════════════════════════════════════════════════════════
 
-val isDryRun = project.findProperty("dryRun")?.toString()?.toBoolean() ?: false
+val isDryRun: Boolean = extra["isDryRun"] as Boolean
+@Suppress("UNCHECKED_CAST")
+val preflightChecks = extra["preflightChecks"] as TaskProvider<*>
+@Suppress("UNCHECKED_CAST")
+val stagedPackages = extra["stagedPackages"] as MutableList<Pair<String, java.io.File>>
+
+fun patchPackageJsonVersion(pkgFile: java.io.File, newVersion: String): String {
+    val originalContent = pkgFile.readText()
+    val patchedContent = originalContent.replace(
+        Regex(""""version"\s*:\s*"[^"]+""""),
+        """"version": "$newVersion""""
+    )
+    pkgFile.writeText(patchedContent)
+    return originalContent
+}
+
+var originalPackageJson: String? = null
+
+val patchPackageJson by tasks.registering {
+    group = "publish"
+    description = "Patch package.json with resolved version"
+    doLast {
+        val pkgFile = project.file("package.json")
+        val ver = project.version.toString()
+        originalPackageJson = patchPackageJsonVersion(pkgFile, ver)
+        logger.lifecycle("Patched package.json version to $ver")
+    }
+}
+
+val restorePackageJson by tasks.registering {
+    group = "publish"
+    description = "Restore original package.json after publish"
+    doLast {
+        val pkgFile = project.file("package.json")
+        val content = originalPackageJson
+        if (content != null) {
+            pkgFile.writeText(content)
+            logger.lifecycle("Restored original package.json")
+        }
+    }
+}
 
 fun readPackageNameVersion(): Pair<String, String> {
     val pkgJson = project.file("package.json")
@@ -247,7 +287,8 @@ fun isAlreadyPublished(name: String, version: String, workDir: java.io.File): Bo
 val publishNpmExec by tasks.registering(NpmTask::class) {
     group = "publish"
     description = "Publish npm package to registry with --tag next (staging)"
-    dependsOn(tasks.named("gate"))
+    dependsOn(tasks.named("gate"), patchPackageJson, preflightChecks)
+    finalizedBy(restorePackageJson)
 
     npmCommand.set(listOf("publish"))
     args.set(listOf("--tag", "next"))
@@ -261,12 +302,56 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
             throw org.gradle.api.tasks.StopExecutionException()
         }
         if (isAlreadyPublished(name, ver, project.projectDir)) {
-            logger.lifecycle("[publishNpmExec] ${name}@${ver} already published — skipping")
+            logger.lifecycle("[publishNpmExec] ${name}@${ver} already published — skipping (will still promote)")
+            stagedPackages.add(name to project.projectDir)
             throw org.gradle.api.tasks.StopExecutionException()
         }
+    }
+    doLast {
+        val (name, _) = readPackageNameVersion()
+        stagedPackages.add(name to project.projectDir)
     }
 }
 
 tasks.named("publishNpm") {
     dependsOn(publishNpmExec)
+}
+
+// ── Promotion: move from 'next' tag to correct dist-tags ──
+
+fun promotePackage(name: String, ver: String, workDir: java.io.File, tags: List<String>) {
+    for (tag in tags) {
+        logger.lifecycle("  Tagging ${name}@${ver} → $tag")
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("npm", "dist-tag", "add", "${name}@${ver}", tag),
+            workingDir = workDir,
+            throwOnError = true
+        )
+    }
+    try {
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("npm", "dist-tag", "rm", name, "next"),
+            workingDir = workDir,
+            throwOnError = false
+        )
+    } catch (_: Exception) {}
+}
+
+val promoteNpm by tasks.registering {
+    group = "publish"
+    description = "Promote npm package from 'next' to all applicable dist-tags"
+    doLast {
+        val (name, _) = readPackageNameVersion()
+        val ver = project.version.toString()
+        if (isDryRun) {
+            logger.lifecycle("[DRY RUN] Would promote ${name}@${ver} to tags: ${npmDistTags.joinToString(", ")}")
+            return@doLast
+        }
+        logger.lifecycle("Promoting ${name}@${ver}")
+        promotePackage(name, ver, project.projectDir, npmDistTags)
+    }
+}
+
+tasks.named("promoteAll") {
+    dependsOn(promoteNpm)
 }
