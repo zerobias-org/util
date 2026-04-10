@@ -116,7 +116,7 @@ jobs:
         run: |
           if git diff --name-only HEAD~1 | grep -q '^packages/build-tools/'; then
             echo "build-tools changed — publishing to Maven"
-            zbb publishRemote
+            npx zbb publishRemote
           else
             echo "build-tools unchanged — skipping Maven publish"
           fi
