@@ -71,7 +71,7 @@ jobs:
       - name: Check gate stamp
         id: check_stamp
         run: |
-          if npx zbb gate --check; then
+          if zbb gate --check; then
             echo "valid=true" >> $GITHUB_OUTPUT
           else
             echo "valid=false" >> $GITHUB_OUTPUT
@@ -142,8 +142,8 @@ jobs:
       # the slot needing to re-fetch from Vault.
       - name: Bootstrap zbb slot
         run: |
-          npx zbb slot create $ZB_SLOT --ephemeral
-          npx zbb stack add .
+          zbb slot create $ZB_SLOT --ephemeral
+          zbb stack add .
         env:
           CI: 'true'
           NPM_TOKEN: ${{ env.READ_TOKEN }}
@@ -152,7 +152,7 @@ jobs:
           READ_TOKEN: ${{ env.READ_TOKEN }}
 
       - name: Run zbb gate
-        run: npx zbb gate
+        run: zbb gate
         env:
           CI: 'true'
           NPM_TOKEN: ${{ env.READ_TOKEN }}

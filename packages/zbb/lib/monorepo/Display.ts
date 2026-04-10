@@ -280,22 +280,47 @@ export class MonorepoDisplay {
         process.stdout.write(
           `${COLOR.red}── ${project.shortName}: ${step.name} failed ──${COLOR.reset}\n\n`,
         );
-        // Inline content: tail of the log file
+        // Inline content: tail of the per-task log file. If the log is
+        // empty (output stream wasn't flushed before the task error
+        // propagated), fall back to the gradle.log and extract the
+        // section for this task.
         try {
+          let lines: string[] = [];
           if (existsSync(logFile)) {
             const content = readFileSync(logFile, 'utf-8');
-            const lines = content.split('\n').filter(l => l.length > 0);
-            const tail = lines.slice(-40);
-            for (const line of tail) {
-              process.stdout.write(`  ${line}\n`);
+            lines = content.split('\n').filter(l => l.length > 0);
+          }
+
+          // Fallback: if per-task log is empty, extract from gradle.log
+          if (lines.length === 0) {
+            const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
+            if (existsSync(gradleLogPath)) {
+              const gradleContent = readFileSync(gradleLogPath, 'utf-8');
+              const taskMarker = `> Task ${project.fullPath}:${step.name}`;
+              const markerIdx = gradleContent.lastIndexOf(taskMarker);
+              if (markerIdx !== -1) {
+                // Extract from task marker to the next "> Task" line or end
+                const afterMarker = gradleContent.slice(markerIdx);
+                const nextTask = afterMarker.indexOf('\n> Task ', taskMarker.length);
+                const section = nextTask !== -1
+                  ? afterMarker.slice(0, nextTask)
+                  : afterMarker.slice(0, 2000);
+                lines = section.split('\n').filter(l => l.length > 0);
+              }
             }
-            if (lines.length > 40) {
-              process.stdout.write(
-                `${COLOR.dim}  … (${lines.length - 40} more lines in log file)${COLOR.reset}\n`,
-              );
+            if (lines.length === 0) {
+              lines = ['(no output captured — check gradle.log)'];
             }
-          } else {
-            process.stdout.write(`${COLOR.dim}  (log file not found)${COLOR.reset}\n`);
+          }
+
+          const tail = lines.slice(-40);
+          for (const line of tail) {
+            process.stdout.write(`  ${line}\n`);
+          }
+          if (lines.length > 40) {
+            process.stdout.write(
+              `${COLOR.dim}  … (${lines.length - 40} more lines in log file)${COLOR.reset}\n`,
+            );
           }
         } catch (e) {
           process.stdout.write(

@@ -123,13 +123,25 @@ gradle.taskGraph.whenReady {
             // doesn't match the runtime Gradle API.
             if (task is Exec) {
                 val execTask: Exec = task
+                // Store the stream so doLast can flush it. Declared outside
+                // the doFirst lambda so both doFirst and doLast see it.
+                var logStream: java.io.OutputStream? = null
+
                 execTask.doFirst {
                     logFile.parentFile.mkdirs()
                     val out = logFile.outputStream()
+                    logStream = out
                     @Suppress("DEPRECATION")
                     (execTask as org.gradle.process.BaseExecSpec).standardOutput = out
                     @Suppress("DEPRECATION")
                     (execTask as org.gradle.process.BaseExecSpec).errorOutput = out
+                }
+
+                // Flush + close the log stream after task completes (success
+                // or failure). Without this, buffered output is lost when the
+                // task fails — the per-task log file ends up empty.
+                execTask.doLast {
+                    try { logStream?.flush(); logStream?.close() } catch (_: Exception) {}
                 }
             }
 
