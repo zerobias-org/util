@@ -354,6 +354,18 @@ gradle.projectsEvaluated {
             dependsOn(publishPlan)
             onlyIf { publishPlanFile.exists() && publishPlanFile.readText().contains(capturedPkgName) }
             doLast {
+                // If this is the stack package, regenerate zbb.yaml from the
+                // root manifest so the published package includes the current
+                // stack config. Consumers download this via `zbb stack add`.
+                if (pkg.relDir == "stack") {
+                    val rootZbbYaml = rootDir.resolve("zbb.yaml")
+                    val stackZbbYaml = pkg.dir.resolve("zbb.yaml")
+                    if (rootZbbYaml.exists()) {
+                        rootZbbYaml.copyTo(stackZbbYaml, overwrite = true)
+                        logger.lifecycle("[prepublish] regenerated stack/zbb.yaml from root")
+                    }
+                }
+
                 logger.lifecycle("[prepublish] $pkgName")
                 if (publishDryRun) {
                     val result = Prepublish.resolve(pkg.dir, rootDir, Prepublish.Options(dryRun = true))
