@@ -266,7 +266,7 @@ val dispatchImageWorkflows = tasks.register("dispatchImageWorkflows") {
             // Find the package with this relDir
             val pkg = service.graph.packages.values.find { it.relDir == relDir } ?: continue
             // Only dispatch if this package was in the publish plan
-            if (!planJson.contains(pkg.name)) continue
+            if (!planJson.contains("\"name\":\"${pkg.name}\"")) continue
 
             // Use the BUMPED version from the publish plan, not the original
             // from package.json (which was read at config time before the bump).
@@ -352,7 +352,7 @@ gradle.projectsEvaluated {
             group = "monorepo"
             description = "Run Kotlin Prepublish for $pkgName"
             dependsOn(publishPlan)
-            onlyIf { publishPlanFile.exists() && publishPlanFile.readText().contains(capturedPkgName) }
+            onlyIf { publishPlanFile.exists() && publishPlanFile.readText().contains("\"name\":\"$capturedPkgName\"") }
             doLast {
                 // If this is the stack package, regenerate zbb.yaml from the
                 // root manifest so the published package includes the current
@@ -415,7 +415,7 @@ gradle.projectsEvaluated {
             finalizedBy(restoreTask)
 
             onlyIf {
-                if (!publishPlanFile.exists() || !publishPlanFile.readText().contains(capturedPkgName)) {
+                if (!publishPlanFile.exists() || !publishPlanFile.readText().contains("\"name\":\"$capturedPkgName\"")) {
                     false  // not in the publish plan
                 } else if (publishDryRun) {
                     logger.lifecycle("[publish] DRY RUN: would publish $pkgName from ${pkg.dir}")
