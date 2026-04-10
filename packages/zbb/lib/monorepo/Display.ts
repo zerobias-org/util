@@ -425,6 +425,13 @@ export class MonorepoDisplay {
       return { rendered: `${COLOR.green}${text}${COLOR.reset}`, width: text.length };
     });
 
+    // Reorder: running steps first (always visible next to the project name),
+    // then completed/cached/failed steps after. This ensures the active step
+    // is never truncated into "+N" when there are many cached steps.
+    const runningParts = stepParts.filter((_, i) => state.steps[i].status === 'running');
+    const doneParts = stepParts.filter((_, i) => state.steps[i].status !== 'running');
+    const orderedParts = [...runningParts, ...doneParts];
+
     // Layout: "  <icon> <name>   <timeline>"
     // Plain-text width of the prefix (icon + space + padded name + 3 spaces).
     const prefixWidth = 2 + 1 + 1 + this.maxNameLen + 3;
@@ -442,7 +449,7 @@ export class MonorepoDisplay {
     let timeline = '';
     let used = 0;
     let included = 0;
-    for (const part of stepParts) {
+    for (const part of orderedParts) {
       const sepW = included === 0 ? 0 : sepPlain.length;
       if (used + sepW + part.width > budget) break;
       if (included > 0) timeline += sepRendered;
@@ -450,7 +457,7 @@ export class MonorepoDisplay {
       used += sepW + part.width;
       included += 1;
     }
-    const dropped = stepParts.length - included;
+    const dropped = orderedParts.length - included;
     if (dropped > 0) {
       const suffix = ` +${dropped}`;
       // Trim earlier pills if needed to fit the suffix
@@ -460,7 +467,7 @@ export class MonorepoDisplay {
         used = 0;
         included -= 1;
         for (let i = 0; i < included; i += 1) {
-          const part = stepParts[i];
+          const part = orderedParts[i];
           const sepW = i === 0 ? 0 : sepPlain.length;
           if (i > 0) timeline += sepRendered;
           timeline += part.rendered;

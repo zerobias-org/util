@@ -213,7 +213,10 @@ val publishPlan = tasks.register("publishPlan") {
                 "name" to name,
                 "version" to (plan.resolvedVersions[name]?.version ?: "?"),
                 "bumped" to (plan.resolvedVersions[name]?.bumped ?: false),
-                "path" to (pkg?.relDir ?: ""),
+                // `location` is what the release-announcement action's
+                // generate_slack_message.sh reads for changelog URLs and
+                // what the publish-release-event code uses for package dirs.
+                "location" to (pkg?.relDir ?: ""),
             )
         }
         publishPlanFile.writeText(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(planData))
