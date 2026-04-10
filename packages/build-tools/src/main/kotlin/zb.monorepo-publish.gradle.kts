@@ -430,6 +430,16 @@ gradle.projectsEvaluated {
                 }
                 logger.lifecycle("[publish] restored all package.json version fields")
             }
+
+            // Write /tmp/published-packages.json for the release-announcement
+            // action. Format: [{ name, version }] — matches the legacy
+            // Publisher.ts output that the action's generate_slack_message.sh
+            // reads.
+            if (publishPlanFile.exists()) {
+                val planJson = publishPlanFile.readText()
+                java.io.File("/tmp/published-packages.json").writeText(planJson)
+                logger.lifecycle("[publish] wrote /tmp/published-packages.json")
+            }
         }
     }
 }
