@@ -32,6 +32,7 @@ import com.zerobias.buildtools.util.SourceHasher
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import java.io.File
 
 @Suppress("UNCHECKED_CAST")
 val graphService = (project.extensions.extraProperties["monorepoGraphService"]
@@ -49,9 +50,29 @@ tasks.register("monorepoGateCheck") {
 
     doLast {
         val service = graphService.get()
+
+        // The marker file lets CI distinguish "stamp is invalid" (a normal
+        // state — gate-run handles it) from "the check itself crashed"
+        // (infrastructure error — fail the workflow). The marker is written
+        // BEFORE we throw on invalid, so an absent marker means we never
+        // reached the validation logic at all (e.g. plugin failed to load,
+        // JVM crashed, build-tools missing).
+        val markerDir = rootProject.file(".zbb-monorepo")
+        val markerFile = File(markerDir, "gate-check.marker")
+        // Wipe any stale marker from a previous run before we start.
+        markerDir.mkdirs()
+        markerFile.delete()
+
+        fun writeMarker(valid: Boolean, reason: String) {
+            markerFile.writeText("valid=$valid\nreason=$reason\nts=${java.time.Instant.now()}\n")
+        }
+
         val stamp = GateStampIO.read(rootStampFile)
 
         if (stamp == null) {
+            // "No stamp" is treated like "invalid" — gate-run will produce
+            // one. This is a recoverable state, not an infrastructure error.
+            writeMarker(valid = false, reason = "stamp-missing")
             logger.error("✗ no gate-stamp.json found at ${rootStampFile.absolutePath}")
             logger.error("  Run `zbb gate` locally and commit the stamp before pushing.")
             throw GradleException("gate-stamp.json missing or unreadable")
@@ -89,8 +110,10 @@ tasks.register("monorepoGateCheck") {
         }
 
         if (!allValid) {
+            writeMarker(valid = false, reason = "stamp-invalid")
             throw GradleException("gate-stamp.json is invalid for one or more packages — run `zbb gate` to refresh")
         }
+        writeMarker(valid = true, reason = "stamp-valid")
         logger.lifecycle("Gate stamp valid — all packages pass validation.")
     }
 }

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "feature/zbb-monorepo-gradle-migration",
-  "timestamp": "2026-04-09T20:10:24.796324523Z",
+  "timestamp": "2026-04-10T13:38:33.027981895Z",
   "packages": {
     "@zerobias-org/util-codegen": {
       "version": "2.0.44",
