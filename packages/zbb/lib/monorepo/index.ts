@@ -114,8 +114,11 @@ export function lookupLifecycleCommand(
 ): string | null {
   if (!lifecycle) return null;
 
-  if (command === 'gate' && parsed.check && lifecycle.gateCheck) {
-    return lifecycle.gateCheck;
+  if (command === 'gate' && parsed.check) {
+    // gate --check has its own lifecycle entry. If it doesn't exist,
+    // return null so the caller falls through to monorepoGateCheck.
+    // Never return lifecycle.gate for --check — gate is the full run.
+    return lifecycle.gateCheck ?? null;
   }
 
   const value = (lifecycle as Record<string, unknown>)[command];

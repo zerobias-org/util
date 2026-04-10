@@ -77,6 +77,12 @@ jobs:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
+      - name: Build build-tools jar
+        run: cd packages/build-tools && ./gradlew jar
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+
       - name: Build local zbb
         run: npm run transpile --workspace=packages/zbb
 
@@ -100,6 +106,21 @@ jobs:
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           READ_TOKEN: ${{ env.READ_TOKEN }}
+
+      # If build-tools source changed, publish the Maven artifact so
+      # consumer repos (hub, hydra, platform, etc.) pick up the new jar.
+      - name: Publish build-tools to Maven
+        if: success()
+        run: |
+          if git diff --name-only HEAD~1 | grep -q '^packages/build-tools/'; then
+            echo "build-tools changed — publishing to Maven"
+            npx zbb publishRemote
+          else
+            echo "build-tools unchanged — skipping Maven publish"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
 
       - name: Release Announcement
         if: success()
