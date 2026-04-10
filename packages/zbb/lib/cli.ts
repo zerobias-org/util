@@ -300,7 +300,10 @@ async function _main(argv: string[]): Promise<void> {
     // Apply slot env (resolve vault/DNS, export to process.env). The stack's
     // contributed env vars are already part of the slot env via the stack
     // composition system from `zbb stack add`.
-    await prepareSlot(slot, { fatal: command === 'publish' });
+    // Vault errors are never fatal — in CI, vault secrets are already
+    // snapshotted into the slot via the CI-mode bootstrap. Locally,
+    // vault is optional for build/test/publish commands.
+    await prepareSlot(slot, { fatal: false });
 
     // Apply repo-level cleanse so child processes don't inherit unwanted
     // vars from the parent shell.
