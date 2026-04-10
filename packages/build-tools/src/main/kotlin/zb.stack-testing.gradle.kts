@@ -116,7 +116,7 @@ tasks.register("stackDown") {
                 "-f", composeFile.absolutePath,
                 "-p", composeProject,
                 "--env-file", envFilePath,
-                "stop", extension.serviceName
+                "stop"
             ),
             workingDir = composeFile.parentFile
         )

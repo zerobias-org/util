@@ -277,8 +277,9 @@ async function _main(argv: string[]): Promise<void> {
     return;
   }
 
+  // Lifecycle commands — route through stack if in stack context
   // Lifecycle commands (build, test, gate) — route through stack if in stack context
-  if (['build', 'test', 'gate'].includes(command) && process.env.ZB_SLOT) {
+  if (['test', 'gate'].includes(command) && process.env.ZB_SLOT) {
     const slot = await SlotManager.load(process.env.ZB_SLOT);
     const stackCtx = await detectStackContext(slot);
     if (stackCtx) {
@@ -1115,7 +1116,7 @@ function printUsage(): void {
 
 Usage:
   zbb slot <create|load|list|info|delete|gc>          Slot management
-  zbb stack <add|list|info|remove|update>             Stack management
+  zbb stack <add|list|info|start|stop|restart|destroy|remove>  Stack management
   zbb registry <start|stop|publish|install|list|clear|status>  Local npm registry
   zbb env <list|get|set|unset|reset|resolve|refresh|explain|diff>  Environment variables
   zbb secret <create|get|list|update|delete>          Secret management

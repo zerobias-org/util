@@ -171,8 +171,16 @@ export abstract class LoggerTransport extends Transport {
     const exception = this.formatException(info.error);
     output = output.replace(this.placeholderRegexes.get('exception')!, exception);
 
-    // Clean up multiple spaces (use [^\S\n]+ to match spaces/tabs but NOT newlines)
-    output = output.replaceAll(/[^\S\n]+/g, ' ').trim();
+    // Clean up multiple spaces on the header line only (first line before any \n)
+    // Preserve indentation in subsequent lines (JSON.stringify pretty-print)
+    const nlIdx = output.indexOf('\n');
+    if (nlIdx === -1) {
+      output = output.replaceAll(/[^\S\n]+/g, ' ').trim();
+    } else {
+      const header = output.slice(0, nlIdx).replaceAll(/\s+/g, ' ').trim();
+      const body = output.slice(nlIdx);
+      output = header + body;
+    }
 
     // Clean up extra newlines
     output = output.replaceAll(/\n+/g, '\n').replace(/\n$/, '');

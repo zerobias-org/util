@@ -126,34 +126,37 @@ export class StackEnvironment extends EventEmitter {
   }
 
   shouldMask(key: string): boolean {
-    const entry = this.manifest.get(key);
-    if (entry?.mask) return true;
-    if (entry?.type === 'secret') return true;
+    const decl = this.schema.get(key);
+    if (decl?.mask !== undefined) return decl.mask;
+    // Compat fallback for vars not in schema
     return SENSITIVE_PATTERNS.some(p => p.test(key));
   }
 
   getManifestEntry(key: string): StackManifestEntry | undefined {
     const entry = this.manifest.get(key);
-    if (!entry) return undefined;
-    // Enrich with schema data — schema is authoritative for type, values, description
     const decl = this.schema.get(key);
-    if (decl) {
-      return {
-        ...entry,
-        type: decl.type ?? entry.type,
-        values: decl.values ?? entry.values,
-        description: decl.description ?? entry.description,
-        hidden: decl.hidden ?? entry.hidden,
-        mask: decl.mask ?? entry.mask ?? decl.type === 'secret',
-      };
-    }
-    return entry;
+    if (!entry && !decl) return undefined;
+    // Join: manifest owns provenance (resolution, value, source), schema owns contract (type, mask, hidden, description, values)
+    return {
+      resolution: entry?.resolution ?? 'unset',
+      value: entry?.value,
+      formula: entry?.formula,
+      source: entry?.source,
+      type: decl?.type,
+      values: decl?.values,
+      description: decl?.description,
+      hidden: decl?.hidden,
+      mask: decl?.mask,
+    };
   }
 
   getManifest(showHidden = false): Record<string, StackManifestEntry> {
     const result: Record<string, StackManifestEntry> = {};
-    for (const key of this.manifest.keys()) {
-      const entry = this.getManifestEntry(key)!;
+    // Union of all known keys — schema (declared), manifest (provenance), env (runtime)
+    const keys = new Set([...this.manifest.keys(), ...this.schema.keys(), ...this.env.keys()]);
+    for (const key of keys) {
+      const entry = this.getManifestEntry(key);
+      if (!entry) continue;
       if (!showHidden && entry.hidden) continue;
       result[key] = entry;
     }

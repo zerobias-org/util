@@ -130,6 +130,23 @@ export async function handleStack(args: string[], slot: Slot): Promise<void> {
       process.exit(1);
     }
 
+    case 'destroy': {
+      const stackName = args[1] ?? await detectStackName(slot);
+      if (!stackName) {
+        console.error('Usage: zbb stack destroy <name>');
+        process.exit(1);
+      }
+      const stack = await slot.stacks.load(stackName);
+      // Stop first
+      try { await stack.runLifecycle('stop'); } catch { /* ignore */ }
+      // Run cleanup (docker compose down -v — removes containers + volumes)
+      if (stack.manifest.lifecycle?.cleanup) {
+        await stack.runLifecycle('cleanup');
+      }
+      console.log(`Destroyed ${stackName} (app data removed, stack config preserved)`);
+      break;
+    }
+
     case 'heartbeat':
       return handleHeartbeat(slot, { quiet: args.includes('--quiet') });
 
@@ -137,15 +154,12 @@ export async function handleStack(args: string[], slot: Slot): Promise<void> {
     case 'start':
     case 'stop':
     case 'restart':
-    case 'build':
-    case 'test':
-    case 'gate':
     case 'status':
       return handleLifecycle(sub, args.slice(1), slot);
 
     default:
       console.error(`Unknown stack command: ${sub}`);
-      console.error('Usage: zbb stack <add|list|info|remove|start|stop|restart|status|build|test|gate>');
+      console.error('Usage: zbb stack <add|list|info|start|stop|restart|destroy|remove>');
       process.exit(1);
   }
 }
