@@ -562,6 +562,27 @@ val generateServerApi by tasks.registering(NpxTask::class) {
                 // model types (ObjectSerializer, model classes). Redirect to ../../src/index.js
                 // which re-exports from both generated/api and generated/model.
                 content = content.replace("from '../api/index.js'", "from '../../src/index.js'")
+                // Fix 3: codegen uses OpenAPI format types (e.g. Arn, Email) as TypeScript
+                // type annotations in deserialization calls, but doesn't import them. Scan for
+                // type annotations on deserialize calls and add missing types to the module import.
+                val deserializePattern = Regex("""let \w+:\s+(\w+)\s+=\s+await ObjectSerializer\.deserialize""")
+                val allImportPattern = Regex("""import \{ (.+?) } from ['"](.+?)['"]""")
+                // Collect all already-imported names across all import lines
+                val allImported = allImportPattern.findAll(content).flatMap { m ->
+                    m.groupValues[1].split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                }.toSet()
+                val moduleImportPattern = Regex("""import \{ (.+) } from '../../src/index\.js'""")
+                val moduleImportMatch = moduleImportPattern.findAll(content).lastOrNull()
+                if (moduleImportMatch != null) {
+                    val existingModuleImports = moduleImportMatch.groupValues[1].split(",").map { it.trim() }.toSet()
+                    val usedTypes = deserializePattern.findAll(content).map { it.groupValues[1] }.toSet()
+                    val primitives = setOf("string", "number", "boolean", "any", "object", "Array")
+                    val missingTypes = usedTypes - allImported - primitives
+                    if (missingTypes.isNotEmpty()) {
+                        val newImports = (existingModuleImports + missingTypes).joinToString(", ")
+                        content = content.replace(moduleImportMatch.value, "import { $newImports } from '../../src/index.js'")
+                    }
+                }
                 file.writeText(content)
             }
         }
