@@ -349,9 +349,11 @@ gradle.projectsEvaluated {
     }
 
     // 3. Cross-phase ordering within a subproject (fallback Exec only).
-    //    Canonical order: lint → generate → transpile → test
-    //    Use mustRunAfter (not dependsOn) so requesting just one phase
-    //    doesn't pull in the earlier ones.
+    //    Canonical chain: lint → generate → transpile → test
+    //    Uses dependsOn so a failure in an earlier phase kills downstream
+    //    phases immediately (fail-fast). This also means `./gradlew transpile`
+    //    pulls in lint + generate, which is correct — you shouldn't transpile
+    //    without generating first.
     for ((_, pkg) in packages) {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
@@ -362,12 +364,9 @@ gradle.projectsEvaluated {
         val transpile = subproject.tasks.findByName("transpile")
         val test = subproject.tasks.findByName("test")
 
-        if (lint != null && generate != null) generate.mustRunAfter(lint)
-        if (transpile != null) {
-            lint?.let { transpile.mustRunAfter(it) }
-            generate?.let { transpile.mustRunAfter(it) }
-        }
-        if (test != null && transpile != null) test.mustRunAfter(transpile)
+        if (generate != null) lint?.let { generate.dependsOn(it) }
+        if (transpile != null) generate?.let { transpile.dependsOn(it) }
+        if (test != null) transpile?.let { test.dependsOn(it) }
     }
 
     // 4. Register Docker build tasks for subprojects whose short-name appears

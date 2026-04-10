@@ -240,8 +240,15 @@ val dispatchImageWorkflows = tasks.register("dispatchImageWorkflows") {
         }
 
         // Read the publish plan to know which packages were actually published
+        // AND their resolved (bumped) versions.
         if (!publishPlanFile.exists()) return@doLast
         val planJson = publishPlanFile.readText()
+        val om = ObjectMapper().registerKotlinModule()
+        @Suppress("UNCHECKED_CAST")
+        val planEntries = om.readValue<List<Map<String, Any?>>>(publishPlanFile)
+        val planVersions = planEntries.associate {
+            (it["name"] as? String ?: "") to (it["version"] as? String ?: "")
+        }
 
         // Detect GitHub repo from git remote
         val githubRepo = detectGithubRepo(rootProject.projectDir)
@@ -258,7 +265,9 @@ val dispatchImageWorkflows = tasks.register("dispatchImageWorkflows") {
             // Only dispatch if this package was in the publish plan
             if (!planJson.contains(pkg.name)) continue
 
-            val version = service.graph.packages[pkg.name]?.version ?: continue
+            // Use the BUMPED version from the publish plan, not the original
+            // from package.json (which was read at config time before the bump).
+            val version = planVersions[pkg.name] ?: continue
             logger.lifecycle("[images] dispatching ${imageConfig.name} (${workflow}) version=$version")
 
             try {
