@@ -3,16 +3,6 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 
-const SENSITIVE_PATTERNS = [
-  /key$/i,
-  /secret$/i,
-  /token$/i,
-  /password$/i,
-  /pass$/i,
-  /credential/i,
-  /jwt$/i,
-];
-
 /**
  * Source values for ManifestEntry:
  *   "override"  — user set via `zbb env set` (written to overrides.env)
@@ -223,9 +213,10 @@ export class SlotEnvironment extends EventEmitter {
   /** Check if var should be masked in output. */
   shouldMask(key: string): boolean {
     const entry = this.manifest.get(key);
-    if (entry?.mask) return true;
-    if (entry?.type === 'secret') return true;
-    return SENSITIVE_PATTERNS.some(p => p.test(key));
+    // Explicit mask: true/false in zbb.yaml is canonical
+    if (entry?.mask !== undefined) return entry.mask;
+    // Compat fallback — will be removed when all zbb.yaml files declare mask explicitly
+    return /(?:key|secret|token|password|pass|jwt)$/i.test(key) || /credential/i.test(key);
   }
 
   /** Is this an override vs declared value? */
