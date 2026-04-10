@@ -604,18 +604,39 @@ export class StackEnvironment extends EventEmitter {
       });
     }
 
-    // Inherited from parent env
-    for (const [name, decl] of Object.entries(schema)) {
-      if (decl.source === 'env') {
+    // Inherited from parent env.
+    // In CI mode (CI=true), ANY declared var that's already in process.env
+    // is used directly — this picks up vault-action secrets, GitHub Actions
+    // env, and anything else the CI runner exported. This avoids re-fetching
+    // from Vault during `prepareSlot()`.
+    const ciMode = process.env.CI === 'true';
+    if (ciMode) {
+      for (const [name, decl] of Object.entries(schema)) {
+        if (manifest.has(name)) continue; // already handled (ports, secrets, etc.)
         const value = process.env[name];
         if (value !== undefined) {
           manifest.set(name, {
             resolution: 'inherited',
             value,
-            source: 'env',
+            source: 'ci-env',
+            mask: decl.mask,
           });
-        } else if (decl.required) {
-          throw new Error(`Required env var '${name}' not found in environment`);
+        }
+      }
+    } else {
+      // Local mode: only inherit vars explicitly declared `source: env`
+      for (const [name, decl] of Object.entries(schema)) {
+        if (decl.source === 'env') {
+          const value = process.env[name];
+          if (value !== undefined) {
+            manifest.set(name, {
+              resolution: 'inherited',
+              value,
+              source: 'env',
+            });
+          } else if (decl.required) {
+            throw new Error(`Required env var '${name}' not found in environment`);
+          }
         }
       }
     }

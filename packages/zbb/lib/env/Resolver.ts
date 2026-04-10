@@ -28,14 +28,29 @@ export function extractRefs(value: string): string[] {
 }
 
 /** Interpolate ${VAR} references in a string using resolved values */
-export function interpolate(template: string, resolved: Map<string, string>): string {
-  return template.replace(VAR_REF, (_, name) => {
+export function interpolate(
+  template: string,
+  resolved: Map<string, string>,
+  lenient = false,
+): string {
+  return template.replace(VAR_REF, (match, name) => {
     const val = resolved.get(name);
     if (val === undefined) {
+      if (lenient) return match; // leave ${VAR} as-is for later resolution
       throw new Error(`Unresolved reference: \${${name}}`);
     }
     return val;
   });
+}
+
+export interface ResolveOptions {
+  /**
+   * When true, unknown variable references are left as literal `${VAR}`
+   * instead of throwing. Used during `slot create` where vars like
+   * `STACK_NAME` aren't known yet — they get resolved later during
+   * `stack add`.
+   */
+  lenient?: boolean;
 }
 
 /**
@@ -43,11 +58,14 @@ export function interpolate(template: string, resolved: Map<string, string>): st
  *
  * @param vars - Map of var name → raw value (may contain ${VAR} refs)
  * @param preResolved - Already-resolved vars (ports, secrets, inherited) that don't need interpolation
+ * @param options - Resolution options (lenient mode for slot create)
  */
 export function resolveAll(
   vars: Map<string, string>,
   preResolved: Map<string, string>,
+  options?: ResolveOptions,
 ): ResolvedVar[] {
+  const lenient = options?.lenient ?? false;
   // Build entries with dependency lists
   const entries: VarEntry[] = [];
   for (const [name, raw] of vars) {
@@ -70,9 +88,13 @@ export function resolveAll(
         list.push(entry.name);
         dependents.set(dep, list);
       } else if (!preResolved.has(dep)) {
-        throw new Error(
-          `Variable '${entry.name}' references unknown variable '\${${dep}}'`
-        );
+        if (!lenient) {
+          throw new Error(
+            `Variable '${entry.name}' references unknown variable '\${${dep}}'`
+          );
+        }
+        // Lenient: unknown dep won't block topo-sort. interpolate() in
+        // lenient mode leaves the ${VAR} literal for later resolution.
       }
     }
   }
@@ -92,7 +114,7 @@ export function resolveAll(
     const entry = entryMap.get(name)!;
 
     const hasDeps = entry.deps.length > 0;
-    const value = hasDeps ? interpolate(entry.raw, resolved) : entry.raw;
+    const value = hasDeps ? interpolate(entry.raw, resolved, lenient) : entry.raw;
     resolved.set(name, value);
     result.push({ name, value, derived: hasDeps });
 

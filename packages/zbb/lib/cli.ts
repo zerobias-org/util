@@ -461,8 +461,12 @@ async function handleSlot(args: string[]): Promise<void> {
         }
       }
 
-      // Merge slot env
+      // Merge slot env + ensure ZB_SLOT is always set (the .env file may
+      // not have it if created by an older zbb version or if slot create
+      // was interrupted before writing the env file).
       Object.assign(shellEnv, slotEnv);
+      shellEnv.ZB_SLOT = slotName;
+      shellEnv.ZB_SLOT_DIR = slot.path;
 
       // Ensure JAVA_HOME is set and on PATH if not already correct
       if (!shellEnv.JAVA_HOME || !shellEnv.JAVA_HOME.includes('21')) {
