@@ -296,7 +296,7 @@ export class StackEnvironment extends EventEmitter {
           lookup.set(key, value);
         }
       }
-      const resolved = resolveAll(derivedVars, lookup);
+      const resolved = resolveAll(derivedVars, lookup, { lenient: true });
       for (const r of resolved) {
         preResolved.set(r.name, r.value);
         // Update manifest inputs
