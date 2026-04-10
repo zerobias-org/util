@@ -1,0 +1,50 @@
+# ──────────────────────────────────────────────────────────────────────
+# Util Meta-Repo Stack Manifest (Phase 3 single-file model)
+# ──────────────────────────────────────────────────────────────────────
+#
+# org/util is the meta-repo containing build-tools (the Gradle plugins)
+# and zbb (the wrapper CLI). It uses the same Phase 3 single-file model
+# as every other zbb-managed repo.
+
+name: "@zerobias-org/util"
+version: "1.0.0"
+
+# ── Tool preflight ────────────────────────────────────────────────────
+require:
+  - tool: node
+    check: "node --version"
+    parse: "v(\\S+)"
+    version: ">=22"
+    install: "nvm install 22"
+
+  - tool: java
+    check: "bash -c '$JAVA_HOME/bin/java -version 2>&1'"
+    parse: 'version "(\S+)"'
+    version: "21"
+    install: "apt install openjdk-21-jdk"
+
+  - tool: docker
+    check: "docker --version"
+    parse: "Docker version (\\S+),"
+    version: ">=24"
+    install: "https://docs.docker.com/engine/install/"
+
+# ── Lifecycle delegation ──────────────────────────────────────────────
+# Routes through the new monorepo Gradle plugins, same as the consumer
+# repos. zbb itself is built and tested via this flow now.
+lifecycle:
+  clean:     ./gradlew monorepoClean
+  build:     ./gradlew monorepoBuild
+  test:      ./gradlew monorepoTest
+  gate:      ./gradlew monorepoGate
+  gateCheck: ./gradlew monorepoGateCheck
+  publish:   ./gradlew monorepoPublish
+
+# ── Monorepo orchestration (consumed by Gradle plugins) ───────────────
+monorepo:
+  registry: https://npm.pkg.github.com/
+  sourceDirs: [src, lib]
+  sourceFiles: [tsconfig.json, package.json]
+  buildPhases: [lint, compile, copyDeps, generate, transpile]
+  testPhases: [test]
+  skipPublish: [build-tools, content-schema]

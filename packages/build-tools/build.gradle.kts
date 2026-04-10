@@ -11,7 +11,7 @@ version = run {
     val token = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
     if (token.isEmpty()) return@run "$baseVersion.0"
 
-    val repoUrl = "https://maven.pkg.github.com/zerobias-com/util"
+    val repoUrl = "https://maven.pkg.github.com/zerobias-org/util"
     val metadataUrl = "$repoUrl/com/zerobias/build-tools/maven-metadata.xml"
     try {
         val url = uri(metadataUrl).toURL()
@@ -58,15 +58,26 @@ dependencies {
 
     // YAML manipulation (replaces yq CLI dependency)
     implementation("org.yaml:snakeyaml:2.2")
+
+    // JSON serialization for monorepo gate stamp (matches JS JSON.stringify byte-for-byte)
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
+
+    // Kotlin test runner
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 publishing {
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/zerobias-com/util")
+            url = uri("https://maven.pkg.github.com/zerobias-org/util")
             credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: "zerobias-com"
+                username = System.getenv("GITHUB_ACTOR") ?: "zerobias-org"
                 password = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
             }
         }

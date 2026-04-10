@@ -83,15 +83,12 @@ export class StackManager {
       throw new Error(`Stack '${stackName}' already exists in slot '${this.slot.name}'`);
     }
 
-    // Run preflight checks if stack declares tool requirements
-    if (manifest.require && manifest.require.length > 0) {
-      const results = runPreflightChecks(manifest.require);
-      const failed = results.filter(r => !r.ok);
-      if (failed.length > 0) {
-        console.log(formatPreflightResults(results));
-        throw new Error(`Stack '${stackName}' has unmet tool requirements`);
-      }
-    }
+    // Preflight checks are NOT run during stack add — it's pure metadata
+    // setup (env resolution, port allocation, import wiring). Runtime tool
+    // requirements (java, docker, sem, etc.) are validated at lifecycle-
+    // command time by cli.ts, which filters `require:` entries by the
+    // `commands:` field (e.g. java is only needed for build/test/gate, not
+    // for stack add).
 
     // Resolve dependencies — auto-pull packaged deps if missing
     await this.resolveDeps(manifest);

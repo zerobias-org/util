@@ -70,10 +70,10 @@ export class StackEnvironment extends EventEmitter {
       throw new Error(`zbb.yaml not found at ${zbbYamlPath} (source: ${schemaDir}) — Layer 1 schema is required`);
     }
     const config = await loadYamlOrDefault<Partial<StackManifest>>(zbbYamlPath, {});
-    if (!config.env) {
-      throw new Error(`zbb.yaml at ${zbbYamlPath} has no env declarations`);
-    }
-    this.schema = new Map(Object.entries(config.env));
+    // A stack is allowed to have zero declared env vars (e.g. a library
+    // monorepo like com/util that just needs lifecycle delegation and has
+    // no ports/secrets/imports). Empty schema is valid.
+    this.schema = new Map(Object.entries(config.env ?? {}));
     this.imports = config.imports ? StackEnvironment.parseImports(config.imports) : [];
   }
 
@@ -607,18 +607,39 @@ export class StackEnvironment extends EventEmitter {
       });
     }
 
-    // Inherited from parent env
-    for (const [name, decl] of Object.entries(schema)) {
-      if (decl.source === 'env') {
+    // Inherited from parent env.
+    // In CI mode (CI=true), ANY declared var that's already in process.env
+    // is used directly — this picks up vault-action secrets, GitHub Actions
+    // env, and anything else the CI runner exported. This avoids re-fetching
+    // from Vault during `prepareSlot()`.
+    const ciMode = process.env.CI === 'true';
+    if (ciMode) {
+      for (const [name, decl] of Object.entries(schema)) {
+        if (manifest.has(name)) continue; // already handled (ports, secrets, etc.)
         const value = process.env[name];
         if (value !== undefined) {
           manifest.set(name, {
             resolution: 'inherited',
             value,
-            source: 'env',
+            source: 'ci-env',
+            mask: decl.mask,
           });
-        } else if (decl.required) {
-          throw new Error(`Required env var '${name}' not found in environment`);
+        }
+      }
+    } else {
+      // Local mode: only inherit vars explicitly declared `source: env`
+      for (const [name, decl] of Object.entries(schema)) {
+        if (decl.source === 'env') {
+          const value = process.env[name];
+          if (value !== undefined) {
+            manifest.set(name, {
+              resolution: 'inherited',
+              value,
+              source: 'env',
+            });
+          } else if (decl.required) {
+            throw new Error(`Required env var '${name}' not found in environment`);
+          }
         }
       }
     }

@@ -116,10 +116,24 @@ export async function handleStack(args: string[], slot: Slot): Promise<void> {
     }
 
     case 'remove': {
-      const stackName = args[1];
+      let stackName = args[1];
       if (!stackName) {
-        console.error('Usage: zbb stack remove <name>');
+        console.error('Usage: zbb stack remove <name|path>');
         process.exit(1);
+      }
+      // If the argument looks like a path (., ./, /, ~), resolve the
+      // stack name from the manifest — same logic as `stack add .`.
+      if (stackName === '.' || stackName.startsWith('./') || stackName.startsWith('/') || stackName.startsWith('~')) {
+        const { resolve: resolvePath } = await import('node:path');
+        const { existsSync } = await import('node:fs');
+        const sourcePath = resolvePath(stackName);
+        const manifest = await loadStackManifest(sourcePath);
+        if (!manifest) {
+          console.error(`No stack manifest found at ${sourcePath}/zbb.yaml`);
+          process.exit(1);
+        }
+        // Extract short name (same as StackManager.extractShortName)
+        stackName = manifest.name.split('/').pop() ?? manifest.name;
       }
       await slot.stacks.remove(stackName);
       break;
@@ -179,6 +193,27 @@ export async function handleLifecycle(
         console.error('Usage: zbb start <stack[:substack]>');
         process.exit(1);
       }
+
+      // Run preflight checks for tools required during stack operations.
+      // Filter require entries to those with `commands:` including 'stack'
+      // (or no commands filter = always required).
+      const stackName = target.split(':')[0];
+      const stack = await slot.stacks.load(stackName);
+      if (stack.manifest.require && stack.manifest.require.length > 0) {
+        const { runPreflightChecks, formatPreflightResults } = await import('../preflight.js');
+        const applicable = stack.manifest.require.filter(
+          (r: any) => !r.commands || r.commands.includes('stack'),
+        );
+        if (applicable.length > 0) {
+          const results = runPreflightChecks(applicable);
+          const failed = results.filter(r => !r.ok);
+          if (failed.length > 0) {
+            console.log(formatPreflightResults(results));
+            process.exit(1);
+          }
+        }
+      }
+
       console.log(`Starting ${target}...`);
       await slot.stacks.start(target);
       console.log(`Started ${target}`);

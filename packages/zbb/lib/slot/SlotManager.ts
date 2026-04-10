@@ -4,18 +4,12 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { Slot, type SlotMeta } from './Slot.js';
 import { SlotEnvironment, type ManifestEntry } from './SlotEnvironment.js';
-import { allocatePorts, allocateSlotPortRange, validatePortRange } from './PortAllocator.js';
-import { scanEnvDeclarations } from '../env/Scanner.js';
-import { resolveAll } from '../env/Resolver.js';
-import { generateSecret } from '../env/SecretGen.js';
+import { allocateSlotPortRange, validatePortRange } from './PortAllocator.js';
 import { saveYaml, loadYamlOrDefault } from '../yaml.js';
 import {
   findRepoRoot,
   getSlotsDir,
   loadUserConfig,
-  loadRepoConfig,
-  loadProjectConfig,
-  type RepoConfig,
   type UserConfig,
 } from '../config.js';
 
@@ -24,12 +18,29 @@ export interface CreateOptions {
   ttl?: number;
   repoRoot?: string;
   portRange?: [number, number];
+  /**
+   * CI mode: snapshot process.env as the source-of-truth for ALL declared
+   * vars (not just `source: env` ones). Vault-injected secrets exported by
+   * `hashicorp/vault-action` are picked up directly without re-fetching from
+   * Vault. Auto-detected from `CI=true` env var when not set explicitly.
+   */
+  ci?: boolean;
 }
 
 export class SlotManager {
   /**
    * Create a new slot.
-   * Scans zbb.yaml files, allocates ports, generates secrets, resolves vars.
+   *
+   * Phase 3 model: slot create is a pure infrastructure step. It creates
+   * the directory structure, writes slot-framework env vars (ZB_SLOT,
+   * ZB_SLOT_DIR, etc.), allocates a port range, and writes metadata.
+   *
+   * All application-level env processing (ports, secrets, derived vars,
+   * ${VAR} resolution) happens later during `stack add`, when the stack
+   * manifest is read and STACK_NAME is known.
+   *
+   * In CI mode, process.env is dumped to an inherited.env file so that
+   * vault-action secrets are available when `stack add` runs.
    */
   static async create(name: string, options: CreateOptions = {}): Promise<Slot> {
     // Validate name
@@ -51,31 +62,12 @@ export class SlotManager {
       throw new Error(`Slot '${name}' already exists at ${slotDir}`);
     }
 
-    // Find repo root (optional — slot can be created outside a project)
-    const repoRoot = options.repoRoot ?? findRepoRoot(process.cwd());
-
-    // Check if current project opts out of repo-wide inheritance
-    const projectConfig = await loadProjectConfig(process.cwd());
-    const inherit = projectConfig.inherit !== false;
-
-    let scanned: Awaited<ReturnType<typeof scanEnvDeclarations>> = [];
-    if (!inherit) {
-      // Standalone project — scan only this project's zbb.yaml
-      const { join } = await import('node:path');
-      scanned = await scanEnvDeclarations(process.cwd(), join(process.cwd(), 'zbb.yaml'));
-    } else if (repoRoot) {
-      const repoConfig = await loadRepoConfig(repoRoot);
-      // Scan all zbb.yaml files across repo
-      scanned = await scanEnvDeclarations(repoRoot);
-    }
-
-    // 2. Allocate a non-overlapping port range for this slot
-    //    Scans existing slots and picks the next available block
+    // 1. Allocate a non-overlapping port range for this slot
     const existingSlots = await SlotManager.list();
     const portRange = options.portRange ?? allocateSlotPortRange(existingSlots);
     validatePortRange(portRange, existingSlots);
 
-    // 3. Create slot directories
+    // 2. Create slot directories
     await mkdir(slotDir, { recursive: true });
     await mkdir(join(slotDir, 'config'), { recursive: true });
     await mkdir(join(slotDir, 'logs'), { recursive: true });
@@ -83,126 +75,27 @@ export class SlotManager {
     await mkdir(join(slotDir, 'state', 'tmp'), { recursive: true });
     await mkdir(join(slotDir, 'stacks'), { recursive: true });
 
-    // 4. Build slot env vars (available for ${VAR} resolution)
+    // 3. Build slot-framework env vars — these are ALWAYS present in any
+    //    slot, regardless of what stack is loaded.
     const slot = new Slot(name, slotsDir);
     const slotVars = slot.getSlotEnvVars();
 
-    // 5. Allocate ports within this slot's range
-    const portAllocations = allocatePorts(scanned, portRange);
-
-    // 5. Generate secrets
-    const secrets = new Map<string, string>();
-    const secretVars = scanned.filter(v => v.declaration.type === 'secret' && v.declaration.generate);
-    for (const v of secretVars) {
-      const value = generateSecret(v.declaration.generate!, secrets);
-      secrets.set(v.name, value);
-    }
-
-    // 6. Collect inherited vars (source: env)
-    const inherited = new Map<string, string>();
-    const inheritedVars = scanned.filter(v => v.declaration.source === 'env');
-    for (const v of inheritedVars) {
-      const value = process.env[v.name];
-      if (!value && v.declaration.required) {
-        throw new Error(
-          `Required environment variable '${v.name}' not found in parent shell. ` +
-          `(declared in ${v.source})`
-        );
-      }
-      if (value) inherited.set(v.name, value);
-    }
-
-    // 6b. Resolve cwd vars (source: cwd → absolute path of declaring project)
-    const { dirname, resolve } = await import('node:path');
-    const cwdVars = new Map<string, string>();
-    if (repoRoot) {
-      for (const v of scanned.filter(v => v.declaration.source === 'cwd')) {
-        cwdVars.set(v.name, resolve(repoRoot, dirname(v.source)));
-      }
-    }
-
-    // 7. Build pre-resolved map (ports + secrets + inherited + cwd + slot vars)
-    const preResolved = new Map<string, string>();
-    for (const [k, v] of Object.entries(slotVars)) preResolved.set(k, v);
-    for (const alloc of portAllocations) preResolved.set(alloc.name, String(alloc.port));
-    for (const [k, v] of secrets) preResolved.set(k, v);
-    for (const [k, v] of inherited) preResolved.set(k, v);
-    for (const [k, v] of cwdVars) preResolved.set(k, v);
-
-    // 8. Collect derived vars (string type with ${VAR} refs in default)
-    const derivedVars = new Map<string, string>();
-    for (const v of scanned) {
-      if (preResolved.has(v.name)) continue; // already resolved
-      if (v.declaration.deprecated) continue;
-      const defaultVal = v.declaration.default;
-      if (defaultVal !== undefined) {
-        derivedVars.set(v.name, defaultVal);
-      }
-    }
-
-    // 9. Resolve derived vars
-    const resolved = resolveAll(derivedVars, preResolved);
-
-    // 10. Build final env and manifest
     const env = new Map<string, string>();
     const manifest = new Map<string, ManifestEntry>();
-
-    // Slot vars
     for (const [k, v] of Object.entries(slotVars)) {
       env.set(k, v);
       manifest.set(k, { source: 'zbb', type: 'slot' });
     }
 
-    // Ports
-    for (const alloc of portAllocations) {
-      env.set(alloc.name, String(alloc.port));
-      manifest.set(alloc.name, {
-        source: alloc.source,
-        type: 'port',
-        allocated: alloc.port,
-      });
-    }
-
-    // Secrets
-    for (const v of secretVars) {
-      env.set(v.name, secrets.get(v.name)!);
-      manifest.set(v.name, {
-        source: v.source,
-        type: 'secret',
-        mask: true,
-        generated: v.declaration.generate,
-      });
-    }
-
-    // Inherited
-    for (const v of inheritedVars) {
-      const value = inherited.get(v.name);
-      if (value) {
-        env.set(v.name, value);
-        manifest.set(v.name, {
-          source: v.source,
-          type: 'inherited',
-          mask: v.declaration.mask ?? false,
-        });
-      }
-    }
-
-    // Derived / string defaults
-    for (const r of resolved) {
-      env.set(r.name, r.value);
-      const scanEntry = scanned.find(s => s.name === r.name);
-      manifest.set(r.name, {
-        source: scanEntry?.source ?? 'unknown',
-        type: scanEntry?.declaration.type ?? 'string',
-        derived: r.derived,
-        mask: scanEntry?.declaration.mask ?? false,
-      });
-    }
-
-    // 11. Write .env and manifest.yaml
+    // 4. Write .env (slot-framework vars only) and manifest.yaml
+    //    CI-mode env inheritance is handled by `stack add` (StackEnvironment
+    //    .initialize) which reads process.env for all declared vars when
+    //    CI=true. No inherited.env file needed — the bootstrap step runs
+    //    both `slot create` and `stack add` in the same CI step, so
+    //    process.env is identical for both.
     await SlotEnvironment.writeDeclaredEnv(slotDir, env, manifest);
 
-    // 12. Write slot.yaml metadata
+    // 6. Write slot.yaml metadata
     const meta: SlotMeta = {
       name,
       created: new Date().toISOString(),
@@ -216,7 +109,7 @@ export class SlotManager {
     }
     await saveYaml(join(slotDir, 'slot.yaml'), meta);
 
-    // 13. Load and return
+    // 7. Load and return
     await slot.load();
     return slot;
   }
