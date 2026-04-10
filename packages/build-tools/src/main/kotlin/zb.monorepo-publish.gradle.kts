@@ -204,12 +204,16 @@ val publishPlan = tasks.register("publishPlan") {
             }
         }
 
-        // Write the plan to a side file so per-package tasks can read it
+        // Write the plan to a side file so per-package tasks can read it.
+        // `path` is the package's relDir — used by the release-announcement
+        // action to build changelog URLs.
         val planData = plan.publishOrdered.map { name ->
+            val pkg = service.graph.packages[name]
             mapOf(
                 "name" to name,
                 "version" to (plan.resolvedVersions[name]?.version ?: "?"),
                 "bumped" to (plan.resolvedVersions[name]?.bumped ?: false),
+                "path" to (pkg?.relDir ?: ""),
             )
         }
         publishPlanFile.writeText(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(planData))
@@ -410,32 +414,120 @@ gradle.projectsEvaluated {
         }
     }
 
-    // ── Restore ALL version-patched package.json files after publish ──
-    // monorepoPublish runs last; after it, restore any package.json files
-    // that were version-patched by publishPlan. Use git checkout to restore
-    // the originals (since prepublish-backup is already handled by restoreTask).
+    // ── Commit version bumps BEFORE per-package publish ──
+    // publishPlan patches each package.json with the bumped version. We
+    // commit that BEFORE prepublish/npm-publish so the published tarball's
+    // git HEAD matches the version it claims.
+    val commitVersionBumps = tasks.register("commitVersionBumps") {
+        group = "monorepo"
+        description = "Git commit the version-bumped package.json files written by publishPlan"
+        dependsOn(publishPlan)
+        onlyIf { !publishDryRun && publishPlanFile.exists() && publishPlanFile.readText() != "[]" }
+
+        doLast {
+            val repoRoot = rootProject.projectDir
+            val om = ObjectMapper().registerKotlinModule()
+
+            // Stage all version-bumped package.json files
+            val filesToStage = mutableListOf<String>()
+            @Suppress("UNCHECKED_CAST")
+            val plan = om.readValue<List<Map<String, Any?>>>(publishPlanFile)
+            for (entry in plan) {
+                val name = entry["name"] as? String ?: continue
+                val pkg = service.graph.packages[name] ?: continue
+                val pkgJson = pkg.dir.resolve("package.json")
+                if (pkgJson.exists()) {
+                    filesToStage.add(pkgJson.relativeTo(repoRoot).path)
+                }
+            }
+
+            if (filesToStage.isEmpty()) return@doLast
+
+            // Git add the version-bumped files
+            val addProc = ProcessBuilder(listOf("git", "add") + filesToStage)
+                .directory(rootProject.projectDir)
+                .redirectErrorStream(true)
+                .start()
+            addProc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+
+            // Also stage gate-stamp.json if it exists (it references the versions)
+            val gateStamp = rootProject.projectDir.resolve("gate-stamp.json")
+            if (gateStamp.exists()) {
+                ProcessBuilder("git", "add", "gate-stamp.json")
+                    .directory(rootProject.projectDir)
+                    .redirectErrorStream(true)
+                    .start()
+                    .waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+            }
+
+            // Commit
+            val versions = plan.map { e -> "${e["name"]}@${e["version"]}" }
+            val commitMsg = "chore(release): ${versions.joinToString(", ")}"
+            val commitProc = ProcessBuilder("git", "commit", "-m", commitMsg)
+                .directory(rootProject.projectDir)
+                .redirectErrorStream(true)
+                .start()
+            commitProc.inputStream.bufferedReader().readText()
+            commitProc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+            logger.lifecycle("[publish] committed version bumps: $commitMsg")
+        }
+    }
+
+    // Wire: commitVersionBumps runs AFTER publishPlan, BEFORE prepublish
+    for ((pkgName, pkg) in service.graph.packages) {
+        if (pkg.private) continue
+        if (service.config.skipPublish.contains(pkgName)) continue
+        val gradlePath = ":" + pkg.relDir.replace("/", ":")
+        val subproject = rootProject.findProject(gradlePath) ?: continue
+        subproject.tasks.findByName("prepublishPackage")?.dependsOn(commitVersionBumps)
+    }
+
+    // ── Tag + push after all packages are published ──
     monorepoPublish.configure {
         doLast {
-            if (!publishDryRun) {
-                for ((pkgName, pkg) in service.graph.packages) {
-                    if (pkg.private) continue
-                    if (service.config.skipPublish.contains(pkgName)) continue
+            if (!publishDryRun && publishPlanFile.exists()) {
+                val om = ObjectMapper().registerKotlinModule()
+                @Suppress("UNCHECKED_CAST")
+                val plan = om.readValue<List<Map<String, Any?>>>(publishPlanFile)
+
+                // Create a git tag for each published package
+                for (entry in plan) {
+                    val name = entry["name"] as? String ?: continue
+                    val version = entry["version"] as? String ?: continue
+                    // Tag format: @scope/name@version (matches npm convention)
+                    val tag = "$name@$version"
                     try {
-                        val proc = ProcessBuilder("git", "checkout", "package.json")
-                            .directory(pkg.dir)
+                        val proc = ProcessBuilder("git", "tag", tag)
+                            .directory(rootProject.projectDir)
                             .redirectErrorStream(true)
                             .start()
                         proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
-                    } catch (_: Exception) { /* ignore */ }
+                        logger.lifecycle("[publish] tagged $tag")
+                    } catch (_: Exception) {
+                        logger.warn("[publish] failed to create tag: $tag")
+                    }
                 }
-                logger.lifecycle("[publish] restored all package.json version fields")
-            }
 
-            // Write /tmp/published-packages.json for the release-announcement
-            // action. Format: [{ name, version }] — matches the legacy
-            // Publisher.ts output that the action's generate_slack_message.sh
-            // reads.
-            if (publishPlanFile.exists()) {
+                // Push the version-bump commit + tags
+                try {
+                    val pushProc = ProcessBuilder("git", "push", "--follow-tags")
+                        .directory(rootProject.projectDir)
+                        .redirectErrorStream(true)
+                        .start()
+                    val pushOutput = pushProc.inputStream.bufferedReader().readText()
+                    pushProc.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
+                    if (pushProc.exitValue() == 0) {
+                        logger.lifecycle("[publish] pushed version bumps + tags")
+                    } else {
+                        logger.warn("[publish] git push failed: $pushOutput")
+                    }
+                } catch (e: Exception) {
+                    logger.warn("[publish] git push failed: ${e.message}")
+                }
+
+                // Write /tmp/published-packages.json for the release-announcement
+                // action. Format: [{ name, version, path }] — the `path` field is
+                // used by generate_slack_message.sh to build changelog URLs.
                 val planJson = publishPlanFile.readText()
                 java.io.File("/tmp/published-packages.json").writeText(planJson)
                 logger.lifecycle("[publish] wrote /tmp/published-packages.json")
