@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "main",
-  "timestamp": "2026-04-10T16:58:10.340718181Z",
+  "timestamp": "2026-04-10T17:09:32.132039409Z",
   "packages": {
     "@zerobias-org/util-codegen": {
       "version": "2.0.44",
@@ -325,11 +325,11 @@
       "sourceHash": "604c60457e9a6a8e89ae93e989ba8baf3d68cb6676aed2bc0483f1314fd0850e",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
-        "lint": "passed",
+        "lint": "skipped",
         "compile": "skipped",
         "copyDeps": "skipped",
         "generate": "skipped",
-        "transpile": "passed",
+        "transpile": "skipped",
         "test": "skipped"
       },
       "tests": {

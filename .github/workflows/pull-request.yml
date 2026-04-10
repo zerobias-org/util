@@ -71,7 +71,7 @@ jobs:
       - name: Check gate stamp
         id: check_stamp
         run: |
-          if zbb gate --check; then
+          if npx zbb gate --check; then
             echo "valid=true" >> $GITHUB_OUTPUT
           else
             echo "valid=false" >> $GITHUB_OUTPUT
@@ -152,7 +152,7 @@ jobs:
           READ_TOKEN: ${{ env.READ_TOKEN }}
 
       - name: Run zbb gate
-        run: zbb gate
+        run: npx zbb gate
         env:
           CI: 'true'
           NPM_TOKEN: ${{ env.READ_TOKEN }}

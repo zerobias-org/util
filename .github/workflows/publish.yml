@@ -87,20 +87,22 @@ jobs:
         run: npm run transpile --workspace=packages/zbb
 
       # Bootstrap an ephemeral slot for this CI publish run. CI mode
-      # snapshots Vault-injected secrets as slot overrides so the slot
-      # doesn't need to re-fetch from Vault.
+      # (auto-detected from CI=true) snapshots process.env as slot
+      # overrides — vault secrets exported above are picked up directly.
+      # IMPORTANT: do NOT override NPM_TOKEN here — the vault step above
+      # exported the WRITE token as NPM_TOKEN.
+      #
+      # org/util uses `npx zbb` (not bare `zbb`) because zbb is a LOCAL
+      # workspace package built from source, not globally installed.
       - name: Bootstrap zbb slot
         run: |
-          zbb slot create $ZB_SLOT --ephemeral
-          zbb stack add .
+          npx zbb slot create $ZB_SLOT --ephemeral
+          npx zbb stack add .
         env:
-          NPM_TOKEN: ${{ env.READ_TOKEN }}
-          ZB_TOKEN: ${{ env.ZB_TOKEN }}
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
-          READ_TOKEN: ${{ env.READ_TOKEN }}
+          CI: 'true'
 
       - name: Publish
-        run: zbb publish
+        run: npx zbb publish
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
