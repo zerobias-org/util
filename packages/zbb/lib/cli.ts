@@ -18,45 +18,36 @@ import {
   findRepoRoot,
   loadProjectConfig,
   loadRepoConfig,
+  loadStackManifest,
   loadUserConfig,
   type ToolRequirement,
 } from './config.js';
 import { scanEnvDeclarations } from './env/Scanner.js';
 import { spawn } from 'node:child_process';
-import { isMonorepo, isMonorepoCommand, handleMonorepo } from './monorepo/index.js';
+import {
+  isLifecycleCommand,
+  parseLifecycleArgs,
+  lookupLifecycleCommand,
+  spawnLifecycleAndExit,
+  spawnGradleFallbackAndExit,
+} from './monorepo/index.js';
 import { handleStack, detectStackContext } from './stack/commands.js';
 
 /**
- * Extend slot from cwd context: walk up to find repo root (.zbb.yaml/gradlew),
- * scan zbb.yaml declarations, add missing vars to slot, re-export to process.env.
- * Returns the repo root path, or null if no project context found.
- */
-async function extendSlotFromCwd(slot: Slot): Promise<string | null> {
-  const repoRoot = findRepoRoot(process.cwd());
-  if (!repoRoot) return null;
-
-  const { extendSlot } = await import('./slot/extend.js');
-  const result = await extendSlot(slot, repoRoot);
-  if (result.extended) {
-    console.log(`Extended slot with ${result.addedVars.length} new var(s): ${result.addedVars.join(', ')}`);
-    const newEnv = slot.env.getAll();
-    for (const varName of result.addedVars) {
-      if (newEnv[varName]) process.env[varName] = newEnv[varName];
-    }
-  }
-  return repoRoot;
-}
-
-/**
- * Full slot preparation: extend + resolve (DNS + vault) + re-export to process.env.
+ * Full slot preparation: resolve (DNS + vault) + re-export to process.env.
  * Shared by: slot load, --slot flag, publish, gate, testHub, and all Gradle commands.
+ *
+ * Phase 3: there is no longer a "lazy slot extension" step. Slot env
+ * vars come from explicitly added stacks (`zbb stack add <path>`), not
+ * from a cwd-driven repo scan. The user owns when each stack joins the
+ * slot.
  *
  * @param slot - Loaded slot instance
  * @param options.fatal - If true, vault errors abort (exit 1). Default: false (warnings only).
- * @returns repo root path, or null
+ * @returns repo root path (from findRepoRoot of cwd), or null
  */
 async function prepareSlot(slot: Slot, options?: { fatal?: boolean }): Promise<string | null> {
-  const repoRoot = await extendSlotFromCwd(slot);
+  const repoRoot = findRepoRoot(process.cwd());
 
   // Run resolve: DNS + vault
   const vaultResult = await slot.resolve(repoRoot ?? undefined);
@@ -149,19 +140,7 @@ async function _main(argv: string[]): Promise<void> {
   }
 
   const command = args[0];
-
-  // Monorepo commands: clean/build/test/gate/publish in npm workspace monorepos
-  // Stack commands (up/down/destroy/info) still route to Gradle even in monorepos.
   const repoRoot = findRepoRoot(process.cwd());
-  if (repoRoot && isMonorepoCommand(command) && isMonorepo(repoRoot)) {
-    // If a slot is loaded, resolve its env (Vault, DNS) and export to process.env
-    // so monorepo commands have access to slot-provided vars (e.g., NEON_API_KEY)
-    if (process.env.ZB_SLOT) {
-      const slot = await SlotManager.load(process.env.ZB_SLOT);
-      await prepareSlot(slot);
-    }
-    return handleMonorepo(command, args.slice(1), repoRoot);
-  }
 
   // Slot subcommands
   if (command === 'slot') return handleSlot(args.slice(1));
@@ -248,22 +227,6 @@ async function _main(argv: string[]): Promise<void> {
     process.exit(result.status ?? 1);
   }
 
-  // Publish — special handling for --dry-run flag conversion
-  // Converts --dry-run to -PdryRun=true (Gradle property, not Gradle --dry-run flag)
-  if (command === 'publish') {
-    const publishArgs = args.slice(1).map(arg =>
-      arg === '--dry-run' ? '-PdryRun=true' : arg
-    );
-
-    if (process.env.ZB_SLOT) {
-      const slot = await SlotManager.load(process.env.ZB_SLOT);
-      await prepareSlot(slot, { fatal: true });
-    }
-
-    runGradle(['publish', ...publishArgs]);
-    return;
-  }
-
   // Publish Gradle plugins/libs to GitHub Packages Maven
   if (command === 'publishRemote') {
     runGradle(['publishAllPublicationsToGitHubPackagesRepository', ...args.slice(1)]);
@@ -277,23 +240,103 @@ async function _main(argv: string[]): Promise<void> {
     return;
   }
 
-  // Lifecycle commands (build, test, gate) — route through stack if in stack context
-  if (['build', 'test', 'gate'].includes(command) && process.env.ZB_SLOT) {
-    const slot = await SlotManager.load(process.env.ZB_SLOT);
-    const stackCtx = await detectStackContext(slot);
-    if (stackCtx) {
-      console.log(`Running ${command} for ${stackCtx.name}...`);
-      const code = await stackCtx.runLifecycle(command);
-      if (code !== 0) {
-        console.error(`${command} failed for ${stackCtx.name} (exit code ${code})`);
-        process.exit(code);
+  // ── Lifecycle dispatch ───────────────────────────────────────────────
+  //
+  // Phase 3 single-tier dispatch. clean/build/test/gate/publish all route
+  // here. The flow:
+  //
+  //   1. Read zbb.yaml from repo root (if present).
+  //   2. gate --check fast path: skip slot/stack/preflight, just spawn the
+  //      lifecycle.gateCheck command (or ./gradlew monorepoGateCheck if no
+  //      lifecycle entry exists). Validates the stamp file only.
+  //   3. All other lifecycle commands require a loaded slot.
+  //   4. Match the repo's stack against added stacks in the slot.
+  //   5. Apply slot env (which already includes the stack's env via the
+  //      stack composition system), then apply repo cleanse, then run
+  //      preflight.
+  //   6. If lifecycle[command] exists → spawn it (with TTY display for
+  //      build/test/gate). Else → fall through to ./gradlew <command>.
+  //
+  // No zbb.yaml → permissive fallback to runGradle (smart wrapper mode).
+  if (isLifecycleCommand(command) && repoRoot) {
+    const zbbYaml = await loadRepoConfig(repoRoot);
+    const manifest = await loadStackManifest(repoRoot);
+    const parsed = parseLifecycleArgs(args.slice(1));
+
+    // gate --check fast path: no slot, no stack, no preflight
+    if (command === 'gate' && parsed.check) {
+      const lifecycleCmd = lookupLifecycleCommand(zbbYaml.lifecycle, command, parsed);
+      if (lifecycleCmd) {
+        return spawnLifecycleAndExit(repoRoot, command, lifecycleCmd, parsed);
       }
-      console.log(`${command} passed for ${stackCtx.name}`);
-      return;
+      return spawnGradleFallbackAndExit(repoRoot, 'monorepoGateCheck', parsed);
     }
+
+    // All other lifecycle commands require a loaded slot + an added stack
+    if (!process.env.ZB_SLOT) {
+      console.error(`Not inside a loaded slot. Run: zbb slot load <name>`);
+      process.exit(1);
+    }
+    const slot = await SlotManager.load(process.env.ZB_SLOT);
+
+    // The repo's zbb.yaml IS the stack manifest in Phase 3 — its `name`
+    // field identifies the stack. Match against the slot's added stacks.
+    if (!manifest) {
+      console.error(`Repo has zbb.yaml but it's missing required 'name'/'version' fields.`);
+      console.error(`Phase 3 requires the repo-root zbb.yaml to also be a stack manifest.`);
+      process.exit(1);
+    }
+    const stackShortName = manifest.name.split('/').pop() ?? manifest.name;
+    const addedStacks = await slot.stacks.list();
+    const stack = addedStacks.find(
+      s => s.name === stackShortName || s.identity.name === manifest.name,
+    );
+    if (!stack) {
+      console.error(`Stack '${stackShortName}' is not added to slot '${slot.name}'.`);
+      console.error(`Run: zbb stack add .`);
+      process.exit(1);
+    }
+
+    // Apply slot env (resolve vault/DNS, export to process.env). The stack's
+    // contributed env vars are already part of the slot env via the stack
+    // composition system from `zbb stack add`.
+    await prepareSlot(slot, { fatal: command === 'publish' });
+
+    // Apply repo-level cleanse so child processes don't inherit unwanted
+    // vars from the parent shell.
+    if (zbbYaml.cleanse && zbbYaml.cleanse.length > 0) {
+      for (const varName of zbbYaml.cleanse) {
+        delete process.env[varName];
+      }
+    }
+
+    // Run command-filtered preflight from `require:`
+    if (zbbYaml.require && zbbYaml.require.length > 0) {
+      const userConfig = await loadUserConfig();
+      const applicable = zbbYaml.require.filter(r => {
+        if (!r.commands) return true;
+        return r.commands.includes(command);
+      });
+      const results = runPreflightChecks(applicable, userConfig.skip_checks);
+      const failed = results.filter(r => !r.ok);
+      if (failed.length > 0) {
+        console.log(formatPreflightResults(results));
+        process.exit(1);
+      }
+    }
+
+    // Look up lifecycle entry → spawn, or fall through to ./gradlew <cmd>
+    const lifecycleCmd = lookupLifecycleCommand(zbbYaml.lifecycle, command, parsed);
+    if (lifecycleCmd) {
+      return spawnLifecycleAndExit(repoRoot, command, lifecycleCmd, parsed);
+    }
+    return spawnGradleFallbackAndExit(repoRoot, command, parsed);
   }
 
-  // Everything else → gradle (resolve slot if loaded)
+  // ── Permissive gradle fallback ───────────────────────────────────────
+  // No zbb.yaml in cwd, or command isn't a lifecycle command. Just run
+  // gradle. This preserves the smart-wrapper behaviour for non-zbb repos
+  // (resolves subproject from cwd, prefixes task names).
   if (process.env.ZB_SLOT) {
     const slot = await SlotManager.load(process.env.ZB_SLOT);
     await prepareSlot(slot);
@@ -312,6 +355,10 @@ async function handleSlot(args: string[]): Promise<void> {
       const ephemeral = args.includes('--ephemeral');
       const ttlIdx = args.indexOf('--ttl');
       const ttl = ttlIdx !== -1 ? parseTtl(args[ttlIdx + 1]) : undefined;
+      // CI mode: snapshot process.env as the source-of-truth for declared
+      // vars (so vault-action's pre-injected secrets are picked up directly).
+      // Auto-on when CI=true is set in the parent shell.
+      const ci = args.includes('--ci') || process.env.CI === 'true';
 
       // Find the slot name — it's the positional arg after 'create' that isn't a flag
       let slotName = '';
@@ -324,7 +371,7 @@ async function handleSlot(args: string[]): Promise<void> {
         break;
       }
 
-      const slot = await SlotManager.create(slotName, { ephemeral, ttl });
+      const slot = await SlotManager.create(slotName, { ephemeral, ttl, ci });
 
       const envCount = slot.env.list().length;
       const portCount = Object.values(slot.env.getManifest())
@@ -1151,12 +1198,14 @@ Registry commands:
   zbb registry clear [--all]            Clear local packages (--all = wipe cache)
   zbb registry status                   Show registry status
 
-Monorepo commands (when .zbb.yaml has monorepo.enabled: true):
-  zbb clean [--all]                        Clean build artifacts
-  zbb build [--all] [--verbose]            Build affected packages
-  zbb test [--all] [--verbose]             Test affected packages
-  zbb gate [--all] [--check]               Full pipeline + write gate-stamp.json
-  zbb publish [--dry-run] [--force]        Publish changed packages (main only)
+Lifecycle commands (require zbb.yaml + loaded slot + added stack):
+  zbb clean [--all]                        Run lifecycle.clean (or ./gradlew clean)
+  zbb build [--all] [--verbose]            Run lifecycle.build (or ./gradlew build)
+  zbb test [--all] [--verbose]             Run lifecycle.test (or ./gradlew test)
+  zbb gate [--all]                         Run lifecycle.gate (or ./gradlew gate)
+  zbb gate --check                         Validate gate-stamp.json (no slot needed)
+  zbb publish [--dry-run] [--force]        Run lifecycle.publish (or ./gradlew publish)
+  Without zbb.yaml in cwd, all of these fall through to ./gradlew <command>.
 
 Secret commands:
   zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]

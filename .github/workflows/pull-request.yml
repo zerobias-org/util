@@ -17,6 +17,10 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   READ_TOKEN: ${{ secrets.READ_TOKEN }}
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  # NOTE: ZB_SLOT is intentionally NOT set at workflow level — gate-check
+  # is slot-less and the published zbb version eagerly loads ZB_SLOT if it
+  # sees it set, which fails when no bootstrap step has run. ZB_SLOT is
+  # set per-job below only on jobs that actually bootstrap a slot.
 
 jobs:
   gate-check:
@@ -38,6 +42,12 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
       - name: Install dependencies
         run: |
           cp .npmrc $HOME/.npmrc
@@ -49,6 +59,9 @@ jobs:
       - name: Build local zbb
         run: npm run transpile --workspace=packages/zbb
 
+      # gate --check is the slot-less fast path: stamp validation only,
+      # no slot, no stack, no preflight. Routes through ./gradlew
+      # monorepoGateCheck via the lifecycle dispatch.
       - name: Check gate stamp
         id: check_stamp
         run: |
@@ -57,12 +70,17 @@ jobs:
           else
             echo "valid=false" >> $GITHUB_OUTPUT
           fi
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
 
   gate-run:
     name: Run Gate
     needs: [gate-check]
     if: needs.gate-check.outputs.stamp_valid == 'false'
     runs-on: ubuntu-latest
+    env:
+      ZB_SLOT: ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Acquire cache
@@ -106,12 +124,29 @@ jobs:
       - name: Build local zbb
         run: npm run transpile --workspace=packages/zbb
 
+      # Bootstrap an ephemeral slot for this CI run. CI mode (auto-detected
+      # from CI=true) snapshots process.env as slot overrides — secrets
+      # exported by previous workflow steps are picked up directly without
+      # the slot needing to re-fetch from Vault.
+      - name: Bootstrap zbb slot
+        run: |
+          npx zbb slot create $ZB_SLOT --ephemeral
+          npx zbb stack add .
+        env:
+          CI: 'true'
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+
       - name: Run zbb gate
         run: npx zbb gate
         env:
           CI: 'true'
           NPM_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
 
       - name: Commit and push gate stamp
         run: |

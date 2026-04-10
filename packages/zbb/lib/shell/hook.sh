@@ -2,12 +2,15 @@
 # zbb shell hook — sourced in the slot subshell.
 # Provides:
 #   - cd hook: scopes env to the current stack on directory change
+#   - prompt update: PS1 shows [zb:slot:scope:name] when in an added stack
 #   - zbb() wrapper: syncs env after stack/env mutations
 
 # ── State ────────────────────────────────────────────────────────────
 
 _ZBB_CURRENT_STACK=""
 _ZBB_CURRENT_STACK_VARS=()
+# Full npm package name of the active stack (e.g. "@zerobias-org/util")
+_ZBB_CURRENT_STACK_FULL=""
 
 # ── Load a stack's .env into the current shell ───────────────────────
 
@@ -59,6 +62,7 @@ _zbb_scope_env() {
   # Walk up from cwd looking for a zbb.yaml with a 'name:' field
   local dir="$PWD"
   local stack_name=""
+  local stack_full=""
 
   while [ "$dir" != "/" ]; do
     if [ -f "$dir/zbb.yaml" ]; then
@@ -69,6 +73,7 @@ _zbb_scope_env() {
         # Only activate if this stack has been added to the slot
         if [ -d "$stacks_dir/$candidate" ]; then
           stack_name="$candidate"
+          stack_full="$name"
         fi
         break
       fi
@@ -76,12 +81,29 @@ _zbb_scope_env() {
     dir=$(dirname "$dir")
   done
 
-  # If same stack and not a forced reload, skip
+  # Refresh PS1 every prompt redraw (cheap, idempotent). The format is:
+  #   [zb:<slot>]                — no active stack
+  #   [zb:<slot>:<scope>:<name>] — in an added stack, where <scope> is the
+  #                                trailing piece of the npm scope after
+  #                                "zerobias-" (e.g. "org" or "com") and
+  #                                <name> is the package short name.
+  if [ -n "$stack_full" ]; then
+    local scope="${stack_full%%/*}"           # "@zerobias-org"
+    scope="${scope#@}"                          # "zerobias-org"
+    scope="${scope#zerobias-}"                  # "org" (or unchanged if no zerobias- prefix)
+    PS1="\[\033[01;36m\][zb:${ZB_SLOT}:${scope}:${stack_name}]\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
+  else
+    PS1="\[\033[01;36m\][zb:${ZB_SLOT}]\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
+  fi
+
+  # If same stack and not a forced reload, skip the env reload (we only
+  # rebuild PS1 above — the env scope didn't change).
   [ "$stack_name" = "$_ZBB_CURRENT_STACK" ] && [ "${_ZBB_FORCE_RELOAD:-}" != "1" ] && return
 
   local prev="$_ZBB_CURRENT_STACK"
   _ZBB_FORCE_RELOAD=""
 
+  _ZBB_CURRENT_STACK_FULL="$stack_full"
   _zbb_load_stack_env "$stack_name"
 
   # Log the transition
