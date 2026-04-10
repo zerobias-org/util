@@ -113,6 +113,7 @@ export class MonorepoDisplay {
   private maxCurrentStepLen = 0;
   private isTTY: boolean;
   private logsDir: string;
+  private startTime: number;
   /** Set true after finalize() if we printed inline error output. Used by
    *  the caller to suppress the redundant gradle stderr block. */
   didShowInlineErrors = false;
@@ -120,6 +121,7 @@ export class MonorepoDisplay {
   constructor(logsDir: string, isTTY: boolean = process.stdout.isTTY ?? false) {
     this.logsDir = logsDir;
     this.isTTY = isTTY;
+    this.startTime = Date.now();
   }
 
   handleEvent(ev: Event): void {
@@ -305,16 +307,21 @@ export class MonorepoDisplay {
       }
     }
 
-    // Footer: paths for post-mortem inspection
-    if (this.projectOrder.length > 0) {
-      const eventsPath = join(dirname(this.logsDir), 'events.jsonl');
-      const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
-      process.stdout.write(
-        `${COLOR.dim}  events: ${eventsPath}${COLOR.reset}\n` +
-        `${COLOR.dim}  logs:   ${this.logsDir}${COLOR.reset}\n` +
-        `${COLOR.dim}  gradle: ${gradleLogPath}${COLOR.reset}\n`,
-      );
+    // Footer: always print paths + timing for post-mortem inspection.
+    // When no projects were registered (everything was up-to-date and
+    // gradle finished instantly), show an explicit message so the user
+    // knows something happened.
+    const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
+    if (this.projectOrder.length === 0) {
+      process.stdout.write(`${COLOR.dim}  All tasks up-to-date (${elapsed}s)${COLOR.reset}\n`);
     }
+    const eventsPath = join(dirname(this.logsDir), 'events.jsonl');
+    const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
+    process.stdout.write(
+      `${COLOR.dim}  events: ${eventsPath}${COLOR.reset}\n` +
+      `${COLOR.dim}  logs:   ${this.logsDir}${COLOR.reset}\n` +
+      `${COLOR.dim}  gradle: ${gradleLogPath}${COLOR.reset}\n`,
+    );
   }
 
   // ── Rendering ────────────────────────────────────────────────────

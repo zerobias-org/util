@@ -117,14 +117,19 @@ gradle.taskGraph.whenReady {
             val safeName = subprojectPath.removePrefix(":").replace(":", "-")
             val logFile = logsDir.resolve("$safeName-$taskName.log")
 
-            // Redirect Exec task output to the log file (only for Exec subtypes)
+            // Redirect Exec task output to the log file (only for Exec subtypes).
+            // Cast through BaseExecSpec to avoid NoSuchMethodError when the
+            // Kotlin-compiled setter targets a covariant return type that
+            // doesn't match the runtime Gradle API.
             if (task is Exec) {
                 val execTask: Exec = task
                 execTask.doFirst {
                     logFile.parentFile.mkdirs()
                     val out = logFile.outputStream()
-                    execTask.standardOutput = out
-                    execTask.errorOutput = out
+                    @Suppress("DEPRECATION")
+                    (execTask as org.gradle.process.BaseExecSpec).standardOutput = out
+                    @Suppress("DEPRECATION")
+                    (execTask as org.gradle.process.BaseExecSpec).errorOutput = out
                 }
             }
 
