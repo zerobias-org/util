@@ -138,10 +138,19 @@ export class StackEnvironment extends EventEmitter {
     if (!entry && !decl) return undefined;
     // Join: manifest owns provenance (resolution, value, source), schema owns contract (type, mask, hidden, description, values)
     return {
+      // Manifest owns provenance
       resolution: entry?.resolution ?? 'unset',
       value: entry?.value,
       formula: entry?.formula,
       source: entry?.source,
+      inputs: entry?.inputs,
+      set_by: entry?.set_by,
+      set_at: entry?.set_at,
+      default_formula: entry?.default_formula,
+      from: entry?.from,
+      original_name: entry?.original_name,
+      generator: entry?.generator,
+      // Schema owns contract
       type: decl?.type,
       values: decl?.values,
       description: decl?.description,
