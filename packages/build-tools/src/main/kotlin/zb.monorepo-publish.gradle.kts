@@ -515,26 +515,45 @@ gradle.projectsEvaluated {
     // dist/. --force bypasses the gate stamp check ONLY; it never bypasses
     // the build requirement.
     //
-    // We wire per-package build tasks (not root monorepoBuild) so that
-    // packages NOT in the publish plan are never dragged into the graph.
-    // This matches Phase 2 behavior, where `npm run build` was invoked only
-    // on packages being published.
+    // CRITICAL: the per-package task selection here MUST mirror what
+    // `monorepoBuild` (in zb.monorepo-build step 5) does for each package.
+    // If the publish graph ever diverges from the gate/build graph, we end
+    // up with "passes local gate, fails CI publish" bugs where hub-specific
+    // Gradle wire-ups (like a subproject's custom `build` that dependsOn a
+    // dangling root task) fire on one path but not the other. Keeping the
+    // two in sync is the only way `zbb gate` locally is a reliable
+    // predictor of `zbb publish` in CI.
     //
-    // Each prepublishPackage has an onlyIf that checks the publish plan, so
-    // gradle will skip its deps too when the package isn't publishing.
+    // hasExistingBuildInfra is duplicated here (instead of imported) because
+    // precompiled script plugins can't share top-level functions. The two
+    // definitions must stay identical — update both.
+    fun publishHasExistingBuildInfra(subproject: org.gradle.api.Project): Boolean {
+        if (subproject.tasks.findByName("compileJava") != null) return true
+        if (subproject.tasks.findByName("compileKotlin") != null) return true
+        if (subproject.tasks.findByName("compileGroovy") != null) return true
+        return false
+    }
+    val buildPhases = service.config.buildPhases  // ["lint", "generate", "transpile"] default
     for ((pkgName, pkg) in service.graph.packages) {
         if (pkg.private) continue
         if (service.config.skipPublish.contains(pkgName)) continue
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
         val prepublish = subproject.tasks.findByName("prepublishPackage") ?: continue
-        // Wire both the phase-tasks (zb.monorepo-build fallback) and an
-        // existing `build` task (native gradle/Java projects). findByName
-        // returns null for whichever isn't registered — no-op in that case.
-        for (phase in listOf("lint", "generate", "transpile")) {
-            subproject.tasks.findByName(phase)?.let { prepublish.dependsOn(it) }
+
+        if (publishHasExistingBuildInfra(subproject)) {
+            // JVM subproject — mirror monorepoBuild: use the existing `build`.
+            subproject.tasks.findByName("build")?.let { prepublish.dependsOn(it) }
+        } else {
+            // Pure-npm subproject — mirror monorepoBuild: use the fallback
+            // phase tasks registered by zb.monorepo-build. Do NOT wire `build`
+            // here: for subprojects that apply only the `base` plugin, `build`
+            // exists but may dependsOn hub-specific custom tasks that are not
+            // in the gate graph, causing publish to diverge from gate.
+            for (phase in buildPhases) {
+                subproject.tasks.findByName(phase)?.let { prepublish.dependsOn(it) }
+            }
         }
-        subproject.tasks.findByName("build")?.let { prepublish.dependsOn(it) }
     }
 
     // ── Tag + push after all packages are published ──
