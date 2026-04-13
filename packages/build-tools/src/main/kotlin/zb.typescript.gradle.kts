@@ -5,6 +5,7 @@ import com.github.gradle.node.npm.task.NpxTask
 import com.zerobias.buildtools.module.ZbExtension
 import com.zerobias.buildtools.module.OpenApiSpecAssembler
 import com.zerobias.buildtools.module.ProductInfoDereferencer
+import com.zerobias.buildtools.module.ConnectionProfileFlattener
 import com.zerobias.buildtools.module.ServerEntryPointGenerator
 import com.zerobias.buildtools.module.DockerRunner
 
@@ -241,6 +242,7 @@ val copyDistributionSpec by tasks.registering {
 
         if (zb.includeConnectionProfileInDist.get()) {
             fullYml.copyTo(distYml, overwrite = true)
+            ConnectionProfileFlattener.flatten(distYml)
         } else {
             OpenApiSpecAssembler.copyWithoutConnectionSchemas(fullYml, distYml)
         }
