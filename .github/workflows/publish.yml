@@ -111,12 +111,22 @@ jobs:
 
       # If build-tools source changed, publish the Maven artifact so
       # consumer repos (hub, hydra, platform, etc.) pick up the new jar.
+      #
+      # NOTE: use $GITHUB_SHA~1 as the diff base, NOT HEAD~1. `zbb publish`
+      # above creates a `commitVersionBumps` commit that becomes HEAD, so
+      # HEAD~1 would be the push commit itself and the diff would only show
+      # the version bumps (never build-tools). $GITHUB_SHA is fixed at
+      # workflow start and always points at the triggering push commit.
       - name: Publish build-tools to Maven
         if: success()
         run: |
-          if git diff --name-only HEAD~1 | grep -q '^packages/build-tools/'; then
-            echo "build-tools changed — publishing to Maven"
-            npx zbb publishRemote
+          BASE="${GITHUB_SHA}~1"
+          if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
+            echo "No parent commit at $BASE (shallow or first commit) — publishing to be safe"
+            cd packages/build-tools && ./gradlew publishRemote
+          elif git diff --name-only "$BASE" "$GITHUB_SHA" -- packages/build-tools/ | grep -q .; then
+            echo "build-tools changed in $BASE..$GITHUB_SHA — publishing to Maven"
+            cd packages/build-tools && ./gradlew publishRemote
           else
             echo "build-tools unchanged — skipping Maven publish"
           fi

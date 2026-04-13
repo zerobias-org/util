@@ -79,12 +79,15 @@ val publishGuard = tasks.register("publishGuard") {
         val rootDir = rootProject.projectDir
 
         // ── Branch guard ──
-        if (!publishForce && !publishDryRun) {
+        //
+        // --force does NOT bypass this — it only bypasses the gate stamp
+        // validation below. Use --dry-run to preview from a feature branch.
+        if (!publishDryRun) {
             val branch = currentBranch(rootDir)
             if (branch != "main" && branch != "master") {
                 throw GradleException(
                     "Cannot publish from branch '$branch'. Switch to main, " +
-                    "or pass -Pforce=true / --dry-run."
+                    "or pass --dry-run."
                 )
             }
         }
@@ -324,7 +327,7 @@ fun detectGithubRepo(repoRoot: java.io.File): String? {
 
 val monorepoPublish = tasks.register("monorepoPublish") {
     group = "monorepo"
-    description = "Publish changed workspace packages (gated by publishGuard + publishPlan)"
+    description = "Build + publish changed workspace packages (monorepoBuild dep added in projectsEvaluated)"
     dependsOn(publishGuard, publishPlan)
     finalizedBy(dispatchImageWorkflows)
 }
@@ -504,6 +507,28 @@ gradle.projectsEvaluated {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
         subproject.tasks.findByName("prepublishPackage")?.dependsOn(commitVersionBumps)
+    }
+
+    // ── Require monorepoBuild before any publishing ─────────────────
+    //
+    // Publish MUST run after build — otherwise tarballs go out without
+    // dist/. --force bypasses the gate stamp check ONLY; it never bypasses
+    // the build requirement. Fail fast if monorepo-build isn't applied.
+    val monorepoBuildTask = rootProject.tasks.findByName("monorepoBuild")
+        ?: throw GradleException(
+            "monorepoPublish requires the zb.monorepo-build plugin to be " +
+            "applied (provides monorepoBuild). Without it, publish would " +
+            "push empty tarballs with no dist/ contents."
+        )
+    monorepoPublish.configure { dependsOn(monorepoBuildTask) }
+    for ((pkgName, pkg) in service.graph.packages) {
+        if (pkg.private) continue
+        if (service.config.skipPublish.contains(pkgName)) continue
+        val gradlePath = ":" + pkg.relDir.replace("/", ":")
+        val subproject = rootProject.findProject(gradlePath) ?: continue
+        // Per-package prepublish must run AFTER build so dist/ exists when
+        // npm publish packs the tarball.
+        subproject.tasks.findByName("prepublishPackage")?.dependsOn(monorepoBuildTask)
     }
 
     // ── Tag + push after all packages are published ──
