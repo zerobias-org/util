@@ -123,10 +123,10 @@ jobs:
           BASE="${GITHUB_SHA}~1"
           if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
             echo "No parent commit at $BASE (shallow or first commit) — publishing to be safe"
-            cd packages/build-tools && ./gradlew publishRemote
+            cd packages/build-tools && ./gradlew publishAllPublicationsToGitHubPackagesRepository
           elif git diff --name-only "$BASE" "$GITHUB_SHA" -- packages/build-tools/ | grep -q .; then
             echo "build-tools changed in $BASE..$GITHUB_SHA — publishing to Maven"
-            cd packages/build-tools && ./gradlew publishRemote
+            cd packages/build-tools && ./gradlew publishAllPublicationsToGitHubPackagesRepository
           else
             echo "build-tools unchanged — skipping Maven publish"
           fi
