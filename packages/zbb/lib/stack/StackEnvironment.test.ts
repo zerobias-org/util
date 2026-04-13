@@ -44,7 +44,7 @@ describe('StackEnvironment.initialize', () => {
     await mkdir(stackDir, { recursive: true });
 
     const schema: Record<string, EnvVarDeclaration> = {
-      MY_SECRET: { type: 'secret', generate: 'uuid' },
+      MY_SECRET: { type: 'secret', generate: 'uuid', mask: true },
     };
     const secrets = new Map([['MY_SECRET', 'abc-123-uuid']]);
 
@@ -276,7 +276,7 @@ describe('StackEnvironment.shouldMask', () => {
     await mkdir(stackDir, { recursive: true });
 
     const schema: Record<string, EnvVarDeclaration> = {
-      MY_SECRET: { type: 'secret', generate: 'uuid' },
+      MY_SECRET: { type: 'secret', generate: 'uuid', mask: true },
       MY_VAR: { type: 'string', default: 'visible' },
     };
     const secrets = new Map([['MY_SECRET', 'secret-value']]);

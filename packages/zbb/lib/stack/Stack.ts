@@ -169,8 +169,8 @@ export class Stack extends EventEmitter {
     }
 
     try {
-      // Handle cleanup as array
-      if (phase === 'cleanup' && Array.isArray(command)) {
+      // Handle array commands (cleanup, clean, destroy, etc.)
+      if (Array.isArray(command)) {
         for (const cmd of command) {
           const code = await this.execCommand(String(cmd));
           if (code !== 0) return code;

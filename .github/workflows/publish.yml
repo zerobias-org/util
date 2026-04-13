@@ -102,7 +102,7 @@ jobs:
           CI: 'true'
 
       - name: Publish
-        run: npx zbb publish
+        run: npx zbb publish --force
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
