@@ -38,6 +38,25 @@ task copyDependencies(type: Copy) {
 }
 build.dependsOn += copyDependencies
 
+// Stage the built hub-module-codegen jar + the openapi-generator-cli runtime
+// jar into `bin/` so `bin/hub-generator.js` can invoke them. Locally this is
+// normally done by `npm run copyDeps`; in CI (fresh clone, no stale bin/*.jar)
+// monorepoBuild runs gradle's :build but never invokes that npm script, so
+// downstream packages (e.g. hub-module-utils) fail at generate time with
+// missing jar errors. Running this as part of :build keeps the two paths
+// in sync.
+task stageBinJars(type: Copy) {
+    dependsOn jar, copyDependencies
+    from jar.archiveFile
+    from fileTree("${project.layout.buildDirectory.get().asFile}/dependencies") {
+        include 'openapi-generator-cli-*.jar'
+    }
+    into "$projectDir/bin"
+    rename(/hub-module-codegen-.*\.jar/, 'hub-module-codegen.jar')
+    rename(/openapi-generator-cli-.*\.jar/, 'openapi-generator-cli.jar')
+}
+build.dependsOn += stageBinJars
+
 repositories {
   mavenLocal()
   maven {
