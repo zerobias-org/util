@@ -67,22 +67,22 @@ object SourceHasher {
     }
 
     /**
-     * Hash test directories. Tests are NOT git-restricted because test files may
-     * include locally-generated fixtures that aren't committed but are part of the
-     * test surface. Recursive walk, skipping `node_modules` and hidden dirs.
+     * Hash test directories. Only git-tracked files — untracked local artifacts
+     * (test output, coverage, .DS_Store, locally-generated fixtures) are
+     * excluded so local and CI produce byte-identical hashes. If a test needs
+     * a generated fixture it must be produced inside the test itself (tempdir)
+     * or committed to source control.
      *
      * Files are sorted using a locale-aware Collator (matching JS
-     * `String.localeCompare()` used by `lib/monorepo/GateStamp.ts`). This is
-     * critical for byte-equality with the TS path: bytes-wise sort produces
-     * different file order for mixed-case names like "AWSEbsClient.ts" vs
-     * "AwsEbsProducer.ts" in com/util/packages/aws-common.
+     * `String.localeCompare()`) for byte-equality with the legacy TS path.
      */
     fun hashTests(packageDir: File, testDirs: List<String> = listOf("test")): String {
         val digest = MessageDigest.getInstance("SHA-256")
         for (dirName in testDirs) {
             val dir = File(packageDir, dirName)
             if (!dir.exists()) continue
-            val files = walkSkippingHidden(dir, packageDir).sortedWith(LOCALE_COMPARE_ORDER)
+            val files = (listGitTrackedFiles(packageDir, dirName) ?: walkFallback(dir, packageDir))
+                .sortedWith(LOCALE_COMPARE_ORDER)
             for (relPath in files) {
                 val absFile = File(packageDir, relPath)
                 if (!absFile.exists()) continue
