@@ -509,26 +509,32 @@ gradle.projectsEvaluated {
         subproject.tasks.findByName("prepublishPackage")?.dependsOn(commitVersionBumps)
     }
 
-    // ── Require monorepoBuild before any publishing ─────────────────
+    // ── Build each package being published ─────────────────────────
     //
     // Publish MUST run after build — otherwise tarballs go out without
     // dist/. --force bypasses the gate stamp check ONLY; it never bypasses
-    // the build requirement. Fail fast if monorepo-build isn't applied.
-    val monorepoBuildTask = rootProject.tasks.findByName("monorepoBuild")
-        ?: throw GradleException(
-            "monorepoPublish requires the zb.monorepo-build plugin to be " +
-            "applied (provides monorepoBuild). Without it, publish would " +
-            "push empty tarballs with no dist/ contents."
-        )
-    monorepoPublish.configure { dependsOn(monorepoBuildTask) }
+    // the build requirement.
+    //
+    // We wire per-package build tasks (not root monorepoBuild) so that
+    // packages NOT in the publish plan are never dragged into the graph.
+    // This matches Phase 2 behavior, where `npm run build` was invoked only
+    // on packages being published.
+    //
+    // Each prepublishPackage has an onlyIf that checks the publish plan, so
+    // gradle will skip its deps too when the package isn't publishing.
     for ((pkgName, pkg) in service.graph.packages) {
         if (pkg.private) continue
         if (service.config.skipPublish.contains(pkgName)) continue
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
-        // Per-package prepublish must run AFTER build so dist/ exists when
-        // npm publish packs the tarball.
-        subproject.tasks.findByName("prepublishPackage")?.dependsOn(monorepoBuildTask)
+        val prepublish = subproject.tasks.findByName("prepublishPackage") ?: continue
+        // Wire both the phase-tasks (zb.monorepo-build fallback) and an
+        // existing `build` task (native gradle/Java projects). findByName
+        // returns null for whichever isn't registered — no-op in that case.
+        for (phase in listOf("lint", "generate", "transpile")) {
+            subproject.tasks.findByName(phase)?.let { prepublish.dependsOn(it) }
+        }
+        subproject.tasks.findByName("build")?.let { prepublish.dependsOn(it) }
     }
 
     // ── Tag + push after all packages are published ──

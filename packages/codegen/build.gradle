@@ -11,6 +11,16 @@ group = 'com.zerobias.hub'
 version = '1.0.0'
 description = 'OpenAPI Generator for creating Hub Modules'
 
+// Force the artifact name regardless of whether gradle is invoked from this
+// directory (rootProject.name = 'hub-module-codegen' via settings.gradle) or
+// from the monorepo root (subproject name = 'codegen' from the directory
+// name). Without this, root-gradle builds produce `codegen-1.0.0.jar` while
+// nested builds produce `hub-module-codegen-1.0.0.jar`, and the `copyDeps`
+// npm script only expects the latter.
+base {
+    archivesName = 'hub-module-codegen'
+}
+
 java {
   sourceCompatibility = JavaVersion.VERSION_1_8
   targetCompatibility = JavaVersion.VERSION_1_8
@@ -38,13 +48,13 @@ task copyDependencies(type: Copy) {
 }
 build.dependsOn += copyDependencies
 
-// Stage the built hub-module-codegen jar + the openapi-generator-cli runtime
-// jar into `bin/` so `bin/hub-generator.js` can invoke them. Locally this is
-// normally done by `npm run copyDeps`; in CI (fresh clone, no stale bin/*.jar)
-// monorepoBuild runs gradle's :build but never invokes that npm script, so
-// downstream packages (e.g. hub-module-utils) fail at generate time with
-// missing jar errors. Running this as part of :build keeps the two paths
-// in sync.
+// Stage the built hub-module-codegen jar and the openapi-generator-cli
+// runtime jar into `bin/` so `bin/hub-generator.js` can invoke them.
+// Locally this is normally done by `npm run copyDeps`; monorepoBuild
+// only runs gradle's :build and never invokes that npm script, so wire
+// the staging directly into :build instead. This keeps local + CI behavior
+// identical for downstream packages (e.g. hub-module-utils) that invoke
+// `hub-generator`.
 task stageBinJars(type: Copy) {
     dependsOn jar, copyDependencies
     from jar.archiveFile

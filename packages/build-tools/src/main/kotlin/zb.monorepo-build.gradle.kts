@@ -332,6 +332,12 @@ gradle.projectsEvaluated {
 
     // 2. Wire per-package dependsOn across subprojects based on the npm dep graph.
     //    Lint is parallel-safe (doesn't depend on other packages' build outputs).
+    //
+    //    For JVM-style deps (hasExistingBuildInfra == true, e.g. `codegen`),
+    //    the dep project has no phase tasks — it has a `build` task. Wire
+    //    the consumer's phase task against that `build` task so consumers
+    //    transitively trigger the full JVM build (including any Copy tasks
+    //    like stageBinJars that stage runtime artifacts into bin/).
     val crossProjectPhases = phases.filter { it != "lint" } + testPhases
     for ((_, pkg) in packages) {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
@@ -342,7 +348,11 @@ gradle.projectsEvaluated {
             for (depName in pkg.internalDeps) {
                 val depPath = service.packageNameToGradlePath[depName] ?: continue
                 val depProject = rootProject.findProject(depPath) ?: continue
-                val depTask = depProject.tasks.findByName(phase) ?: continue
+                val depTask = if (hasExistingBuildInfra(depProject)) {
+                    depProject.tasks.findByName("build")
+                } else {
+                    depProject.tasks.findByName(phase)
+                } ?: continue
                 task.dependsOn(depTask)
             }
         }
