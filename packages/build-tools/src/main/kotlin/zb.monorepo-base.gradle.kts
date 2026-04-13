@@ -152,4 +152,28 @@ gradle.taskGraph.whenReady {
             }
         }
     }
+
+    // Root-level phase tasks — the monorepo aggregators shown in the display
+    // as a breadcrumb ("which step in the chain are we on"). Each gets a
+    // doFirst hook that fires emitPhaseStart; the finish side is already
+    // handled by the OperationCompletionListener in MonorepoEventEmitter.
+    val phaseTaskNames = setOf(
+        "monorepoBuild",
+        "monorepoTest",
+        "monorepoDockerBuild",
+        "monorepoPublishDryRun",
+        "monorepoPublish",
+        "monorepoGate",
+        "monorepoGateCheck",
+        "monorepoClean",
+    )
+    for (phaseName in phaseTaskNames) {
+        val task = rootProject.tasks.findByName(phaseName) ?: continue
+        val capturedPhase = phaseName
+        val emitterProvider = eventEmitter
+        task.usesService(emitterProvider)
+        task.doFirst {
+            emitterProvider.get().emitPhaseStart(capturedPhase)
+        }
+    }
 }

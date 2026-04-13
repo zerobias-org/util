@@ -59,7 +59,50 @@ interface TaskDoneEvent {
   ts: number;
 }
 
-type Event = TaskStartEvent | TaskDoneEvent;
+// ── Phase events (root-level monorepo aggregators: monorepoBuild, gate, etc.) ──
+
+interface PhaseStartEvent {
+  event: 'phase_start';
+  phase: string;
+  ts: number;
+}
+
+interface PhaseDoneEvent {
+  event: 'phase_done';
+  phase: string;
+  status: 'passed' | 'failed' | 'skipped' | 'up-to-date' | 'from-cache';
+  durationMs: number;
+  ts: number;
+}
+
+// ── Publish plan (from monorepoPublishDryRun / monorepoPublish) ──
+
+interface PublishPlanEvent {
+  event: 'publish_plan';
+  packages: Array<{
+    name: string;
+    version: string;
+    bumped: boolean;
+  }>;
+  ts: number;
+}
+
+// ── Gate stamp written (from monorepoGate at the end of a gate run) ──
+
+interface GateStampWrittenEvent {
+  event: 'gate_stamp_written';
+  path: string;
+  packageCount: number;
+  ts: number;
+}
+
+type Event =
+  | TaskStartEvent
+  | TaskDoneEvent
+  | PhaseStartEvent
+  | PhaseDoneEvent
+  | PublishPlanEvent
+  | GateStampWrittenEvent;
 
 // ── Per-project state ────────────────────────────────────────────────
 
@@ -85,6 +128,24 @@ interface ProjectState {
   projectStartedAt: number;
 }
 
+type PhaseStatus = 'running' | 'passed' | 'failed' | 'skipped' | 'cached';
+
+interface PhaseEntry {
+  name: string;
+  status: PhaseStatus;
+  startedAt: number;
+  durationMs?: number;
+}
+
+interface PublishPlanState {
+  packages: Array<{ name: string; version: string; bumped: boolean }>;
+}
+
+interface GateStampState {
+  path: string;
+  packageCount: number;
+}
+
 // ── ANSI color helpers ──────────────────────────────────────────────
 
 const COLOR = {
@@ -99,12 +160,30 @@ const COLOR = {
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+/**
+ * Short display name for each monorepo phase. Named by what they DO, not
+ * by their gradle task name. `monorepoGate` is the step that writes the
+ * gate stamp, so it's shown as "Stamp" in the breadcrumb. Everything else
+ * strips the `monorepo` prefix.
+ */
+function phaseDisplayName(phase: string): string {
+  if (phase === 'monorepoGate') return 'Stamp';
+  if (phase === 'monorepoGateCheck') return 'StampCheck';
+  return phase.replace(/^monorepo/, '');
+}
+
 // ── Display renderer ────────────────────────────────────────────────
 
 export class MonorepoDisplay {
   private projects = new Map<string, ProjectState>();
   /** Insertion order — keeps row positions stable as projects appear */
   private projectOrder: string[] = [];
+  /** Root-level monorepo phases in the order we first saw them */
+  private phases: PhaseEntry[] = [];
+  /** Publish plan from monorepoPublishDryRun (null until the event fires) */
+  private publishPlan: PublishPlanState | null = null;
+  /** Gate stamp written at end of monorepoGate (null until the event fires) */
+  private gateStamp: GateStampState | null = null;
   private spinnerIdx = 0;
   private spinnerTimer: ReturnType<typeof setInterval> | null = null;
   /** How many rows we wrote in our last render() call. Used for cursor-up. */
@@ -127,8 +206,58 @@ export class MonorepoDisplay {
   handleEvent(ev: Event): void {
     if (ev.event === 'task_start') this.onStart(ev);
     else if (ev.event === 'task_done') this.onDone(ev);
+    else if (ev.event === 'phase_start') this.onPhaseStart(ev);
+    else if (ev.event === 'phase_done') this.onPhaseDone(ev);
+    else if (ev.event === 'publish_plan') this.onPublishPlan(ev);
+    else if (ev.event === 'gate_stamp_written') this.onGateStampWritten(ev);
     this.maybeStartSpinner();
     this.render();
+  }
+
+  private onPhaseStart(ev: PhaseStartEvent): void {
+    // Look up existing entry so a repeated start doesn't duplicate.
+    const existing = this.phases.find(p => p.name === ev.phase);
+    if (existing) {
+      existing.status = 'running';
+      existing.startedAt = Date.now();
+      existing.durationMs = undefined;
+      return;
+    }
+    this.phases.push({
+      name: ev.phase,
+      status: 'running',
+      startedAt: Date.now(),
+    });
+  }
+
+  private onPhaseDone(ev: PhaseDoneEvent): void {
+    const status: PhaseStatus =
+      ev.status === 'failed' ? 'failed'
+      : ev.status === 'skipped' ? 'skipped'
+      : ev.status === 'up-to-date' || ev.status === 'from-cache' ? 'cached'
+      : 'passed';
+    const existing = this.phases.find(p => p.name === ev.phase);
+    if (existing) {
+      existing.status = status;
+      existing.durationMs = ev.durationMs;
+    } else {
+      // Finish without a prior start — happens for NO-SOURCE / up-to-date
+      // phases where gradle skipped the action hook. Record anyway.
+      this.phases.push({
+        name: ev.phase,
+        status,
+        startedAt: ev.ts - ev.durationMs,
+        durationMs: ev.durationMs,
+      });
+    }
+  }
+
+  private onPublishPlan(ev: PublishPlanEvent): void {
+    this.publishPlan = { packages: ev.packages };
+  }
+
+  private onGateStampWritten(ev: GateStampWrittenEvent): void {
+    this.gateStamp = { path: ev.path, packageCount: ev.packageCount };
   }
 
   private onStart(ev: TaskStartEvent): void {
@@ -340,12 +469,82 @@ export class MonorepoDisplay {
     if (this.projectOrder.length === 0) {
       process.stdout.write(`${COLOR.dim}  All tasks up-to-date (${elapsed}s)${COLOR.reset}\n`);
     }
+
+    // Blank line between the per-project rows and the summary footer
+    // blocks (publish plan / gate stamp / paths) so the visual groups
+    // don't run together.
+    if (this.projectOrder.length > 0 && (this.publishPlan || this.gateStamp)) {
+      process.stdout.write('\n');
+    }
+
+    // Publish plan summary box — shown after the per-project rows. Only
+    // appears when monorepoPublishDryRun or monorepoPublish fired a
+    // publish_plan event; for other commands (build/test/clean) this
+    // stays hidden.
+    if (this.publishPlan) {
+      this.renderPublishPlanBox();
+    }
+
+    // Gate stamp footer — shown when monorepoGate wrote a gate-stamp.json.
+    if (this.gateStamp) {
+      process.stdout.write(
+        `  ${COLOR.green}⛿${COLOR.reset} ${this.gateStamp.path} written ${COLOR.dim}·${COLOR.reset} ${this.gateStamp.packageCount} packages\n`,
+      );
+    }
+
     const eventsPath = join(dirname(this.logsDir), 'events.jsonl');
     const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
     process.stdout.write(
       `${COLOR.dim}  events: ${eventsPath}${COLOR.reset}\n` +
       `${COLOR.dim}  logs:   ${this.logsDir}${COLOR.reset}\n` +
       `${COLOR.dim}  gradle: ${gradleLogPath}${COLOR.reset}\n`,
+    );
+  }
+
+  /**
+   * Render the "Publish plan" summary box. Layout:
+   *
+   *   ┌ Publish plan ─ 3 package(s) will publish ─────────
+   *   │ ✔ @zerobias-org/zbb              0.3.48  (auto-bump)
+   *   │ ✔ @zerobias-org/util-codegen     2.0.48  (auto-bump)
+   *   │ ✔ @zerobias-org/util-hub-utils   2.0.43  (auto-bump)
+   *   └────────────────────────────────────────────────────
+   *
+   * Empty plan renders as a single one-line summary:
+   *
+   *   ⌘ publish plan: no packages to publish
+   */
+  private renderPublishPlanBox(): void {
+    if (!this.publishPlan) return;
+    const packages = this.publishPlan.packages;
+
+    if (packages.length === 0) {
+      process.stdout.write(
+        `  ${COLOR.dim}⌘ publish plan: no packages to publish${COLOR.reset}\n`,
+      );
+      return;
+    }
+
+    // Column widths: align package names for readability.
+    const nameWidth = Math.max(...packages.map(p => p.name.length));
+    const versionWidth = Math.max(...packages.map(p => p.version.length));
+
+    const header = `Publish plan ─ ${packages.length} package(s) will publish `;
+    process.stdout.write(
+      `  ${COLOR.cyan}┌${COLOR.reset} ${header}${COLOR.dim}${'─'.repeat(Math.max(0, 60 - header.length - 2))}${COLOR.reset}\n`,
+    );
+    for (const pkg of packages) {
+      const name = pkg.name.padEnd(nameWidth);
+      const version = pkg.version.padEnd(versionWidth);
+      const bump = pkg.bumped
+        ? `${COLOR.dim}(auto-bump)${COLOR.reset}`
+        : '';
+      process.stdout.write(
+        `  ${COLOR.cyan}│${COLOR.reset} ${COLOR.green}✔${COLOR.reset} ${name}  ${COLOR.cyan}${version}${COLOR.reset}  ${bump}\n`,
+      );
+    }
+    process.stdout.write(
+      `  ${COLOR.cyan}└${'─'.repeat(60)}${COLOR.reset}\n`,
     );
   }
 
@@ -367,15 +566,31 @@ export class MonorepoDisplay {
   }
 
   private render(): void {
-    if (!this.isTTY || this.projectOrder.length === 0) return;
+    // Render if we have EITHER phase breadcrumbs or per-project rows.
+    // Phases often start before any per-project rows appear (monorepoBuild
+    // is running for a second before its subproject tasks begin emitting
+    // task_start events), and the breadcrumb is useful even then.
+    if (!this.isTTY) return;
+    if (this.projectOrder.length === 0 && this.phases.length === 0) return;
 
     // Move cursor up by the number of rows we wrote LAST time (not the
-    // current count — they may differ if a new project just appeared).
+    // current count — they may differ if a new project just appeared or
+    // a new phase entered the chain).
     if (this.lastRowCount > 0) {
       process.stdout.write(`\x1b[${this.lastRowCount}A`);
     }
 
     let written = 0;
+
+    // Phase breadcrumb: single line at the top showing the monorepo-level
+    // aggregators and which one is currently running. Separated from the
+    // per-project rows by a blank line for readability.
+    if (this.phases.length > 0) {
+      process.stdout.write(`\x1b[2K${this.renderPhaseLine()}\n`);
+      process.stdout.write('\x1b[2K\n');
+      written += 2;
+    }
+
     for (const path of this.projectOrder) {
       const state = this.projects.get(path)!;
       // \x1b[2K clears the entire line before re-writing it
@@ -390,6 +605,53 @@ export class MonorepoDisplay {
     }
 
     this.lastRowCount = Math.max(written, this.lastRowCount);
+  }
+
+  /**
+   * Render the phase breadcrumb line. Format:
+   *
+   *   phases: ✓ monorepoBuild 32s  ⠋ monorepoTest 5s  ⋯ monorepoPublishDryRun  ⋯ monorepoGate
+   *
+   * - Completed phases show their duration.
+   * - The running phase shows a spinner + live elapsed.
+   * - Not-yet-started phases in the chain show a dim `⋯` placeholder.
+   *
+   * "Not-yet-started" is only included when we KNOW a phase is coming but
+   * it hasn't emitted phase_start yet. Currently we don't predict the chain,
+   * so only phases that have emitted at least phase_start are rendered.
+   */
+  private renderPhaseLine(): string {
+    const now = Date.now();
+    const parts: string[] = [];
+    for (const phase of this.phases) {
+      const shortName = phaseDisplayName(phase.name);
+      if (phase.status === 'running') {
+        const elapsed = (Math.max(0, now - phase.startedAt) / 1000).toFixed(1);
+        parts.push(
+          `${COLOR.cyan}${SPINNER_FRAMES[this.spinnerIdx]} ${shortName} ${elapsed}s${COLOR.reset}`,
+        );
+      } else {
+        // All terminal states get a timing (even 0.0s) so the breadcrumb has
+        // consistent width and the user can see at a glance how long each
+        // phase actually took. `?` only shows up if we genuinely lost the
+        // timing (shouldn't happen in practice).
+        const dur = phase.durationMs != null
+          ? `${(phase.durationMs / 1000).toFixed(1)}s`
+          : '?';
+        if (phase.status === 'failed') {
+          parts.push(`${COLOR.red}✗ ${shortName} ${dur}${COLOR.reset}`);
+        } else if (phase.status === 'skipped') {
+          parts.push(`${COLOR.dim}· ${shortName} skipped${COLOR.reset}`);
+        } else if (phase.status === 'cached') {
+          parts.push(`${COLOR.blue}◆ ${shortName} cached ${dur}${COLOR.reset}`);
+        } else {
+          // passed
+          parts.push(`${COLOR.green}✓ ${shortName} ${dur}${COLOR.reset}`);
+        }
+      }
+    }
+    const label = `${COLOR.dim}phases:${COLOR.reset}`;
+    return `  ${label} ${parts.join(`${COLOR.dim}  ·  ${COLOR.reset}`)}`;
   }
 
   private renderRow(state: ProjectState): string {

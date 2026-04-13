@@ -136,14 +136,31 @@ object PublishChangeDetector {
     /**
      * Get files changed for a specific path filter since a git ref.
      * Excludes docs and CI files.
+     *
+     * Includes THREE classes of changes:
+     *   1. Committed changes since the ref (git diff ref..HEAD)
+     *   2. Unstaged/staged modifications in the working tree (git diff ref)
+     *   3. Untracked non-gitignored files (git ls-files --others --exclude-standard)
+     *
+     * This is what makes local `zbb gate` reflect what you'd actually publish
+     * if you committed your current working tree — uncommitted changes count,
+     * not just commits on main. CI is always on a fresh checkout so (2) and
+     * (3) are empty there, making this behavior-compatible with the CI path.
      */
     private fun getChangedFilesSinceRef(
         repoRoot: File,
         ref: String,
         pathFilter: String? = null,
     ): List<String> {
-        return try {
-            val args = mutableListOf("git", "diff", "--name-only", "$ref..HEAD")
+        val changed = mutableSetOf<String>()
+
+        // (1) + (2): `git diff <ref>` diffs the WORKING TREE against ref,
+        // which naturally includes both committed changes since ref AND any
+        // uncommitted tracked modifications. `git diff <ref>..HEAD` would
+        // only cover (1), which misses the local dev workflow where the
+        // user has in-flight changes.
+        try {
+            val args = mutableListOf("git", "diff", "--name-only", ref)
             if (pathFilter != null) {
                 args.add("--")
                 args.add(pathFilter)
@@ -154,17 +171,42 @@ object PublishChangeDetector {
                 .start()
             val output = proc.inputStream.bufferedReader().readText().trim()
             val finished = proc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
-            if (!finished || proc.exitValue() != 0 || output.isEmpty()) {
-                emptyList()
-            } else {
-                output.lines().filter { f ->
-                    !f.endsWith(".md") &&
-                    !f.startsWith(".github/") &&
-                    !f.startsWith(".claude/")
-                }
+            if (finished && proc.exitValue() == 0 && output.isNotEmpty()) {
+                changed.addAll(output.lines())
             }
         } catch (_: Exception) {
-            emptyList()
+            // Fall through; we'll still collect untracked files below.
+        }
+
+        // (3) Untracked, non-gitignored files in the path. These are brand
+        // new files the user hasn't staged yet — they're clearly "changes
+        // that would publish" if committed.
+        try {
+            val args = mutableListOf("git", "ls-files", "--others", "--exclude-standard")
+            if (pathFilter != null) {
+                args.add("--")
+                args.add(pathFilter)
+            }
+            val proc = ProcessBuilder(args)
+                .directory(repoRoot)
+                .redirectErrorStream(false)
+                .start()
+            val output = proc.inputStream.bufferedReader().readText().trim()
+            val finished = proc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+            if (finished && proc.exitValue() == 0 && output.isNotEmpty()) {
+                changed.addAll(output.lines())
+            }
+        } catch (_: Exception) {
+            // fall through
+        }
+
+        // Filter out noise that never triggers a publish: docs, CI config,
+        // claude scratchpads. Same filter the tag-only path used.
+        return changed.filter { f ->
+            f.isNotEmpty() &&
+            !f.endsWith(".md") &&
+            !f.startsWith(".github/") &&
+            !f.startsWith(".claude/")
         }
     }
 

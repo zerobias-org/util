@@ -59,16 +59,91 @@ abstract class MonorepoEventEmitter : BuildService<MonorepoEventEmitter.Params>,
     /** Track start times so we can include duration in finish events. */
     private val startTimes = ConcurrentHashMap<String, Long>()
 
+    /** Track which phases have already had phase_start emitted, so it's
+     *  idempotent — callers can fire it multiple times and only the first
+     *  one goes through. Needed because subproject tasks infer the phase
+     *  from their task name and concurrently try to emit phase_start, but
+     *  only one should win. */
+    private val phasesStarted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Root-level monorepo tasks that should be reported as phases in the
+     * display (distinct from per-package phase tasks). Anything not in this
+     * set is ignored when it shows up as a root task — gradle has plenty of
+     * internal root tasks (help, buildEnvironment, etc.) that would clutter
+     * the display.
+     */
+    private val PHASE_TASK_NAMES = setOf(
+        "monorepoBuild",
+        "monorepoTest",
+        "monorepoDockerBuild",
+        "monorepoPublishDryRun",
+        "monorepoPublish",
+        "monorepoGate",
+        "monorepoGateCheck",
+        "monorepoClean",
+    )
+
+    /**
+     * Map a subproject task name to the root phase it belongs to. Used to
+     * infer the active phase from the first subproject task that starts —
+     * gradle runs aggregator task actions AFTER their dependencies, so
+     * doFirst on monorepoBuild itself fires at the END of the phase, not
+     * the beginning. The display needs to show "monorepoBuild running" as
+     * soon as the first lint/transpile task kicks off, so we piggyback on
+     * the task_start event from those subproject tasks.
+     */
+    private fun subprojectTaskToPhase(taskName: String): String? = when (taskName) {
+        // Build phase: anything that produces dist/ or compile output.
+        "lint", "generate", "transpile",
+        "npmLint", "npmGenerate", "npmTranspile", "npmBuild",
+        "build", "jar", "classes", "compileJava", "compileKotlin",
+        "stageBinJars", "copyDependencies",
+        -> "monorepoBuild"
+
+        // Test phase: anything that executes tests.
+        "test", "npmTest", "check" -> "monorepoTest"
+
+        // Docker phase: substack docker pipeline.
+        "dockerBuild", "npmPack", "prepareDockerContext", "injectLocalDeps"
+        -> "monorepoDockerBuild"
+
+        else -> null
+    }
+
     fun isEnabled(): Boolean = writer != null
 
     /**
      * Emit a task_start event. Called from a doFirst hook on each tracked task.
+     *
+     * Also opportunistically emits phase_start for the parent phase (if we
+     * haven't yet), so the display can show the phase breadcrumb as soon as
+     * the first subproject task actually begins running — NOT waiting until
+     * the aggregator task's own doFirst fires (which happens at the end).
      */
     fun emitStart(projectPath: String, taskName: String) {
         val w = writer ?: return
         val key = "$projectPath:$taskName"
         val now = System.currentTimeMillis()
         startTimes[key] = now
+
+        // Infer the parent phase and emit phase_start if not yet done.
+        // This captures phases that have subproject task dependencies —
+        // monorepoBuild, monorepoTest, monorepoDockerBuild — whose own
+        // doFirst hooks would fire at the END of the phase.
+        subprojectTaskToPhase(taskName)?.let { phase ->
+            if (phasesStarted.add(phase)) {
+                synchronized(w) {
+                    startTimes["__phase:$phase"] = now
+                    w.println(jsonLine(
+                        "event" to "phase_start",
+                        "phase" to phase,
+                        "ts" to now,
+                    ))
+                }
+            }
+        }
+
         synchronized(w) {
             w.println(jsonLine(
                 "event" to "task_start",
@@ -80,12 +155,80 @@ abstract class MonorepoEventEmitter : BuildService<MonorepoEventEmitter.Params>,
     }
 
     /**
+     * Emit a phase_start event directly. Used by root-level aggregator
+     * doFirst hooks for phases that have no subproject task deps (e.g.
+     * monorepoPublishDryRun, monorepoGate, monorepoPublish). Idempotent —
+     * a second call for a phase that already started is a no-op.
+     */
+    fun emitPhaseStart(phase: String) {
+        val w = writer ?: return
+        if (!phasesStarted.add(phase)) return
+        val now = System.currentTimeMillis()
+        startTimes["__phase:$phase"] = now
+        synchronized(w) {
+            w.println(jsonLine(
+                "event" to "phase_start",
+                "phase" to phase,
+                "ts" to now,
+            ))
+        }
+    }
+
+    /**
+     * Emit a publish_plan event carrying the packages the publish (or
+     * publish dry-run) identified as publishable. Payload shape:
+     *
+     *   {"event":"publish_plan","packages":[
+     *     {"name":"@scope/pkg","version":"1.2.3","bumped":true},
+     *     ...
+     *   ],"ts":...}
+     *
+     * The display renders this as a summary box so the user doesn't have
+     * to grep the gradle log to see what would publish.
+     */
+    fun emitPublishPlan(packages: List<Triple<String, String, Boolean>>) {
+        val w = writer ?: return
+        val now = System.currentTimeMillis()
+        // Hand-rolled JSON for the packages array to keep the hot path free
+        // of Jackson init. Each element: {"name":"...","version":"...","bumped":true}
+        val arr = StringBuilder("[")
+        for ((i, pkg) in packages.withIndex()) {
+            if (i > 0) arr.append(',')
+            val (name, version, bumped) = pkg
+            arr.append("{\"name\":\"").append(escapeJson(name))
+                .append("\",\"version\":\"").append(escapeJson(version))
+                .append("\",\"bumped\":").append(bumped).append('}')
+        }
+        arr.append(']')
+        synchronized(w) {
+            w.println("{\"event\":\"publish_plan\",\"packages\":$arr,\"ts\":$now}")
+        }
+    }
+
+    /**
+     * Emit a gate_stamp_written event after monorepoGate writes its stamp.
+     * The display renders this as a footer line so the user gets explicit
+     * feedback that the stamp exists and how many packages it covers.
+     */
+    fun emitGateStampWritten(path: String, packageCount: Int) {
+        val w = writer ?: return
+        val now = System.currentTimeMillis()
+        synchronized(w) {
+            w.println(jsonLine(
+                "event" to "gate_stamp_written",
+                "path" to path,
+                "packageCount" to packageCount,
+                "ts" to now,
+            ))
+        }
+    }
+
+    /**
      * OperationCompletionListener implementation: receives task finish events.
      */
     override fun onFinish(event: FinishEvent) {
         if (event !is TaskFinishEvent) return
-        val taskPath = event.descriptor.taskPath  // e.g. ":packages:foo:transpile"
-        val (projectPath, taskName) = splitTaskPath(taskPath) ?: return
+        val taskPath = event.descriptor.taskPath  // e.g. ":packages:foo:transpile" or ":monorepoBuild"
 
         val w = writer ?: return
         val result = event.result
@@ -98,6 +241,32 @@ abstract class MonorepoEventEmitter : BuildService<MonorepoEventEmitter.Params>,
             else -> "unknown"
         }
 
+        // Root-level task (single leading colon, e.g. ":monorepoBuild").
+        // Only emit phase_done for tasks we explicitly track — gradle has
+        // dozens of internal root tasks that would otherwise flood the log.
+        val lastColon = taskPath.lastIndexOf(':')
+        if (lastColon == 0) {
+            val taskName = taskPath.substring(1)
+            if (taskName !in PHASE_TASK_NAMES) return
+            val startedAt = startTimes.remove("__phase:$taskName")
+            val durationMs = if (startedAt != null) {
+                System.currentTimeMillis() - startedAt
+            } else {
+                (event.result.endTime - event.result.startTime)
+            }
+            synchronized(w) {
+                w.println(jsonLine(
+                    "event" to "phase_done",
+                    "phase" to taskName,
+                    "status" to status,
+                    "durationMs" to durationMs,
+                    "ts" to System.currentTimeMillis(),
+                ))
+            }
+            return
+        }
+
+        val (projectPath, taskName) = splitTaskPath(taskPath) ?: return
         val key = "$projectPath:$taskName"
         val startedAt = startTimes.remove(key)
         val durationMs = if (startedAt != null) {

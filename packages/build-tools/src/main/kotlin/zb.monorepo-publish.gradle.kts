@@ -332,6 +332,141 @@ val monorepoPublish = tasks.register("monorepoPublish") {
     finalizedBy(dispatchImageWorkflows)
 }
 
+// ── monorepoPublishDryRun — validate publish flow without pushing ──
+//
+// Runs the publish code paths WITHOUT mutating files or pushing anything:
+//   1. PublishChangeDetector.detectChanges() — identifies which packages
+//      would publish (same logic as publishPlan).
+//   2. Prepublish.resolve(dryRun = true) — runs the package.json mutation
+//      logic and reports errors without writing files.
+//   3. `npm pack --dry-run --json` per package — validates tarball layout
+//      and verifies entryCount + unpackedSize are non-trivial. This is the
+//      check that would have caught the 2-30 kB empty tarballs from the
+//      earlier phase-3 publish bug: if `dist/` is missing, unpackedSize
+//      will be orders of magnitude smaller than expected.
+//
+// Wired into monorepoGate so `zbb gate` locally runs the full publish
+// path short of the actual push. This is the guarantee behind "gate
+// passes ⇒ publish will pass in CI".
+//
+// Depends on monorepoBuild (wired in projectsEvaluated below) so dist/
+// exists when npm pack inspects the package.
+@Suppress("UNCHECKED_CAST")
+val eventEmitter = (rootProject.extensions.extraProperties["monorepoEventEmitter"]
+    as org.gradle.api.provider.Provider<com.zerobias.buildtools.monorepo.MonorepoEventEmitter>)
+
+val monorepoPublishDryRun = tasks.register("monorepoPublishDryRun") {
+    group = "monorepo"
+    description = "Validate the publish flow without mutating or pushing (change detection + prepublish dry-run + npm pack --dry-run)"
+    usesService(eventEmitter)
+
+    doLast {
+        val service = graphService.get()
+        val rootDir = rootProject.projectDir
+
+        // 1. Change detection — same logic publishPlan uses at publish time.
+        val plan = PublishChangeDetector.detectChanges(
+            repoRoot = rootDir,
+            graph = service.graph,
+            config = service.config,
+            registry = service.config.registry,
+        )
+
+        // Emit publish_plan event so the display can render a summary box.
+        // Always emit (even for empty plans) so the display knows the check ran.
+        val planEvents = plan.publishOrdered.map { name ->
+            val rv = plan.resolvedVersions[name]!!
+            Triple(name, rv.version, rv.bumped)
+        }
+        eventEmitter.get().emitPublishPlan(planEvents)
+
+        if (plan.publishOrdered.isEmpty()) {
+            logger.lifecycle("[publish-dry-run] no packages have changes since their last published tag")
+            return@doLast
+        }
+
+        logger.lifecycle("[publish-dry-run] ${plan.publishOrdered.size} package(s) would publish:")
+        for (name in plan.publishOrdered) {
+            val rv = plan.resolvedVersions[name]!!
+            val bump = if (rv.bumped) " (auto-bumped)" else ""
+            logger.lifecycle("  ${name} → ${rv.version}$bump")
+        }
+
+        val errors = mutableListOf<String>()
+        val mapper = ObjectMapper().registerKotlinModule()
+
+        // 2. prepublish dry-run per package — validates resolve logic
+        //    without writing to disk.
+        for (name in plan.publishOrdered) {
+            val pkg = service.graph.packages[name] ?: continue
+            try {
+                val result = Prepublish.resolve(pkg.dir, rootDir, Prepublish.Options(dryRun = true))
+                logger.lifecycle("  ✓ ${name}: prepublish would resolve ${result.dependencies.size} deps")
+            } catch (e: Exception) {
+                errors.add("${name}: prepublish dry-run failed — ${e.message}")
+            }
+        }
+
+        // 3. npm pack --dry-run per package — validates tarball contents.
+        //    Thresholds: ≥3 files and ≥2 KB unpacked. These catch the
+        //    "tarball only contains package.json" failure mode without
+        //    false-positive-ing on genuinely tiny packages (schemas, etc.).
+        for (name in plan.publishOrdered) {
+            val pkg = service.graph.packages[name] ?: continue
+            val packProc = ProcessBuilder("npm", "pack", "--dry-run", "--json")
+                .directory(pkg.dir)
+                .redirectErrorStream(false)
+                .start()
+            val stdout = packProc.inputStream.bufferedReader().readText()
+            val stderr = packProc.errorStream.bufferedReader().readText()
+            val finished = packProc.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)
+            if (!finished || packProc.exitValue() != 0) {
+                errors.add("${name}: npm pack --dry-run failed — ${stderr.take(500)}")
+                continue
+            }
+
+            val packInfo: Map<String, Any?>? = try {
+                @Suppress("UNCHECKED_CAST")
+                val packArr = mapper.readValue<List<Map<String, Any?>>>(stdout)
+                packArr.firstOrNull()
+            } catch (e: Exception) {
+                errors.add("${name}: could not parse npm pack --dry-run output — ${e.message}")
+                null
+            }
+            if (packInfo == null) {
+                // Either parse failed (error already recorded above) or the
+                // array was empty. Record the empty-array case explicitly so
+                // we never silently skip a package.
+                if (errors.none { it.startsWith("${name}:") }) {
+                    errors.add("${name}: npm pack --dry-run returned empty array")
+                }
+                continue
+            }
+            val entryCount = (packInfo["entryCount"] as? Number)?.toInt() ?: 0
+            val unpackedSize = (packInfo["unpackedSize"] as? Number)?.toLong() ?: 0L
+
+            if (entryCount < 3) {
+                errors.add("${name}: tarball has only $entryCount file(s) — likely missing dist/ or other build output")
+                continue
+            }
+            if (unpackedSize < 2048) {
+                errors.add("${name}: tarball unpacked size is only $unpackedSize bytes — likely missing build output")
+                continue
+            }
+            logger.lifecycle("  ✓ ${name}: tarball $entryCount files, $unpackedSize bytes unpacked")
+        }
+
+        if (errors.isNotEmpty()) {
+            throw GradleException(
+                "publish dry-run failed for ${errors.size} package(s):\n  " +
+                errors.joinToString("\n  ") +
+                "\n\nFix these before committing — `zbb publish` will fail in CI with the same errors."
+            )
+        }
+        logger.lifecycle("[publish-dry-run] ✓ all ${plan.publishOrdered.size} package(s) pass dry-run validation")
+    }
+}
+
 // ── Per-subproject task wiring (after projectsEvaluated) ────────────
 
 gradle.projectsEvaluated {
@@ -556,6 +691,17 @@ gradle.projectsEvaluated {
         }
     }
 
+    // ── Wire monorepoPublishDryRun deps to match monorepoPublish ─────
+    //
+    // The dry-run task needs dist/ to exist when `npm pack` runs, so it
+    // depends on monorepoBuild (if present — same pattern as gate/publish).
+    // This matches monorepoPublish's build dep via prepublishPackage, but
+    // because monorepoPublishDryRun doesn't go through publishPlan /
+    // prepublishPackage tasks, we wire the build dep directly.
+    rootProject.tasks.findByName("monorepoBuild")?.let { buildTask ->
+        monorepoPublishDryRun.configure { dependsOn(buildTask) }
+    }
+
     // ── Tag + push after all packages are published ──
     monorepoPublish.configure {
         doLast {
@@ -564,14 +710,28 @@ gradle.projectsEvaluated {
                 @Suppress("UNCHECKED_CAST")
                 val plan = om.readValue<List<Map<String, Any?>>>(publishPlanFile)
 
-                // Create a git tag for each published package
+                // Create an annotated git tag for each published package.
+                //
+                // Tag format: `<shortName>@<version>` (scope stripped).
+                // This MUST match what PublishChangeDetector.getLastPublishedTag
+                // looks up — which does `git describe --match=<shortName>@*`.
+                // If the format ever drifts (e.g. a scoped tag while lookup
+                // strips the scope, or vice versa), the detector silently
+                // treats every package as "never published" and re-publishes
+                // them on every run.
+                //
+                // Annotated tags (`-a`) are required so `git push --follow-tags`
+                // actually pushes them. Lightweight tags (plain `git tag`) are
+                // ignored by --follow-tags and get stranded on the CI runner.
                 for (entry in plan) {
                     val name = entry["name"] as? String ?: continue
                     val version = entry["version"] as? String ?: continue
-                    // Tag format: @scope/name@version (matches npm convention)
-                    val tag = "$name@$version"
+                    val shortName = name.replace(Regex("^@[^/]+/"), "")
+                    val tag = "$shortName@$version"
                     try {
-                        val proc = ProcessBuilder("git", "tag", tag)
+                        val proc = ProcessBuilder(
+                            "git", "tag", "-a", tag, "-m", "Release $name@$version"
+                        )
                             .directory(rootProject.projectDir)
                             .redirectErrorStream(true)
                             .start()
@@ -582,7 +742,8 @@ gradle.projectsEvaluated {
                     }
                 }
 
-                // Push the version-bump commit + tags
+                // Push the version-bump commit + annotated tags.
+                // --follow-tags pushes annotated tags reachable from pushed commits.
                 try {
                     val pushProc = ProcessBuilder("git", "push", "--follow-tags")
                         .directory(rootProject.projectDir)

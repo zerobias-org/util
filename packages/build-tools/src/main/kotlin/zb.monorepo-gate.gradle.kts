@@ -133,6 +133,12 @@ val monorepoGate = tasks.register("monorepoGate") {
     rootProject.tasks.findByName("monorepoBuild")?.let { dependsOn(it) }
     rootProject.tasks.findByName("monorepoTest")?.let { dependsOn(it) }
     rootProject.tasks.findByName("monorepoDockerBuild")?.let { dependsOn(it) }
+    // monorepoPublishDryRun validates the full publish path (change
+    // detection + prepublish dry-run + npm pack --dry-run) without
+    // mutating files or pushing. Wired here so `zbb gate` locally
+    // exercises the same code paths as `zbb publish` in CI. If gate
+    // passes locally, publish will pass in CI — that's the contract.
+    rootProject.tasks.findByName("monorepoPublishDryRun")?.let { dependsOn(it) }
 
     doLast {
         val service = graphService.get()
@@ -258,6 +264,13 @@ val monorepoGate = tasks.register("monorepoGate") {
 
         GateStampIO.write(rootStampFile, stamp)
         logger.lifecycle("Wrote ${rootStampFile.name} with ${packageEntries.size} packages")
+
+        // Emit gate_stamp_written event so the display renders an explicit
+        // footer confirming the stamp exists and how many packages it covers.
+        @Suppress("UNCHECKED_CAST")
+        val emitter = (rootProject.extensions.extraProperties["monorepoEventEmitter"]
+            as? org.gradle.api.provider.Provider<com.zerobias.buildtools.monorepo.MonorepoEventEmitter>)
+        emitter?.get()?.emitGateStampWritten(rootStampFile.name, packageEntries.size)
     }
 }
 

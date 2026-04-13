@@ -1,11 +1,11 @@
 {
   "version": 1,
   "branch": "main",
-  "timestamp": "2026-04-13T14:15:59.427408255Z",
+  "timestamp": "2026-04-13T15:20:59.837044432Z",
   "packages": {
     "@zerobias-org/util-codegen": {
-      "version": "2.0.45",
-      "sourceHash": "5a7aff5045db1d8de6fcff62a6884639f1b0f6a5928dfbe1038358aaa6458830",
+      "version": "2.0.47",
+      "sourceHash": "46c6d0bfb8d76fb7df5002c76512259159c108d9d51f4c9141ecf4658d9cce4e",
       "testHash": "ffd2c3654748679b3983df3bcc14c6ac63b37a636dac4fa65ebd6144805353db",
       "tasks": {
         "lint": "skipped",
@@ -41,8 +41,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "2.0.40",
-      "sourceHash": "ee6639e000ad0d01f21760c57ad880760a64c417b77bd45058dde02d2d0d2e56",
+      "version": "2.0.42",
+      "sourceHash": "4aa12743c6e1d4ae0a57f07240243dc0c06bae70a331e76c05de6753dea7abb5",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
         "lint": "passed",
@@ -321,8 +321,8 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.45",
-      "sourceHash": "c651c8e07f1d2d8ae788027864fbf432868180ce8dac02e3b16454089f66e10e",
+      "version": "0.3.47",
+      "sourceHash": "3a1bb7f13856b6041f3c42b3eccab770d6c2b85f83717a3cad288cdc8910e4ca",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
