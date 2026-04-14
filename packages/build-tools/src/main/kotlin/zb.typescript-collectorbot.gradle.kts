@@ -413,39 +413,66 @@ tasks.named("promoteAll") {
 fun collectorbotImageName(): String =
     CollectorbotEntryPointGenerator.readPackageIdentity(project.projectDir).imageName
 
+// Dockerfile output lives under build/docker/ (Gradle's conventional build
+// output dir) rather than generated/ because transpile declares
+// `inputs.dir("generated")` and Gradle 8.10 strict mode flags any task
+// that writes under there without an explicit transpile dependency as an
+// implicit-dependency violation. build/ is outside transpile's input tree.
 val generateCollectorbotDockerfile by tasks.registering {
     group = "lifecycle"
     description = "Generate Dockerfile for collectorbot container"
-    val dockerDir = project.file("generated/docker")
+    val dockerDir = layout.buildDirectory.dir("docker")
     outputs.dir(dockerDir)
     onlyIf { !project.file("Dockerfile").exists() }
     doLast {
-        dockerDir.mkdirs()
-        // Multi-stage: first stage installs runtime-only deps, second stage copies
-        // them into a clean image alongside dist/. This avoids destructive
-        // `npm prune --omit=dev` on the project tree at build time.
+        val outDir = dockerDir.get().asFile
+        outDir.mkdirs()
+
+        // Stage a real .npmrc into build/docker/ so the Dockerfile can COPY
+        // it from inside the build context. The project's own .npmrc is
+        // typically a symlink to the repo root (e.g. ../../../../.npmrc)
+        // whose target lives *outside* the docker build context; BuildKit
+        // then fails during checksum with "too many links" when it tries
+        // to resolve the symlink. readText() follows the symlink and gives
+        // us the real content, which we write as a regular file.
+        val projectNpmrc = project.file(".npmrc")
+        if (projectNpmrc.exists()) {
+            outDir.resolve(".npmrc").writeText(projectNpmrc.readText())
+        }
+
+        // Single-stage: copy the host's pre-installed node_modules directly.
+        // Matches the proven pattern used by zb.typescript.gradle.kts for
+        // modules. An earlier multi-stage attempt that ran `npm install
+        // --omit=dev` inside the deps stage failed with 401 Unauthorized
+        // because the in-container npm install needs NPM_TOKEN/ZB_TOKEN
+        // which aren't available. Host's node_modules already has the
+        // packages resolved; accepting the devDep bloat is simpler than
+        // wiring build secrets.
+        //
+        // All COPY sources are explicit paths inside the build context —
+        // no globs, no out-of-context symlinks — because glob resolution
+        // walks the tree and blows up on node_modules link farms, and
+        // BuildKit rejects symlinks whose targets escape the context.
         val dockerfile = """
-            |FROM node:22-alpine AS deps
-            |WORKDIR /opt/collectorbot
-            |COPY package.json ./
-            |COPY package-lock.json* ./
-            |COPY .npmrc* ./
-            |RUN npm install --omit=dev --no-audit --no-fund
-            |
             |FROM node:22-alpine
-            |LABEL org.opencontainers.image.source https://github.com/auditlogic/collectorbot
+            |LABEL org.opencontainers.image.source=https://github.com/auditlogic/collectorbot
             |RUN apk update && apk add ca-certificates openssl git && rm -rf /var/cache/apk/*
             |WORKDIR /opt/collectorbot
-            |COPY --from=deps /opt/collectorbot/node_modules ./node_modules
             |COPY dist ./dist
+            |COPY node_modules ./node_modules
             |COPY package.json ./
             |COPY *.yml ./
-            |COPY .npmrc* ./
+            |COPY build/docker/.npmrc ./.npmrc
             |CMD ["node", "dist/generated/run.js"]
         """.trimMargin() + "\n"
-        project.file("generated/docker/Dockerfile").writeText(dockerfile)
+        outDir.resolve("Dockerfile").writeText(dockerfile)
     }
 }
+
+fun collectorbotDockerfilePath(): String =
+    if (project.file("Dockerfile").exists()) "Dockerfile"
+    else layout.buildDirectory.file("docker/Dockerfile").get().asFile
+        .relativeTo(project.projectDir).path
 
 val buildImageExec by tasks.registering(Exec::class) {
     group = "lifecycle"
@@ -456,8 +483,7 @@ val buildImageExec by tasks.registering(Exec::class) {
     doFirst {
         val imageName = collectorbotImageName()
         val ver = project.version.toString()
-        val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile"
-            else "generated/docker/Dockerfile"
+        val dockerfilePath = collectorbotDockerfilePath()
         commandLine("docker", "build",
             "-f", dockerfilePath,
             "-t", "${imageName}:local",
@@ -507,8 +533,7 @@ val publishImageEcr by tasks.registering(Exec::class) {
         }
         val ecrRegistry = System.getenv("ECR_REGISTRY")
             ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
-        val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile"
-            else "generated/docker/Dockerfile"
+        val dockerfilePath = collectorbotDockerfilePath()
         val ecrImage = "${ecrRegistry}/${imageName}:${ver}"
         commandLine("bash", "-c", """
             docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ecrImage --push . 2>&1 && exit 0
@@ -543,8 +568,7 @@ val publishImageGhcr by tasks.registering(Exec::class) {
         }
         val ghcrRegistry = System.getenv("GHCR_REGISTRY")
             ?: throw GradleException("GHCR_REGISTRY not set in slot env — add to zbb.yaml")
-        val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile"
-            else "generated/docker/Dockerfile"
+        val dockerfilePath = collectorbotDockerfilePath()
         val ghcrImage = "${ghcrRegistry}/${imageName}:${ver}"
         val npmToken = System.getenv("NPM_TOKEN")
             ?: throw GradleException("NPM_TOKEN not set — needed for GHCR push")
