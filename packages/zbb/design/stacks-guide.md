@@ -177,7 +177,7 @@ state:
 
 logs:
   source: docker
-  container: "${STACK_NAME}-dana"
+  container: "${ZB_SLOT}-dana"
 
 secrets:
   connection_profile:

@@ -16,6 +16,7 @@ import { runPreflightChecks, formatPreflightResults } from '../preflight.js';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
 import { Stack } from './Stack.js';
 import { StackEnvironment } from './StackEnvironment.js';
+import { SlotEnvironment } from '../slot/SlotEnvironment.js';
 import type { StackManifest, StackIdentity, DependencySpec } from '../config.js';
 import type { ImportSpec, StackStatus } from './types.js';
 import type { Slot } from '../slot/Slot.js';
@@ -109,18 +110,17 @@ export class StackManager {
     // Generate secrets (reuses cached values from previous add if available)
     const secrets = await this.generateSecrets(manifest, stackName);
 
-    // Get slot env vars + stack-level vars
-    // STACK_NAME = slot name so all stacks share the same Docker compose project/network.
-    // ZB_STACK = individual stack name for stack-level identity.
-    const slotVars = {
-      ...this.slot.getSlotEnvVars(),
-      ZB_STACK: stackName,
-      STACK_NAME: this.slot.name,
-    };
+    // Slot identity vars passed into initialize. Path vars come from
+    // the slot (ZB_SLOT, ZB_SLOT_DIR, …) and are registered as inherited
+    // with source:slot. Stack identity (ZB_STACK) is passed separately
+    // and registered with source:zbb — it's set by the orchestrator at
+    // stack-add time, scoped to this stack, not inherited from the slot.
+    const slotVars = this.slot.getSlotEnvVars();
 
     // Initialize env (builds manifest + .env)
     await StackEnvironment.initialize(
       stackPath,
+      stackName,
       manifest.env ?? {},
       ports,
       secrets,
@@ -401,7 +401,7 @@ export class StackManager {
 
     // Stop the substack's specific containers
     if (substackConfig.services?.length) {
-      const stackEnvName = stack.env.get('STACK_NAME') ?? this.slot.name;
+      const stackEnvName = this.slot.name;
       const containers = substackConfig.services
         .map(s => `${stackEnvName}-${s}`)
         .join(' ');
@@ -526,7 +526,7 @@ export class StackManager {
     }
 
     // Start each substack in order
-    const stackEnvName = stack.env.get('STACK_NAME') ?? this.slot.name;
+    const stackEnvName = this.slot.name;
     const envFile = join(this.stacksDir, stack.name, '.env');
 
     for (const sub of sorted) {
@@ -845,65 +845,40 @@ export class StackManager {
   }
 
   /**
-   * Rebuild the slot-level .env as a merged projection of all stacks.
-   * This keeps legacy consumers (node-lib Slot, hub-cli) working — they read
-   * the flat slot .env, not per-stack .env files.
+   * Re-sync the slot-level .env file.
    *
-   * Merge order: slot vars first, then each stack's EXPORTED vars (topo-sorted).
-   * Later stacks override earlier ones (so hub's SERVER_URL overrides dana's if both export it).
+   * Under the current architecture (Option A — "stack owns its env"),
+   * the slot `.env` file holds ONLY the identity/path vars in
+   * ZBB_SLOT_VARS. It does NOT hold a merged projection of stack env.
+   * Stack env lives in each stack's own `<slot>/stacks/<name>/.env`
+   * and is composed on demand at command dispatch by `prepareSlot` in
+   * cli.ts.
+   *
+   * This method used to write a flat merge of every added stack's env
+   * into the slot `.env` (option C). That caused cross-stack pollution
+   * — a stack-scoped override could be stomped by the merge, and one
+   * stack's var could leak into another stack's subprocess. We killed
+   * the merge in favor of on-demand composition. The call sites that
+   * used to invoke this after stack add/remove/start are kept as no-ops
+   * for now so callers don't need to be audited.
+   *
+   * This method is idempotent and simply re-writes the slot-level vars
+   * in case anything got out of sync externally (file manually edited,
+   * etc). For normal operation it's essentially a no-op.
    */
   async syncSlotEnv(): Promise<void> {
-    const { writeFile } = await import('node:fs/promises');
-
-    const merged = new Map<string, string>();
-
-    // 1. Slot-level vars always present
     const slotVars = this.slot.getSlotEnvVars();
+    const env = new Map<string, string>();
+    const manifest = new Map<string, { source: string; type: string }>();
     for (const [k, v] of Object.entries(slotVars)) {
-      merged.set(k, v);
+      env.set(k, v);
+      manifest.set(k, { source: 'zbb', type: 'slot' });
     }
-
-    // 2. Load all stacks in topo-sorted order (deps first)
-    const stacks = await this.list();
-    if (stacks.length === 0) {
-      // No stacks — write just slot vars
-      await this.writeSlotEnv(merged);
-      return;
-    }
-
-    // Topo-sort stacks by dependencies
-    interface DepNode { name: string; deps: string[] }
-    const nodes: DepNode[] = stacks.map(s => ({
-      name: s.name,
-      deps: s.manifest.depends ? Object.keys(s.manifest.depends) : [],
-    }));
-    const { sorted } = toposort(nodes, n => n.name, n => n.deps);
-
-    // 3. Merge each stack's vars (all vars from .env, not just exports)
-    //    Exports control what consumers can IMPORT, but the merged .env
-    //    needs all vars for tools like hub-cli that read SERVER_URL etc.
-    for (const node of sorted) {
-      const stack = stacks.find(s => s.name === node.name);
-      if (!stack) continue;
-
-      const envAll = stack.env.getAll();
-      for (const [k, v] of Object.entries(envAll)) {
-        // Skip slot-level vars (already set, don't override with stack copies)
-        if (k.startsWith('ZB_SLOT') || k === 'ZB_STACKS_DIR' || k === 'STACK_NAME') continue;
-        merged.set(k, v);
-      }
-    }
-
-    await this.writeSlotEnv(merged);
-  }
-
-  private async writeSlotEnv(env: Map<string, string>): Promise<void> {
-    const { writeFile } = await import('node:fs/promises');
-    const lines: string[] = [];
-    for (const key of [...env.keys()].sort()) {
-      lines.push(`${key}=${env.get(key)}`);
-    }
-    await writeFile(join(this.slot.path, '.env'), lines.join('\n') + '\n', 'utf-8');
+    await SlotEnvironment.writeDeclaredEnv(
+      this.slot.path,
+      env,
+      manifest as never,
+    );
   }
 
   /**

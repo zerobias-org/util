@@ -353,7 +353,7 @@ val monorepoPublish = tasks.register("monorepoPublish") {
 // exists when npm pack inspects the package.
 @Suppress("UNCHECKED_CAST")
 val eventEmitter = (rootProject.extensions.extraProperties["monorepoEventEmitter"]
-    as org.gradle.api.provider.Provider<com.zerobias.buildtools.monorepo.MonorepoEventEmitter>)
+    as org.gradle.api.provider.Provider<com.zerobias.buildtools.lifecycle.EventEmitter>)
 
 val monorepoPublishDryRun = tasks.register("monorepoPublishDryRun") {
     group = "monorepo"
@@ -407,10 +407,22 @@ val monorepoPublishDryRun = tasks.register("monorepoPublishDryRun") {
             }
         }
 
-        // 3. npm pack --dry-run per package — validates tarball contents.
-        //    Thresholds: ≥3 files and ≥2 KB unpacked. These catch the
-        //    "tarball only contains package.json" failure mode without
-        //    false-positive-ing on genuinely tiny packages (schemas, etc.).
+        // 3. npm pack --dry-run per package — validates tarball contents
+        //    against the package's own declarations.
+        //
+        // Principled check: for every entry the package's package.json
+        // declares (`files` patterns, `main`, `bin` paths), verify that
+        // entry actually appears in the tarball. This catches both:
+        //
+        //   - The empty-tarball bug from earlier (`files: ["dist"]` but
+        //     dist/ wasn't built → no dist/* in tarball)
+        //   - Packages that declare files that were never produced (e.g.
+        //     `files: ["bom.json"]` but the build doesn't generate bom.json)
+        //   - `bin` entries pointing at nonexistent paths
+        //
+        // It does NOT false-positive on intentionally tiny packages — a
+        // package that declares `files: ["index.js"]` and ships index.js
+        // passes cleanly, no matter how small the tarball.
         for (name in plan.publishOrdered) {
             val pkg = service.graph.packages[name] ?: continue
             val packProc = ProcessBuilder("npm", "pack", "--dry-run", "--json")
@@ -434,25 +446,120 @@ val monorepoPublishDryRun = tasks.register("monorepoPublishDryRun") {
                 null
             }
             if (packInfo == null) {
-                // Either parse failed (error already recorded above) or the
-                // array was empty. Record the empty-array case explicitly so
-                // we never silently skip a package.
                 if (errors.none { it.startsWith("${name}:") }) {
                     errors.add("${name}: npm pack --dry-run returned empty array")
                 }
                 continue
             }
+
+            // Extract the tarball file paths.
+            @Suppress("UNCHECKED_CAST")
+            val tarballPaths = ((packInfo["files"] as? List<Map<String, Any?>>) ?: emptyList())
+                .mapNotNull { it["path"] as? String }
+
+            // Read the package's package.json and pull out files/main/bin.
+            val pkgJsonFile = java.io.File(pkg.dir, "package.json")
+            if (!pkgJsonFile.exists()) {
+                errors.add("${name}: package.json not found at ${pkgJsonFile.absolutePath}")
+                continue
+            }
+            val pkgJson: Map<String, Any?> = try {
+                @Suppress("UNCHECKED_CAST")
+                mapper.readValue(pkgJsonFile)
+            } catch (e: Exception) {
+                errors.add("${name}: failed to parse package.json — ${e.message}")
+                continue
+            }
+
+            val missing = mutableListOf<String>()
+
+            // 3a. Each entry in `files` must match at least one tarball path.
+            //     A `files` entry can be:
+            //       - An exact filename:   "index.js"
+            //       - A directory name:    "dist"             (recursive)
+            //       - A glob pattern:      "test/**" / "*.ts" (minimatch-style)
+            //
+            //     For exact + directory forms we do a cheap prefix check;
+            //     for anything containing glob chars we use JDK's built-in
+            //     PathMatcher (`glob:...`) which handles `**`, `*`, `?`,
+            //     `{a,b}` etc. the same way npm's internal matcher does.
+            val fs = java.nio.file.FileSystems.getDefault()
+            @Suppress("UNCHECKED_CAST")
+            val filesField = (pkgJson["files"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            for (rawPattern in filesField) {
+                val pattern = rawPattern.removePrefix("./").removeSuffix("/")
+                val hasGlob = pattern.contains('*') || pattern.contains('?') || pattern.contains('[')
+
+                val matches = if (hasGlob) {
+                    val matcher = try {
+                        fs.getPathMatcher("glob:$pattern")
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (matcher == null) {
+                        // Invalid glob — fall back to literal compare, still
+                        // useful as a sanity check.
+                        tarballPaths.any { it == pattern }
+                    } else {
+                        tarballPaths.any { path ->
+                            try {
+                                matcher.matches(java.nio.file.Paths.get(path))
+                            } catch (_: Exception) {
+                                false
+                            }
+                        }
+                    }
+                } else {
+                    // No glob metacharacters — exact filename or directory.
+                    tarballPaths.any { path ->
+                        path == pattern || path.startsWith("$pattern/")
+                    }
+                }
+
+                if (!matches) {
+                    missing.add("'files' entry not in tarball: $rawPattern")
+                }
+            }
+
+            // 3b. `main` must point to a file actually in the tarball
+            //     (only when present — not all packages declare main).
+            val mainField = pkgJson["main"] as? String
+            if (mainField != null) {
+                val normalized = mainField.removePrefix("./")
+                if (!tarballPaths.any { it == normalized }) {
+                    missing.add("'main' not in tarball: $mainField")
+                }
+            }
+
+            // 3c. Every `bin` entry must point to a file actually in the
+            //     tarball. `bin` can be a string (single bin) or a map.
+            val binField = pkgJson["bin"]
+            when (binField) {
+                is String -> {
+                    val normalized = binField.removePrefix("./")
+                    if (!tarballPaths.any { it == normalized }) {
+                        missing.add("'bin' not in tarball: $binField")
+                    }
+                }
+                is Map<*, *> -> {
+                    for ((binName, binPath) in binField) {
+                        val pathStr = binPath as? String ?: continue
+                        val normalized = pathStr.removePrefix("./")
+                        if (!tarballPaths.any { it == normalized }) {
+                            missing.add("'bin.$binName' not in tarball: $pathStr")
+                        }
+                    }
+                }
+                else -> { /* no bin field, nothing to check */ }
+            }
+
+            if (missing.isNotEmpty()) {
+                errors.add("${name}: ${missing.joinToString("; ")}")
+                continue
+            }
+
             val entryCount = (packInfo["entryCount"] as? Number)?.toInt() ?: 0
             val unpackedSize = (packInfo["unpackedSize"] as? Number)?.toLong() ?: 0L
-
-            if (entryCount < 3) {
-                errors.add("${name}: tarball has only $entryCount file(s) — likely missing dist/ or other build output")
-                continue
-            }
-            if (unpackedSize < 2048) {
-                errors.add("${name}: tarball unpacked size is only $unpackedSize bytes — likely missing build output")
-                continue
-            }
             logger.lifecycle("  ✓ ${name}: tarball $entryCount files, $unpackedSize bytes unpacked")
         }
 

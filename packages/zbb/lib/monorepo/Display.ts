@@ -56,6 +56,9 @@ interface TaskDoneEvent {
   step: string;
   status: 'passed' | 'failed' | 'skipped' | 'up-to-date' | 'from-cache';
   durationMs: number;
+  /** Failure message extracted from gradle's TaskFailureResult.failures.
+   *  Only present when status === 'failed'. */
+  error?: string;
   ts: number;
 }
 
@@ -72,6 +75,9 @@ interface PhaseDoneEvent {
   phase: string;
   status: 'passed' | 'failed' | 'skipped' | 'up-to-date' | 'from-cache';
   durationMs: number;
+  /** Failure message extracted from gradle's TaskFailureResult.failures.
+   *  Only present when status === 'failed'. */
+  error?: string;
   ts: number;
 }
 
@@ -113,6 +119,8 @@ interface StepEntry {
   startedAt: number;
   durationMs?: number;
   status: StepStatus;
+  /** Failure message from gradle, surfaced under the row when status='failed' */
+  error?: string;
 }
 
 type ProjectStatus = 'running' | 'passed' | 'failed';
@@ -135,6 +143,8 @@ interface PhaseEntry {
   status: PhaseStatus;
   startedAt: number;
   durationMs?: number;
+  /** Failure message from gradle, shown in the failure summary */
+  error?: string;
 }
 
 interface PublishPlanState {
@@ -240,6 +250,7 @@ export class MonorepoDisplay {
     if (existing) {
       existing.status = status;
       existing.durationMs = ev.durationMs;
+      if (ev.error) existing.error = ev.error;
     } else {
       // Finish without a prior start — happens for NO-SOURCE / up-to-date
       // phases where gradle skipped the action hook. Record anyway.
@@ -248,6 +259,7 @@ export class MonorepoDisplay {
         status,
         startedAt: ev.ts - ev.durationMs,
         durationMs: ev.durationMs,
+        error: ev.error,
       });
     }
   }
@@ -322,6 +334,7 @@ export class MonorepoDisplay {
       if (s.name === ev.step && s.status === 'running') {
         s.status = stepStatus;
         s.durationMs = ev.durationMs;
+        if (ev.error) s.error = ev.error;
         matched = true;
         break;
       }
@@ -333,6 +346,7 @@ export class MonorepoDisplay {
         startedAt: ev.ts - ev.durationMs,
         durationMs: ev.durationMs,
         status: stepStatus,
+        error: ev.error,
       });
       if (ev.step.length > this.maxCurrentStepLen) {
         this.maxCurrentStepLen = ev.step.length;
@@ -381,17 +395,111 @@ export class MonorepoDisplay {
       state.status = hasFailure ? 'failed' : 'passed';
     }
 
+    // Same treatment for phases. When one phase fails early (e.g.
+    // monorepoPublishDryRun throws), gradle aborts the remaining in-flight
+    // phases without firing their `phase_done` events. The breadcrumb
+    // would otherwise be stuck on a spinner forever. Mark each still-
+    // running phase as 'skipped' (build failed → aborted) or 'passed'
+    // (build succeeded → event just arrived late).
+    for (const phase of this.phases) {
+      if (phase.status === 'running') {
+        phase.status = success ? 'passed' : 'skipped';
+        phase.durationMs = now - phase.startedAt;
+      }
+    }
+
     // Track whether we showed inline error output, so the caller can decide
     // whether to also dump gradle's own stderr (which is usually noise after
     // the inline error).
-    this.didShowInlineErrors = [...this.projects.values()].some(p => p.status === 'failed');
+    const anyProjectFailed = [...this.projects.values()].some(p => p.status === 'failed');
+    const anyPhaseFailed = this.phases.some(p => p.status === 'failed');
+    this.didShowInlineErrors = anyProjectFailed || anyPhaseFailed;
 
     this.stopSpinner();
     this.render();
 
-    // For each failed step, print the log file path AND inline content
-    // (last ~40 lines) so the user can see the error without leaving the
-    // terminal. Full log is still available at the file path.
+    // ── Order of the post-render summary ──────────────────────────────
+    //
+    // Successful summary first, then errors below. The user reads top-to-
+    // bottom; the green/positive blocks shouldn't get buried under noisy
+    // stack traces, and "minor" failures shouldn't be hidden ABOVE the
+    // pretty publish-plan box (the reason this was reordered).
+    //
+    // Order:
+    //   1. Blank-line separator
+    //   2. "All tasks up-to-date" line if nothing ran
+    //   3. Publish plan box (success summary)
+    //   4. Gate stamp footer (success)  OR  no-gate-stamp warning (failure)
+    //   5. Phase-level failure blocks (publishDryRun, monorepoGate, etc.)
+    //   6. Per-step failure blocks with log tails
+    //   7. Paths footer
+
+    // Blank line between per-project rows and the footer blocks.
+    if (
+      this.projectOrder.length > 0 &&
+      (this.publishPlan || this.gateStamp || this.shouldWarnNoGateStamp(success) ||
+       anyPhaseFailed || anyProjectFailed)
+    ) {
+      process.stdout.write('\n');
+    }
+
+    // 2. "All tasks up-to-date" line (nothing ran).
+    const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
+    if (this.projectOrder.length === 0) {
+      process.stdout.write(`${COLOR.dim}  All tasks up-to-date (${elapsed}s)${COLOR.reset}\n`);
+    }
+
+    // 3. Publish plan summary box.
+    if (this.publishPlan) {
+      this.renderPublishPlanBox();
+    }
+
+    // 4. Gate stamp footer / no-gate-stamp warning.
+    if (this.gateStamp) {
+      process.stdout.write(
+        `  ${COLOR.green}⛿${COLOR.reset} ${this.gateStamp.path} written ${COLOR.dim}·${COLOR.reset} ${this.gateStamp.packageCount} packages\n`,
+      );
+    } else if (this.shouldWarnNoGateStamp(success)) {
+      // Loud red warning so the user knows the stamp is NOT valid for
+      // this version of the source. Without this, a gate failure leaves
+      // a stale stamp on disk and the next CI run might pass on the old
+      // hash even though the failing tests were never actually fixed.
+      process.stdout.write('\n');
+      process.stdout.write(
+        `  ${COLOR.red}✗ No gate-stamp.json written — gate failed.${COLOR.reset}\n` +
+        `  ${COLOR.red}  Fix the failures below and re-run \`zbb gate\` to refresh the stamp.${COLOR.reset}\n`,
+      );
+    }
+
+    // 5. Phase-level failure blocks. These come from gradle's
+    //    TaskFailureResult extraction (e.g. monorepoPublishDryRun's
+    //    GradleException string with the dry-run validation errors).
+    const failedPhases = this.phases.filter(p => p.status === 'failed' && p.error);
+    if (failedPhases.length > 0) {
+      process.stdout.write('\n');
+      for (const phase of failedPhases) {
+        const shortName = phaseDisplayName(phase.name);
+        process.stdout.write(
+          `${COLOR.red}── ${shortName} failed ──${COLOR.reset}\n\n`,
+        );
+        // Errors can be multi-line. Indent each line for readability and
+        // color the whole block red so it stands out from the success
+        // summaries above.
+        const lines = (phase.error ?? '').split('\n');
+        for (const line of lines) {
+          if (line.length === 0) {
+            process.stdout.write('\n');
+          } else {
+            process.stdout.write(`  ${COLOR.red}${line}${COLOR.reset}\n`);
+          }
+        }
+        process.stdout.write('\n');
+      }
+    }
+
+    // 6. Per-step failure blocks: for each failed task, print the log
+    //    tail so the user can see the actual stderr without opening the
+    //    log file.
     const failedSteps: Array<{ project: ProjectState; step: StepEntry; logFile: string }> = [];
     for (const project of this.projects.values()) {
       for (const step of project.steps) {
@@ -444,7 +552,7 @@ export class MonorepoDisplay {
 
           const tail = lines.slice(-40);
           for (const line of tail) {
-            process.stdout.write(`  ${line}\n`);
+            process.stdout.write(`  ${COLOR.red}${line}${COLOR.reset}\n`);
           }
           if (lines.length > 40) {
             process.stdout.write(
@@ -461,37 +569,7 @@ export class MonorepoDisplay {
       }
     }
 
-    // Footer: always print paths + timing for post-mortem inspection.
-    // When no projects were registered (everything was up-to-date and
-    // gradle finished instantly), show an explicit message so the user
-    // knows something happened.
-    const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
-    if (this.projectOrder.length === 0) {
-      process.stdout.write(`${COLOR.dim}  All tasks up-to-date (${elapsed}s)${COLOR.reset}\n`);
-    }
-
-    // Blank line between the per-project rows and the summary footer
-    // blocks (publish plan / gate stamp / paths) so the visual groups
-    // don't run together.
-    if (this.projectOrder.length > 0 && (this.publishPlan || this.gateStamp)) {
-      process.stdout.write('\n');
-    }
-
-    // Publish plan summary box — shown after the per-project rows. Only
-    // appears when monorepoPublishDryRun or monorepoPublish fired a
-    // publish_plan event; for other commands (build/test/clean) this
-    // stays hidden.
-    if (this.publishPlan) {
-      this.renderPublishPlanBox();
-    }
-
-    // Gate stamp footer — shown when monorepoGate wrote a gate-stamp.json.
-    if (this.gateStamp) {
-      process.stdout.write(
-        `  ${COLOR.green}⛿${COLOR.reset} ${this.gateStamp.path} written ${COLOR.dim}·${COLOR.reset} ${this.gateStamp.packageCount} packages\n`,
-      );
-    }
-
+    // 7. Paths footer.
     const eventsPath = join(dirname(this.logsDir), 'events.jsonl');
     const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
     process.stdout.write(
@@ -499,6 +577,41 @@ export class MonorepoDisplay {
       `${COLOR.dim}  logs:   ${this.logsDir}${COLOR.reset}\n` +
       `${COLOR.dim}  gradle: ${gradleLogPath}${COLOR.reset}\n`,
     );
+  }
+
+  /**
+   * Decide whether to surface the "no gate-stamp.json written" warning.
+   *
+   * Conditions:
+   *   - The build failed overall (or a phase failed).
+   *   - No gate_stamp_written event arrived.
+   *   - The user actually invoked a gate task in this run. We detect
+   *     that by looking for a gate phase ("monorepoGate") OR a per-step
+   *     entry named "gate" (standard mode emits the latter via
+   *     EventEmitter.displayNameFor).
+   *   - The gateCheck-only path is excluded — gateCheck validates an
+   *     existing stamp and never writes a new one, so "no stamp written"
+   *     would be misleading.
+   */
+  private shouldWarnNoGateStamp(success: boolean): boolean {
+    if (this.gateStamp != null) return false;
+    const failed = !success || this.phases.some(p => p.status === 'failed') ||
+      [...this.projects.values()].some(p => p.status === 'failed');
+    if (!failed) return false;
+
+    const isGateCheckRun =
+      this.phases.some(p => p.name === 'monorepoGateCheck') ||
+      [...this.projects.values()].some(proj =>
+        proj.steps.some(s => s.name === 'gateCheck'),
+      );
+    if (isGateCheckRun) return false;
+
+    const wasGateAttempted =
+      this.phases.some(p => p.name === 'monorepoGate') ||
+      [...this.projects.values()].some(proj =>
+        proj.steps.some(s => s.name === 'gate'),
+      );
+    return wasGateAttempted;
   }
 
   /**

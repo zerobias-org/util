@@ -38,6 +38,8 @@ interface NpmrcSwap {
 export class Stack extends EventEmitter {
   public readonly name: string;
   public readonly path: string;
+  /** The parent stacks directory — needed to instantiate dep stacks on recursive load. */
+  public readonly stacksDir: string;
   public identity!: StackIdentity;
   public env: StackEnvironment;
   public manifest!: StackManifest;
@@ -47,6 +49,7 @@ export class Stack extends EventEmitter {
   constructor(name: string, stacksDir: string) {
     super();
     this.name = name;
+    this.stacksDir = stacksDir;
     this.path = join(stacksDir, name);
     this.env = new StackEnvironment(this.path);
   }
@@ -68,7 +71,32 @@ export class Stack extends EventEmitter {
 
   // ── Loading ─────────────────────────────────────────────────
 
-  async load(): Promise<void> {
+  /**
+   * Load this stack and recursively resolve every stack it depends on.
+   *
+   * The dep chain is walked BEFORE this stack's own env.resolve(), so
+   * by the time we read imported values from a source stack's .env,
+   * that .env is guaranteed fresh. Without this recursive resolve,
+   * env values could cascade-stale down the chain (imports picking up
+   * yesterday's values from upstream .envs that hadn't been re-resolved).
+   *
+   * The dep set is the UNION of:
+   *   - manifest.depends keys  (lifecycle deps — "what must be running")
+   *   - manifest.imports keys  (env deps — "what values to pull from")
+   *
+   * A stack might import from a stack it doesn't list under `depends`
+   * (e.g. pulling vars from a shared config stack without needing its
+   * services running). Both have to be resolved regardless.
+   *
+   * Cycle protection via a shared `visited` set. The same set is
+   * threaded through every recursive call, so diamond deps resolve
+   * each node exactly once per load() invocation.
+   */
+  async load(visited?: Set<string>): Promise<void> {
+    const seen = visited ?? new Set<string>();
+    if (seen.has(this.name)) return;
+    seen.add(this.name);
+
     this.identity = await loadYamlOrDefault<StackIdentity>(
       this.stackYamlPath,
       { name: this.name, version: '0.0.0', mode: 'dev', source: '', added: '' },
@@ -83,6 +111,30 @@ export class Stack extends EventEmitter {
       };
     } else {
       this.manifest = { name: this.name, version: this.identity.version };
+    }
+
+    // Collect every stack we transitively need resolved before us.
+    // Deduplicated across depends + imports.
+    const depNames = new Set<string>();
+    if (this.manifest.depends) {
+      for (const k of Object.keys(this.manifest.depends)) depNames.add(k);
+    }
+    if (this.manifest.imports) {
+      for (const k of Object.keys(this.manifest.imports)) depNames.add(k);
+    }
+
+    for (const depName of depNames) {
+      if (seen.has(depName)) continue; // already handled this invocation
+      const depPath = join(this.stacksDir, depName);
+      if (!existsSync(join(depPath, 'stack.yaml'))) {
+        // Dep stack isn't added to the slot. If it's referenced by
+        // imports, env.resolve() below will surface a clear error on a
+        // non-optional import. If it's only in depends, we skip
+        // silently — readiness checking is handled elsewhere.
+        continue;
+      }
+      const depStack = new Stack(depName, this.stacksDir);
+      await depStack.load(seen);
     }
 
     await this.env.resolve();

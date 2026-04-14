@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Slot, _deps as slotDeps } from './Slot.js';
-import { parseYaml } from '../yaml.js';
+import { Slot, _deps as slotDeps } from '../../lib/slot/Slot.js';
+import { parseYaml } from '../../lib/yaml.js';
 
 interface DnsCache {
   prefix: string;
@@ -86,7 +86,7 @@ describe('slot.resolve()', () => {
       INSTALL_TYPE: { source: 'user', type: 'string' },
       OVERRIDE_VALUE: { source: 'override', type: 'string' },
     };
-    const { saveYaml } = await import('../yaml.js');
+    const { saveYaml } = await import('../../lib/yaml.js');
     await saveYaml(join(slotDir, 'manifest.yaml'), manifestOverride);
 
     // Reload to pick up manifest
@@ -147,7 +147,7 @@ describe('slot.resolve()', () => {
     const cacheContent = await readFile(join(slotDir, 'dns-cache.yml'), 'utf-8');
     const cache = parseYaml<DnsCache>(cacheContent);
     cache.expires_at = new Date(Date.now() - 1000).toISOString();
-    const { saveYaml } = await import('../yaml.js');
+    const { saveYaml } = await import('../../lib/yaml.js');
     await saveYaml(join(slotDir, 'dns-cache.yml'), cache);
 
     await slot.resolve();
@@ -188,7 +188,7 @@ describe('slot.resolve()', () => {
     assert.equal(callCount, 1, 'DNS should be queried on first call');
 
     // Expire the cache
-    const { saveYaml } = await import('../yaml.js');
+    const { saveYaml } = await import('../../lib/yaml.js');
     await saveYaml(join(slotDir, 'dns-cache.yml'), {
       prefix: '_hub',
       queried_at: new Date(Date.now() - 60000).toISOString(),

@@ -41,9 +41,27 @@ val graphService = (project.extensions.extraProperties["monorepoGraphService"]
     as org.gradle.api.provider.Provider<MonorepoGraphService>)
 
 // ── DockerSemaphore — caps concurrent docker builds across subprojects ──
+//
+// Default is 1 (serialize) for two reasons:
+//
+//   1. Two parallel `docker build` invocations against the same daemon
+//      contend on metadata locks, making the "transferring dockerfile"
+//      / "load build context" / WORKDIR / COPY metadata steps take 30-
+//      100x longer than they should. Serialization eliminates the
+//      contention entirely.
+//
+//   2. When Verdaccio routing is active, parallel builds cause a
+//      thundering herd against Verdaccio's upstream uplinks. Both
+//      containers request the same package at the same instant;
+//      Verdaccio doesn't deduplicate inflight requests, so BOTH go to
+//      the public registry and report `cache miss`. Serializing makes
+//      the second build's fetches all `cache hit`.
+//
+// Override via `DOCKER_BUILD_CONCURRENCY=N` or `-Pdocker.concurrency=N`
+// when you have a beefy machine and don't care about the cache thrash.
 val dockerConcurrency = (System.getenv("DOCKER_BUILD_CONCURRENCY")
     ?: project.findProperty("docker.concurrency") as? String
-    ?: "2").toIntOrNull() ?: 2
+    ?: "1").toIntOrNull() ?: 1
 
 val dockerSemaphore = gradle.sharedServices.registerIfAbsent(
     "dockerSemaphore",
@@ -163,25 +181,81 @@ val monorepoDockerBuild = tasks.register("monorepoDockerBuild") {
 
 tasks.register("monorepoClean") {
     group = "monorepo"
-    description = "Clean all workspace packages (dist/, generated/, build/, tsbuildinfo)"
+    description = "Clean all workspace packages — runs `npm run clean` per package (catches package-specific artifacts) AND always sweeps the standard build outputs (dist/, generated/, build/, *.tsbuildinfo)."
     doLast {
         val service = graphService.get()
-        var cleaned = 0
-        for ((_, pkg) in service.graph.packages) {
+        var npmCleaned = 0
+        var standardCleaned = 0
+        var failed = 0
+
+        for ((pkgName, pkg) in service.graph.packages) {
+            // ── Step 1: package's own clean script ─────────────────
+            //
+            // Run first so any package-specific artifacts get cleared
+            // (api.yml, .docs/, tmp/, test-intetest-dump, *.yml bundles,
+            // etc). The package author knows what's specific to their
+            // module and the standard sweep below can't enumerate it.
+            //
+            // Failures here are NON-FATAL — we log and continue to the
+            // standard sweep, because a broken or missing script
+            // shouldn't leave stale dist/ + tsbuildinfo behind. Most of
+            // the time it just means the package didn't define a clean
+            // script at all.
+            val cleanScript = pkg.scripts["clean"]
+            if (!cleanScript.isNullOrBlank()) {
+                try {
+                    ExecUtils.exec(
+                        command = listOf("npm", "run", "clean"),
+                        workingDir = pkg.dir,
+                        throwOnError = true,
+                    )
+                    npmCleaned += 1
+                } catch (e: Exception) {
+                    logger.warn("monorepoClean: $pkgName `npm run clean` failed: ${e.message}")
+                    failed += 1
+                }
+            }
+
+            // ── Step 2: standard build-output sweep ────────────────
+            //
+            // ALWAYS run, regardless of whether the npm script ran or
+            // succeeded. This is the safety net that closes the silent-
+            // tsc-skip footgun: when dist/ gets wiped (by anything) but
+            // *.tsbuildinfo doesn't, the next `tsc -b` reads the cache,
+            // decides "already built", and emits nothing. By guaranteeing
+            // both go away together, we make sure any subsequent build
+            // produces real output.
+            //
+            // The list covers everything zbb's typescript pipeline
+            // produces. Package-specific artifacts (yml bundles, etc.)
+            // are NOT in this list — they belong to step 1.
+            var sweptAny = false
             for (sub in listOf("dist", "generated", "build")) {
                 val target = pkg.dir.resolve(sub)
                 if (target.exists()) {
                     target.deleteRecursively()
-                    cleaned += 1
+                    sweptAny = true
                 }
             }
-            val tsBuildInfo = pkg.dir.resolve("tsconfig.tsbuildinfo")
-            if (tsBuildInfo.exists()) {
-                tsBuildInfo.delete()
-                cleaned += 1
+            // tsc incremental build cache files. Cover the canonical
+            // names AND any other tsconfig.*.tsbuildinfo variants the
+            // package might use (test, esm, cjs, etc).
+            val tsBuildInfoFiles = pkg.dir.listFiles { _, name ->
+                name == "tsconfig.tsbuildinfo" ||
+                (name.startsWith("tsconfig.") && name.endsWith(".tsbuildinfo"))
             }
+            if (tsBuildInfoFiles != null) {
+                for (f in tsBuildInfoFiles) {
+                    if (f.delete()) sweptAny = true
+                }
+            }
+            if (sweptAny) standardCleaned += 1
         }
-        logger.lifecycle("monorepoClean: removed $cleaned artifacts across ${service.graph.packages.size} packages")
+
+        val total = service.graph.packages.size
+        logger.lifecycle(
+            "monorepoClean: $npmCleaned via npm script, $standardCleaned via standard sweep, $failed npm script failures (total $total packages)"
+        )
     }
 }
 
@@ -256,10 +330,29 @@ gradle.projectsEvaluated {
 
         for (phase in phases) {
             val scriptBody = pkg.scripts[phase]
-            if (scriptBody.isNullOrBlank() || scriptBody.trimStart().startsWith("echo ")) {
+            // Empty/echo script: register a no-op task instead of skipping
+            // registration entirely. Same reasoning as the testPhase loop
+            // below — keeps the display showing "passed" for these phases
+            // rather than making them invisible.
+            val isNoOp =
+                scriptBody.isNullOrBlank() ||
+                scriptBody.trimStart().startsWith("echo ")
+            val stampFile = pkg.dir.resolve("build/${phase}.stamp")
+            if (isNoOp) {
+                subproject.tasks.register(phase) {
+                    group = "monorepo"
+                    description = "No-op `$phase` for $pkgName (script empty)"
+                    dependsOn(workspaceInstall)
+                    inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                    if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
+                    outputs.file(stampFile).withPropertyName("phaseStamp")
+                    doLast {
+                        stampFile.parentFile.mkdirs()
+                        stampFile.writeText("$phase no-op (script empty) at ${java.time.Instant.now()}\n")
+                    }
+                }
                 continue
             }
-            val stampFile = pkg.dir.resolve("build/${phase}.stamp")
             subproject.tasks.register<Exec>(phase) {
                 group = "monorepo"
                 description = "Run `npm run $phase` for $pkgName"
@@ -302,11 +395,34 @@ gradle.projectsEvaluated {
 
         for (testPhase in testPhases) {
             val scriptBody = pkg.scripts[testPhase]
-            if (scriptBody.isNullOrBlank() || scriptBody.trimStart().startsWith("echo ")) {
-                continue
-            }
+            // Empty / echo / missing script: still register a no-op task that
+            // shows up as "passed" in the display. Skipping registration
+            // entirely (the old behavior) hid these from the TUI and made it
+            // look like the package wasn't being tested at all. The no-op
+            // task satisfies gradle's task graph, runs in milliseconds, and
+            // the OperationCompletionListener emits a normal task_done
+            // event so the display row gets a check mark.
+            val isNoOp =
+                scriptBody.isNullOrBlank() ||
+                scriptBody.trimStart().startsWith("echo ")
             val stampFile = pkg.dir.resolve("build/${testPhase}.stamp")
             val testDir = pkg.dir.resolve("test")
+            if (isNoOp) {
+                subproject.tasks.register(testPhase) {
+                    group = "monorepo"
+                    description = "No-op `$testPhase` for $pkgName (script empty)"
+                    dependsOn(workspaceInstall)
+                    inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                    inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
+                    if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
+                    outputs.file(stampFile).withPropertyName("phaseStamp")
+                    doLast {
+                        stampFile.parentFile.mkdirs()
+                        stampFile.writeText("$testPhase no-op (script empty) at ${java.time.Instant.now()}\n")
+                    }
+                }
+                continue
+            }
             subproject.tasks.register<Exec>(testPhase) {
                 group = "monorepo"
                 description = "Run `npm run $testPhase` for $pkgName"
@@ -359,24 +475,41 @@ gradle.projectsEvaluated {
     }
 
     // 3. Cross-phase ordering within a subproject (fallback Exec only).
-    //    Canonical chain: lint → generate → transpile → test
-    //    Uses dependsOn so a failure in an earlier phase kills downstream
-    //    phases immediately (fail-fast). This also means `./gradlew transpile`
-    //    pulls in lint + generate, which is correct — you shouldn't transpile
-    //    without generating first.
+    //
+    // Honors the `monorepo.buildPhases` order from zbb.yaml — each phase
+    // depends on the previous one in the configured list. Then every
+    // testPhase depends on the LAST build phase. Fail-fast via `dependsOn`:
+    // a failure in an earlier phase kills downstream phases immediately.
+    //
+    // This used to hardcode the chain as `lint → generate → transpile → test`,
+    // which silently dropped any phase name not in that exact set (e.g. a
+    // package that uses `compile` instead of `transpile`). Symptom: the
+    // unlisted phase had no upstream dep, ran first, failed because its
+    // inputs hadn't been generated yet. Honor the config instead.
     for ((_, pkg) in packages) {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
         if (hasExistingBuildInfra(subproject)) continue
 
-        val lint = subproject.tasks.findByName("lint")
-        val generate = subproject.tasks.findByName("generate")
-        val transpile = subproject.tasks.findByName("transpile")
-        val test = subproject.tasks.findByName("test")
+        // Walk phases in declared order, wiring each to the previous.
+        var prevTask: org.gradle.api.Task? = null
+        for (phaseName in phases) {
+            val task = subproject.tasks.findByName(phaseName) ?: continue
+            if (prevTask != null) {
+                task.dependsOn(prevTask)
+            }
+            prevTask = task
+        }
 
-        if (generate != null) lint?.let { generate.dependsOn(it) }
-        if (transpile != null) generate?.let { transpile.dependsOn(it) }
-        if (test != null) transpile?.let { test.dependsOn(it) }
+        // Test phases depend on the last build phase that exists for this
+        // package. Without this a `:pkg:test` could run before `:pkg:transpile`
+        // (or whatever the last build phase is).
+        for (testPhaseName in testPhases) {
+            val testTask = subproject.tasks.findByName(testPhaseName) ?: continue
+            if (prevTask != null) {
+                testTask.dependsOn(prevTask)
+            }
+        }
     }
 
     // 4. Register Docker build tasks for subprojects whose short-name appears
@@ -554,6 +687,15 @@ fun registerDockerTasksForPackage(
                         workingDir = pkgDir
                     )
                 }
+                // The bash prepublish-standalone.sh script also creates its
+                // own internal `package.json.prepublish-backup`. Once we've
+                // restored from our `.gradle-bak`, the package.json is
+                // guaranteed to be in its original state, so the bash
+                // script's backup is stale and safe to remove.
+                val prepublishBackup = pkgDir.resolve("package.json.prepublish-backup")
+                if (prepublishBackup.exists()) {
+                    prepublishBackup.delete()
+                }
             }
 
             packStamp.get().asFile.apply {
@@ -646,6 +788,12 @@ fun registerDockerTasksForPackage(
                                 workingDir = wsProjectDir
                             )
                         }
+                        // Clean up the bash script's own .prepublish-backup
+                        // (see npmPack finally above for full reasoning).
+                        val wsPrepublishBackup = wsProjectDir.resolve("package.json.prepublish-backup")
+                        if (wsPrepublishBackup.exists()) {
+                            wsPrepublishBackup.delete()
+                        }
                     }
 
                     val wsTarball = localDepsDir.listFiles { f ->
@@ -731,6 +879,7 @@ fun registerDockerTasksForPackage(
         description = "Build Docker image $imageTag for ${pkg.name}"
         dependsOn(injectLocalDeps)
         usesService(dockerSemaphore)
+        usesService(registryInjection)
 
         // Inputs: the prepared context (output of prepareDockerContext) +
         // the Dockerfile / start.sh / .npmrc next to it.
@@ -748,42 +897,186 @@ fun registerDockerTasksForPackage(
 
             val npmToken = System.getenv("NPM_TOKEN") ?: ""
             val zbToken = System.getenv("ZB_TOKEN") ?: ""
-            if (npmToken.isEmpty() || zbToken.isEmpty()) {
+
+            // ── Verdaccio routing ────────────────────────────────────
+            //
+            // When the slot has a healthy registry stack, point the
+            // in-container `npm install` at Verdaccio's host-bridge URL
+            // (host.docker.internal:<REGISTRY_PORT>) instead of pulling
+            // from npm.pkg.github.com / pkg.zerobias.org over the public
+            // internet. Verdaccio proxies both upstreams server-side and
+            // grants anonymous reads, so the build container needs no
+            // auth tokens for the swap path.
+            //
+            // Why the host bridge instead of the compose network:
+            //   BuildKit (the default Docker build engine since 23+)
+            //   refuses arbitrary `--network <name>` modes for security
+            //   isolation. Attaching `--network local_default` fails
+            //   with "network mode not supported by buildkit". The host
+            //   bridge sidesteps the restriction — Verdaccio is already
+            //   published on a host port, so we just point the build at
+            //   `host.docker.internal:<port>` and pass
+            //   `--add-host=host.docker.internal:host-gateway` so the
+            //   name resolves on bare Linux too (Docker Desktop already
+            //   has it).
+            //
+            // Mechanism:
+            //   1. If `dockerContextDir/.npmrc.zbb-bak` exists from a
+            //      crashed prior run, restore it first (recovery).
+            //   2. Back up the source `.npmrc` to `.npmrc.zbb-bak`.
+            //   3. Write a fresh Verdaccio-flavored `.npmrc` over it.
+            //   4. Pass `--add-host=host.docker.internal:host-gateway`
+            //      to docker build so the in-container resolver can
+            //      find Verdaccio.
+            //   5. Restore the source `.npmrc` in `finally`, regardless
+            //      of build success / failure.
+            //
+            // Falls back to the original upstream-targeting flow when
+            // the registry stack isn't running.
+            val regSvc = registryInjection.get()
+            val sourceNpmrc = dockerContextDir.resolve(".npmrc")
+            val backupNpmrc = dockerContextDir.resolve(".npmrc.zbb-bak")
+            val useVerdaccio = regSvc.isHealthy && regSvc.hostBridgeRegistryUrl != null
+
+            // Recovery: restore stale backup from a crashed prior run.
+            if (backupNpmrc.exists() && !useVerdaccio) {
+                println("[verdaccio] recovering stale .npmrc.zbb-bak from prior run")
+                java.nio.file.Files.move(
+                    backupNpmrc.toPath(),
+                    sourceNpmrc.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+            }
+
+            var swappedNpmrc = false
+            if (useVerdaccio) {
+                val bridgeUrl = regSvc.hostBridgeRegistryUrl!!
+                println("[verdaccio] routing in-container npm install through $bridgeUrl")
+                if (sourceNpmrc.exists()) {
+                    // Recovery first — if a stray backup exists, drop
+                    // the current .npmrc (which is from a previous
+                    // crashed swap) and use the backup as the truth.
+                    if (backupNpmrc.exists()) {
+                        sourceNpmrc.delete()
+                        java.nio.file.Files.move(
+                            backupNpmrc.toPath(),
+                            sourceNpmrc.toPath(),
+                        )
+                    }
+                    java.nio.file.Files.copy(
+                        sourceNpmrc.toPath(),
+                        backupNpmrc.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    )
+                    swappedNpmrc = true
+                }
+                sourceNpmrc.writeText(buildVerdaccioNpmrc(bridgeUrl))
+            } else if (npmToken.isEmpty() || zbToken.isEmpty()) {
                 println("WARNING: NPM_TOKEN or ZB_TOKEN not set - Docker build may fail")
             }
 
-            val gradleDockerfile = dockerContextDir.resolve("GradleDockerfile")
-            val dockerfileArgs = if (gradleDockerfile.exists()) {
-                println("Using GradleDockerfile")
-                listOf("-f", "GradleDockerfile")
-            } else {
-                println("Using default Dockerfile")
-                emptyList()
+            try {
+                val gradleDockerfile = dockerContextDir.resolve("GradleDockerfile")
+                val dockerfileArgs = if (gradleDockerfile.exists()) {
+                    println("Using GradleDockerfile")
+                    listOf("-f", "GradleDockerfile")
+                } else {
+                    println("Using default Dockerfile")
+                    emptyList()
+                }
+
+                // --add-host: only when verdaccio is in play.
+                //
+                // BuildKit refuses arbitrary `--network <name>` modes,
+                // so we route through the host bridge instead. The
+                // `host-gateway` magic value resolves to the host's
+                // gateway IP from the build container's perspective —
+                // built into Docker since 20.10, works on Linux + Docker
+                // Desktop without per-machine configuration.
+                val networkArgs = if (useVerdaccio) {
+                    listOf("--add-host", "host.docker.internal:host-gateway")
+                } else {
+                    emptyList()
+                }
+
+                val fullCommand = listOf(
+                    "docker", "build",
+                    "--progress=plain",
+                    "-t", imageTag,
+                    "--build-arg", "npm_token=${npmToken}",
+                    "--build-arg", "zb_token=${zbToken}",
+                ) + networkArgs + dockerfileArgs + listOf(".")
+
+                // Capture docker's stdout/stderr to BOTH the per-task
+                // log file (for post-mortem inspection + the display's
+                // "log: …" reference) AND gradle's own stdout (so the
+                // user can see live build progress in their terminal —
+                // without this, dockerBuild looks like a 5-minute black
+                // box with no idea what step is running).
+                //
+                // ProcessBuilder doesn't have a built-in tee, so we
+                // read the process's combined stdout+stderr line-by-line
+                // and write each line to both sinks.
+                val safeName = pkg.relDir.replace("/", "-")
+                val logFile = repoRoot.resolve(".zbb-monorepo/logs/$safeName-dockerBuild.log")
+                logFile.parentFile.mkdirs()
+
+                val dockerProcess = ProcessBuilder(fullCommand)
+                    .directory(dockerContextDir)
+                    .redirectErrorStream(true)
+                    .start()
+
+                logFile.bufferedWriter().use { writer ->
+                    dockerProcess.inputStream.bufferedReader().forEachLine { line ->
+                        writer.write(line)
+                        writer.newLine()
+                        writer.flush()
+                        println(line)
+                    }
+                }
+                val dockerExit = dockerProcess.waitFor()
+                if (dockerExit != 0) {
+                    throw GradleException("Docker build failed (exit $dockerExit) — see $logFile")
+                }
+
+                imageStamp.get().asFile.apply {
+                    parentFile.mkdirs()
+                    writeText("$imageTag built at ${java.time.Instant.now()}")
+                }
+
+                println("✓ Docker image built: $imageTag")
+            } finally {
+                // Restore the source .npmrc whether the build passed,
+                // failed, or threw. This is the only thing that keeps the
+                // working tree clean.
+                if (swappedNpmrc && backupNpmrc.exists()) {
+                    java.nio.file.Files.move(
+                        backupNpmrc.toPath(),
+                        sourceNpmrc.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    )
+                }
             }
-
-            val fullCommand = listOf(
-                "docker", "build",
-                "--progress=plain",
-                "-t", imageTag,
-                "--build-arg", "npm_token=${npmToken}",
-                "--build-arg", "zb_token=${zbToken}"
-            ) + dockerfileArgs + listOf(".")
-
-            val dockerProcess = ProcessBuilder(fullCommand)
-                .directory(dockerContextDir)
-                .inheritIO()
-                .start()
-            val dockerExit = dockerProcess.waitFor()
-            if (dockerExit != 0) {
-                throw GradleException("Docker build failed (exit $dockerExit)")
-            }
-
-            imageStamp.get().asFile.apply {
-                parentFile.mkdirs()
-                writeText("$imageTag built at ${java.time.Instant.now()}")
-            }
-
-            println("✓ Docker image built: $imageTag")
         }
     }
+}
+
+/**
+ * Render the in-container `.npmrc` that points all zbb-tracked scopes at
+ * the local Verdaccio container. Verdaccio's default config grants
+ * anonymous reads (`access: $all`) so no `_authToken` lines are needed —
+ * the build container can pull tarballs without any credentials.
+ */
+private fun buildVerdaccioNpmrc(internalUrl: String): String {
+    val u = if (internalUrl.endsWith("/")) internalUrl else "$internalUrl/"
+    return """
+        # Generated by zbb dockerBuild — points at the slot's local
+        # Verdaccio cache. Restored to the source .npmrc after the build.
+        registry=$u
+        @zerobias-com:registry=$u
+        @zerobias-org:registry=$u
+        @auditlogic:registry=$u
+        @auditmation:registry=$u
+        @devsupply:registry=$u
+    """.trimIndent() + "\n"
 }

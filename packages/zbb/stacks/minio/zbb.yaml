@@ -52,16 +52,16 @@ state:
     values: [starting, healthy, stopped, error]
 
 lifecycle:
-  start: docker compose -f compose.yml -p ${STACK_NAME} up -d
-  stop: docker stop ${STACK_NAME}-minio 2>/dev/null; docker rm ${STACK_NAME}-minio 2>/dev/null; true
+  start: docker compose -f compose.yml -p ${ZB_SLOT} up -d
+  stop: docker stop ${ZB_SLOT}-minio 2>/dev/null; docker rm ${ZB_SLOT}-minio 2>/dev/null; true
   health:
     command: "curl -sf http://localhost:${MINIO_PORT}/minio/health/live >/dev/null"
     interval: 2
     timeout: 30
   cleanup:
-    - "docker stop ${STACK_NAME}-minio 2>/dev/null; docker rm ${STACK_NAME}-minio 2>/dev/null; true"
-    - "docker volume rm ${STACK_NAME}_minio-data 2>/dev/null; true"
+    - "docker stop ${ZB_SLOT}-minio 2>/dev/null; docker rm ${ZB_SLOT}-minio 2>/dev/null; true"
+    - "docker volume rm ${ZB_SLOT}_minio-data 2>/dev/null; true"
 
 logs:
   source: docker
-  container: "${STACK_NAME}-minio"
+  container: "${ZB_SLOT}-minio"

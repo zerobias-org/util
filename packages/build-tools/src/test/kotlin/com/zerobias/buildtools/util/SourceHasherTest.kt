@@ -134,6 +134,10 @@ class SourceHasherTest {
         File(pkg, "src/index.ts").writeText("x")
         File(pkg, "test").mkdirs()
         File(pkg, "test/index.test.ts").writeText("it('works', () => {})")
+        // SourceHasher uses `git ls-files` to enumerate files, so untracked
+        // files return the empty-string hash. Commit before hashing.
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "init")
 
         val srcHash = SourceHasher.hashSources(pkg, listOf(), listOf("src"))
         val testHash = SourceHasher.hashTests(pkg)
@@ -141,6 +145,8 @@ class SourceHasherTest {
 
         // Adding more test files changes test hash but not source hash
         File(pkg, "test/another.test.ts").writeText("it('also', () => {})")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "add another test")
         val srcHash2 = SourceHasher.hashSources(pkg, listOf(), listOf("src"))
         val testHash2 = SourceHasher.hashTests(pkg)
         assertEquals(srcHash, srcHash2) { "source hash should be unchanged" }

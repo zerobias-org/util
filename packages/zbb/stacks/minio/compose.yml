@@ -1,7 +1,7 @@
 services:
   minio:
     image: minio/minio:latest
-    container_name: ${STACK_NAME}-minio
+    container_name: ${ZB_SLOT}-minio
     command: server /data --console-address ":9001"
     ports:
       - "${MINIO_PORT}:9000"
@@ -17,7 +17,7 @@ services:
     volumes:
       - minio-data:/data
     labels:
-      zerobias.slot: ${STACK_NAME}
+      zerobias.slot: ${ZB_SLOT}
 
 volumes:
   minio-data:

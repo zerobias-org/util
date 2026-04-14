@@ -1,6 +1,11 @@
 import com.zerobias.buildtools.module.ZbExtension
 import com.zerobias.buildtools.core.PropertyResolver
 import com.zerobias.buildtools.core.VaultSecretsService
+import com.zerobias.buildtools.util.SourceHasher
+import com.zerobias.buildtools.standard.StandardGateStampValidator
+import com.zerobias.buildtools.lifecycle.EventEmitter
+import org.gradle.build.event.BuildEventsListenerRegistry
+import org.gradle.kotlin.dsl.support.serviceOf
 
 // ────────────────────────────────────────────────────────────
 // Extension: project-level configuration
@@ -33,6 +38,38 @@ val zb = extensions.create<ZbExtension>("zb").apply {
     })
     includeConnectionProfileInDist.convention(false)
     generatorArgs.convention(emptyList())
+}
+
+// ────────────────────────────────────────────────────────────
+// Event emitter — feeds the zbb TTY display via .zbb-monorepo/events.jsonl
+//
+// Shared across monorepo mode (zb.monorepo-base registers this exact same
+// service) and standard mode (every zb.base subproject registers it too).
+// `registerIfAbsent` deduplicates — the first caller wins, subsequent
+// callers get the same instance. The BuildEventsListener subscription is
+// gated by an extra property on rootProject so we don't double-subscribe
+// if BOTH zb.monorepo-base AND zb.base register listeners in the same
+// build. The first to run wins.
+// ────────────────────────────────────────────────────────────
+val zbbBaseEventFile = System.getenv("ZBB_MONOREPO_EVENT_FILE")
+    ?: rootProject.file(".zbb-monorepo/events.jsonl").absolutePath
+val zbbBaseLogsDir = rootProject.file(".zbb-monorepo/logs")
+
+val zbbBaseEventEmitter = gradle.sharedServices.registerIfAbsent(
+    "monorepoEventEmitter",
+    EventEmitter::class.java,
+) {
+    parameters.eventFilePath.set(zbbBaseEventFile)
+}
+
+run {
+    val listenerRegisteredKey = "zbbMonorepoEventListenerRegistered"
+    val rootExtra = rootProject.extensions.extraProperties
+    if (!rootExtra.has(listenerRegisteredKey)) {
+        val registry = project.serviceOf<BuildEventsListenerRegistry>()
+        registry.onTaskCompletion(zbbBaseEventEmitter)
+        rootExtra.set(listenerRegisteredKey, true)
+    }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -734,142 +771,93 @@ val gate by tasks.registering {
 }
 
 // ── Gate stamp — written after gate passes, verified before publish ──
-// Two hashes:
-//   sourceHash — committed source files (src/, package.json, api.yml, etc.)
-//                Used by CI to verify the stamp matches the source code.
-//   distHash   — includes dist/ (build output, not committed)
-//                Used locally to skip gate entirely when nothing changed.
-
-fun hashFiles(dirs: List<String>, files: List<String>): String {
-    val digest = java.security.MessageDigest.getInstance("SHA-256")
-    for (name in files) {
-        val f = project.file(name)
-        if (f.exists()) {
-            digest.update(name.toByteArray())
-            digest.update(f.readBytes())
-        }
-    }
-    for (dirName in dirs) {
-        val dir = project.file(dirName)
-        if (dir.exists()) {
-            dir.walkTopDown()
-                .filter { it.isFile }
-                .sortedBy { it.relativeTo(project.projectDir).path }
-                .forEach { f ->
-                    val relPath = f.relativeTo(project.projectDir).path
-                    digest.update(relPath.toByteArray())
-                    digest.update(f.readBytes())
-                }
-        }
-    }
-    return digest.digest().joinToString("") { "%02x".format(it) }
-}
-
-// package.json excluded — version field gets patched during publish, which would invalidate the hash.
-// package-lock.json excluded — npm ci may regenerate it slightly differently across environments.
+//
+// Two hashes, BOTH computed over files tracked by git (via `git ls-files`):
+//
+//   sourceHash — committed source files that define the module's behavior
+//                (src/, api.yml, tsconfig.json). If this changes, gate must
+//                re-run. Validated by CI before publish to ensure the
+//                committed stamp matches the committed source.
+//
+//   testHash   — committed test files (test/**). If ONLY this changes, we
+//                can skip everything except test tasks on the next run.
+//
+// Git-only enumeration is critical: filesystem walks picked up untracked
+// local artifacts (.DS_Store, coverage output, build output, temp files)
+// which produce different hashes between local and CI and cause the
+// committed stamp to fail CI validation. This is the SAME bug we fixed
+// for monorepo SourceHasher.hashTests, now unified here via the shared
+// SourceHasher implementation.
+//
+// package.json excluded — version field gets patched during publish, which
+// would invalidate the hash.
+// package-lock.json excluded — npm ci may regenerate it slightly differently
+// across environments.
 val sourceFiles = listOf("api.yml", "tsconfig.json")
 val sourceDirs = listOf("src")
+val testDirs = listOf("test")
 
-fun computeSourceHash(): String = hashFiles(sourceDirs, sourceFiles)
-fun computeDistHash(): String = hashFiles(sourceDirs + "dist", sourceFiles)
+fun computeSourceHash(): String =
+    SourceHasher.hashSources(project.projectDir, sourceFiles, sourceDirs)
+
+fun computeTestHash(): String =
+    SourceHasher.hashTests(project.projectDir, testDirs)
 
 val gateStampFile = project.layout.projectDirectory.file("gate-stamp.json")
 
-// Collect test results from each test task's output.
-// Each test exec task writes a small JSON file to build/test-results-{suite}.json.
-// The gate stamp aggregates these.
-/**
- * Count expected test cases by scanning for it( / it.only( / test( in test files.
- */
-fun countExpectedTests(testDir: java.io.File): Int {
-    if (!testDir.exists()) return 0
-    val pattern = Regex("""(?:^|\s)(?:it|it\.only|test)\s*\(""")
-    return testDir.walkTopDown()
-        .filter { it.isFile && (it.name.endsWith(".ts") || it.name.endsWith(".js")) }
-        .sumOf { file ->
-            file.readLines().count { line -> pattern.containsMatchIn(line) }
-        }
-}
+// Count expected test cases — delegated to the shared SourceHasher so both
+// the standard gate path and the monorepo gate path use identical counting
+// logic.
+fun countExpectedTests(testDir: java.io.File): Int =
+    SourceHasher.countExpectedTests(testDir)
 
 /**
- * Verify the gate stamp file: exists, valid JSON, hash matches current artifacts.
- * Returns true if publish can skip gate.
- */
-/**
  * Check gate stamp validity. Returns a result indicating what can be skipped:
- *   - FULL: distHash + test counts match — skip all gate tasks (local, nothing changed)
- *   - SOURCE: sourceHash + test counts match, dist missing — skip tests, rebuild (CI path)
- *   - TESTS_CHANGED: source/dist ok but test count mismatch — need to re-run tests
- *   - INVALID: stamp stale or missing — re-run full gate
+ *
+ *   - VALID:         sourceHash AND testHash match, all recorded task
+ *                    results were successful — gate + all child tasks can
+ *                    skip. Rebuild is still required if dist/ is missing;
+ *                    that's handled by each task's own up-to-date check.
+ *   - TESTS_CHANGED: sourceHash matches, testHash differs — rerun tests
+ *                    only, skip validate/lint/compile/buildArtifacts.
+ *   - INVALID:       sourceHash mismatch, stamp missing, or a recorded
+ *                    task result was "failed"/"not-run" — rerun everything.
+ *
+ * All hashing goes through SourceHasher (git ls-files based) so local and
+ * CI compute byte-identical values regardless of untracked files.
  */
-enum class GateStampResult { FULL, SOURCE, TESTS_CHANGED, INVALID }
+// Type alias kept for backward-compatibility with the rest of this script
+// plugin, which references `GateStampResult.VALID`/`TESTS_CHANGED`/`INVALID`
+// in the publish-aware task graph configuration below.
+typealias GateStampResult = StandardGateStampValidator.Result
 
 fun checkGateStamp(): GateStampResult {
     val stampFile = gateStampFile.asFile
-    if (!stampFile.exists()) return GateStampResult.INVALID
-
     return try {
-        val content = stampFile.readText()
-
-        // 1. Verify sourceHash — source code hasn't changed
-        val stampSourceHash = Regex(""""sourceHash"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-            ?: return GateStampResult.INVALID
-        val currentSourceHash = computeSourceHash()
-        if (stampSourceHash != currentSourceHash) {
-            logger.lifecycle("Gate stamp invalid — source changed since last gate")
-            return GateStampResult.INVALID
-        }
-
-        // 2. Verify all tasks passed
-        val requiredTasks = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "testDataloader", "buildArtifacts")
-        for (taskName in requiredTasks) {
-            val taskStatus = Regex(""""$taskName":\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-            if (taskStatus != "passed" && taskStatus != "skipped" && taskStatus != "up-to-date") {
-                return GateStampResult.INVALID
-            }
-        }
-
-        // 3. Verify test counts — separate from source hash since tests are in test/, not src/
-        var testsMatch = true
-        val testSuites = mapOf(
+        val content = if (stampFile.exists()) stampFile.readText() else null
+        val testSuiteDirs = listOf(
             "unit" to project.file("test/unit"),
             "integration" to project.file("test/integration"),
-            "e2e" to project.file("test/e2e")
+            "e2e" to project.file("test/e2e"),
         )
-        for ((suite, dir) in testSuites) {
-            val currentExpected = countExpectedTests(dir)
-            if (currentExpected == 0) continue
-
-            val stampExpected = Regex(""""$suite":\s*\{[^}]*"expected":\s*(\d+)""")
-                .find(content)?.groupValues?.get(1)?.toIntOrNull()
-            val stampRan = Regex(""""$suite":\s*\{[^}]*"ran":\s*(\d+)""")
-                .find(content)?.groupValues?.get(1)?.toIntOrNull()
-            val stampStatus = Regex(""""$suite":\s*\{[^}]*"status":\s*"([^"]+)"""")
-                .find(content)?.groupValues?.get(1)
-
-            if (stampExpected == null || stampRan == null || stampStatus == null) { testsMatch = false; break }
-            if (stampStatus != "passed" && stampStatus != "skipped") { testsMatch = false; break }
-            if (currentExpected != stampExpected) {
-                logger.lifecycle("Gate stamp: $suite test count changed ($stampExpected → $currentExpected)")
-                testsMatch = false; break
-            }
-            if (stampRan != stampExpected) { testsMatch = false; break }
+        val suiteCounts = testSuiteDirs.map { (name, dir) ->
+            StandardGateStampValidator.SuiteCount(name, countExpectedTests(dir))
         }
-
-        if (!testsMatch) {
-            return GateStampResult.TESTS_CHANGED
+        val outcome = StandardGateStampValidator.validate(
+            stampContent = content,
+            currentSourceHash = computeSourceHash(),
+            currentTestHash = computeTestHash(),
+            currentTestCounts = suiteCounts,
+        )
+        when (outcome.result) {
+            StandardGateStampValidator.Result.INVALID ->
+                logger.lifecycle("Gate stamp invalid — ${outcome.reason}")
+            StandardGateStampValidator.Result.TESTS_CHANGED ->
+                logger.lifecycle("Gate stamp: ${outcome.reason} — rerunning tests")
+            StandardGateStampValidator.Result.VALID ->
+                logger.lifecycle("Gate stamp valid — skipping gate tasks")
         }
-
-        // 4. Check distHash — if dist/ matches too, skip everything (local)
-        val stampDistHash = Regex(""""distHash"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-        val currentDistHash = try { computeDistHash() } catch (_: Exception) { "" }
-        if (stampDistHash != null && stampDistHash == currentDistHash) {
-            logger.lifecycle("Gate stamp valid (distHash match) — skipping all gate tasks")
-            return GateStampResult.FULL
-        }
-
-        logger.lifecycle("Gate stamp valid (sourceHash match) — skipping tests, rebuild required")
-        GateStampResult.SOURCE
+        outcome.result
     } catch (e: Exception) {
         logger.warn("Gate stamp unreadable: ${e.message}")
         GateStampResult.INVALID
@@ -885,8 +873,12 @@ val writeGateStamp by tasks.registering {
     outputs.upToDateWhen { false } // Always rewrite — stamp includes timestamp and task states
     doLast {
         val sourceHash = computeSourceHash()
-        val distHash = computeDistHash()
-        val taskNames = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "testDataloader", "buildArtifacts")
+        val testHash = computeTestHash()
+        val taskNames = listOf(
+            "validate", "lint", "compile",
+            "test", "testDirect", "testDocker", "testDataloader",
+            "buildArtifacts",
+        )
         val taskResults = taskNames.map { taskName ->
             val task = project.tasks.findByName(taskName)
             val state = task?.state
@@ -931,7 +923,7 @@ val writeGateStamp by tasks.registering {
   "branch": "$branch",
   "timestamp": "${java.time.Instant.now()}",
   "sourceHash": "$sourceHash",
-  "distHash": "$distHash",
+  "testHash": "$testHash",
   "tasks": {
     ${taskResults.joinToString(",\n    ")}
   },
@@ -951,6 +943,13 @@ ${testEntries.joinToString(",\n")}
                 logger.lifecycle("  $suite: $expected/$expected passed")
             }
         }
+
+        // Emit the gate_stamp_written event so the TUI display can render
+        // the stamp footer line, identical to the monorepo path.
+        zbbBaseEventEmitter.get().emitGateStampWritten(
+            stampFile.relativeTo(rootProject.projectDir).path,
+            1,  // standard mode writes one stamp per gate (this package)
+        )
     }
 }
 
@@ -958,16 +957,75 @@ gate.configure {
     finalizedBy(writeGateStamp)
 }
 
+// ── gateCheck — cheap CI preflight ──────────────────────────────
+//
+// Analogous to monorepoGateCheck in the monorepo plugin. Runs only the
+// validation logic (reads the committed gate-stamp.json, re-hashes via
+// SourceHasher, checks recorded task results) and exits 0/1 WITHOUT
+// running any gate child tasks. Used by CI matrix cells to skip the
+// full gate when the committed stamp is still valid.
+//
+// Writes `.zbb-module/gate-check.marker` so CI can distinguish:
+//   - marker present, valid=true  → stamp is current, skip full gate
+//   - marker present, valid=false → stamp is stale, run full gate
+//   - marker absent               → validation crashed (plugin error,
+//                                    JVM crash, missing build-tools) →
+//                                    infrastructure failure
+val gateCheck by tasks.registering {
+    group = "lifecycle"
+    description = "Validate gate-stamp.json against current source. Exit 0 if valid, 1 otherwise. Cheap — no build/test/vault required."
+
+    doLast {
+        val markerDir = project.layout.buildDirectory.dir(".zbb-module").get().asFile
+        val markerFile = java.io.File(markerDir, "gate-check.marker")
+        markerDir.mkdirs()
+        markerFile.delete()
+
+        fun writeMarker(valid: Boolean, reason: String) {
+            markerFile.writeText("valid=$valid\nreason=$reason\nts=${java.time.Instant.now()}\n")
+        }
+
+        val stampFile = gateStampFile.asFile
+        if (!stampFile.exists()) {
+            writeMarker(valid = false, reason = "stamp-missing")
+            logger.error("✗ no gate-stamp.json found at ${stampFile.absolutePath}")
+            logger.error("  Run `zbb gate` locally and commit the stamp before pushing.")
+            throw GradleException("gate-stamp.json missing or unreadable")
+        }
+
+        when (val result = checkGateStamp()) {
+            GateStampResult.VALID -> {
+                writeMarker(valid = true, reason = "stamp-valid")
+                logger.lifecycle("✓ gate stamp valid — source/test hashes match, all recorded task results OK")
+            }
+            GateStampResult.TESTS_CHANGED -> {
+                writeMarker(valid = false, reason = "tests-changed")
+                logger.error("✗ gate stamp: test files changed since last gate")
+                logger.error("  Run `zbb gate` to re-run tests and update the stamp.")
+                throw GradleException("gate-stamp.json invalid — tests changed")
+            }
+            GateStampResult.INVALID -> {
+                writeMarker(valid = false, reason = "stamp-invalid")
+                logger.error("✗ gate stamp: source changed or task result missing/failed since last gate")
+                logger.error("  Run `zbb gate` to refresh the stamp.")
+                throw GradleException("gate-stamp.json invalid — source/task drift")
+            }
+        }
+    }
+}
+
 // When publish is in the task graph, decide what to skip based on gate stamp.
 //
 // LOCAL scenarios:
 //   1. No stamp or sourceHash mismatch (INVALID) → gate runs fully, writes new stamp
-//   2. sourceHash matches, distHash mismatch (SOURCE) → skip tests, rebuild
-//   3. distHash matches (FULL) → skip all gate tasks
+//   2. sourceHash matches, testHash mismatch (TESTS_CHANGED) → rerun tests only,
+//      keep build/validation skipped since source is unchanged
+//   3. sourceHash AND testHash match (VALID) → skip gate + all child tasks;
+//      gradle's own inputs/outputs handle any missing dist/ rebuild on demand
 //
 // CI scenarios:
-//   4. No stamp or sourceHash mismatch → preflight hard-fails (handled in preflight check)
-//   5. sourceHash matches → skip tests, run npm ci + build (always SOURCE in CI since no dist/)
+//   4. INVALID or TESTS_CHANGED → preflight hard-fails (handled in preflight check)
+//   5. VALID → skip gate entirely
 gradle.taskGraph.whenReady {
     val publishInGraph = try {
         hasTask(tasks.named("publish").get()) ||
@@ -1000,18 +1058,11 @@ gradle.taskGraph.whenReady {
     val isCI = System.getenv("CI") == "true"
 
     when (gateStampResult) {
-        GateStampResult.FULL -> {
-            // Local: distHash + test counts match — skip everything
-            for (task in project.tasks) {
-                if (task.name in testAndValidationTasks || task.name in buildTasks) {
-                    task.enabled = false
-                }
-            }
-            project.tasks.findByName("gate")?.enabled = false
-            project.tasks.findByName("writeGateStamp")?.enabled = false
-        }
-        GateStampResult.SOURCE -> {
-            // sourceHash + test counts match, dist missing — skip tests, rebuild
+        GateStampResult.VALID -> {
+            // sourceHash + testHash + recorded task results all match.
+            // Skip every test/validation/build task — each task's own
+            // inputs/outputs declaration will still handle rebuilding dist/
+            // on demand if it's missing (no more distHash shortcut needed).
             for (task in project.tasks) {
                 if (task.name in testAndValidationTasks) {
                     task.enabled = false
@@ -1022,16 +1073,17 @@ gradle.taskGraph.whenReady {
         }
         GateStampResult.TESTS_CHANGED -> {
             if (isCI) {
-                throw GradleException("gate-stamp.json test counts don't match current test files — run zbb gate locally and commit the stamp")
+                throw GradleException("gate-stamp.json test hash/counts don't match current test files — run zbb gate locally and commit the stamp")
             } else {
-                // Local: source is fine but tests changed — re-run tests, skip validation/build
-                // Let gate run which includes tests, then writeGateStamp updates the stamp
+                // Local: source + build are clean, but tests changed. Let
+                // the test tasks run (they'll be cheap since nothing else
+                // needs to rebuild), then writeGateStamp updates the stamp.
                 for (task in project.tasks) {
                     if (task.name in buildTasks) {
                         task.enabled = false
                     }
                 }
-                logger.lifecycle("Gate stamp: test count changed — re-running tests")
+                logger.lifecycle("Gate stamp: tests changed — re-running tests")
             }
         }
         GateStampResult.INVALID -> {
@@ -1197,15 +1249,18 @@ val commitVersion by tasks.registering {
         val updated = content.replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
         pkgFile.writeText(updated)
 
-        // Regenerate gate stamp with the new source hash (post version bump)
+        // Regenerate gate stamp with the new source/test hashes (post version bump).
+        // sourceHash now excludes package.json so the version bump alone
+        // wouldn't change it, but we still recompute in case other tracked
+        // files changed during the publish flow (e.g. prepublish mutations).
         val stampFile = gateStampFile.asFile
         if (stampFile.exists()) {
             val stampContent = stampFile.readText()
             val newSourceHash = computeSourceHash()
-            val newDistHash = try { computeDistHash() } catch (_: Exception) { "" }
+            val newTestHash = computeTestHash()
             val updatedStamp = stampContent
                 .replace(Regex(""""sourceHash"\s*:\s*"[^"]+""""), """"sourceHash": "$newSourceHash"""")
-                .replace(Regex(""""distHash"\s*:\s*"[^"]+""""), """"distHash": "$newDistHash"""")
+                .replace(Regex(""""testHash"\s*:\s*"[^"]+""""), """"testHash": "$newTestHash"""")
                 .replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
                 .replace(Regex(""""timestamp"\s*:\s*"[^"]+""""), """"timestamp": "${java.time.Instant.now()}"""")
             stampFile.writeText(updatedStamp)
@@ -1334,6 +1389,86 @@ tasks.withType<JavaExec>().configureEach {
             if (value != null) {
                 environment(envVar, propertyResolver.resolve(value))
             }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────
+// TTY display event wiring
+//
+// Hook doFirst on every zb.base / zb.typescript task that should appear
+// in the display. Each hook calls emitStart(projectPath, taskName) which
+// writes a task_start event to .zbb-monorepo/events.jsonl. Task finish
+// events are automatically emitted by the BuildEventsListener subscribed
+// above.
+//
+// The same per-task stdout/stderr log capture used in zb.monorepo-base
+// is applied here too, so per-task logs live at .zbb-monorepo/logs/
+// regardless of which plugin wired the task.
+// ────────────────────────────────────────────────────────────
+val zbbBasePhaseTaskNames = setOf(
+    // Validation + build phase
+    "validate", "validateSpec", "validateConnector",
+    "lint", "lintExec",
+    "generate", "generateApi", "generateServerApi", "generateServerEntry",
+    "assembleSpec", "bundleSpec", "dereferenceSpec", "generateCode",
+    "compile", "compileExec", "compileServer",
+    "transpile", "transpileExec",
+    "buildHubSdk", "buildHubSdkExec",
+    "buildOpenApiSdk",
+    "buildImage", "buildImageExec",
+    "buildArtifacts",
+    // Test phase
+    "test", "testUnit", "testUnitExec",
+    "testIntegration", "testIntegrationExec",
+    "testDirect", "testDirectExec",
+    "testDocker", "testDockerExec",
+    "testHub", "testHubExec",
+    "testDataloader", "testDataloaderExec",
+    // Gate + stamp
+    "gate", "gateCheck", "writeGateStamp",
+)
+
+gradle.taskGraph.whenReady {
+    val subprojectPath = if (project.path == ":") ":" else project.path
+    val emitterProvider = zbbBaseEventEmitter
+    zbbBaseLogsDir.mkdirs()
+
+    for (taskName in zbbBasePhaseTaskNames) {
+        val task = project.tasks.findByName(taskName) ?: continue
+        val capturedProjectPath = subprojectPath
+        val capturedTaskName = taskName
+
+        task.usesService(emitterProvider)
+
+        // Per-task log file path
+        val safeName = subprojectPath.removePrefix(":").replace(":", "-")
+            .ifEmpty { project.name }
+        val logFile = zbbBaseLogsDir.resolve("$safeName-$taskName.log")
+
+        // Exec/NpxTask: redirect stdout/stderr to the per-task log file so
+        // the live TTY display doesn't get polluted by child process output.
+        if (task is Exec) {
+            val execTask: Exec = task
+            var logStream: java.io.OutputStream? = null
+            execTask.doFirst {
+                logFile.parentFile.mkdirs()
+                val out = logFile.outputStream()
+                logStream = out
+                @Suppress("DEPRECATION")
+                (execTask as org.gradle.process.BaseExecSpec).standardOutput = out
+                @Suppress("DEPRECATION")
+                (execTask as org.gradle.process.BaseExecSpec).errorOutput = out
+            }
+            execTask.doLast {
+                try { logStream?.flush(); logStream?.close() } catch (_: Exception) {}
+            }
+        }
+
+        // Emit task_start via doFirst. doFirst PREPENDS the action so it
+        // runs BEFORE any other doFirst hooks that were registered earlier.
+        task.doFirst {
+            emitterProvider.get().emitStart(capturedProjectPath, capturedTaskName)
         }
     }
 }

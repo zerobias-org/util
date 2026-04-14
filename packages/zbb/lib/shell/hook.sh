@@ -25,7 +25,7 @@ _zbb_load_stack_env() {
     for var in "${_ZBB_CURRENT_STACK_VARS[@]}"; do
       # Never unset slot-level vars — they must persist across stack changes
       case "$var" in
-        ZB_SLOT|ZB_SLOT_DIR|ZB_SLOT_CONFIG|ZB_SLOT_LOGS|ZB_SLOT_STATE|ZB_SLOT_TMP|ZB_STACKS_DIR|STACK_NAME) ;;
+        ZB_SLOT|ZB_SLOT_DIR|ZB_SLOT_CONFIG|ZB_SLOT_LOGS|ZB_SLOT_STATE|ZB_SLOT_TMP|ZB_STACKS_DIR) ;;
         *) unset "$var" 2>/dev/null ;;
       esac
     done

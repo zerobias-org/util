@@ -37,7 +37,7 @@ export class SlotManager {
    *
    * All application-level env processing (ports, secrets, derived vars,
    * ${VAR} resolution) happens later during `stack add`, when the stack
-   * manifest is read and STACK_NAME is known.
+   * manifest is read and the stack short name is known.
    *
    * In CI mode, process.env is dumped to an inherited.env file so that
    * vault-action secrets are available when `stack add` runs.
@@ -170,7 +170,7 @@ export class SlotManager {
     let volumeCount = 0;
 
     // Stop containers and remove volumes for this slot
-    // Match by label OR by name prefix (STACK_NAME = slot name)
+    // Match by label OR by name prefix (compose project = slot name)
     const { execSync } = await import('node:child_process');
     try {
       // Find containers by label or name prefix

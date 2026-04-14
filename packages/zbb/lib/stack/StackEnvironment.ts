@@ -414,34 +414,66 @@ export class StackEnvironment extends EventEmitter {
     if (this.schema.size === 0) await this.loadSchema();
     await this.loadManifest();
 
-    // 2. Re-evaluate imports from zbb.yaml — imports are live, not frozen at add-time
+    // 2. Re-evaluate imports from zbb.yaml — imports are live, not frozen at add-time.
+    //
+    // Non-optional imports that fail (source stack missing, or the
+    // source stack doesn't export the named var) throw a clear error
+    // listing EVERY failed import at once, instead of one-by-one.
+    // Catching all of them at once means the user fixes them in a
+    // single zbb.yaml edit pass rather than one-error-per-gate-run.
     if (this.imports.length > 0) {
       const slotStacksDir = join(this.stackDir, '..');
+      const missing: Array<{ imp: ImportSpec; reason: string }> = [];
+
       for (const imp of this.imports) {
         const depEnvPath = join(slotStacksDir, imp.fromStack, '.env');
-        if (!existsSync(depEnvPath)) {
-          if (imp.optional) continue;
-        }
         const localName = imp.alias ?? imp.varName;
-        // Don't overwrite user overrides
+
+        // Don't overwrite user overrides — this is the stack-scoped
+        // override path. If the user set FOO in this stack's scope,
+        // imports shouldn't clobber it regardless of the source stack's
+        // value.
         const existing = this.manifest.get(localName);
         if (existing?.resolution === 'override') continue;
 
-        let value: string | undefined;
-        if (existsSync(depEnvPath)) {
-          const depEnv = parseEnvFile(await readFile(depEnvPath, 'utf-8'));
-          value = depEnv.get(imp.varName);
+        if (!existsSync(depEnvPath)) {
+          if (!imp.optional) {
+            missing.push({ imp, reason: `source stack '${imp.fromStack}' is not added to the slot (no ${imp.fromStack}/.env found)` });
+          }
+          continue;
         }
-        if (value !== undefined) {
-          this.manifest.set(localName, {
-            ...existing,
-            resolution: 'imported',
-            value,
-            from: imp.fromStack,
-            original_name: imp.alias ? imp.varName : undefined,
-          });
+
+        const depEnv = parseEnvFile(await readFile(depEnvPath, 'utf-8'));
+        const value = depEnv.get(imp.varName);
+
+        if (value === undefined) {
+          if (!imp.optional) {
+            missing.push({ imp, reason: `source stack '${imp.fromStack}' does not export '${imp.varName}'` });
+          }
+          continue;
         }
+
+        this.manifest.set(localName, {
+          ...existing,
+          resolution: 'imported',
+          value,
+          from: imp.fromStack,
+          original_name: imp.alias ? imp.varName : undefined,
+        });
       }
+
+      if (missing.length > 0) {
+        const lines = missing.map(({ imp, reason }) => {
+          const asLocal = imp.alias ? ` as ${imp.alias}` : '';
+          return `  - imports.${imp.fromStack}.${imp.varName}${asLocal}: ${reason}`;
+        });
+        throw new Error(
+          `Stack '${this.stackDir.split('/').pop()}' has unresolved imports:\n${lines.join('\n')}\n` +
+          `\nFix your zbb.yaml — either add the missing source stack to the slot, ` +
+          `correct the variable name, or mark the import as optional: true.`,
+        );
+      }
+
       await this.saveManifest();
     }
 
@@ -573,11 +605,13 @@ export class StackEnvironment extends EventEmitter {
    * @param ports - Allocated ports (name → port number)
    * @param secrets - Generated secrets (name → value)
    * @param imports - Resolved import specs
-   * @param slotVars - Slot-level vars (ZB_SLOT, etc.)
+   * @param stackName - Short name for this stack (becomes ZB_STACK)
+   * @param slotVars - Slot-level vars inherited from the enclosing slot
    * @param slotStacksDir - Path to slot's stacks/ dir
    */
   static async initialize(
     stackDir: string,
+    stackName: string,
     schema: Record<string, EnvVarDeclaration>,
     ports: Map<string, number>,
     secrets: Map<string, string>,
@@ -588,7 +622,7 @@ export class StackEnvironment extends EventEmitter {
   ): Promise<StackEnvironment> {
     const manifest = new Map<string, StackManifestEntry>();
 
-    // Slot vars as inherited
+    // Slot-inherited path vars (ZB_SLOT, ZB_SLOT_DIR, …).
     for (const [key, value] of Object.entries(slotVars)) {
       manifest.set(key, {
         resolution: 'inherited',
@@ -596,6 +630,13 @@ export class StackEnvironment extends EventEmitter {
         source: 'slot',
       });
     }
+
+    // Stack identity — set by zbb at stack-add time, scoped to this stack.
+    manifest.set('ZB_STACK', {
+      resolution: 'allocated',
+      value: stackName,
+      source: 'zbb',
+    });
 
     // Ports
     for (const [name, port] of ports) {

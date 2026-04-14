@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { SlotWatcher } from './SlotWatcher.js';
+import { SlotWatcher } from '../../lib/slot/SlotWatcher.js';
 
 /** Helper: wait for a specific event with timeout */
 function waitForEvent(emitter: SlotWatcher, event: string, timeoutMs: number = 2000): Promise<string> {

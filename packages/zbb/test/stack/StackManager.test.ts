@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { parse as yamlParse } from 'yaml';
-import { Slot } from '../slot/Slot.js';
-import { StackManager } from './StackManager.js';
+import { Slot } from '../../lib/slot/Slot.js';
+import { StackManager } from '../../lib/stack/StackManager.js';
 import { createTestSlot, createMockStackSource, createAddedStack } from './test-helpers.js';
 
 let tmpDir: string;

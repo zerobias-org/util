@@ -198,13 +198,17 @@ export class Slot extends EventEmitter {
    * @param repoRoot - Repo root path (needed for vault var scanning)
    * @returns Vault refresh result (DNS is silent)
    */
-  async resolve(repoRoot?: string): Promise<RefreshResult> {
+  async resolve(repoRoot?: string, stack?: import('../stack/Stack.js').Stack | null): Promise<RefreshResult> {
     // ── DNS TXT provisioning ──
     await this.resolveDns();
 
     // ── Vault secret resolution ──
+    // Pass the stack through so vault-sourced vars declared in the
+    // stack's zbb.yaml write to the stack's env, not the slot's. Without
+    // a stack, non-slot vault vars are silently skipped — they'll be
+    // refreshed when a command dispatches with the owning stack in scope.
     if (repoRoot) {
-      return refreshVaultVars(this, repoRoot);
+      return refreshVaultVars(this, repoRoot, stack);
     }
     return { refreshed: [], errors: [] };
   }
