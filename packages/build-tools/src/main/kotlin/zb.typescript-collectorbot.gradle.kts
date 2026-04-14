@@ -195,6 +195,29 @@ val transpile by tasks.registering(NpxTask::class) {
     inputs.dir("generated")
     inputs.file("tsconfig.json").optional()
     outputs.dir("dist")
+    doFirst {
+        // Self-heal stale tsbuildinfo: if dist/ was wiped externally but
+        // the tsbuildinfo cache still thinks the build is up-to-date,
+        // tsc silently no-ops and leaves dist/ empty. Clear the cache so
+        // tsc is forced into a full emit. Same defensive fix as
+        // zb.typescript.gradle.kts.
+        val distDir = project.file("dist")
+        val distEmpty = !distDir.exists() ||
+            (distDir.isDirectory && (distDir.listFiles()?.isEmpty() ?: true))
+        if (distEmpty) {
+            val tsBuildInfoFiles = project.projectDir.listFiles { _, name ->
+                name == "tsconfig.tsbuildinfo" ||
+                (name.startsWith("tsconfig.") && name.endsWith(".tsbuildinfo"))
+            }
+            if (tsBuildInfoFiles != null && tsBuildInfoFiles.isNotEmpty()) {
+                for (f in tsBuildInfoFiles) {
+                    if (f.delete()) {
+                        logger.lifecycle("transpile: cleared stale ${'$'}{f.name} (dist/ was empty)")
+                    }
+                }
+            }
+        }
+    }
 }
 
 tasks.named("compile") {
