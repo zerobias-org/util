@@ -182,15 +182,15 @@ object ZbbSlotProvider {
     }
 
     /**
-     * Compute the compose project name: ${ZB_SLOT}-${STACK_NAME}
-     * Reads STACK_NAME from the stack's .env on disk, not from shell.
+     * Compute the compose project name: ${ZB_SLOT}-${ZB_STACK}
+     * Reads ZB_STACK from the stack's .env on disk, not from shell.
      * Unique per slot+stack combination — prevents container collisions.
      */
     fun composeProjectName(): String {
         val slot = requireActiveSlot()
         val stackEnv = getStackEnv()
-        val stackName = stackEnv["STACK_NAME"]
-            ?: throw GradleException("STACK_NAME not found in stack .env. Re-add the stack: zbb stack add .")
+        val stackName = stackEnv["ZB_STACK"]
+            ?: throw GradleException("ZB_STACK not found in stack .env. Re-add the stack: zbb stack add .")
         return "$slot-$stackName"
     }
 

@@ -287,7 +287,7 @@ Single source (no name needed):
 ```yaml
 logs:
   source: docker
-  container: "${STACK_NAME}-dana"
+  container: "${ZB_SLOT}-dana"
 ```
 
 Multiple sources (named):
@@ -295,7 +295,7 @@ Multiple sources (named):
 logs:
   app:
     source: docker
-    container: "${STACK_NAME}-myservice"
+    container: "${ZB_SLOT}-myservice"
   access:
     source: file
     path: "${ZB_SLOT_LOGS}/myservice-access.log"

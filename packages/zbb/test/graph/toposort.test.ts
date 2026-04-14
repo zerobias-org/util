@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { toposort, getTransitiveDependents } from './toposort.js';
+import { toposort, getTransitiveDependents } from '../../lib/graph/toposort.js';
 
 interface Node {
   id: string;

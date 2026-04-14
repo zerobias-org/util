@@ -189,7 +189,7 @@ object ContainerTrackingUtils {
      *
      * Returns a YAML string that can be added to a service definition.
      *
-     * @param slotEnvVar Environment variable name for slot (e.g., STACK_NAME)
+     * @param slotEnvVar Environment variable name for slot (e.g., ZB_SLOT)
      * @param module Module name
      * @return YAML labels snippet
      */

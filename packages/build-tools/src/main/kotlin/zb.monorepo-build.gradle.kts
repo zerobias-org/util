@@ -163,25 +163,57 @@ val monorepoDockerBuild = tasks.register("monorepoDockerBuild") {
 
 tasks.register("monorepoClean") {
     group = "monorepo"
-    description = "Clean all workspace packages (dist/, generated/, build/, tsbuildinfo)"
+    description = "Clean all workspace packages — delegates to `npm run clean` per package when defined; otherwise falls back to deleting dist/, generated/, build/, tsconfig.tsbuildinfo."
     doLast {
         val service = graphService.get()
-        var cleaned = 0
-        for ((_, pkg) in service.graph.packages) {
+        var npmCleaned = 0
+        var hardCleaned = 0
+        var failed = 0
+
+        for ((pkgName, pkg) in service.graph.packages) {
+            val cleanScript = pkg.scripts["clean"]
+
+            if (!cleanScript.isNullOrBlank()) {
+                // Delegate to the package's own clean script. This is the
+                // source of truth — it's what the package author intends,
+                // and it covers package-specific artifacts the hardcoded
+                // fallback below would miss (api.yml, .docs/, tmp/, etc).
+                try {
+                    ExecUtils.exec(
+                        command = listOf("npm", "run", "clean"),
+                        workingDir = pkg.dir,
+                        throwOnError = true,
+                    )
+                    npmCleaned += 1
+                } catch (e: Exception) {
+                    logger.warn("monorepoClean: $pkgName `npm run clean` failed: ${e.message}")
+                    failed += 1
+                }
+                continue
+            }
+
+            // Fallback for packages with no clean script: best-effort
+            // removal of the standard build output directories.
+            var any = false
             for (sub in listOf("dist", "generated", "build")) {
                 val target = pkg.dir.resolve(sub)
                 if (target.exists()) {
                     target.deleteRecursively()
-                    cleaned += 1
+                    any = true
                 }
             }
             val tsBuildInfo = pkg.dir.resolve("tsconfig.tsbuildinfo")
             if (tsBuildInfo.exists()) {
                 tsBuildInfo.delete()
-                cleaned += 1
+                any = true
             }
+            if (any) hardCleaned += 1
         }
-        logger.lifecycle("monorepoClean: removed $cleaned artifacts across ${service.graph.packages.size} packages")
+
+        val total = service.graph.packages.size
+        logger.lifecycle(
+            "monorepoClean: $npmCleaned via npm script, $hardCleaned via fallback, $failed failed (total $total packages)"
+        )
     }
 }
 
@@ -256,10 +288,29 @@ gradle.projectsEvaluated {
 
         for (phase in phases) {
             val scriptBody = pkg.scripts[phase]
-            if (scriptBody.isNullOrBlank() || scriptBody.trimStart().startsWith("echo ")) {
+            // Empty/echo script: register a no-op task instead of skipping
+            // registration entirely. Same reasoning as the testPhase loop
+            // below — keeps the display showing "passed" for these phases
+            // rather than making them invisible.
+            val isNoOp =
+                scriptBody.isNullOrBlank() ||
+                scriptBody.trimStart().startsWith("echo ")
+            val stampFile = pkg.dir.resolve("build/${phase}.stamp")
+            if (isNoOp) {
+                subproject.tasks.register(phase) {
+                    group = "monorepo"
+                    description = "No-op `$phase` for $pkgName (script empty)"
+                    dependsOn(workspaceInstall)
+                    inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                    if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
+                    outputs.file(stampFile).withPropertyName("phaseStamp")
+                    doLast {
+                        stampFile.parentFile.mkdirs()
+                        stampFile.writeText("$phase no-op (script empty) at ${java.time.Instant.now()}\n")
+                    }
+                }
                 continue
             }
-            val stampFile = pkg.dir.resolve("build/${phase}.stamp")
             subproject.tasks.register<Exec>(phase) {
                 group = "monorepo"
                 description = "Run `npm run $phase` for $pkgName"
@@ -302,11 +353,34 @@ gradle.projectsEvaluated {
 
         for (testPhase in testPhases) {
             val scriptBody = pkg.scripts[testPhase]
-            if (scriptBody.isNullOrBlank() || scriptBody.trimStart().startsWith("echo ")) {
-                continue
-            }
+            // Empty / echo / missing script: still register a no-op task that
+            // shows up as "passed" in the display. Skipping registration
+            // entirely (the old behavior) hid these from the TUI and made it
+            // look like the package wasn't being tested at all. The no-op
+            // task satisfies gradle's task graph, runs in milliseconds, and
+            // the OperationCompletionListener emits a normal task_done
+            // event so the display row gets a check mark.
+            val isNoOp =
+                scriptBody.isNullOrBlank() ||
+                scriptBody.trimStart().startsWith("echo ")
             val stampFile = pkg.dir.resolve("build/${testPhase}.stamp")
             val testDir = pkg.dir.resolve("test")
+            if (isNoOp) {
+                subproject.tasks.register(testPhase) {
+                    group = "monorepo"
+                    description = "No-op `$testPhase` for $pkgName (script empty)"
+                    dependsOn(workspaceInstall)
+                    inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                    inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
+                    if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
+                    outputs.file(stampFile).withPropertyName("phaseStamp")
+                    doLast {
+                        stampFile.parentFile.mkdirs()
+                        stampFile.writeText("$testPhase no-op (script empty) at ${java.time.Instant.now()}\n")
+                    }
+                }
+                continue
+            }
             subproject.tasks.register<Exec>(testPhase) {
                 group = "monorepo"
                 description = "Run `npm run $testPhase` for $pkgName"
@@ -359,24 +433,41 @@ gradle.projectsEvaluated {
     }
 
     // 3. Cross-phase ordering within a subproject (fallback Exec only).
-    //    Canonical chain: lint → generate → transpile → test
-    //    Uses dependsOn so a failure in an earlier phase kills downstream
-    //    phases immediately (fail-fast). This also means `./gradlew transpile`
-    //    pulls in lint + generate, which is correct — you shouldn't transpile
-    //    without generating first.
+    //
+    // Honors the `monorepo.buildPhases` order from zbb.yaml — each phase
+    // depends on the previous one in the configured list. Then every
+    // testPhase depends on the LAST build phase. Fail-fast via `dependsOn`:
+    // a failure in an earlier phase kills downstream phases immediately.
+    //
+    // This used to hardcode the chain as `lint → generate → transpile → test`,
+    // which silently dropped any phase name not in that exact set (e.g. a
+    // package that uses `compile` instead of `transpile`). Symptom: the
+    // unlisted phase had no upstream dep, ran first, failed because its
+    // inputs hadn't been generated yet. Honor the config instead.
     for ((_, pkg) in packages) {
         val gradlePath = ":" + pkg.relDir.replace("/", ":")
         val subproject = rootProject.findProject(gradlePath) ?: continue
         if (hasExistingBuildInfra(subproject)) continue
 
-        val lint = subproject.tasks.findByName("lint")
-        val generate = subproject.tasks.findByName("generate")
-        val transpile = subproject.tasks.findByName("transpile")
-        val test = subproject.tasks.findByName("test")
+        // Walk phases in declared order, wiring each to the previous.
+        var prevTask: org.gradle.api.Task? = null
+        for (phaseName in phases) {
+            val task = subproject.tasks.findByName(phaseName) ?: continue
+            if (prevTask != null) {
+                task.dependsOn(prevTask)
+            }
+            prevTask = task
+        }
 
-        if (generate != null) lint?.let { generate.dependsOn(it) }
-        if (transpile != null) generate?.let { transpile.dependsOn(it) }
-        if (test != null) transpile?.let { test.dependsOn(it) }
+        // Test phases depend on the last build phase that exists for this
+        // package. Without this a `:pkg:test` could run before `:pkg:transpile`
+        // (or whatever the last build phase is).
+        for (testPhaseName in testPhases) {
+            val testTask = subproject.tasks.findByName(testPhaseName) ?: continue
+            if (prevTask != null) {
+                testTask.dependsOn(prevTask)
+            }
+        }
     }
 
     // 4. Register Docker build tasks for subprojects whose short-name appears
@@ -554,6 +645,15 @@ fun registerDockerTasksForPackage(
                         workingDir = pkgDir
                     )
                 }
+                // The bash prepublish-standalone.sh script also creates its
+                // own internal `package.json.prepublish-backup`. Once we've
+                // restored from our `.gradle-bak`, the package.json is
+                // guaranteed to be in its original state, so the bash
+                // script's backup is stale and safe to remove.
+                val prepublishBackup = pkgDir.resolve("package.json.prepublish-backup")
+                if (prepublishBackup.exists()) {
+                    prepublishBackup.delete()
+                }
             }
 
             packStamp.get().asFile.apply {
@@ -645,6 +745,12 @@ fun registerDockerTasksForPackage(
                                 command = listOf("mv", wsPackageJsonBackup.absolutePath, wsPackageJson.absolutePath),
                                 workingDir = wsProjectDir
                             )
+                        }
+                        // Clean up the bash script's own .prepublish-backup
+                        // (see npmPack finally above for full reasoning).
+                        val wsPrepublishBackup = wsProjectDir.resolve("package.json.prepublish-backup")
+                        if (wsPrepublishBackup.exists()) {
+                            wsPrepublishBackup.delete()
                         }
                     }
 

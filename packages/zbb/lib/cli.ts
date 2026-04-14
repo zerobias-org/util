@@ -32,6 +32,7 @@ import {
   spawnGradleFallbackAndExit,
 } from './monorepo/index.js';
 import { handleStack, detectStackContext } from './stack/commands.js';
+import type { Stack } from './stack/Stack.js';
 
 /**
  * Full slot preparation: resolve (DNS + vault) + re-export to process.env.
@@ -46,11 +47,40 @@ import { handleStack, detectStackContext } from './stack/commands.js';
  * @param options.fatal - If true, vault errors abort (exit 1). Default: false (warnings only).
  * @returns repo root path (from findRepoRoot of cwd), or null
  */
-async function prepareSlot(slot: Slot, options?: { fatal?: boolean }): Promise<string | null> {
+/**
+ * Resolve slot + (optionally) stack env and apply to process.env.
+ *
+ * Two layers, applied in order:
+ *
+ *   1. Slot-level — ZBB_SLOT_VARS only (ZB_SLOT, ZB_SLOT_DIR, paths, etc).
+ *      These are the slot's identity/path vars, always applied. Non-slot
+ *      vars in the slot's .env/overrides.env are silently filtered out by
+ *      SlotEnvironment.getAll().
+ *
+ *   2. Stack-level — if a stack is provided, that stack's env.resolve()
+ *      recursively refreshes its full dep chain (including imports from
+ *      other stacks), then the resolved result is overlaid onto
+ *      process.env. ZB_STACK carries the stack short name so downstream
+ *      consumers know which stack they're in.
+ *
+ * Without a stack, only the slot-level vars reach process.env. That's
+ * the right behavior for commands that don't have a stack context
+ * (e.g. `zbb slot list`, `zbb slot delete`, cross-stack admin ops).
+ *
+ * Key invariant: every call re-runs the stack dep chain resolution, so
+ * values are never stale. If the minio stack changes its AWS vars, the
+ * next `zbb gate` picks them up.
+ */
+async function prepareSlot(
+  slot: Slot,
+  options?: { fatal?: boolean; stack?: Stack | null },
+): Promise<string | null> {
   const repoRoot = findRepoRoot(process.cwd());
 
-  // Run resolve: DNS + vault
-  const vaultResult = await slot.resolve(repoRoot ?? undefined);
+  // Run resolve: DNS + vault secrets refresh. Pass the stack so
+  // vault-sourced vars declared in the stack's zbb.yaml write to the
+  // stack's own env instead of the slot.
+  const vaultResult = await slot.resolve(repoRoot ?? undefined, options?.stack ?? null);
 
   if (vaultResult.refreshed.length > 0) {
     console.log('Vault credentials refreshed:');
@@ -68,10 +98,36 @@ async function prepareSlot(slot: Slot, options?: { fatal?: boolean }): Promise<s
     }
   }
 
-  // Re-export all slot env to process.env so child processes see updated values
+  // Layer 1: apply slot-level vars (ZB_SLOT, paths, etc). Filtered by
+  // SlotEnvironment.getAll() to only return ZBB_SLOT_VARS.
   const slotEnv = slot.env.getAll();
   for (const [k, v] of Object.entries(slotEnv)) {
     if (v) process.env[k] = v;
+  }
+
+  // Layer 2: if a stack context is available, recursively resolve the
+  // stack's full dep chain and apply its composed env. Stack.load() is
+  // recursive — it walks manifest.depends + manifest.imports keys,
+  // resolving each dep stack first, so by the time we call env.getAll()
+  // here every imported value is fresh on disk.
+  const stack = options?.stack;
+  if (stack) {
+    try {
+      await stack.load();
+    } catch (e: any) {
+      // Stack import errors (from the fail-loudly check in
+      // StackEnvironment.resolve) surface here. Re-throw with the same
+      // message — the user needs to fix their zbb.yaml.
+      throw new Error(`Failed to resolve stack '${stack.name}':\n${e.message}`);
+    }
+    const stackEnv = stack.env.getAll();
+    for (const [k, v] of Object.entries(stackEnv)) {
+      if (v) process.env[k] = v;
+    }
+    // ZB_STACK carries the current stack's short name. The cd hook
+    // sources each stack .env (which contains ZB_STACK) on directory
+    // change; here we stamp it for the zbb subprocess path.
+    process.env.ZB_STACK = stack.name;
   }
 
   return repoRoot;
@@ -263,13 +319,28 @@ async function _main(argv: string[]): Promise<void> {
     const manifest = await loadStackManifest(repoRoot);
     const parsed = parseLifecycleArgs(args.slice(1));
 
+    // Mode split: zbb.yaml with a `monorepo:` block uses the monorepo
+    // dispatch path (monorepoBuild/Gate/Publish root aggregators, event
+    // pipeline, TUI display). zbb.yaml WITHOUT a monorepo block uses the
+    // standard dispatch path (plain gradle passthrough with cwd-aware
+    // subproject prefixing, no monorepo flags, no event pipeline).
+    const isMonorepo = zbbYaml.monorepo != null;
+
     // gate --check fast path: no slot, no stack, no preflight
     if (command === 'gate' && parsed.check) {
       const lifecycleCmd = lookupLifecycleCommand(zbbYaml.lifecycle, command, parsed);
-      if (lifecycleCmd) {
-        return spawnLifecycleAndExit(repoRoot, command, lifecycleCmd, parsed);
+      if (isMonorepo) {
+        if (lifecycleCmd) {
+          return spawnLifecycleAndExit(repoRoot, command, lifecycleCmd, parsed);
+        }
+        return spawnGradleFallbackAndExit(repoRoot, 'monorepoGateCheck', parsed);
       }
-      return spawnGradleFallbackAndExit(repoRoot, 'monorepoGateCheck', parsed);
+      // Standard: fall through to the lifecycle entry (or `./gradlew gateCheck`
+      // scoped to the cwd subproject). The standard dispatcher handles the
+      // subproject prefix logic.
+      const { spawnStandardLifecycleAndExit } = await import('./standardLifecycle.js');
+      const cmd = lifecycleCmd ?? './gradlew gateCheck';
+      return spawnStandardLifecycleAndExit(repoRoot, command, cmd, parsed);
     }
 
     // All other lifecycle commands require a loaded slot + an added stack
@@ -297,21 +368,25 @@ async function _main(argv: string[]): Promise<void> {
       process.exit(1);
     }
 
-    // Apply slot env (resolve vault/DNS, export to process.env). The stack's
-    // contributed env vars are already part of the slot env via the stack
-    // composition system from `zbb stack add`.
-    // Vault errors are never fatal — in CI, vault secrets are already
-    // snapshotted into the slot via the CI-mode bootstrap. Locally,
-    // vault is optional for build/test/publish commands.
-    await prepareSlot(slot, { fatal: false });
-
-    // Apply repo-level cleanse so child processes don't inherit unwanted
-    // vars from the parent shell.
+    // Apply repo-level cleanse FIRST so parent-shell leaks get stripped
+    // before the slot/stack env is applied. Ordering matters: if cleanse
+    // ran AFTER prepareSlot, cleansing a var would remove a value the
+    // stack just provided (the correct value), not a parent-shell leak.
     if (zbbYaml.cleanse && zbbYaml.cleanse.length > 0) {
       for (const varName of zbbYaml.cleanse) {
         delete process.env[varName];
       }
     }
+
+    // Apply slot-level + stack-level env. prepareSlot:
+    //   1. Applies slot identity/path vars (ZB_SLOT, ZB_SLOT_DIR, etc)
+    //   2. Recursively resolves the stack's full dep chain
+    //   3. Applies the resolved stack env (including imports from dep stacks)
+    //   4. Injects ZB_STACK from stack.name
+    //
+    // Without the stack parameter, only slot ZB_* vars would be applied —
+    // the user's tests would have no PG/AWS/port vars at all.
+    await prepareSlot(slot, { fatal: false, stack });
 
     // Run command-filtered preflight from `require:`
     if (zbbYaml.require && zbbYaml.require.length > 0) {
@@ -330,10 +405,17 @@ async function _main(argv: string[]): Promise<void> {
 
     // Look up lifecycle entry → spawn, or fall through to ./gradlew <cmd>
     const lifecycleCmd = lookupLifecycleCommand(zbbYaml.lifecycle, command, parsed);
-    if (lifecycleCmd) {
-      return spawnLifecycleAndExit(repoRoot, command, lifecycleCmd, parsed);
+    if (isMonorepo) {
+      if (lifecycleCmd) {
+        return spawnLifecycleAndExit(repoRoot, command, lifecycleCmd, parsed);
+      }
+      return spawnGradleFallbackAndExit(repoRoot, command, parsed);
     }
-    return spawnGradleFallbackAndExit(repoRoot, command, parsed);
+    // Standard mode: use the plain-gradle dispatcher with cwd-aware
+    // subproject prefixing. No monorepo flags, no TUI display (yet).
+    const { spawnStandardLifecycleAndExit } = await import('./standardLifecycle.js');
+    const cmd = lifecycleCmd ?? `./gradlew ${command}`;
+    return spawnStandardLifecycleAndExit(repoRoot, command, cmd, parsed);
   }
 
   // ── Permissive gradle fallback ───────────────────────────────────────
@@ -954,7 +1036,7 @@ async function handleLogs(args: string[]): Promise<void> {
       }
 
       // Docker container logs
-      const stackName = slot.env.get('STACK_NAME') ?? slot.name;
+      const stackName = slot.name;
       try {
         const containers = execSync(
           `docker ps --filter "name=${stackName}-" --format "{{.Names}}\t{{.Status}}"`,
@@ -1067,7 +1149,7 @@ async function handleLogs(args: string[]): Promise<void> {
         }
 
         case 'docker': {
-          const containerName = process.env._ZBB_LOG_CONTAINER ?? `${slot.env.get('STACK_NAME') ?? slot.name}-${logName}`;
+          const containerName = process.env._ZBB_LOG_CONTAINER ?? `${slot.name}-${logName}`;
           delete process.env._ZBB_LOG_CONTAINER;
           const dockerArgs = ['logs', '--tail', tailN];
           if (follow) dockerArgs.push('-f');
@@ -1141,7 +1223,7 @@ async function handleLogs(args: string[]): Promise<void> {
  * actual node process and signal it directly.
  */
 async function signalContainer(slot: Slot, serviceName: string, signal: string, levelName: string): Promise<void> {
-  const stackName = slot.env.get('STACK_NAME') ?? slot.name;
+  const stackName = slot.name;
   const containerName = `${stackName}-${serviceName}`;
   try {
     const { execSync } = await import('node:child_process');

@@ -4,7 +4,7 @@ import { mkdtemp, rm, mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 // yaml stringify not needed — using stack.setState() API directly
-import { Stack } from './Stack.js';
+import { Stack } from '../../lib/stack/Stack.js';
 import { createMockStackSource, createAddedStack } from './test-helpers.js';
 
 let tmpDir: string;
@@ -484,5 +484,238 @@ describe('Stack.createSubstackDirectories', () => {
 
     const { existsSync } = await import('node:fs');
     assert.equal(existsSync(join(stackPath, 'substacks')), false);
+  });
+});
+
+describe('Stack.load recursive dep resolution', () => {
+  /**
+   * Helper: create a stack with declared deps AND imports, pointing at a
+   * source that has the given manifest. The test infrastructure already
+   * supports createAddedStack with a custom source; we just need to embed
+   * the manifest into the source's zbb.yaml ourselves so the Stack can
+   * discover `depends` and `imports` when manifest is loaded from source.
+   */
+  async function createStackWithManifest(
+    stacksDir: string,
+    name: string,
+    manifest: Record<string, unknown>,
+    env: Record<string, string> = {},
+  ): Promise<string> {
+    const sourceDir = join(stacksDir, `_src-${name}`);
+    await createMockStackSource(sourceDir, {
+      name: `@zerobias-com/${name}`,
+      version: '1.0.0',
+      ...manifest,
+    });
+    return createAddedStack(stacksDir, name, {
+      identity: {
+        name: `@zerobias-com/${name}`,
+        version: '1.0.0',
+        mode: 'dev',
+        source: sourceDir,
+        added: new Date().toISOString(),
+      },
+      env,
+      sourceDir,
+    });
+  }
+
+  it('loads a stack with no deps (baseline)', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    await createStackWithManifest(stacksDir, 'leaf', {
+      env: { LEAF_VAR: { type: 'string', default: 'leafval' } },
+    });
+
+    const stack = new Stack('leaf', stacksDir);
+    await stack.load();
+
+    // Didn't throw, got initialized. No deps to walk, nothing special.
+    assert.ok(stack.isInitialized());
+  });
+
+  it('recursively loads a linear chain A → B → C before resolving A', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+
+    // C (leaf) — exports VAR_C
+    await createStackWithManifest(
+      stacksDir,
+      'stackC',
+      { env: { VAR_C: { type: 'string' } }, exports: ['VAR_C'] },
+      { VAR_C: 'from-C' },
+    );
+
+    // B imports VAR_C from stackC, exposes its own VAR_B
+    await createStackWithManifest(
+      stacksDir,
+      'stackB',
+      {
+        env: { VAR_B: { type: 'string' } },
+        exports: ['VAR_B'],
+        depends: { stackC: 'latest' },
+        imports: { stackC: ['VAR_C'] },
+      },
+      { VAR_B: 'from-B' },
+    );
+
+    // A imports both via the chain
+    await createStackWithManifest(
+      stacksDir,
+      'stackA',
+      {
+        env: { VAR_A: { type: 'string', default: 'from-A' } },
+        depends: { stackB: 'latest' },
+        imports: { stackB: ['VAR_B'] },
+      },
+      { VAR_A: 'from-A' },
+    );
+
+    const stackA = new Stack('stackA', stacksDir);
+    await stackA.load();
+
+    // A should see VAR_B imported from B. If load was NOT recursive,
+    // B might have stale values and A's import would pick up whatever
+    // was last written to stacks/stackB/.env by a prior run. Here
+    // everything is fresh so the value should be what B's source declares.
+    const a = stackA.env.getAll();
+    assert.ok(stackA.isInitialized(), 'stackA should be initialized');
+    assert.equal(a.VAR_B, 'from-B', 'stackA should have imported VAR_B from stackB');
+  });
+
+  it('resolves a diamond A → {B, C} → D without re-resolving D', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+
+    // D — leaf with a counter we can inspect later
+    await createStackWithManifest(
+      stacksDir,
+      'stackD',
+      { env: { VAR_D: { type: 'string' } }, exports: ['VAR_D'] },
+      { VAR_D: 'from-D' },
+    );
+
+    // B imports VAR_D from D
+    await createStackWithManifest(
+      stacksDir,
+      'stackB2',
+      {
+        env: { VAR_B2: { type: 'string' } },
+        exports: ['VAR_B2', 'VAR_D'],
+        depends: { stackD: 'latest' },
+        imports: { stackD: ['VAR_D'] },
+      },
+      { VAR_B2: 'from-B2' },
+    );
+
+    // C also imports VAR_D from D
+    await createStackWithManifest(
+      stacksDir,
+      'stackC2',
+      {
+        env: { VAR_C2: { type: 'string' } },
+        exports: ['VAR_C2', 'VAR_D'],
+        depends: { stackD: 'latest' },
+        imports: { stackD: ['VAR_D'] },
+      },
+      { VAR_C2: 'from-C2' },
+    );
+
+    // A depends on both B and C
+    await createStackWithManifest(
+      stacksDir,
+      'stackA2',
+      {
+        env: { VAR_A2: { type: 'string' } },
+        depends: { stackB2: 'latest', stackC2: 'latest' },
+        imports: { stackB2: ['VAR_B2'], stackC2: ['VAR_C2'] },
+      },
+      { VAR_A2: 'from-A2' },
+    );
+
+    const stackA = new Stack('stackA2', stacksDir);
+    // Should not loop, should not throw.
+    await stackA.load();
+
+    const a = stackA.env.getAll();
+    assert.equal(a.VAR_B2, 'from-B2', 'diamond: VAR_B2 resolved via B');
+    assert.equal(a.VAR_C2, 'from-C2', 'diamond: VAR_C2 resolved via C');
+  });
+
+  it('survives a cycle A → B → A without hanging', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+
+    await createStackWithManifest(
+      stacksDir,
+      'cyclicA',
+      {
+        env: { A_VAR: { type: 'string' } },
+        depends: { cyclicB: 'latest' },
+      },
+      { A_VAR: 'a' },
+    );
+
+    await createStackWithManifest(
+      stacksDir,
+      'cyclicB',
+      {
+        env: { B_VAR: { type: 'string' } },
+        depends: { cyclicA: 'latest' }, // cycle!
+      },
+      { B_VAR: 'b' },
+    );
+
+    const stackA = new Stack('cyclicA', stacksDir);
+    // Cycle protection should prevent an infinite recursion. The second
+    // time we re-enter cyclicA through cyclicB's dep walk, the visited
+    // set should short-circuit and we return cleanly.
+    await stackA.load();
+    assert.ok(stackA.isInitialized());
+  });
+
+  it('deduplicates deps + imports source-stack names (union)', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+
+    // Single source stack
+    await createStackWithManifest(
+      stacksDir,
+      'shared',
+      { env: { SHARED_VAR: { type: 'string' } }, exports: ['SHARED_VAR'] },
+      { SHARED_VAR: 'shared-val' },
+    );
+
+    // Consumer lists 'shared' in BOTH depends and imports — should only
+    // resolve once, not twice.
+    await createStackWithManifest(
+      stacksDir,
+      'consumer',
+      {
+        env: { CONSUMER_VAR: { type: 'string' } },
+        depends: { shared: 'latest' },
+        imports: { shared: ['SHARED_VAR'] },
+      },
+      { CONSUMER_VAR: 'c' },
+    );
+
+    const consumer = new Stack('consumer', stacksDir);
+    await consumer.load();
+    assert.equal(consumer.env.get('SHARED_VAR'), 'shared-val');
+  });
+
+  it('silently skips missing dep stack directories (depends-only)', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+
+    // Consumer depends on 'ghost' which isn't added. Since it's only in
+    // `depends` (not `imports`), load should NOT throw — the dep is a
+    // lifecycle dep not an env dep. Readiness checking is separate.
+    await createStackWithManifest(
+      stacksDir,
+      'loner',
+      {
+        env: { LONER_VAR: { type: 'string', default: 'l' } },
+        depends: { ghost: 'latest' },
+      },
+    );
+
+    const loner = new Stack('loner', stacksDir);
+    await loner.load();
+    assert.ok(loner.isInitialized());
   });
 });

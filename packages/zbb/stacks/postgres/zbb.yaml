@@ -35,17 +35,17 @@ state:
     values: [starting, healthy, stopped, error]
 
 lifecycle:
-  start: docker compose -f compose.yml -p ${STACK_NAME} up -d
-  stop: docker stop ${STACK_NAME}-postgres 2>/dev/null; docker rm ${STACK_NAME}-postgres 2>/dev/null; true
+  start: docker compose -f compose.yml -p ${ZB_SLOT} up -d
+  stop: docker stop ${ZB_SLOT}-postgres 2>/dev/null; docker rm ${ZB_SLOT}-postgres 2>/dev/null; true
   health:
     command: "pg_isready -h localhost -p ${PGPORT} -U ${PGUSER}"
     interval: 2
     timeout: 30
   cleanup:
-    - "docker stop ${STACK_NAME}-postgres 2>/dev/null; docker rm ${STACK_NAME}-postgres 2>/dev/null; true"
-    - "docker volume rm ${STACK_NAME}_postgres-data 2>/dev/null; true"
-    - "docker network rm ${STACK_NAME}_default 2>/dev/null; true"
+    - "docker stop ${ZB_SLOT}-postgres 2>/dev/null; docker rm ${ZB_SLOT}-postgres 2>/dev/null; true"
+    - "docker volume rm ${ZB_SLOT}_postgres-data 2>/dev/null; true"
+    - "docker network rm ${ZB_SLOT}_default 2>/dev/null; true"
 
 logs:
   source: docker
-  container: "${STACK_NAME}-postgres"
+  container: "${ZB_SLOT}-postgres"

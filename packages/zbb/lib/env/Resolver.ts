@@ -47,8 +47,8 @@ export interface ResolveOptions {
   /**
    * When true, unknown variable references are left as literal `${VAR}`
    * instead of throwing. Used during `slot create` where vars like
-   * `STACK_NAME` aren't known yet — they get resolved later during
-   * `stack add`.
+   * `ZB_STACK` / stack-scoped imports aren't known yet — they get
+   * resolved later during `stack add`.
    */
   lenient?: boolean;
 }

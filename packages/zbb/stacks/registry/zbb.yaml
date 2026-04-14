@@ -15,7 +15,7 @@ env:
 
   REGISTRY_INTERNAL_URL:
     type: string
-    value: "http://${STACK_NAME}-registry:4873"
+    value: "http://${ZB_SLOT}-registry:4873"
     description: Local npm registry URL (container-side, via Docker network)
 
   NPM_TOKEN:
@@ -41,16 +41,16 @@ state:
 lifecycle:
   start: >-
     bash setup.sh &&
-    docker compose -f compose.yml -p ${STACK_NAME} up -d
-  stop: docker stop ${STACK_NAME}-registry 2>/dev/null; docker rm ${STACK_NAME}-registry 2>/dev/null; true
+    docker compose -f compose.yml -p ${ZB_SLOT} up -d
+  stop: docker stop ${ZB_SLOT}-registry 2>/dev/null; docker rm ${ZB_SLOT}-registry 2>/dev/null; true
   health:
     command: "curl -sf http://localhost:${REGISTRY_PORT}/-/ping >/dev/null"
     interval: 2
     timeout: 30
   cleanup:
-    - "docker stop ${STACK_NAME}-registry 2>/dev/null; docker rm ${STACK_NAME}-registry 2>/dev/null; true"
-    - "docker volume rm ${STACK_NAME}_verdaccio-storage 2>/dev/null; true"
+    - "docker stop ${ZB_SLOT}-registry 2>/dev/null; docker rm ${ZB_SLOT}-registry 2>/dev/null; true"
+    - "docker volume rm ${ZB_SLOT}_verdaccio-storage 2>/dev/null; true"
 
 logs:
   source: docker
-  container: "${STACK_NAME}-registry"
+  container: "${ZB_SLOT}-registry"

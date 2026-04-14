@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:${POSTGRES_VERSION:-17}
-    container_name: ${STACK_NAME}-postgres
+    container_name: ${ZB_SLOT}-postgres
     ports:
       - "${PGPORT}:5432"
     environment:
@@ -16,7 +16,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     labels:
-      zerobias.slot: ${STACK_NAME}
+      zerobias.slot: ${ZB_SLOT}
 
 volumes:
   postgres-data:

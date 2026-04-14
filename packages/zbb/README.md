@@ -142,7 +142,6 @@ ZB_SLOT_CONFIG=~/.zbb/slots/local/config
 ZB_SLOT_LOGS=~/.zbb/slots/local/logs
 ZB_SLOT_STATE=~/.zbb/slots/local/state
 ZB_SLOT_TMP=~/.zbb/slots/local/state/tmp
-STACK_NAME=local
 ```
 
 Projects use these to route output. For example, a `zbb.yaml` can declare:
@@ -192,9 +191,9 @@ What happens:
 8. Sets prompt to `[zb:{{slotName}}]:path$`
 
 Inside the subshell, all tools read from the environment:
-- `./gradlew stackUp` reads `PGPORT`, `STACK_NAME`, etc.
+- `./gradlew stackUp` reads `PGPORT`, `ZB_SLOT`, `ZB_STACK`, etc.
 - `hub-node node start` reads `SERVER_URL`, `API_KEY`, etc.
-- `docker compose up` reads `${STACK_NAME}` for container names
+- `docker compose up` reads `${ZB_SLOT}` for container name prefixes
 
 Running `zbb slot load` with no args while already in a slot re-evaluates from the current directory (picks up new zbb.yaml vars).
 
@@ -483,7 +482,7 @@ env:
     default: "${ZB_SLOT_LOGS}/node.log"
 ```
 
-For Docker source, the container name is derived from `${STACK_NAME}-${logName}` (e.g., `local-dana`).
+For Docker source, the container name is derived from `${ZB_SLOT}-${logName}` (e.g., `local-dana`).
 
 ## Dataloader
 
@@ -528,7 +527,7 @@ zbb destroy
 zbb destroy local
 ```
 
-This is a direct Docker operation (not a Gradle alias). It finds containers/volumes/networks prefixed with the slot's `STACK_NAME` and removes them.
+This is a direct Docker operation (not a Gradle alias). It finds containers/volumes/networks prefixed with the slot's `ZB_SLOT` name and removes them.
 
 ## Project Configuration
 

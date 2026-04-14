@@ -160,8 +160,17 @@ ZB_SLOT_CONFIG    <slot>/config/
 ZB_SLOT_LOGS      <slot>/logs/
 ZB_SLOT_STATE     <slot>/state/
 ZB_SLOT_TMP       <slot>/state/tmp/
-STACK_NAME        same as ZB_SLOT (alias)
+ZB_STACKS_DIR     <slot>/stacks/
 ```
+
+Stack-scoped vars (live in `<slot>/stacks/<stack>/.env`, sourced on cd):
+
+```
+ZB_STACK          current stack's short name
+```
+
+The legacy `STACK_NAME` alias has been removed — use `ZB_SLOT` for the
+slot/compose-project name and `ZB_STACK` for the active stack short name.
 
 ---
 
@@ -387,12 +396,12 @@ substacks:
 Containers bootstrap using three environment variables that all processes derive paths from:
 
 ```dockerfile
-ARG SLOT_NAME=default
-ARG STACK_NAME=hub-node
+ARG ZB_SLOT=default
+ARG ZB_STACK=hub-node
 
-ENV ZB_SLOT=${SLOT_NAME}
-ENV ZB_SLOT_DIR=/home/zerobias/.zbb/slots/${SLOT_NAME}
-ENV ZB_STACK=${STACK_NAME}
+ENV ZB_SLOT=${ZB_SLOT}
+ENV ZB_SLOT_DIR=/home/zerobias/.zbb/slots/${ZB_SLOT}
+ENV ZB_STACK=${ZB_STACK}
 ```
 
 Derived paths:

@@ -26,7 +26,7 @@
  */
 
 import com.zerobias.buildtools.monorepo.MonorepoGraphService
-import com.zerobias.buildtools.monorepo.MonorepoEventEmitter
+import com.zerobias.buildtools.lifecycle.EventEmitter
 import org.gradle.api.tasks.Exec
 import org.gradle.build.event.BuildEventsListenerRegistry
 import org.gradle.kotlin.dsl.support.serviceOf
@@ -45,7 +45,7 @@ val graphService = gradle.sharedServices.registerIfAbsent(
 
 extensions.extraProperties["monorepoGraphService"] = graphService
 
-// ── MonorepoEventEmitter — JSON-line events for the zbb TTY display ──
+// ── EventEmitter — JSON-line events for the zbb TTY display ──
 //
 // Default event file: <repo>/.zbb-monorepo/events.jsonl (gitignored, preserved
 // between runs for post-mortem inspection). Override with ZBB_MONOREPO_EVENT_FILE.
@@ -58,7 +58,7 @@ val logsDir = rootProject.file(".zbb-monorepo/logs")
 
 val eventEmitter = gradle.sharedServices.registerIfAbsent(
     "monorepoEventEmitter",
-    MonorepoEventEmitter::class.java
+    EventEmitter::class.java
 ) {
     parameters.eventFilePath.set(eventFile)
     // monorepoProjectPaths and phaseTaskNames are set in projectsEvaluated
@@ -156,7 +156,7 @@ gradle.taskGraph.whenReady {
     // Root-level phase tasks — the monorepo aggregators shown in the display
     // as a breadcrumb ("which step in the chain are we on"). Each gets a
     // doFirst hook that fires emitPhaseStart; the finish side is already
-    // handled by the OperationCompletionListener in MonorepoEventEmitter.
+    // handled by the OperationCompletionListener in EventEmitter.
     val phaseTaskNames = setOf(
         "monorepoBuild",
         "monorepoTest",

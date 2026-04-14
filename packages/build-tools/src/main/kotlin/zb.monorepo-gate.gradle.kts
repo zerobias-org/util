@@ -269,8 +269,37 @@ val monorepoGate = tasks.register("monorepoGate") {
         // footer confirming the stamp exists and how many packages it covers.
         @Suppress("UNCHECKED_CAST")
         val emitter = (rootProject.extensions.extraProperties["monorepoEventEmitter"]
-            as? org.gradle.api.provider.Provider<com.zerobias.buildtools.monorepo.MonorepoEventEmitter>)
+            as? org.gradle.api.provider.Provider<com.zerobias.buildtools.lifecycle.EventEmitter>)
         emitter?.get()?.emitGateStampWritten(rootStampFile.name, packageEntries.size)
+    }
+}
+
+// Wipe stale per-task logs + the events file whenever `:monorepoGate` is
+// in the task graph. Stale logs from previous runs mislead debugging —
+// e.g. a failed test from version 1.0.37 left `app-test.log` behind and
+// made it look like the current run's :app:test was failing when the task
+// hadn't even been invoked.
+//
+// taskGraph.whenReady runs AFTER gradle builds the graph but BEFORE any
+// task executes, so there's no race against writers. We only wipe when
+// monorepoGate is actually being invoked — ad-hoc `./gradlew :pkg:test`
+// runs leave logs alone so users can inspect their most recent work.
+gradle.taskGraph.whenReady {
+    val gateInGraph = allTasks.any { it.path == ":monorepoGate" }
+    if (!gateInGraph) return@whenReady
+
+    val logsDir = rootProject.file(".zbb-monorepo/logs")
+    if (logsDir.exists()) {
+        logsDir.deleteRecursively()
+    }
+    logsDir.mkdirs()
+
+    // The events file is truncated-on-open by EventEmitter's
+    // writer, but we delete it here too so there's no window where users
+    // might look at a half-stale file while the build is spinning up.
+    val eventsFile = rootProject.file(".zbb-monorepo/events.jsonl")
+    if (eventsFile.exists()) {
+        eventsFile.delete()
     }
 }
 
