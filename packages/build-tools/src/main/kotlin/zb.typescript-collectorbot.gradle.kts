@@ -2,6 +2,7 @@
 
 import com.github.gradle.node.npm.task.NpmTask
 import com.github.gradle.node.npm.task.NpxTask
+import com.zerobias.buildtools.collectorbot.CollectorbotEntryPointGenerator
 import com.zerobias.buildtools.module.ZbExtension
 
 plugins {
@@ -157,8 +158,27 @@ val generateHubClient by tasks.registering(NpxTask::class) {
     outputs.dir("generated")
 }
 
+// Render the Docker container entry point run.ts from package.json identity.
+// The output lands next to generated/inversify.config.ts so the relative
+// `./inversify.config.js` import resolves after tsc.
+val generateCollectorbotRun by tasks.registering {
+    group = "lifecycle"
+    description = "Generate generated/run.ts entry point for Docker container"
+    dependsOn(generateHubClient)
+    inputs.file("package.json")
+    outputs.file("generated/run.ts")
+    doLast {
+        val identity = CollectorbotEntryPointGenerator.readPackageIdentity(project.projectDir)
+        val content = CollectorbotEntryPointGenerator.generate(identity)
+        val outFile = project.file("generated/run.ts")
+        outFile.parentFile.mkdirs()
+        outFile.writeText(content)
+        logger.lifecycle("Generated ${outFile.relativeTo(project.projectDir)} for ${identity.scope}/${identity.name}")
+    }
+}
+
 tasks.named("generate") {
-    dependsOn(npmInstallCollectorbot, generateModels, generateHubClient)
+    dependsOn(npmInstallCollectorbot, generateModels, generateHubClient, generateCollectorbotRun)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -354,4 +374,189 @@ val promoteNpm by tasks.registering {
 
 tasks.named("promoteAll") {
     dependsOn(promoteNpm)
+}
+
+// ════════════════════════════════════════════════════════════
+// Docker Image Build + Publish (Multi-Arch buildx -> ECR + GHCR)
+//
+// Image name derives from package.json: {scopeWithoutAt}-{nameAfterSlash}
+//   @auditlogic/collectorbot-github-github  → auditlogic-collectorbot-github-github
+//   @zerobias-org/collectorbot-foo-bar      → zerobias-org-collectorbot-foo-bar
+//
+// This matches the formula hub-client-server uses in ContainerManager.ts to
+// pull the preview image, so both org scopes work with no client changes.
+// ════════════════════════════════════════════════════════════
+
+fun collectorbotImageName(): String =
+    CollectorbotEntryPointGenerator.readPackageIdentity(project.projectDir).imageName
+
+val generateCollectorbotDockerfile by tasks.registering {
+    group = "lifecycle"
+    description = "Generate Dockerfile for collectorbot container"
+    val dockerDir = project.file("generated/docker")
+    outputs.dir(dockerDir)
+    onlyIf { !project.file("Dockerfile").exists() }
+    doLast {
+        dockerDir.mkdirs()
+        // Multi-stage: first stage installs runtime-only deps, second stage copies
+        // them into a clean image alongside dist/. This avoids destructive
+        // `npm prune --omit=dev` on the project tree at build time.
+        val dockerfile = """
+            |FROM node:22-alpine AS deps
+            |WORKDIR /opt/collectorbot
+            |COPY package.json ./
+            |COPY package-lock.json* ./
+            |COPY .npmrc* ./
+            |RUN npm install --omit=dev --no-audit --no-fund
+            |
+            |FROM node:22-alpine
+            |LABEL org.opencontainers.image.source https://github.com/auditlogic/collectorbot
+            |RUN apk update && apk add ca-certificates openssl git && rm -rf /var/cache/apk/*
+            |WORKDIR /opt/collectorbot
+            |COPY --from=deps /opt/collectorbot/node_modules ./node_modules
+            |COPY dist ./dist
+            |COPY package.json ./
+            |COPY *.yml ./
+            |COPY .npmrc* ./
+            |CMD ["node", "dist/generated/run.js"]
+        """.trimMargin() + "\n"
+        project.file("generated/docker/Dockerfile").writeText(dockerfile)
+    }
+}
+
+val buildImageExec by tasks.registering(Exec::class) {
+    group = "lifecycle"
+    description = "Build collectorbot Docker image"
+    dependsOn(tasks.named("compile"), generateCollectorbotDockerfile)
+    workingDir(project.projectDir)
+    commandLine("echo", "placeholder")
+    doFirst {
+        val imageName = collectorbotImageName()
+        val ver = project.version.toString()
+        val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile"
+            else "generated/docker/Dockerfile"
+        commandLine("docker", "build",
+            "-f", dockerfilePath,
+            "-t", "${imageName}:local",
+            "-t", "${imageName}:${ver}",
+            ".")
+    }
+}
+
+tasks.named("buildImage") {
+    dependsOn(buildImageExec)
+}
+
+@Suppress("UNCHECKED_CAST")
+val collectorbotPreflightChecks = extra["preflightChecks"] as TaskProvider<*>
+val collectorbotIsDryRun: Boolean = extra["isDryRun"] as Boolean
+
+val ensureCollectorbotEcrRepo by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Create ECR repository for collectorbot if it does not exist"
+    onlyIf { !collectorbotIsDryRun }
+    workingDir(project.projectDir)
+    commandLine("echo", "placeholder")
+    isIgnoreExitValue = true
+    doFirst {
+        val awsRegion = System.getenv("AWS_REGION")
+            ?: throw GradleException("AWS_REGION not set in slot env — add to zbb.yaml")
+        val imageName = collectorbotImageName()
+        commandLine("aws", "ecr", "create-repository",
+            "--repository-name", imageName,
+            "--region", awsRegion)
+    }
+}
+
+val publishImageEcr by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Build and push multi-arch collectorbot Docker image to ECR"
+    dependsOn(tasks.named("buildImage"), ensureCollectorbotEcrRepo, collectorbotPreflightChecks)
+    workingDir(project.projectDir)
+    commandLine("echo", "placeholder")
+    doFirst {
+        val imageName = collectorbotImageName()
+        val ver = project.version.toString().substringBefore("+")
+        if (collectorbotIsDryRun) {
+            val ecrRegistry = System.getenv("ECR_REGISTRY") ?: "<ECR_REGISTRY>"
+            logger.lifecycle("[DRY RUN] Would push multi-arch collectorbot image to ECR: ${ecrRegistry}/${imageName}:${ver}")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+        val ecrRegistry = System.getenv("ECR_REGISTRY")
+            ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
+        val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile"
+            else "generated/docker/Dockerfile"
+        val ecrImage = "${ecrRegistry}/${imageName}:${ver}"
+        commandLine("bash", "-c", """
+            docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ecrImage --push . 2>&1 && exit 0
+
+            echo "Buildx push failed with host credentials — retrying with explicit ECR auth..."
+            TMPCONF=${'$'}(mktemp -d)
+            if [ -d ~/.docker/buildx ]; then ln -sf ${'$'}(realpath ~/.docker/buildx) ${'$'}TMPCONF/buildx; fi
+            ECR_TOKEN=${'$'}(aws ecr get-login-password --region ${System.getenv("AWS_REGION") ?: "us-east-1"})
+            AUTH=${'$'}(echo -n "AWS:${'$'}ECR_TOKEN" | base64 -w0)
+            echo '{"auths":{"$ecrRegistry":{"auth":"'"${'$'}AUTH"'"}}}' > ${'$'}TMPCONF/config.json
+            DOCKER_CONFIG=${'$'}TMPCONF docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ecrImage --push .
+            EXIT=${'$'}?
+            rm -rf ${'$'}TMPCONF
+            exit ${'$'}EXIT
+        """.trimIndent())
+    }
+}
+
+val publishImageGhcr by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Build and push multi-arch collectorbot Docker image to GHCR"
+    dependsOn(tasks.named("buildImage"), publishImageEcr, collectorbotPreflightChecks)
+    workingDir(project.projectDir)
+    commandLine("echo", "placeholder")
+    doFirst {
+        val imageName = collectorbotImageName()
+        val ver = project.version.toString().substringBefore("+")
+        if (collectorbotIsDryRun) {
+            val ghcrRegistry = System.getenv("GHCR_REGISTRY") ?: "<GHCR_REGISTRY>"
+            logger.lifecycle("[DRY RUN] Would push multi-arch collectorbot image to GHCR: ${ghcrRegistry}/${imageName}:${ver}")
+            throw org.gradle.api.tasks.StopExecutionException()
+        }
+        val ghcrRegistry = System.getenv("GHCR_REGISTRY")
+            ?: throw GradleException("GHCR_REGISTRY not set in slot env — add to zbb.yaml")
+        val dockerfilePath = if (project.file("Dockerfile").exists()) "Dockerfile"
+            else "generated/docker/Dockerfile"
+        val ghcrImage = "${ghcrRegistry}/${imageName}:${ver}"
+        val npmToken = System.getenv("NPM_TOKEN")
+            ?: throw GradleException("NPM_TOKEN not set — needed for GHCR push")
+        commandLine("bash", "-c", """
+            docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ghcrImage --push . 2>&1 && exit 0
+
+            echo "Buildx push failed with host credentials — retrying with explicit GHCR auth..."
+            TMPCONF=${'$'}(mktemp -d)
+            if [ -d ~/.docker/buildx ]; then ln -sf ${'$'}(realpath ~/.docker/buildx) ${'$'}TMPCONF/buildx; fi
+            AUTH=${'$'}(echo -n "auditlogic:$npmToken" | base64 -w0)
+            echo '{"auths":{"ghcr.io":{"auth":"'"${'$'}AUTH"'"}}}' > ${'$'}TMPCONF/config.json
+            DOCKER_CONFIG=${'$'}TMPCONF docker buildx build -f $dockerfilePath --platform linux/amd64,linux/arm64 -t $ghcrImage --push .
+            EXIT=${'$'}?
+            rm -rf ${'$'}TMPCONF
+            exit ${'$'}EXIT
+        """.trimIndent())
+    }
+}
+
+tasks.named("publishImage") {
+    dependsOn(publishImageEcr, publishImageGhcr)
+}
+
+val collectorbotChangedSinceTag: Boolean = extra["changedSinceTag"] as Boolean
+
+listOf(
+    "publishImageEcr",
+    "publishImageGhcr"
+).forEach { taskName ->
+    tasks.named(taskName) {
+        onlyIf {
+            if (!collectorbotChangedSinceTag) {
+                logger.lifecycle("[$taskName] Skipping -- no changes since last tag")
+            }
+            collectorbotChangedSinceTag
+        }
+    }
 }

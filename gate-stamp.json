@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "zbb-slot-stack-fixes",
-  "timestamp": "2026-04-14T13:45:23.984042659Z",
+  "timestamp": "2026-04-14T16:04:45.041619156Z",
   "packages": {
     "@zerobias-org/util-codegen": {
       "version": "2.0.48",
@@ -321,9 +321,9 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.48",
-      "sourceHash": "be064d7a9c7f10ba2d6ae83b16d729183d74b415044abfa8ffbe98b53f5993e1",
-      "testHash": "4a9c50f480e1064c14e3ca20a18157a5124e147b091efe1a9ba8a04ec6e52268",
+      "version": "0.3.49",
+      "sourceHash": "5f229cdf64f195361c5011cdbb55c1aadc2f804562aa0c9e96470395e2aa0906",
+      "testHash": "55245b912d216b7b07f02e1a387a10ed258e9801d4dc5b018090c15070c7e21f",
       "tasks": {
         "lint": "passed",
         "compile": "passed",

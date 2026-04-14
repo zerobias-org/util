@@ -67,6 +67,112 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
     /** True if registry injection should fire for this build. */
     val isActive: Boolean get() = trigger != null
 
+    /**
+     * Lighter-weight check: is the slot's registry stack healthy?
+     *
+     * Distinct from [isActive] / [trigger] which ALSO require
+     * `publishes.json` to be non-empty. This check is for routing-only
+     * use cases (proxying upstream `npm install` through Verdaccio's
+     * cache) where we don't care whether anything has been locally
+     * published — we just want to know that the registry container is
+     * reachable on the slot's compose network so a Docker build can
+     * attach to it via `--network ${ZB_SLOT}_default`.
+     */
+    val isHealthy: Boolean by lazy { detectHealthy() }
+
+    /**
+     * Container-side URL for reaching Verdaccio from inside another
+     * container on the same slot's compose network. Returns null when
+     * the slot isn't loaded or the registry stack isn't healthy.
+     *
+     * Format: `http://${ZB_SLOT}-registry:4873`
+     *
+     * Distinct from the host-side `REGISTRY_URL` (which is something like
+     * `http://localhost:15016`) — that one only works from the host shell,
+     * not from inside a `docker build` container.
+     */
+    val internalRegistryUrl: String? by lazy { detectInternalRegistryUrl() }
+
+    /**
+     * `host.docker.internal`-flavored URL for reaching Verdaccio from
+     * inside a `docker build` container that goes through the host
+     * networking stack (rather than attaching to the slot's compose
+     * network).
+     *
+     * Why we need this: BuildKit (the default Docker build engine since
+     * Docker 23+) refuses arbitrary `--network <name>` modes for security
+     * isolation. It only allows networks that were registered at builder
+     * creation time. Attaching `--network local_default` to a buildx
+     * build fails with "network mode … not supported by buildkit".
+     *
+     * The escape hatch: Verdaccio is already published on a host port
+     * (`REGISTRY_PORT` in the registry stack's .env), so the build
+     * container can reach it through the host's network stack via
+     * `host.docker.internal`. The caller passes
+     * `--add-host=host.docker.internal:host-gateway` so the name resolves
+     * even on bare Linux (it works automatically on Docker Desktop).
+     *
+     * Returns null when the slot isn't loaded or the registry stack
+     * isn't healthy.
+     */
+    val hostBridgeRegistryUrl: String? by lazy { detectHostBridgeRegistryUrl() }
+
+    /** Slot name (`ZB_SLOT`) when set. Null otherwise. */
+    val slotName: String? get() = System.getenv("ZB_SLOT")
+
+    /** Compose project / network name for the active slot. Null when no slot. */
+    val composeNetworkName: String? get() = slotName?.let { "${it}_default" }
+
+    private fun detectHealthy(): Boolean {
+        val slot = System.getenv("ZB_SLOT") ?: return false
+        val home = System.getenv("HOME") ?: return false
+        val stateFile = File(home, ".zbb/slots/$slot/stacks/registry/state.yaml")
+        if (!stateFile.exists()) return false
+        val state = try {
+            Yaml().load<Map<String, Any?>>(stateFile.readText())
+        } catch (_: Exception) { return false }
+        return state["status"] == "healthy"
+    }
+
+    private fun detectInternalRegistryUrl(): String? {
+        if (!isHealthy) return null
+        val slot = System.getenv("ZB_SLOT") ?: return null
+        // Try the stack's .env first — it's the source of truth and would
+        // pick up any custom REGISTRY_INTERNAL_URL the user might have
+        // overridden. Fall back to the canonical `${slot}-registry:4873`
+        // format if the .env doesn't carry the var.
+        val home = System.getenv("HOME") ?: return null
+        val envFile = File(home, ".zbb/slots/$slot/stacks/registry/.env")
+        if (envFile.exists()) {
+            val fromEnv = envFile.readLines()
+                .firstNotNullOfOrNull { line ->
+                    Regex("^REGISTRY_INTERNAL_URL=(.+)$").find(line)?.groupValues?.get(1)
+                }
+            if (fromEnv != null) return fromEnv
+        }
+        return "http://$slot-registry:4873"
+    }
+
+    private fun detectHostBridgeRegistryUrl(): String? {
+        if (!isHealthy) return null
+        val slot = System.getenv("ZB_SLOT") ?: return null
+        // Read REGISTRY_URL from the stack's .env — it's a host-side URL
+        // like `http://localhost:15016` produced by the registry stack
+        // when allocating its host port. Rewrite `localhost`/`127.0.0.1`
+        // to `host.docker.internal` so the URL is reachable from inside
+        // a docker build container that has --add-host configured.
+        val home = System.getenv("HOME") ?: return null
+        val envFile = File(home, ".zbb/slots/$slot/stacks/registry/.env")
+        if (!envFile.exists()) return null
+        val hostUrl = envFile.readLines()
+            .firstNotNullOfOrNull { line ->
+                Regex("^REGISTRY_URL=(.+)$").find(line)?.groupValues?.get(1)
+            } ?: return null
+        return hostUrl
+            .replace("://localhost:", "://host.docker.internal:")
+            .replace("://127.0.0.1:", "://host.docker.internal:")
+    }
+
     // ── Trigger detection ────────────────────────────────────────────
 
     data class TriggerInfo(

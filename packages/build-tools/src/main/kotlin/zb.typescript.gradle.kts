@@ -327,6 +327,41 @@ val transpile by tasks.registering(NpxTask::class) {
         if (serverEntry.exists()) serverEntry.delete()
         val serverDir = project.file("generated/server")
         if (serverDir.exists()) serverDir.deleteRecursively()
+
+        // ── Self-heal stale tsbuildinfo ─────────────────────────────
+        //
+        // tsc -b's incremental build cache (tsconfig*.tsbuildinfo) is
+        // separate from the actual emit output (dist/). If something
+        // wipes dist/ without also wiping the tsbuildinfo (e.g. a
+        // package's own `npm run clean` script that doesn't know about
+        // the cache file, OR a stale gradle daemon running an old
+        // monorepoClean), tsc -b reads the cache, decides "input
+        // hashes match, nothing to emit", and silently no-ops. The
+        // result is a missing dist/ but a green ✓ on transpile —
+        // downstream packages that depend on the .d.ts files then
+        // fail with "Cannot find module".
+        //
+        // Defensive fix: before invoking tsc, check whether dist/ is
+        // missing or empty. If it is, blow away every tsconfig*
+        // .tsbuildinfo file in the package so tsc has no cache to read
+        // and is forced to do a full emit. Cheap (one stat call + a
+        // listFiles), idempotent, and self-healing.
+        val distDir = project.file("dist")
+        val distEmpty = !distDir.exists() ||
+            (distDir.isDirectory && (distDir.listFiles()?.isEmpty() ?: true))
+        if (distEmpty) {
+            val tsBuildInfoFiles = project.projectDir.listFiles { _, name ->
+                name == "tsconfig.tsbuildinfo" ||
+                (name.startsWith("tsconfig.") && name.endsWith(".tsbuildinfo"))
+            }
+            if (tsBuildInfoFiles != null && tsBuildInfoFiles.isNotEmpty()) {
+                for (f in tsBuildInfoFiles) {
+                    if (f.delete()) {
+                        logger.lifecycle("transpile: cleared stale ${f.name} (dist/ was empty)")
+                    }
+                }
+            }
+        }
     }
 }
 
