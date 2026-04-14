@@ -925,20 +925,23 @@ fun patchPackageJsonVersion(pkgFile: java.io.File, newVersion: String): String {
 // Store original package.json content for restoration
 var originalPackageJson: String? = null
 
-val patchPackageJson by tasks.registering {
-    group = "publish"
-    description = "Patch package.json with reckon-calculated version"
-    doLast {
-        val pkgFile = project.file("package.json")
-        val ver = project.version.toString()
-        originalPackageJson = patchPackageJsonVersion(pkgFile, ver)
-        logger.lifecycle("Patched package.json version to $ver")
-    }
-}
-
+// restorePackageJson is defined BEFORE patchPackageJson so that
+// patchPackageJson.finalizedBy(restorePackageJson) can reference it. Anchoring
+// the finalizer to patchPackageJson (the task that actually dirties the file)
+// rather than to publishNpmExec guarantees the restore fires even when a
+// downstream task (preflightChecks, publishNpmExec itself, …) fails or is
+// skipped. Gradle finalizers only run when the finalized task actually
+// executed; anchoring to the earliest "task that dirties the file" is the
+// only reliable point.
 val restorePackageJson by tasks.registering {
     group = "publish"
     description = "Restore original package.json after publish"
+    // Delay until after publishNpmExec in the success case so `npm publish`
+    // still sees the bumped version on disk. In the failure case the
+    // mustRunAfter becomes a no-op (publishNpmExec not in the executed set)
+    // and this task fires right after patchPackageJson — which is what we
+    // want, since there's nothing left that needs the patched file.
+    mustRunAfter(tasks.named("publishNpmExec"))
     doLast {
         val pkgFile = project.file("package.json")
         val content = originalPackageJson
@@ -946,6 +949,21 @@ val restorePackageJson by tasks.registering {
             pkgFile.writeText(content)
             logger.lifecycle("Restored original package.json")
         }
+    }
+}
+
+val patchPackageJson by tasks.registering {
+    group = "publish"
+    description = "Patch package.json with reckon-calculated version"
+    // Finalizer on patchPackageJson (not on publishNpmExec) so restore fires
+    // even if a task between patch and publish fails — see the
+    // restorePackageJson comment above for the reasoning.
+    finalizedBy(restorePackageJson)
+    doLast {
+        val pkgFile = project.file("package.json")
+        val ver = project.version.toString()
+        originalPackageJson = patchPackageJsonVersion(pkgFile, ver)
+        logger.lifecycle("Patched package.json version to $ver")
     }
 }
 
@@ -978,7 +996,9 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
     group = "publish"
     description = "Publish npm package to registry with --tag next (staging)"
     dependsOn(tasks.named("gate"), patchPackageJson, preflightChecks)
-    finalizedBy(restorePackageJson)
+    // restorePackageJson is a finalizer of patchPackageJson (not of this task)
+    // so it fires even when preflightChecks or patchPackageJson itself fails —
+    // see the restorePackageJson comment in this file for the reasoning.
 
     npmCommand.set(listOf("publish"))
     args.set(listOf("--tag", "next"))

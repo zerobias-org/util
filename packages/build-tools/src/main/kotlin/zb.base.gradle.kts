@@ -224,7 +224,14 @@ val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
 
 val bumpVersion by tasks.registering {
     group = "publish"
-    description = "Bump package.json version on main branch"
+    description = "Bump package.json version on main branch (in-memory only)"
+    // Run as late as possible in the publish chain: only after the full build
+    // phase has produced artifacts. If an earlier build/install/generate task
+    // fails we must not have bumped the version. Using `buildArtifacts` as the
+    // barrier (vs. `gate`) because gate can be skipped when its stamp is valid,
+    // which breaks the mustRunAfter ordering for anything gate transitively
+    // depends on — whereas buildArtifacts aggregates all the real build work.
+    mustRunAfter(buildArtifacts)
     onlyIf { branch == "main" }
     doLast {
         val pkgJson = project.file("package.json")
@@ -242,16 +249,17 @@ val bumpVersion by tasks.registering {
             output == currentVersion
         } catch (_: Exception) { false }
 
+        // CRITICAL: do NOT write to package.json here. Keep the computed version
+        // in memory only via `project.version`. Writing here used to leave the
+        // working tree dirty on any downstream failure (preflight, publish,
+        // flatten, anything between bump and commit). commitVersion is the
+        // single authoritative writer + committer for main-branch publishes,
+        // and patchPackageJson handles the transient write-for-npm-publish
+        // dance (with restorePackageJson as its finalizer).
         if (published) {
             // Bump patch: 6.11.1 → 6.11.2
             val parts = currentVersion.split(".")
             val newVersion = "${parts[0]}.${parts[1]}.${parts[2].toInt() + 1}"
-            val content = pkgJson.readText()
-            val updated = content.replace(
-                Regex(""""version"\s*:\s*"[^"]+""""),
-                """"version": "$newVersion""""
-            )
-            pkgJson.writeText(updated)
             project.version = newVersion
             logger.lifecycle("Version bumped: $currentVersion → $newVersion (previous version already published)")
         } else {
@@ -359,6 +367,11 @@ val preflightChecks by tasks.registering {
     group = "publish"
     description = "Validate publish readiness: registry auth, version, Docker, working tree"
     dependsOn(gate)
+    // Preflight is a publish-readiness gate: NPM_TOKEN, multi-arch buildx, AWS
+    // identity, ECR creds. None of that is relevant in dry-run — dry-run
+    // rehearses the task graph without publishing anything, so failing on env
+    // validation for a publish that will never happen is pure noise.
+    onlyIf { !isDryRun }
     doLast {
         val ver = project.version.toString()
         val (pkgName, _) = if (project.file("package.json").exists()) {
@@ -1128,6 +1141,10 @@ val publishHubSdk by tasks.registering {
 val resolvePublishVersion by tasks.registering {
     group = "publish"
     description = "Resolve a non-conflicting version for branch publish"
+    // Same reasoning as bumpVersion: hold version resolution until the full
+    // build phase is done, so a build failure never leaves us with a partially-
+    // bumped or partially-computed version.
+    mustRunAfter(buildArtifacts)
     onlyIf { branch != "main" && branchSuffix != null }
     doLast {
         val resolved = resolvePreReleaseVersion(baseVersion, branchSuffix!!, gitCounter)
@@ -1166,8 +1183,9 @@ listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { ta
 }
 
 // Shared success flags for publish pipeline coordination.
-// publishAllSucceeded: gates promoteAll, commitVersion, tagVersion
-// promoteAllSucceeded: gates commitVersion, tagVersion (only commit if fully promoted)
+// publishAllSucceeded: gates promoteAll
+// promoteAllSucceeded: gates tagVersion, pushVersion, publishReleaseEvent
+// (commitVersion now runs BEFORE publish; gated only on branch==main && !isDryRun)
 var publishAllSucceeded = false
 var promoteAllSucceeded = false
 
@@ -1202,14 +1220,20 @@ gradle.buildFinished {
             }
         }
 
-        // Revert package.json bump
+        // Revert package.json bump. Since commitVersion now runs BEFORE publish,
+        // the bump may already be in a local commit — `checkout --` only restores
+        // if the working-tree copy differs from HEAD (i.e. bumpVersion ran but
+        // commitVersion was skipped or failed). If the bump was committed and
+        // then publish failed, the commit stays on the ephemeral CI runner and
+        // is discarded with the job; on dev, the committed bump will no-op on
+        // the next run (git diff will be empty so commitVersion skips).
         try {
             com.zerobias.buildtools.util.ExecUtils.exec(
                 command = listOf("git", "checkout", "--", "package.json"),
                 workingDir = project.projectDir,
                 throwOnError = false
             )
-            logger.warn("  Reverted package.json version bump")
+            logger.warn("  Reverted working-tree package.json (if not already committed)")
         } catch (e: Exception) {
             logger.warn("  Failed to revert package.json: ${e.message}")
         }
@@ -1233,26 +1257,42 @@ val promoteAll by tasks.registering {
 }
 
 // Commit published version after successful promote
+// Commit the bumped package.json + refreshed gate-stamp BEFORE the actual
+// publish runs — so the npm tarball's git HEAD matches the version it
+// claims. Mirrors the zb.monorepo-publish.commitVersionBumps ordering.
+// Gated to main only; branches publish pre-release versions without a commit.
 val commitVersion by tasks.registering {
     group = "publish"
-    description = "Commit bumped package.json version + updated gate stamp"
-    mustRunAfter(promoteAll)
-    onlyIf { !isDryRun && promoteAllSucceeded }
+    description = "Commit bumped package.json version + updated gate stamp (main branch, pre-publish)"
+    mustRunAfter(bumpVersion, resolvePublishVersion)
+    onlyIf { branch == "main" && !isDryRun }
     doLast {
         val ver = project.version.toString()
         val pkgFile = project.file("package.json")
         val moduleDir = project.projectDir.relativeTo(project.rootDir).path
         val pkgPath = "${moduleDir}/package.json"
+        val stampPath = "${moduleDir}/gate-stamp.json"
 
-        // Write the published version into package.json (restorePackageJson may have reverted it)
-        val content = pkgFile.readText()
-        val updated = content.replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
-        pkgFile.writeText(updated)
+        // commitVersion is the single authoritative writer for the committed
+        // package.json version on main. bumpVersion only updates project.version
+        // in memory (so a failure between bump and commit leaves the tree clean);
+        // this task writes the bumped version to disk now, stages it, and commits.
+        // If the version didn't change, the `git diff --cached` check below
+        // makes the commit a no-op.
+        run {
+            val content = pkgFile.readText()
+            val updated = content.replace(
+                Regex(""""version"\s*:\s*"[^"]+""""),
+                """"version": "$ver""""
+            )
+            if (content != updated) {
+                pkgFile.writeText(updated)
+            }
+        }
 
-        // Regenerate gate stamp with the new source/test hashes (post version bump).
-        // sourceHash now excludes package.json so the version bump alone
-        // wouldn't change it, but we still recompute in case other tracked
-        // files changed during the publish flow (e.g. prepublish mutations).
+        // Refresh gate-stamp.json so the committed stamp matches the version
+        // being published. sourceHash/testHash are recomputed in case earlier
+        // tasks touched tracked files during the build phase.
         val stampFile = gateStampFile.asFile
         if (stampFile.exists()) {
             val stampContent = stampFile.readText()
@@ -1264,23 +1304,33 @@ val commitVersion by tasks.registering {
                 .replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
                 .replace(Regex(""""timestamp"\s*:\s*"[^"]+""""), """"timestamp": "${java.time.Instant.now()}"""")
             stampFile.writeText(updatedStamp)
-            logger.lifecycle("Updated gate-stamp.json with post-publish hashes")
+            logger.lifecycle("Updated gate-stamp.json for v${ver}")
         }
 
-        // Stage both package.json and gate-stamp.json
-        val stampPath = "${moduleDir}/gate-stamp.json"
         com.zerobias.buildtools.util.ExecUtils.exec(
             command = listOf("git", "add", pkgPath, stampPath),
             workingDir = project.rootDir,
             throwOnError = true
         )
 
+        // Skip the commit if nothing is staged — happens when bumpVersion
+        // decided not to bump and the stamp was already up to date.
+        val staged = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf("git", "diff", "--cached", "--name-only"),
+            workingDir = project.rootDir,
+            throwOnError = false
+        ).trim()
+        if (staged.isEmpty()) {
+            logger.lifecycle("No staged changes — skipping commit for v${ver}")
+            return@doLast
+        }
+
         com.zerobias.buildtools.util.ExecUtils.exec(
             command = listOf("git", "commit", "-m", "chore(release): ${zb.vendor.get()}-${zb.product.get()} v${ver}"),
             workingDir = project.rootDir,
             throwOnError = true
         )
-        logger.lifecycle("Committed version bump + gate stamp: v${ver}")
+        logger.lifecycle("Committed version bump: v${ver}")
     }
 }
 
@@ -1324,16 +1374,21 @@ val pushVersion by tasks.registering {
     }
 }
 
-// Top-level publish: bump → stage → promote → commit → tag → push → release event
+// Top-level publish: bump → commit → stage (publish) → promote → tag → push → release event
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
     dependsOn(publishAll, promoteAll, commitVersion, tagVersion, pushVersion, publishReleaseEvent)
 }
 
-// Ordering: promote → commit → tag → push → release event
+// Ordering:
+//   bump → commit → publish (stage) → promote → tag → push → release event
+// commit runs BEFORE the actual publish so the npm tarball's git HEAD
+// matches the version it claims. Matches the zb.monorepo-publish ordering.
+listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { taskName ->
+    tasks.named(taskName) { mustRunAfter(commitVersion) }
+}
 tagVersion.configure { mustRunAfter(commitVersion) }
-commitVersion.configure { mustRunAfter(promoteAll) }
 pushVersion.configure { mustRunAfter(tagVersion) }
 publishReleaseEvent.configure { mustRunAfter(pushVersion) }
 

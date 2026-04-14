@@ -12,13 +12,15 @@ import java.io.File
  * deep-merges allOf subschemas left-to-right (later wins), then re-applies root-level keys
  * so source-authored annotations beat anything inherited from composed subschemas.
  *
- * Ports scripts/fixAllOfs/fixAllOfs.js from the auditlogic/module repo.
+ * Ports scripts/fixAllOfs/fixAllOfs.js from the auditlogic/module repo, including the
+ * `$ref`-following behavior at fixAllOfs.js:79-82 that handles the msgraph-style
+ * `ConnectionProfile → $ref → connectionProfile` alias produced by redocly bundle.
  */
 object ConnectionProfileFlattener {
 
     /**
      * Flatten `components.schemas.<schemaName>` in the given spec file in place.
-     * No-op if the schema is missing or has no `allOf`.
+     * No-op if the schema is missing or (after alias resolution) has no `allOf`.
      */
     fun flatten(specFile: File, schemaName: String = "ConnectionProfile") {
         if (!specFile.exists()) return
@@ -27,19 +29,99 @@ object ConnectionProfileFlattener {
         @Suppress("UNCHECKED_CAST")
         val spec = yaml.load<Any>(specFile.readText()) as? MutableMap<String, Any?> ?: return
 
-        @Suppress("UNCHECKED_CAST")
-        val components = spec["components"] as? MutableMap<String, Any?> ?: return
-        @Suppress("UNCHECKED_CAST")
-        val schemas = components["schemas"] as? MutableMap<String, Any?> ?: return
+        val result = resolveSchema(spec, schemaName) ?: return
+        if (!result.wasFlattened) return  // already flat — preserve byte-identical no-op
 
         @Suppress("UNCHECKED_CAST")
-        val original = schemas[schemaName] as? Map<String, Any?> ?: return
-        if (!original.containsKey("allOf")) return
-
-        val resolved = mergeAllOf(deepCopyMap(original), schemas)
-        schemas[schemaName] = resolved
+        val schemas = ((spec["components"] as MutableMap<String, Any?>)["schemas"]) as MutableMap<String, Any?>
+        schemas[result.resolvedName] = result.schema
 
         specFile.writeText(yaml.dump(spec))
+    }
+
+    /**
+     * Resolve `components.schemas.<schemaName>` in [specFile], flatten any `allOf`
+     * composition, and write the bare schema (no `components/schemas` wrapper) to
+     * [outputFile]. Mirrors the legacy `node fixAllOfs.js cp.yml > connectionProfile.yml`
+     * prepublish step.
+     *
+     * This tolerates already-flattened schemas (since the upstream `copyDistributionSpec`
+     * task may have already run `flatten(distYml)` on the bundled spec). It only throws
+     * when the named schema can't be found at all.
+     */
+    fun flattenToStandaloneFile(
+        specFile: File,
+        outputFile: File,
+        schemaName: String = "ConnectionProfile"
+    ) {
+        if (!specFile.exists()) {
+            throw GradleException("Spec file not found: $specFile")
+        }
+
+        val yaml = MetadataSyncer.createYaml()
+        @Suppress("UNCHECKED_CAST")
+        val spec = yaml.load<Any>(specFile.readText()) as? MutableMap<String, Any?>
+            ?: throw GradleException("$specFile is not a valid YAML mapping")
+
+        val result = resolveSchema(spec, schemaName)
+            ?: throw GradleException(
+                "Schema '$schemaName' not found in $specFile"
+            )
+
+        outputFile.parentFile?.mkdirs()
+        outputFile.writeText(yaml.dump(result.schema))
+    }
+
+    private data class ResolveResult(
+        val resolvedName: String,
+        val schema: MutableMap<String, Any?>,
+        /** True if [schema] required `allOf` flattening; false if it was already flat. */
+        val wasFlattened: Boolean,
+    )
+
+    /**
+     * Locate `components.schemas[schemaName]`, follow internal `$ref` aliases of the
+     * form `{$ref: '#/components/schemas/Other'}`, and run [mergeAllOf] on the target
+     * if it has an `allOf`. Returns null only when the schema is missing.
+     *
+     * Alias-following ports fixAllOfs.js:79-82, which allowed `ConnectionProfile` to be
+     * a thin pointer to the real schema — this is the shape redocly bundle produces for
+     * msgraph (`ConnectionProfile: {$ref: '#/components/schemas/connectionProfile'}`).
+     */
+    private fun resolveSchema(
+        spec: MutableMap<String, Any?>,
+        schemaName: String
+    ): ResolveResult? {
+        @Suppress("UNCHECKED_CAST")
+        val components = spec["components"] as? MutableMap<String, Any?> ?: return null
+        @Suppress("UNCHECKED_CAST")
+        val schemas = components["schemas"] as? MutableMap<String, Any?> ?: return null
+
+        var currentName = schemaName
+        val seen = mutableSetOf<String>()
+        while (true) {
+            if (!seen.add(currentName)) {
+                throw GradleException("Cycle while resolving schema alias starting at '$schemaName'")
+            }
+            @Suppress("UNCHECKED_CAST")
+            val entry = schemas[currentName] as? Map<String, Any?> ?: return null
+            val ref = entry["\$ref"] as? String
+            if (ref != null && ref.startsWith("#/components/schemas/") && entry.size == 1) {
+                currentName = ref.substringAfterLast('/')
+            } else {
+                break
+            }
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val original = schemas[currentName] as? Map<String, Any?> ?: return null
+        val hasAllOf = original.containsKey("allOf")
+        val resolved = if (hasAllOf) {
+            mergeAllOf(deepCopyMap(original), schemas)
+        } else {
+            deepCopyMap(original)
+        }
+        return ResolveResult(currentName, resolved, wasFlattened = hasAllOf)
     }
 
     private fun mergeAllOf(
