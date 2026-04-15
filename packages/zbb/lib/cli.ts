@@ -292,7 +292,9 @@ async function _main(argv: string[]): Promise<void> {
     return handleDataloader(args.slice(1));
   }
 
-  // Run — execute a command or npm script with slot/stack env
+  // Run — execute a named script defined in zbb.yaml lifecycle or
+  // package.json scripts. Error if neither defines it. All trailing args
+  // pass through to the script implementation.
   if (command === 'run') {
     const slotName = process.env.ZB_SLOT;
     if (!slotName) {
@@ -308,31 +310,91 @@ async function _main(argv: string[]): Promise<void> {
 
     const runArgs = args.slice(1);
     if (runArgs.length === 0) {
-      console.error('Usage: zbb run <npm-script> [args...]');
-      console.error('       zbb run -- <command> [args...]');
+      console.error('Usage: zbb run <script> [args...]');
+      console.error('       zbb exec <command> [args...]');
       process.exit(1);
     }
 
+    const scriptName = runArgs[0];
+    const scriptArgs = runArgs.slice(1);
     const { spawnSync } = await import('node:child_process');
-    let cmd: string;
-    let cmdArgs: string[];
+    const { readFile } = await import('node:fs/promises');
+    const { join } = await import('node:path');
 
-    if (runArgs[0] === '--') {
-      // Arbitrary command: zbb run -- node src/seed.js
-      cmdArgs = runArgs.slice(1);
-      if (cmdArgs.length === 0) {
-        console.error('No command specified after --');
-        process.exit(1);
-      }
-      cmd = cmdArgs[0];
-      cmdArgs = cmdArgs.slice(1);
-    } else {
-      // npm script: zbb run test:integration
-      cmd = 'npm';
-      cmdArgs = ['run', ...runArgs];
+    // 1. zbb.yaml lifecycle — canonical place for project-scoped scripts.
+    // Lifecycle entries are typed for known verbs (build/test/gate/etc)
+    // but the field is user-extensible — custom verbs like `buildVm`
+    // live here too. Read through an unknown index to access them.
+    const repoRootForRun = findRepoRoot(process.cwd());
+    const zbbYaml = repoRootForRun ? await loadRepoConfig(repoRootForRun) : {};
+    const lifecycleMap = (zbbYaml.lifecycle ?? {}) as Record<string, unknown>;
+    const lifecycleEntry = lifecycleMap[scriptName];
+    const lifecycleCmd = typeof lifecycleEntry === 'string' ? lifecycleEntry : null;
+    if (lifecycleCmd) {
+      const fullCmd = scriptArgs.length > 0
+        ? `${lifecycleCmd} ${scriptArgs.join(' ')}`
+        : lifecycleCmd;
+      const result = spawnSync('bash', ['-c', fullCmd], {
+        stdio: 'inherit',
+        env: process.env,
+        cwd: repoRootForRun ?? process.cwd(),
+      });
+      process.exit(result.status ?? 1);
     }
 
-    const result = spawnSync(cmd, cmdArgs, {
+    // 2. package.json scripts (in cwd — npm respects workspaces).
+    let npmScripts: Record<string, string> = {};
+    try {
+      const pkg = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf-8'));
+      if (pkg && typeof pkg.scripts === 'object') npmScripts = pkg.scripts;
+    } catch {
+      // no package.json or unreadable
+    }
+    if (scriptName in npmScripts) {
+      const result = spawnSync('npm', ['run', scriptName, ...scriptArgs], {
+        stdio: 'inherit',
+        env: process.env,
+        cwd: process.cwd(),
+      });
+      process.exit(result.status ?? 1);
+    }
+
+    // 3. Error — not defined anywhere.
+    console.error(`zbb: no script '${scriptName}' defined.`);
+    const lifecycleKeys = Object.keys(lifecycleMap);
+    const npmKeys = Object.keys(npmScripts);
+    if (lifecycleKeys.length > 0) {
+      console.error(`  zbb.yaml lifecycle: ${lifecycleKeys.join(', ')}`);
+    }
+    if (npmKeys.length > 0) {
+      console.error(`  package.json scripts: ${npmKeys.join(', ')}`);
+    }
+    if (lifecycleKeys.length === 0 && npmKeys.length === 0) {
+      console.error(`  No scripts defined in zbb.yaml or package.json.`);
+    }
+    console.error(`\nFor arbitrary commands with slot+stack env, use: zbb exec <command>`);
+    process.exit(1);
+  }
+
+  // Exec — run an arbitrary command with slot+stack env applied.
+  // Replaces the legacy `zbb run -- <cmd>` form.
+  if (command === 'exec') {
+    const slotName = process.env.ZB_SLOT;
+    if (!slotName) {
+      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+      process.exit(1);
+    }
+    const slot = await SlotManager.load(slotName);
+    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    await prepareSlot(slot, { stack });
+
+    const execArgs = args.slice(1);
+    if (execArgs.length === 0) {
+      console.error('Usage: zbb exec <command> [args...]');
+      process.exit(1);
+    }
+    const { spawnSync } = await import('node:child_process');
+    const result = spawnSync(execArgs[0], execArgs.slice(1), {
       stdio: 'inherit',
       env: process.env,
       cwd: process.cwd(),
@@ -1316,8 +1378,8 @@ Usage:
   zbb env <list|get|set|unset|reset|resolve|refresh|explain|diff>  Environment variables
   zbb secret <create|get|list|update|delete>          Secret management
   zbb logs <list|show|debug|info>                     Log viewer + log level control
-  zbb run <npm-script> [args...]                      Run npm script with slot/stack env
-  zbb run -- <command> [args...]                      Run arbitrary command with slot/stack env
+  zbb run <script> [args...]                          Run a script defined in zbb.yaml lifecycle or package.json, with slot+stack env
+  zbb exec <command> [args...]                        Run an arbitrary command with slot+stack env
   zbb dataloader [args...]                            Run dataloader with slot SQL env
   zbb publish [--dry-run]                             Publish all artifacts (Gradle)
   zbb <gradle-task> [args...]                         Run Gradle task
