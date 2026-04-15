@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "branch": "fix/module-server-entry-connection-management",
-  "timestamp": "2026-04-15T21:30:13.261736898Z",
+  "branch": "fix/server-entry-stateless-connectors",
+  "timestamp": "2026-04-15T22:04:40.247048669Z",
   "packages": {
     "@zerobias-org/util-api-client-base": {
-      "version": "1.0.41",
-      "sourceHash": "7e763554c794d9e404391cd24ff8add66619cf0d5dce910504d484cba135528d",
+      "version": "1.0.42",
+      "sourceHash": "d0691e2204f4c5a000332ede482ac6b642d0f1d71b9b7d092dbb89108049fa17",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -83,8 +83,8 @@
       }
     },
     "@zerobias-org/module-tester": {
-      "version": "1.0.9",
-      "sourceHash": "45cd9bb8e6bfcf41d3a54421d0e1d91dc1ca60506e823c1f6b3c24fb9f64ef53",
+      "version": "1.0.10",
+      "sourceHash": "1a56fcd644825f05db99d7c0bfac76e7671a00a52239dc8d492705da51ed5f66",
       "testHash": "cde5b931c178ea511af07afca046a323dd387db237e7b7eff2eb3bb64a1f1c9c",
       "tasks": {
         "lint": "passed",
@@ -161,8 +161,8 @@
       }
     },
     "@zerobias-org/util-spectral-config": {
-      "version": "1.0.32",
-      "sourceHash": "b9fda29fdcec609bd31ff68e930d85b7ae20667e5eb303ec030311cafa59dbcc",
+      "version": "1.0.33",
+      "sourceHash": "869e491aa87fb3291da43ea1b7c33406c389105b789e14efd3a1cc4855bb2ead",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -201,8 +201,8 @@
       }
     },
     "@zerobias-org/util-collector": {
-      "version": "1.0.37",
-      "sourceHash": "6235b276b100bae1eaa28cf2675f930a50cf46f06e76f6994490b3588a285858",
+      "version": "1.0.38",
+      "sourceHash": "5154ab35041cb5c4f5c12ae1d7b05d3e16e04c8722a5681ccc3270a6b9a7826e",
       "testHash": "538007cc6c8a0c66415559ba2d3c2c8059f58b3476939056f98460ba5ca91647",
       "tasks": {
         "lint": "passed",
@@ -241,8 +241,8 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "2.0.48",
-      "sourceHash": "dc3e1bf6a339c414412c2bb9486486d303bd570669fc1c9511e5829548136257",
+      "version": "2.0.49",
+      "sourceHash": "b432193b4cd3d141deaf58a1e8a04cb3672efb05dbc54c124ed4ed2bc6fe711f",
       "testHash": "ffd2c3654748679b3983df3bcc14c6ac63b37a636dac4fa65ebd6144805353db",
       "tasks": {
         "lint": "skipped",
@@ -317,8 +317,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "2.0.43",
-      "sourceHash": "e49dbc78b39b1a086df08ac8ef12cf9b7f96bb40e7eaa7c14ebb37c016b61300",
+      "version": "2.0.44",
+      "sourceHash": "7e30d4ae6b45ec16f7c433e1fbbceef20b5feadf9a546fa4b275593f3996369f",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
         "lint": "passed",
@@ -361,8 +361,8 @@
       }
     },
     "@zerobias-org/util-connector": {
-      "version": "1.0.37",
-      "sourceHash": "0426dc3bd40fdcaae1a09cf6f954f987a3597b92896c926b9f7773fe3ddb9b2a",
+      "version": "1.0.38",
+      "sourceHash": "5d02e3a3aa403d15a8e17231b0ac0a5c34f836ff56c52082e5645f65554e3518",
       "testHash": "2bb646e7472ba501356498be2c59c152821649ad5150cf4ec3dbfe38df0167d6",
       "tasks": {
         "lint": "passed",
@@ -437,8 +437,8 @@
       }
     },
     "@zerobias-org/logger": {
-      "version": "3.0.6",
-      "sourceHash": "ce0de4b2e7eed6d3654f70c892234cac00f130c35759c12284e090bc2c74bb19",
+      "version": "3.0.7",
+      "sourceHash": "f70e9e5b8eb22a34b88deb06e0636e5fb4bc12b765b5c8171fcb73835fb05cfc",
       "testHash": "b4e1f0819581aef73a80fd63c6e169141acb70170cc4adc6a1e9a377dd13c970",
       "tasks": {
         "lint": "passed",
@@ -477,8 +477,8 @@
       }
     },
     "@zerobias-org/data-utils": {
-      "version": "1.0.31",
-      "sourceHash": "45906e6781540338a260a735c9280ac482d8300380c113058037265efbb1bd02",
+      "version": "1.0.32",
+      "sourceHash": "9714df9656eaa81fa2ddc8211e399a0c738259364e5195e614bb50cf34c5de3e",
       "testHash": "853b146457fdd677eb3ed74a6bc579f44913967f663defd910246a5cbf9be5b0",
       "tasks": {
         "lint": "passed",
@@ -516,8 +516,8 @@
       }
     },
     "@zerobias-org/util-api-invoker-isomorphic": {
-      "version": "1.0.35",
-      "sourceHash": "ea5918d7058c1e14b2089ae970bc48a48f31030b7320bfd093a9cafc74fe01e0",
+      "version": "1.0.36",
+      "sourceHash": "27908f666e0c68de25ff4a1c6301d054b8022a96a90e1b351a46074970baae21",
       "testHash": "d87ecf960dfafe908b8ab2ddade655c07c893d1ec7e162ab30c1509967501fd5",
       "tasks": {
         "lint": "passed",
@@ -556,8 +556,8 @@
       }
     },
     "@zerobias-org/util-api-invoker-api": {
-      "version": "1.0.34",
-      "sourceHash": "17c2ead14b6bece35da23a238ae3e344f745f90774e9aeacffca10e5e4007707",
+      "version": "1.0.35",
+      "sourceHash": "b923043488d3c92b2a14642d72bee302773ae8cc74bd3be3d4680cc464889564",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
