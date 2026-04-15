@@ -321,19 +321,15 @@ async function _main(argv: string[]): Promise<void> {
     const { readFile } = await import('node:fs/promises');
     const { join } = await import('node:path');
 
-    // 1. zbb.yaml lifecycle — canonical place for project-scoped scripts.
-    // Lifecycle entries are typed for known verbs (build/test/gate/etc)
-    // but the field is user-extensible — custom verbs like `buildVm`
-    // live here too. Read through an unknown index to access them.
+    // 1. zbb.yaml `scripts:` — canonical home for user-defined dev scripts.
     const repoRootForRun = findRepoRoot(process.cwd());
     const zbbYaml = repoRootForRun ? await loadRepoConfig(repoRootForRun) : {};
-    const lifecycleMap = (zbbYaml.lifecycle ?? {}) as Record<string, unknown>;
-    const lifecycleEntry = lifecycleMap[scriptName];
-    const lifecycleCmd = typeof lifecycleEntry === 'string' ? lifecycleEntry : null;
-    if (lifecycleCmd) {
+    const zbbScripts = zbbYaml.scripts ?? {};
+    const zbbScriptCmd = zbbScripts[scriptName];
+    if (zbbScriptCmd) {
       const fullCmd = scriptArgs.length > 0
-        ? `${lifecycleCmd} ${scriptArgs.join(' ')}`
-        : lifecycleCmd;
+        ? `${zbbScriptCmd} ${scriptArgs.join(' ')}`
+        : zbbScriptCmd;
       const result = spawnSync('bash', ['-c', fullCmd], {
         stdio: 'inherit',
         env: process.env,
@@ -342,7 +338,7 @@ async function _main(argv: string[]): Promise<void> {
       process.exit(result.status ?? 1);
     }
 
-    // 2. package.json scripts (in cwd — npm respects workspaces).
+    // 2. package.json scripts — fallback for npm-native projects.
     let npmScripts: Record<string, string> = {};
     try {
       const pkg = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf-8'));
@@ -361,15 +357,15 @@ async function _main(argv: string[]): Promise<void> {
 
     // 3. Error — not defined anywhere.
     console.error(`zbb: no script '${scriptName}' defined.`);
-    const lifecycleKeys = Object.keys(lifecycleMap);
+    const zbbKeys = Object.keys(zbbScripts);
     const npmKeys = Object.keys(npmScripts);
-    if (lifecycleKeys.length > 0) {
-      console.error(`  zbb.yaml lifecycle: ${lifecycleKeys.join(', ')}`);
+    if (zbbKeys.length > 0) {
+      console.error(`  zbb.yaml scripts: ${zbbKeys.join(', ')}`);
     }
     if (npmKeys.length > 0) {
       console.error(`  package.json scripts: ${npmKeys.join(', ')}`);
     }
-    if (lifecycleKeys.length === 0 && npmKeys.length === 0) {
+    if (zbbKeys.length === 0 && npmKeys.length === 0) {
       console.error(`  No scripts defined in zbb.yaml or package.json.`);
     }
     console.error(`\nFor arbitrary commands with slot+stack env, use: zbb exec <command>`);
