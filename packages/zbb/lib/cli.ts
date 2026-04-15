@@ -533,6 +533,42 @@ async function _main(argv: string[]): Promise<void> {
     return spawnStandardLifecycleAndExit(repoRoot, command, cmd, parsed);
   }
 
+  // ── Custom lifecycle verb from local zbb.yaml ────────────────────────
+  // The standard lifecycle dispatcher above only handles the 6 canonical
+  // verbs (clean/build/test/gate/publish/dockerBuild). A package can
+  // declare additional verbs in its zbb.yaml lifecycle: block — e.g.
+  // appliance/zbb.yaml has `buildVm`. If cwd's zbb.yaml declares this
+  // command, dispatch it directly: bash the command string with slot +
+  // stack env. No monorepo aggregation, no preflight — just env-wrapped
+  // execution, same as `zbb run`. This is what makes nested packages
+  // with their own zbb.yaml ("substacks") work.
+  if (repoRoot) {
+    const zbbYaml = await loadRepoConfig(repoRoot);
+    const lifecycleMap = (zbbYaml.lifecycle ?? {}) as Record<string, unknown>;
+    const entry = lifecycleMap[command];
+    if (typeof entry === 'string') {
+      if (!process.env.ZB_SLOT) {
+        console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+        process.exit(1);
+      }
+      const slot = await SlotManager.load(process.env.ZB_SLOT);
+      const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+      await prepareSlot(slot, { stack });
+
+      const extraArgs = args.slice(1);
+      const fullCmd = extraArgs.length > 0
+        ? `${entry} ${extraArgs.join(' ')}`
+        : entry;
+      const { spawnSync } = await import('node:child_process');
+      const result = spawnSync('bash', ['-c', fullCmd], {
+        stdio: 'inherit',
+        env: process.env,
+        cwd: repoRoot,
+      });
+      process.exit(result.status ?? 1);
+    }
+  }
+
   // ── Permissive gradle fallback ───────────────────────────────────────
   // No zbb.yaml in cwd, or command isn't a lifecycle command. Just run
   // gradle. This preserves the smart-wrapper behaviour for non-zbb repos
