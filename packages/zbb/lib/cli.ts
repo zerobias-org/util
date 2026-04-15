@@ -133,6 +133,42 @@ async function prepareSlot(
   return repoRoot;
 }
 
+/**
+ * Resolve the stack context for the current invocation.
+ *
+ * Resolution order:
+ *   1. Explicit hint (from --stack flag, or ZB_STACK already in env).
+ *   2. cwd's zbb.yaml manifest — match its `name` against the slot's
+ *      added stacks (same logic as the lifecycle dispatcher).
+ *   3. null — no stack context.
+ *
+ * Returning null is normal for invocations outside any stack (e.g.
+ * `zbb slot list` from a random directory). Callers that require a
+ * stack should error at their call site.
+ *
+ * Shared by --slot flag, `zbb run`, and the Gradle wrapper fallback
+ * so all three dispatch paths load stack env identically to the
+ * lifecycle dispatcher.
+ */
+async function resolveStackForCwd(slot: Slot, hint?: string): Promise<Stack | null> {
+  if (hint) {
+    try {
+      return await slot.stacks.load(hint);
+    } catch {
+      return null;
+    }
+  }
+  const repoRoot = findRepoRoot(process.cwd());
+  if (!repoRoot) return null;
+  const manifest = await loadStackManifest(repoRoot);
+  if (!manifest) return null;
+  const shortName = manifest.name.split('/').pop() ?? manifest.name;
+  const addedStacks = await slot.stacks.list();
+  return addedStacks.find(
+    s => s.name === shortName || s.identity.name === manifest.name,
+  ) ?? null;
+}
+
 export async function main(argv: string[]): Promise<void> {
   try {
     await _main(argv);
@@ -148,8 +184,16 @@ export async function main(argv: string[]): Promise<void> {
 async function _main(argv: string[]): Promise<void> {
   let args = argv.slice(2);
 
-  // Global --slot flag: load slot env before running any command
-  // Usage: zbb --slot local build, zbb --slot local testDocker
+  // Global --stack flag: parsed first so --slot handler can use it.
+  // Usage: zbb --slot local --stack hub start
+  const stackIdx = args.indexOf('--stack');
+  if (stackIdx !== -1 && args[stackIdx + 1]) {
+    process.env.ZB_STACK = args[stackIdx + 1];
+    args = [...args.slice(0, stackIdx), ...args.slice(stackIdx + 2)];
+  }
+
+  // Global --slot flag: load slot + stack env before running any command
+  // Usage: zbb --slot local build, zbb --slot local --stack hub run qemu
   const slotIdx = args.indexOf('--slot');
   if (slotIdx !== -1 && args[slotIdx + 1]) {
     const slotName = args[slotIdx + 1];
@@ -169,15 +213,12 @@ async function _main(argv: string[]): Promise<void> {
       }
     }
 
-    await prepareSlot(slot);
-  }
-
-  // Global --stack flag: set stack context for non-interactive use
-  // Usage: zbb --slot local --stack hub start
-  const stackIdx = args.indexOf('--stack');
-  if (stackIdx !== -1 && args[stackIdx + 1]) {
-    process.env.ZB_STACK = args[stackIdx + 1];
-    args = [...args.slice(0, stackIdx), ...args.slice(stackIdx + 2)];
+    // Resolve stack from ZB_STACK (set above by --stack) or cwd manifest,
+    // then apply slot + stack env in one prepareSlot call. Without this,
+    // downstream dispatch paths (run, Gradle wrapper fallback) only see
+    // slot env — no ports, no imported vars from dep stacks.
+    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    await prepareSlot(slot, { stack });
   }
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
@@ -247,7 +288,11 @@ async function _main(argv: string[]): Promise<void> {
       process.exit(1);
     }
     const slot = await SlotManager.load(slotName);
-    await prepareSlot(slot);
+    // Resolve stack context so scripts see the full composed env (ports,
+    // imports from dep stacks). Without this, `zbb run` degrades to plain
+    // bash with only ZB_SLOT/ZB_SLOT_DIR — defeats the whole point.
+    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    await prepareSlot(slot, { stack });
 
     const runArgs = args.slice(1);
     if (runArgs.length === 0) {
@@ -421,10 +466,13 @@ async function _main(argv: string[]): Promise<void> {
   // ── Permissive gradle fallback ───────────────────────────────────────
   // No zbb.yaml in cwd, or command isn't a lifecycle command. Just run
   // gradle. This preserves the smart-wrapper behaviour for non-zbb repos
-  // (resolves subproject from cwd, prefixes task names).
+  // (resolves subproject from cwd, prefixes task names). Gradle IS the
+  // task DAG — custom verbs like `buildVm` wire up their own dependsOn
+  // chains. zbb's job here is just to load the env Gradle will inherit.
   if (process.env.ZB_SLOT) {
     const slot = await SlotManager.load(process.env.ZB_SLOT);
-    await prepareSlot(slot);
+    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    await prepareSlot(slot, { stack });
   }
   runGradle(args);
 }
