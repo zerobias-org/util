@@ -192,11 +192,11 @@ async function main() {
       return;
     }
     try {
-      // Cast: the codegen-generated module base class declares isSupported()
-      // with zero args, but the Connector<P,S> interface it implements
-      // declares isSupported(operationId: string). The runtime accepts the
-      // operationId; this cast threads it through until the codegen base
-      // class signature is fixed.
+      // Cast: until @zerobias-org/util-codegen republishes with the updated
+      // api-all.mustache (now declaring `isSupported(_operationId: string)`),
+      // every connector's regenerated base class still declares isSupported()
+      // with zero args. Drop this cast in a follow-up once codegen is released
+      // and modules have regenerated against the new template.
       const status = await (impl as any).isSupported(req.params.operationId);
       res.send(status);
     } catch (e: any) {
