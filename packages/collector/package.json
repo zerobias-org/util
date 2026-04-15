@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-collector",
-  "version": "1.0.37",
+  "version": "1.0.38",
   "description": "Common utilities for collector bots - HTTP fetching, data chunking, CSV/YAML parsing",
   "type": "module",
   "main": "dist/src/index.js",
@@ -44,9 +44,9 @@
   },
   "dependencies": {
     "@zerobias-com/platform-sdk": "^1.1.5",
-    "@zerobias-org/logger": "^3.0.6",
+    "@zerobias-org/logger": "^3.0.7",
     "@zerobias-org/types-core-js": "^1.2.17",
-    "@zerobias-org/util-connector": "^1.0.37",
+    "@zerobias-org/util-connector": "^1.0.38",
     "axios": "^1.13.5",
     "csv-parse": "^6.0.0",
     "yaml": "2.8.3"
