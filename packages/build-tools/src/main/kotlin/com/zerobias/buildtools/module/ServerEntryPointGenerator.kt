@@ -135,7 +135,7 @@ async function main() {
     const impl = new ${pascal}Impl();
     connections[id] = impl;
     try {
-      const state = await (impl as any).connect(connectionProfile, oauthDetails);
+      const state = await impl.connect(connectionProfile, oauthDetails);
       res.send(state);
     } catch (e: any) {
       delete connections[id];
@@ -158,13 +158,13 @@ async function main() {
       res.status(404).send({ error: 'No active connection' });
       return;
     }
-    if (typeof (impl as any).refresh !== 'function') {
+    if (!impl.refresh) {
       res.status(501).send({ error: 'refresh not implemented' });
       return;
     }
     try {
       const { connectionProfile, connectionState, oauthDetails } = req.body;
-      const state = await (impl as any).refresh(connectionProfile, connectionState, oauthDetails);
+      const state = await impl.refresh(connectionProfile, connectionState, oauthDetails);
       res.send(state);
     } catch (e: any) {
       sendError(res, e);
@@ -177,12 +177,8 @@ async function main() {
       res.status(404).send({ error: 'No active connection' });
       return;
     }
-    if (typeof (impl as any).metadata !== 'function') {
-      res.status(501).send({ error: 'metadata not implemented' });
-      return;
-    }
     try {
-      const md = await (impl as any).metadata();
+      const md = await impl.metadata();
       res.send(md);
     } catch (e: any) {
       sendError(res, e);
@@ -195,13 +191,12 @@ async function main() {
       res.status(404).send({ error: 'No active connection' });
       return;
     }
-    if (typeof (impl as any).isSupported !== 'function') {
-      // OperationSupportStatus enum serializes to a bare string via EnumValue.toJSON();
-      // 'maybe' is the documented "let the platform decide" default.
-      res.json('maybe');
-      return;
-    }
     try {
+      // Cast: the codegen-generated module base class declares isSupported()
+      // with zero args, but the Connector<P,S> interface it implements
+      // declares isSupported(operationId: string). The runtime accepts the
+      // operationId; this cast threads it through until the codegen base
+      // class signature is fixed.
       const status = await (impl as any).isSupported(req.params.operationId);
       res.send(status);
     } catch (e: any) {
