@@ -33,8 +33,7 @@
     "test": "npm run generate:test"
   },
   "files": [
-    "bin/",
-    "bom.json"
+    "bin/"
   ],
   "keywords": [
     "hub",

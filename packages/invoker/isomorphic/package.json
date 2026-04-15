@@ -32,8 +32,7 @@
     "registry": "https://npm.pkg.github.com/"
   },
   "files": [
-    "dist",
-    "bom.json"
+    "dist"
   ],
   "dependencies": {
     "@zerobias-org/types-core-js": "^1.2.17",
