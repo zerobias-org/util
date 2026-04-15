@@ -303,6 +303,42 @@ val restorePackageJson by tasks.registering {
     }
 }
 
+// Stage an npm-shrinkwrap.json alongside package-lock.json so the npm pack
+// tarball contains a lockfile. Background: runHubClient (hub-client's CLI)
+// runs `npm ci --omit=dev --ignore-scripts` against the downloaded tarball
+// and requires a lockfile inside. npm's `pack` hard-excludes
+// package-lock.json but auto-includes npm-shrinkwrap.json (that's its
+// dedicated purpose). The two file formats are identical, so a plain copy
+// is enough — no need for `npm shrinkwrap` which would destructively
+// rename the lock file.
+//
+// Mirrors the pattern used by zerobias-org/collectorbot's scripts/publish.sh.
+val stageShrinkwrapForPublish by tasks.registering {
+    group = "publish"
+    description = "Copy package-lock.json to npm-shrinkwrap.json so the publish tarball contains a lockfile"
+    doLast {
+        val lock = project.file("package-lock.json")
+        val shrink = project.file("npm-shrinkwrap.json")
+        if (lock.exists()) {
+            lock.copyTo(shrink, overwrite = true)
+            logger.lifecycle("Staged npm-shrinkwrap.json from package-lock.json for publish")
+        } else {
+            logger.warn("No package-lock.json found — tarball will not contain a lockfile")
+        }
+    }
+}
+
+val cleanupShrinkwrapAfterPublish by tasks.registering {
+    group = "publish"
+    description = "Remove ephemeral npm-shrinkwrap.json after publish (idempotent)"
+    doLast {
+        val shrink = project.file("npm-shrinkwrap.json")
+        if (shrink.exists() && shrink.delete()) {
+            logger.lifecycle("Removed ephemeral npm-shrinkwrap.json")
+        }
+    }
+}
+
 fun readPackageNameVersion(): Pair<String, String> {
     val pkgJson = project.file("package.json")
     require(pkgJson.exists()) { "package.json not found in ${project.projectDir}" }
@@ -330,8 +366,8 @@ fun isAlreadyPublished(name: String, version: String, workDir: java.io.File): Bo
 val publishNpmExec by tasks.registering(NpmTask::class) {
     group = "publish"
     description = "Publish npm package to registry with --tag next (staging)"
-    dependsOn(tasks.named("gate"), patchPackageJson, preflightChecks)
-    finalizedBy(restorePackageJson)
+    dependsOn(tasks.named("gate"), patchPackageJson, stageShrinkwrapForPublish, preflightChecks)
+    finalizedBy(restorePackageJson, cleanupShrinkwrapAfterPublish)
 
     npmCommand.set(listOf("publish"))
     args.set(listOf("--tag", "next"))
