@@ -111,7 +111,7 @@ export abstract class {{apiName}}InvokerBase implements {{apiName}}{{#isConnecto
 
   abstract metadata(): Promise<ConnectionMetadata>;
 
-  async isSupported(): Promise<OperationSupportStatusDef> {
+  async isSupported(_operationId: string): Promise<OperationSupportStatusDef> {
     return OperationSupportStatus.Maybe;
   }{{#hasState}}
 
