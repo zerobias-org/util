@@ -6,7 +6,7 @@
 
 import { existsSync, readFileSync, writeFileSync, statSync, mkdirSync } from 'node:fs';
 import { join, resolve, relative, sep } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { platform } from 'node:os';
 
 // ── Environment Setup ────────────────────────────────────────────────
@@ -200,15 +200,59 @@ export function runGradle(args: string[]): void {
   const projectPath = detectProject(root, projects);
   const gradleArgs = projectPath ? prefixArgs(args, projectPath) : args;
 
-  try {
-    execFileSync(wrapper, gradleArgs, {
-      cwd: root,
-      stdio: 'inherit',
-      env: prepareGradleEnv(),
-      timeout: 600_000,
-    });
-    process.exit(0);
-  } catch (err: any) {
-    process.exit(err.status ?? 1);
-  }
+  // Spawn gradle in its OWN process group (detached: true) so that we
+  // can forward Ctrl+C to the whole tree — gradlew → java daemon → npm
+  // child processes → etc. Without this, execFileSync blocks the event
+  // loop (no chance to install a SIGINT handler), and pressing Ctrl+C
+  // leaves orphaned npm / java children running in the background.
+  //
+  // On Ctrl+C we:
+  //   1. kill(-child.pid, SIGINT)  — sends SIGINT to the whole group
+  //   2. run `./gradlew --stop` — kills any still-alive gradle daemon
+  //      that ducked out of the process group (the daemon intentionally
+  //      detaches itself on startup for reuse across invocations).
+  const child = spawn(wrapper, gradleArgs, {
+    cwd: root,
+    stdio: 'inherit',
+    env: prepareGradleEnv(),
+    detached: true,
+  });
+
+  let signalForwarded = false;
+  const forwardSignal = (sig: NodeJS.Signals) => {
+    if (signalForwarded) {
+      // User hit Ctrl+C twice — hard-kill the group and exit now.
+      try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch {}
+      process.exit(130);
+    }
+    signalForwarded = true;
+    try {
+      if (child.pid) process.kill(-child.pid, sig);
+    } catch {}
+    // Best-effort: ask the gradle daemon to stop so orphaned java
+    // daemons don't keep building after gradlew exits. Run async,
+    // don't block the signal handler.
+    try {
+      spawn(wrapper, ['--stop'], {
+        cwd: root,
+        stdio: 'ignore',
+        env: prepareGradleEnv(),
+        detached: true,
+      }).unref();
+    } catch {}
+  };
+  process.on('SIGINT', () => forwardSignal('SIGINT'));
+  process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+
+  child.on('exit', (code, signal) => {
+    if (signal) {
+      // Node exit codes for signals: 128 + signal number.
+      process.exit(128 + (signal === 'SIGINT' ? 2 : signal === 'SIGTERM' ? 15 : 1));
+    }
+    process.exit(code ?? 1);
+  });
+  child.on('error', (err) => {
+    process.stderr.write(`zbb: failed to launch gradle: ${err.message}\n`);
+    process.exit(1);
+  });
 }

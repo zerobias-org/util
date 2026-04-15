@@ -1,6 +1,7 @@
 package com.zerobias.buildtools.lifecycle
 
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 import org.gradle.tooling.Failure
@@ -45,6 +46,31 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
 
     interface Params : BuildServiceParameters {
         val eventFilePath: Property<String>
+        /**
+         * Extra task names that should render as their own display row even
+         * though the baked-in displayNameFor map would otherwise hide them.
+         * Used by monorepo mode to surface the `test` / `build` / `lint`
+         * phase tasks (from zbb.yaml's `testPhases` / `buildPhases`) as real
+         * rows — in standard mode those same names are lifecycle aliases
+         * with *Exec sub-tasks and must stay hidden, so we can't just bake
+         * them into displayNameFor unconditionally.
+         *
+         * Each name in this set maps to itself as its own display name.
+         */
+        val extraDisplayTaskNames: SetProperty<String>
+        /**
+         * When true, emitStart does NOT run its transition-close path —
+         * the listener's root-aggregator `onFinish` is the only way phases
+         * get closed. Set by monorepo mode, where root aggregator tasks
+         * (monorepoBuild, monorepoTest, …) exist and can run in parallel
+         * off monorepoGate. Without this flag, the first task_start of a
+         * later phase (e.g. `:events:dockerBuild` → monorepoDockerBuild)
+         * prematurely closes any still-running earlier phase (e.g.
+         * monorepoTest with `:node-lib:test` still executing), because
+         * the transition-close loop assumes gradle's DAG enforces
+         * sequential phases — which is only true in standard mode.
+         */
+        val disableTransitionClose: Property<Boolean>
     }
 
     private val writer: PrintWriter? by lazy {
@@ -187,7 +213,26 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
      *     jar, classes, …) and lifecycle aliases (test, writeGateStamp)
      *     return null and are hidden.
      */
-    private fun displayNameFor(taskName: String): String? = when (taskName) {
+    /** Cached so we don't re-read the Provider on every displayNameFor call. */
+    private val extraDisplayTaskNames: Set<String> by lazy {
+        parameters.extraDisplayTaskNames.orNull ?: emptySet()
+    }
+
+    /** Cached — see Params.disableTransitionClose for why. */
+    private val disableTransitionClose: Boolean by lazy {
+        parameters.disableTransitionClose.orNull ?: false
+    }
+
+    private fun displayNameFor(taskName: String): String? {
+        // Monorepo mode registers phases like `test` / `build` / `compile`
+        // as real tasks; pass those through as their own display names so
+        // they show up as rows. Standard mode leaves this set empty so
+        // its lifecycle aliases stay hidden.
+        if (taskName in extraDisplayTaskNames) return taskName
+        return displayNameForBaked(taskName)
+    }
+
+    private fun displayNameForBaked(taskName: String): String? = when (taskName) {
         // Validation
         "validate", "validateSpec", "validateConnector" -> "validate"
 
@@ -271,23 +316,36 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
         subprojectTaskToPhase(taskName)?.let { phase ->
             if (phasesStarted.add(phase)) {
                 // Transition close: any OTHER phase that's already started
-                // but not yet ended must be closing right now (gradle's
-                // DAG enforces that dependents only start after their deps
-                // complete). Emit phase_done for the prior phase(s) so
-                // standard mode — which has no root aggregator tasks to
-                // drive the listener-based phase_done path — still gets
-                // proper phase-transition boundaries in the display.
-                // Idempotent against the monorepo listener path via
-                // phasesEnded dedup.
-                for (prior in phasesStarted) {
-                    if (prior == phase || prior in phasesEnded) continue
-                    val priorStartedAt = startTimes.remove("__phase:$prior")
-                    val priorDuration = if (priorStartedAt != null) {
-                        now - priorStartedAt
-                    } else {
-                        0L
+                // but not yet ended must be closing right now (standard
+                // mode's DAG enforces that dependents only start after
+                // their deps complete). Emit phase_done for the prior
+                // phase(s) so standard mode — which has no root aggregator
+                // tasks to drive the listener-based phase_done path —
+                // still gets proper phase-transition boundaries in the
+                // display. Idempotent against the monorepo listener path
+                // via phasesEnded dedup.
+                //
+                // Monorepo mode disables this path because its root
+                // aggregators (monorepoTest, monorepoDockerBuild, …) can
+                // run in PARALLEL off monorepoGate — the DAG-ordering
+                // assumption above doesn't hold there. Without this gate,
+                // the first dockerBuild task_start would prematurely close
+                // monorepoTest while per-project test tasks are still
+                // running, and the display shows `Test ✓` with test rows
+                // spinning beneath it. The root aggregator onFinish path
+                // in the listener is the authoritative phase_done source
+                // in monorepo mode.
+                if (!disableTransitionClose) {
+                    for (prior in phasesStarted) {
+                        if (prior == phase || prior in phasesEnded) continue
+                        val priorStartedAt = startTimes.remove("__phase:$prior")
+                        val priorDuration = if (priorStartedAt != null) {
+                            now - priorStartedAt
+                        } else {
+                            0L
+                        }
+                        emitPhaseDoneInternal(prior, "passed", priorDuration, null)
                     }
-                    emitPhaseDoneInternal(prior, "passed", priorDuration, null)
                 }
                 synchronized(w) {
                     startTimes["__phase:$phase"] = now

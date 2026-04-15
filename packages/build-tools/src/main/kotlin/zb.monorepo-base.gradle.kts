@@ -61,15 +61,55 @@ val eventEmitter = gradle.sharedServices.registerIfAbsent(
     EventEmitter::class.java
 ) {
     parameters.eventFilePath.set(eventFile)
-    // monorepoProjectPaths and phaseTaskNames are set in projectsEvaluated
-    // once we know the workspace graph
+    // Surface the monorepo phase names (from zbb.yaml's `buildPhases` /
+    // `testPhases`) as first-class display rows. Without this, a bare
+    // `test` / `build` task — which monorepo mode registers as the real
+    // Exec running `npm run test` — falls through displayNameFor and
+    // produces ZERO rows in the TTY display, so users only see the raw
+    // Gradle exception message ("Process 'command 'npm'' finished with
+    // non-zero exit value N") on failure instead of per-package status
+    // and a log tail. Provider-based so graphService is resolved lazily
+    // (after projectsEvaluated parses zbb.yaml).
+    parameters.extraDisplayTaskNames.set(
+        graphService.map { svc ->
+            (svc.config.buildPhases + svc.config.testPhases).toSet()
+        }
+    )
+    // Monorepo mode has root aggregator tasks (monorepoBuild, monorepoTest,
+    // …) whose onFinish listener event closes each phase authoritatively.
+    // Disable the transition-close path in emitStart — that path is a
+    // standard-mode-only fallback and assumes sequential-phase DAG edges
+    // which don't hold here (monorepoGate depends on monorepoTest AND
+    // monorepoDockerBuild in parallel, so a dockerBuild task_start used
+    // to prematurely close monorepoTest while per-project tests were
+    // still running).
+    parameters.disableTransitionClose.set(true)
 }
 
 extensions.extraProperties["monorepoEventEmitter"] = eventEmitter
 
-// Subscribe the emitter to task FINISH events via the modern BuildEventsListenerRegistry
-val buildEventsListenerRegistry = project.serviceOf<BuildEventsListenerRegistry>()
-buildEventsListenerRegistry.onTaskCompletion(eventEmitter)
+// Subscribe the emitter to task FINISH events via the modern BuildEventsListenerRegistry.
+//
+// Guarded by a root-project extra property so we don't double-subscribe
+// when BOTH this plugin AND zb.base (which is transitively applied by
+// zb.typescript on every subproject) try to register. Without the guard,
+// every task_done / phase_done gets fired twice — once per subscription —
+// and the dedup in EventEmitter's state maps is defeated because the two
+// listener callbacks race on the `add()` call. Observed symptoms were
+// corrupted events.jsonl lines, double `phase_done monorepoBuild`
+// (one failed + one passed from the same root task finish), and a
+// `:store-api:generate` that emitted both `failed` and `passed`
+// `task_done` events. zb.base uses the SAME key name, so whichever
+// plugin runs first wins and the other is a no-op.
+run {
+    val listenerRegisteredKey = "zbbMonorepoEventListenerRegistered"
+    val rootExtra = rootProject.extensions.extraProperties
+    if (!rootExtra.has(listenerRegisteredKey)) {
+        val buildEventsListenerRegistry = project.serviceOf<BuildEventsListenerRegistry>()
+        buildEventsListenerRegistry.onTaskCompletion(eventEmitter)
+        rootExtra.set(listenerRegisteredKey, true)
+    }
+}
 
 gradle.projectsEvaluated {
     val service = graphService.get()
