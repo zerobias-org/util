@@ -128,14 +128,26 @@ async function main() {
     }
   };
 
-  // Connection management
+  // Connection management.
+  //
+  // Note on the `as any` casts below: connector module impls vary in shape
+  // depending on whether the OpenAPI spec declares connectionState (OAuth /
+  // token-bearing modules like msgraph) or not (stateless modules like
+  // amazon/aws/iam). The codegen base class only emits `oauthDetails` and
+  // `refresh?` for stateful connectors — see api-all.mustache:103-122. The
+  // server-entry routes are uniform across both shapes, so we cast at the
+  // specific call sites where the impl signatures differ. Runtime guards
+  // (typeof / property checks) handle the polymorphism correctly.
   app.post('/connections', async (req: express.Request, res: express.Response) => {
     const { connectionId, connectionProfile, oauthDetails } = req.body;
     const id = connectionId || 'default';
     const impl = new ${pascal}Impl();
     connections[id] = impl;
     try {
-      const state = await impl.connect(connectionProfile, oauthDetails);
+      // Stateless connectors declare connect(profile) — the extra oauthDetails
+      // arg is harmless at runtime (ignored) but a type error against the
+      // narrower base-class signature.
+      const state = await (impl as any).connect(connectionProfile, oauthDetails);
       res.send(state);
     } catch (e: any) {
       delete connections[id];
@@ -158,13 +170,18 @@ async function main() {
       res.status(404).send({ error: 'No active connection' });
       return;
     }
-    if (!impl.refresh) {
+    // Stateless connectors don't declare `refresh` at all (the base class
+    // omits the property entirely when hasState=false). The cast lets us
+    // probe for it at runtime; the typeof guard short-circuits to 501 when
+    // it's absent.
+    const refreshable = impl as any;
+    if (typeof refreshable.refresh !== 'function') {
       res.status(501).send({ error: 'refresh not implemented' });
       return;
     }
     try {
       const { connectionProfile, connectionState, oauthDetails } = req.body;
-      const state = await impl.refresh(connectionProfile, connectionState, oauthDetails);
+      const state = await refreshable.refresh(connectionProfile, connectionState, oauthDetails);
       res.send(state);
     } catch (e: any) {
       sendError(res, e);
