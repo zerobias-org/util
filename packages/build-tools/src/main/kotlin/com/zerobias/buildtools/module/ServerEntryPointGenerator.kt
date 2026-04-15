@@ -199,8 +199,9 @@ async function main() {
     }
   });
 
-  // Mount REST API routes from generated server controllers (OpenAPI paths)
-  await install(factory, app, 'full.yml', '');
+  // Spec path is 'generated/full.yml' (not 'full.yml'): the bundled spec lands
+  // under generated/ and the Docker image copies that dir into /opt/module/.
+  await install(factory, app, 'generated/full.yml', '');
   const port = process.env.PORT || 8888;
   app.listen(port, () => logger.info('REST server listening on port ' + port));
 }
