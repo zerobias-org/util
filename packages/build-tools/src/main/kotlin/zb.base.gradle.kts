@@ -1356,21 +1356,104 @@ val publishReleaseEvent by tasks.registering {
 // Push version commit and tags to remote
 val pushVersion by tasks.registering {
     group = "publish"
-    description = "Push version commit and tags to remote"
+    description = "Push version commit and tags to remote (retries with rebase on fast-forward rejection)"
     mustRunAfter(tagVersion)
     onlyIf { !isDryRun && promoteAllSucceeded }
     doLast {
-        try {
-            com.zerobias.buildtools.util.ExecUtils.exec(
-                command = listOf("git", "push", "--follow-tags"),
-                workingDir = project.rootDir,
-                throwOnError = true
-            )
-            logger.lifecycle("Pushed version commit and tags to remote")
-        } catch (e: Exception) {
-            logger.warn("Failed to push: ${e.message}")
-            // Non-fatal — don't fail the publish for a push issue
+        // Concurrent publish jobs from sibling modules can race on the same main
+        // branch — when two jobs build in parallel and both produce a release
+        // commit, whichever pushes first wins and the loser hits a fast-forward
+        // rejection. Retry by rebasing our local commit on top of whatever
+        // landed and pushing again. The release commit only touches this
+        // module's package.json + gate-stamp.json (+ optional CHANGELOG), so
+        // rebase conflicts against another module's release commit are
+        // structurally impossible — different files entirely.
+        //
+        // Tag handling: tagVersion creates an annotated tag at HEAD before this
+        // task runs. A rebase rewrites HEAD to a new SHA, orphaning the tag
+        // (it still points at the pre-rebase commit, which is no longer an
+        // ancestor of HEAD). `git push --follow-tags` only pushes tags reachable
+        // from the pushed commits, so the orphaned tag would silently fail to
+        // upload. After each rebase we force-move the tag to the new HEAD so
+        // it stays reachable.
+        //
+        // Failing loudly on final exhaustion is intentional. Previous behavior
+        // swallowed the push error as "non-fatal", which left main's bookkeeping
+        // silently out of sync with the npm registry whenever the race fired.
+        // A loud failure here forces a human to reconcile (npm has the artifact;
+        // git just needs to catch up).
+
+        // Compute tag identity the same way tagVersion does, so we can re-point
+        // it after a rebase if needed.
+        val ver = readBaseVersion()
+        val tag = "${tagPrefix}${ver}"
+        val tagMessage = "Release ${zb.vendor.get()}-${zb.product.get()} v${ver}"
+
+        val maxAttempts = 5
+        var lastError: Exception? = null
+        for (attempt in 1..maxAttempts) {
+            try {
+                com.zerobias.buildtools.util.ExecUtils.exec(
+                    command = listOf("git", "push", "--follow-tags"),
+                    workingDir = project.rootDir,
+                    throwOnError = true
+                )
+                logger.lifecycle("Pushed version commit and tags to remote (attempt $attempt)")
+                return@doLast
+            } catch (e: Exception) {
+                lastError = e
+                logger.warn("Push attempt $attempt/$maxAttempts failed: ${e.message}")
+                if (attempt == maxAttempts) break
+
+                // Rebase our local commit onto the current remote main. If the
+                // rebase itself conflicts (extraordinarily rare for a release
+                // commit), abort cleanly and bail — pushing in a half-rebased
+                // state would corrupt main.
+                try {
+                    com.zerobias.buildtools.util.ExecUtils.exec(
+                        command = listOf("git", "pull", "--rebase", "origin", "main"),
+                        workingDir = project.rootDir,
+                        throwOnError = true
+                    )
+                    logger.lifecycle("Rebased onto remote main; retrying push")
+                } catch (rebaseErr: Exception) {
+                    com.zerobias.buildtools.util.ExecUtils.exec(
+                        command = listOf("git", "rebase", "--abort"),
+                        workingDir = project.rootDir,
+                        throwOnError = false
+                    )
+                    throw GradleException(
+                        "pushVersion: rebase failed after push rejection — manual reconciliation required (npm artifact already published, git state diverged): ${rebaseErr.message}",
+                        rebaseErr
+                    )
+                }
+
+                // The rebase moved HEAD to a new SHA, orphaning any tag that
+                // tagVersion created earlier. Force-move the tag back onto HEAD
+                // so `git push --follow-tags` sees it as reachable.
+                try {
+                    com.zerobias.buildtools.util.ExecUtils.exec(
+                        command = listOf("git", "tag", "-f", "-a", tag, "-m", tagMessage),
+                        workingDir = project.rootDir,
+                        throwOnError = true
+                    )
+                    logger.lifecycle("Re-pointed tag $tag to rebased HEAD")
+                } catch (tagErr: Exception) {
+                    // Non-fatal: the commit will still push on the next retry,
+                    // but the tag won't. Log and continue — a missing tag is
+                    // less bad than a missing commit.
+                    logger.warn("Failed to re-point tag $tag after rebase: ${tagErr.message}")
+                }
+
+                // Brief jittered backoff to thin out a thundering herd if many
+                // sibling jobs are racing the same remote.
+                Thread.sleep(500L * attempt + (Math.random() * 250).toLong())
+            }
         }
+        throw GradleException(
+            "pushVersion: failed after $maxAttempts attempts (npm artifact already published, git state diverged — manual reconciliation required): ${lastError?.message}",
+            lastError
+        )
     }
 }
 
