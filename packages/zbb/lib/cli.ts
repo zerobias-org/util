@@ -158,15 +158,27 @@ async function resolveStackForCwd(slot: Slot, hint?: string): Promise<Stack | nu
       return null;
     }
   }
-  const repoRoot = findRepoRoot(process.cwd());
-  if (!repoRoot) return null;
-  const manifest = await loadStackManifest(repoRoot);
-  if (!manifest) return null;
-  const shortName = manifest.name.split('/').pop() ?? manifest.name;
+  // Walk up from cwd looking for the nearest zbb.yaml whose name matches
+  // an added stack. Nested packages (e.g. appliance/zbb.yaml inside
+  // com/hub/zbb.yaml) can declare their own identity without being
+  // standalone stacks in the slot — in that case the parent's stack is
+  // the right scope. Mirrors the bash cd hook's walk-up logic.
   const addedStacks = await slot.stacks.list();
-  return addedStacks.find(
-    s => s.name === shortName || s.identity.name === manifest.name,
-  ) ?? null;
+  const { resolve: resolvePath, dirname } = await import('node:path');
+  let dir = process.cwd();
+  while (true) {
+    const manifest = await loadStackManifest(dir);
+    if (manifest) {
+      const shortName = manifest.name.split('/').pop() ?? manifest.name;
+      const match = addedStacks.find(
+        s => s.name === shortName || s.identity.name === manifest.name,
+      );
+      if (match) return match;
+    }
+    const parent = resolvePath(dir, '..');
+    if (parent === dir) return null;
+    dir = parent;
+  }
 }
 
 export async function main(argv: string[]): Promise<void> {
