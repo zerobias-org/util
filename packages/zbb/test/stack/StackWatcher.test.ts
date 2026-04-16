@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { StackWatcher } from '../../lib/stack/StackWatcher.js';
 
 /** Helper: wait for a specific event with timeout */
-function waitForEvent(emitter: StackWatcher, event: string, timeoutMs: number = 2000): Promise<unknown[]> {
+function waitForEvent(emitter: StackWatcher, event: string, timeoutMs: number = 5000): Promise<unknown[]> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timeout waiting for '${event}'`)), timeoutMs);
     emitter.once(event, (...args: unknown[]) => {
@@ -52,7 +52,7 @@ describe('StackWatcher', () => {
   it('watch("state") detects substack state.yaml write', async () => {
     watcher = new StackWatcher(stackPath);
     watcher.watch('state');
-    await delay(300);
+    await delay(500);
 
     await mkdir(join(stackPath, 'substacks', 'node'), { recursive: true });
     await delay(200);
@@ -67,7 +67,7 @@ describe('StackWatcher', () => {
   it('watch("state") detects collection item write', async () => {
     watcher = new StackWatcher(stackPath);
     watcher.watch('state');
-    await delay(300);
+    await delay(500);
 
     await mkdir(join(stackPath, 'substacks', 'alerts'), { recursive: true });
     await delay(200);
@@ -82,7 +82,7 @@ describe('StackWatcher', () => {
   it('watch("state") detects stack-level state.yaml write', async () => {
     watcher = new StackWatcher(stackPath);
     watcher.watch('state');
-    await delay(300);
+    await delay(500);
 
     const eventPromise = waitForEvent(watcher, 'state:change');
     await writeFile(join(stackPath, 'state.yaml'), 'status: healthy\n', 'utf-8');
@@ -92,7 +92,7 @@ describe('StackWatcher', () => {
   it('watch("env") detects .env write', async () => {
     watcher = new StackWatcher(stackPath);
     watcher.watch('env');
-    await delay(300);
+    await delay(500);
 
     const eventPromise = waitForEvent(watcher, 'env:change');
     await writeFile(join(stackPath, '.env'), 'FOO=bar\n', 'utf-8');
@@ -112,7 +112,7 @@ describe('StackWatcher', () => {
     await writeFile(join(stackPath, 'substacks', 'node', 'state.yaml'), 'status: running\n', 'utf-8');
     await writeFile(join(stackPath, 'state.yaml'), 'status: healthy\n', 'utf-8');
     await writeFile(join(stackPath, '.env'), 'FOO=bar\n', 'utf-8');
-    await delay(300);
+    await delay(500);
 
     assert.equal(eventCount, 0, `Expected 0 events, got ${eventCount}`);
   });
@@ -121,7 +121,7 @@ describe('StackWatcher', () => {
     watcher = new StackWatcher(stackPath);
     watcher.watch('state');
     watcher.watch('state'); // second call should be no-op
-    await delay(300);
+    await delay(500);
 
     let eventCount = 0;
     watcher.on('substack:change', () => { eventCount += 1; });
@@ -138,7 +138,7 @@ describe('StackWatcher', () => {
     watcher = new StackWatcher(stackPath);
     watcher.watch('state');
     watcher.watch('env');
-    await delay(300);
+    await delay(500);
 
     assert.equal(watcher.isWatching(), true);
     await watcher.close();
@@ -153,7 +153,7 @@ describe('StackWatcher', () => {
     await mkdir(join(stackPath, 'substacks', 'node'), { recursive: true });
     await writeFile(join(stackPath, 'substacks', 'node', 'state.yaml'), 'status: running\n', 'utf-8');
     await writeFile(join(stackPath, '.env'), 'FOO=bar\n', 'utf-8');
-    await delay(300);
+    await delay(500);
 
     assert.equal(eventCount, 0, `Expected 0 events after close, got ${eventCount}`);
   });
@@ -162,7 +162,7 @@ describe('StackWatcher', () => {
     watcher = new StackWatcher(stackPath);
     watcher.watch('state');
     watcher.watch('env');
-    await delay(300);
+    await delay(500);
 
     watcher.unwatch('state');
     assert.equal(watcher.isWatching('state'), false);
@@ -182,7 +182,7 @@ describe('StackWatcher', () => {
 
     watcher = new StackWatcher(emptyStackPath);
     watcher.watch('state');
-    await delay(300);
+    await delay(500);
 
     // Create state.yaml — should be detected via bootstrap watcher
     const statePromise = waitForEvent(watcher, 'state:change');

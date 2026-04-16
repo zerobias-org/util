@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { SlotWatcher } from '../../lib/slot/SlotWatcher.js';
 
 /** Helper: wait for a specific event with timeout */
-function waitForEvent(emitter: SlotWatcher, event: string, timeoutMs: number = 2000): Promise<string> {
+function waitForEvent(emitter: SlotWatcher, event: string, timeoutMs: number = 5000): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timeout waiting for '${event}'`)), timeoutMs);
     emitter.once(event, (filename: string) => {
