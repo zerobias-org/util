@@ -103,25 +103,29 @@ tasks.register("stackUp") {
 
 tasks.register("stackDown") {
     group = "stack"
-    description = "Stop ${extension.serviceName}"
+    description = "Stop all services in the ${extension.serviceName} stack"
 
     doFirst {
         val composeFile = extension.composeFile
             ?: throw GradleException("composeFile not configured in zbStack extension")
 
-        println("Stopping ${extension.serviceName}: $composeProject")
+        // Stop the WHOLE compose project — no service arg. `zbb stop` is a
+        // stack-level operation; targeting a single service leaves siblings
+        // (coredns, sidecars, etc.) running. Consumers that need per-service
+        // stop can override this task locally.
+        println("Stopping stack: $composeProject (${extension.serviceName})")
         ExecUtils.execIgnoreErrors(
             command = listOf(
                 "docker", "compose",
                 "-f", composeFile.absolutePath,
                 "-p", composeProject,
                 "--env-file", envFilePath,
-                "stop", extension.serviceName
+                "stop"
             ),
             workingDir = composeFile.parentFile
         )
 
-        println("✓ ${extension.serviceName} stopped")
+        println("✓ Stack stopped: $composeProject")
     }
 }
 
