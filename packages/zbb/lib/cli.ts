@@ -1035,7 +1035,7 @@ async function handleEnv(args: string[]): Promise<void> {
         process.exit(1);
       }
       console.log('Resolving external sources (DNS + vault)...');
-      const result = await slot.resolve(repoRoot);
+      const result = await slot.resolve(repoRoot, stackCtx);
       if (result.refreshed.length > 0) {
         for (const name of result.refreshed) {
           console.log(`  \u2713 ${name}`);
