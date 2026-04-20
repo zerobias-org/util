@@ -232,7 +232,10 @@ val bumpVersion by tasks.registering {
     // which breaks the mustRunAfter ordering for anything gate transitively
     // depends on — whereas buildArtifacts aggregates all the real build work.
     mustRunAfter(buildArtifacts)
-    onlyIf { branch == "main" }
+    // Skip when no module files changed since the last release tag — avoids
+    // computing a phantom next-version (e.g. 2.0.0 → 2.0.1) that will never
+    // be published but would confuse downstream promote/tag tasks.
+    onlyIf { branch == "main" && changedSinceTag }
     doLast {
         val pkgJson = project.file("package.json")
         val currentVersion = readBaseVersion()
@@ -273,7 +276,10 @@ val bumpVersion by tasks.registering {
 val tagVersion by tasks.registering {
     group = "publish"
     description = "Create git tag for published version"
-    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded }
+    // changedSinceTag: if no module files changed since the previous release
+    // tag, the current package.json version matches that tag — re-creating
+    // it with `git tag -a` would fail "tag already exists".
+    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded && changedSinceTag }
     doLast {
         val ver = readBaseVersion()
         val tag = "${tagPrefix}${ver}"
@@ -1195,6 +1201,14 @@ extra["stagedPackages"] = stagedPackages
 
 publishAll.configure {
     doLast {
+        // publishAll's dependents (publishNpm, publishImage, publishSdk,
+        // publishHubSdk) skip when changedSinceTag is false, but Gradle still
+        // runs publishAll's own doLast. Guard the success flag so downstream
+        // tasks gated on `publishAllSucceeded` correctly see "nothing to do".
+        if (!changedSinceTag) {
+            logger.lifecycle("[publishAll] No changes since last tag -- nothing staged to promote")
+            return@doLast
+        }
         publishAllSucceeded = true
         logger.lifecycle("All staging publishes succeeded -- ready to promote")
     }
@@ -1251,6 +1265,15 @@ val promoteAll by tasks.registering {
         publishAllSucceeded
     }
     doLast {
+        // Individual promote tasks skip when changedSinceTag is false (see
+        // zb.typescript.gradle.kts), so promoteAll's doLast should only
+        // declare success when there was actually work to do. Without this
+        // guard, tagVersion / pushVersion / publishReleaseEvent would run
+        // with promoteAllSucceeded=true even though nothing was promoted.
+        if (!changedSinceTag) {
+            logger.lifecycle("[promoteAll] No changes since last tag -- nothing promoted")
+            return@doLast
+        }
         promoteAllSucceeded = true
         logger.lifecycle("All promotions succeeded")
     }
@@ -1265,7 +1288,9 @@ val commitVersion by tasks.registering {
     group = "publish"
     description = "Commit bumped package.json version + updated gate stamp (main branch, pre-publish)"
     mustRunAfter(bumpVersion, resolvePublishVersion)
-    onlyIf { branch == "main" && !isDryRun }
+    // No changes since last tag ⇒ bumpVersion skipped, project.version still
+    // matches the committed package.json — nothing to write, nothing to commit.
+    onlyIf { branch == "main" && !isDryRun && changedSinceTag }
     doLast {
         val ver = project.version.toString()
         val pkgFile = project.file("package.json")
@@ -1341,7 +1366,7 @@ val publishReleaseEvent by tasks.registering {
     group = "publish"
     description = "Release announcement (handled by CI workflow)"
     mustRunAfter(tagVersion)
-    onlyIf { !isDryRun && promoteAllSucceeded }
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag }
     doLast {
         val ver = project.version.toString()
         val pkgJson = project.file("package.json")
@@ -1358,7 +1383,7 @@ val pushVersion by tasks.registering {
     group = "publish"
     description = "Push version commit and tags to remote (retries with rebase on fast-forward rejection)"
     mustRunAfter(tagVersion)
-    onlyIf { !isDryRun && promoteAllSucceeded }
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag }
     doLast {
         // Concurrent publish jobs from sibling modules can race on the same main
         // branch — when two jobs build in parallel and both produce a release

@@ -1975,3 +1975,25 @@ val promoteSdk by tasks.registering {
 tasks.named("promoteAll") {
     dependsOn(promoteNpm, promoteHubSdk, promoteSdk)
 }
+
+// Promote tasks must share the same changedSinceTag guard as their publish
+// counterparts. When publish skips (no changes since last tag), there is no
+// fresh package version at the registry to tag — `npm dist-tag add` 404s on
+// the version bumpVersion computed in-memory but publish* never pushed.
+//
+// This block must be declared AFTER the promote tasks are registered above,
+// otherwise tasks.named(...) fails at configuration time.
+listOf(
+    "promoteNpm",
+    "promoteHubSdk",
+    "promoteSdk"
+).forEach { taskName ->
+    tasks.named(taskName) {
+        onlyIf {
+            if (!changedSinceTag) {
+                logger.lifecycle("[$taskName] Skipping -- no changes since last tag")
+            }
+            changedSinceTag
+        }
+    }
+}
