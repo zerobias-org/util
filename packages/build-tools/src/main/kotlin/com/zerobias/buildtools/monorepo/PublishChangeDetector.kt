@@ -1,5 +1,8 @@
 package com.zerobias.buildtools.monorepo
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.io.File
 
 /**
@@ -47,6 +50,7 @@ object PublishChangeDetector {
         registry: String? = null,
     ): PublishPlan {
         val changed = mutableSetOf<String>()
+        val headRootDeps = getRootDepsAt(repoRoot, "HEAD")
 
         for ((name, pkg) in graph.packages) {
             if (pkg.private) continue
@@ -61,6 +65,24 @@ object PublishChangeDetector {
 
             val changedFiles = getChangedFilesSinceRef(repoRoot, lastTag, pkg.relDir)
             if (changedFiles.isNotEmpty()) {
+                changed.add(name)
+                continue
+            }
+
+            // Root-deps drift: if any root dep/override this package resolves
+            // against has changed since the package's last publish tag, mark
+            // it changed. Mirrors ChangeDetector.findPackagesAffectedByRootDeps,
+            // but per-package (baseline = each pkg's own lastTag, not a single
+            // repo-wide baseRef).
+            val changedRootDeps = diffRootDeps(getRootDepsAt(repoRoot, lastTag), headRootDeps)
+            if (changedRootDeps.isEmpty()) continue
+
+            val resolved = try {
+                Prepublish.resolveRootDeps(pkg.dir, repoRoot)
+            } catch (_: Exception) {
+                emptyMap()
+            }
+            if (changedRootDeps.any { resolved.containsKey(it) }) {
                 changed.add(name)
             }
         }
@@ -279,6 +301,68 @@ object PublishChangeDetector {
         val parts = version.split(".")
         if (parts.size != 3) throw RuntimeException("Invalid semver: $version")
         return "${parts[0]}.${parts[1]}.${parts[2].toInt() + 1}"
+    }
+
+    // ── Root-deps drift ──────────────────────────────────────────────
+
+    private data class RootDepsSnapshot(
+        val deps: Map<String, String>,
+        val overrides: Map<String, Any?>,
+    )
+
+    private val rootDepsMapper: ObjectMapper = ObjectMapper().registerKotlinModule()
+
+    /**
+     * Read the root `package.json` at a given git ref and return its
+     * `dependencies`+`devDependencies` (flattened) plus `overrides`.
+     *
+     * Returns empty snapshot if the ref can't be read (e.g. shallow clone
+     * missing the tag); that causes the diff to fall back to "nothing changed",
+     * which is a safe default — we don't over-publish.
+     */
+    private fun getRootDepsAt(repoRoot: File, ref: String): RootDepsSnapshot {
+        return try {
+            val proc = ProcessBuilder("git", "show", "$ref:package.json")
+                .directory(repoRoot)
+                .redirectErrorStream(false)
+                .start()
+            val output = proc.inputStream.bufferedReader().readText()
+            val finished = proc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+            if (!finished || proc.exitValue() != 0 || output.isEmpty()) {
+                return RootDepsSnapshot(emptyMap(), emptyMap())
+            }
+            val pkg: Map<String, Any?> = rootDepsMapper.readValue(output)
+            val deps = mutableMapOf<String, String>()
+            (pkg["dependencies"] as? Map<*, *>)?.forEach { (k, v) ->
+                if (k is String && v is String) deps[k] = v
+            }
+            (pkg["devDependencies"] as? Map<*, *>)?.forEach { (k, v) ->
+                if (k is String && v is String) deps[k] = v
+            }
+            @Suppress("UNCHECKED_CAST")
+            val overrides = (pkg["overrides"] as? Map<String, Any?>) ?: emptyMap()
+            RootDepsSnapshot(deps, overrides)
+        } catch (_: Exception) {
+            RootDepsSnapshot(emptyMap(), emptyMap())
+        }
+    }
+
+    /**
+     * Return the set of root dep/override keys whose value differs between
+     * two snapshots (added, removed, or changed). Overrides are compared via
+     * JSON stringification so nested object values are handled correctly.
+     */
+    private fun diffRootDeps(old: RootDepsSnapshot, current: RootDepsSnapshot): Set<String> {
+        val changed = mutableSetOf<String>()
+        for (key in old.deps.keys + current.deps.keys) {
+            if (old.deps[key] != current.deps[key]) changed.add(key)
+        }
+        for (key in old.overrides.keys + current.overrides.keys) {
+            val a = rootDepsMapper.writeValueAsString(old.overrides[key])
+            val b = rootDepsMapper.writeValueAsString(current.overrides[key])
+            if (a != b) changed.add(key)
+        }
+        return changed
     }
 
     // ── Package.json manipulation ────────────────────────────────────

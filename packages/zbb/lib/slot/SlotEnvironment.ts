@@ -237,8 +237,27 @@ export class SlotEnvironment extends EventEmitter {
     this.emit('change', {});
   }
 
-  /** Remove a user override. */
+  /**
+   * Remove a user override. Throws if the caller tries to unset a non-slot
+   * var (routing bug — those belong to a stack) or a key that isn't
+   * currently an override (declared slot paths like ZB_SLOT_DIR are not
+   * unsettable — they come from the slot itself, not the user).
+   */
   async unset(key: string): Promise<void> {
+    if (!isSlotLevelVar(key)) {
+      throw new Error(
+        `Cannot unset '${key}' at the slot level — the slot only owns ` +
+        `identity/path vars (${[...ZBB_SLOT_VARS].join(', ')}). ` +
+        `Non-slot vars belong to a stack. Use stack.env.unset('${key}') ` +
+        `on the appropriate stack instead.`,
+      );
+    }
+    if (!this.overrides.has(key)) {
+      throw new Error(
+        `Cannot unset '${key}' — it is not a user override. ` +
+        `Slot-level path vars come from the slot itself and cannot be unset.`,
+      );
+    }
     this.overrides.delete(key);
     // Remove from manifest if it was an override-sourced entry (user-added)
     const entry = this.manifest.get(key);

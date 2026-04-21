@@ -12,30 +12,69 @@ export interface RefreshResult {
 }
 
 /**
- * Refresh vault-sourced env vars.
+ * Refresh environment variables from their declared external sources.
  *
- * Architecture:
- *   - Vault-sourced vars declared in a STACK's zbb.yaml are stack-owned.
- *     When a stack context is available, vault values are written to that
- *     stack's env, not to the slot. This is consistent with the rest of
- *     the new-architecture rule: slot holds identity, stacks hold the
- *     real values.
- *   - If no stack context is available (e.g. `zbb slot load` without a
- *     specific stack loaded), vault vars that aren't slot-level are
- *     silently skipped rather than throwing — they'll be refreshed later
- *     when a command dispatches with the relevant stack in scope.
- *   - Slot-level vars (the canonical ZBB_SLOT_VARS set) are always safe
- *     to write to `slot.env.set()`, so those go through the slot.
+ * Three sources are covered:
+ *   - `source: file` — re-read the file path (e.g. ~/.vault-token). Per-stack.
+ *   - `source: env`  — re-read from process.env. Per-stack.
+ *   - `source: vault` — re-fetch from Vault. Per-repo-root scan (current
+ *      behavior preserved for back-compat).
  *
- * - refresh: true vars are always re-fetched
- * - refresh: false (or omitted) vars are only fetched if not yet set
- * - Multiple vars sharing the same vault base path make one Vault call (cache)
+ * User overrides (manifest entry with resolution === 'override') are never
+ * clobbered; a refresh leaves them alone so that an explicit `zbb env set`
+ * wins over any external source.
+ *
+ * Iteration model:
+ *   - File/env: walks every stack added to the slot via slot.stacks.list(),
+ *     calling stack.env.refreshSourcedVars() per stack. Each stack updates
+ *     its own inherited manifest entry in place, preserving resolution type.
+ *     This matches where the initial read happens (StackEnvironment.initialize).
+ *   - Vault: scans the repo-root zbb.yaml for vault-declared vars. Slot-level
+ *     vars (ZBB_SLOT_VARS) write to slot.env; the rest write to stack.env as
+ *     overrides when a stack context is provided. Without a stack, non-slot
+ *     vault vars are silently skipped — they'll be refreshed on the next
+ *     command dispatched in the owning stack's scope.
  */
 export async function refreshVaultVars(
   slot: Slot,
   repoRoot: string,
   stack?: Stack | null,
 ): Promise<RefreshResult> {
+  const refreshed: string[] = [];
+  const errors: Array<{ name: string; error: string }> = [];
+
+  // ── 1. Per-stack file/env refresh ──
+  // Walks every added stack so a var declared in (e.g.) hub's stack/zbb.yaml
+  // with `source: file, file: ~/.vault-token` is picked up independently of
+  // which cwd the user ran `zbb env refresh` from.
+  try {
+    const stacks = await slot.stacks.list();
+    for (const s of stacks) {
+      try {
+        const result = await s.env.refreshSourcedVars();
+        for (const name of result.refreshed) {
+          refreshed.push(`${s.name}.${name}`);
+        }
+        for (const err of result.errors) {
+          errors.push({ name: `${s.name}.${err.name}`, error: err.error });
+        }
+      } catch (e: unknown) {
+        // If a single stack fails to refresh (e.g. missing zbb.yaml source),
+        // record the error and keep going for the others.
+        errors.push({
+          name: `${s.name}`,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+  } catch (e: unknown) {
+    errors.push({
+      name: 'stacks-list',
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  // ── 2. Vault refresh (repo-root scan) ──
   clearVaultCache();
 
   const projectConfig = await loadProjectConfig(process.cwd());
@@ -47,21 +86,19 @@ export async function refreshVaultVars(
   const vaultVars = scanned.filter(v => v.declaration.source === 'vault' && v.declaration.vault);
 
   if (vaultVars.length === 0) {
-    return { refreshed: [], errors: [] };
+    return { refreshed, errors };
   }
 
   // Verify vault connection before attempting any secret fetches
   try {
     await verifyVaultConnection();
-  } catch (e: any) {
-    return {
-      refreshed: [],
-      errors: [{ name: 'vault-connection', error: e.message }],
-    };
+  } catch (e: unknown) {
+    errors.push({
+      name: 'vault-connection',
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return { refreshed, errors };
   }
-
-  const refreshed: string[] = [];
-  const errors: Array<{ name: string; error: string }> = [];
 
   for (const v of vaultVars) {
     // Determine the write target for this var:
@@ -71,8 +108,6 @@ export async function refreshVaultVars(
     //     dispatches with the owning stack in scope).
     const isSlotVar = isSlotLevelVar(v.name);
     if (!isSlotVar && !stack) {
-      // Skip non-slot vault vars without a stack context. The stack will
-      // handle them the next time a command runs in its scope.
       continue;
     }
 
@@ -89,8 +124,8 @@ export async function refreshVaultVars(
         await stack!.env.set(v.name, value);
       }
       refreshed.push(v.name);
-    } catch (e: any) {
-      errors.push({ name: v.name, error: e.message });
+    } catch (e: unknown) {
+      errors.push({ name: v.name, error: e instanceof Error ? e.message : String(e) });
     }
   }
 

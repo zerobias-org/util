@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { StackEnvironment } from '../../lib/stack/StackEnvironment.js';
@@ -242,6 +242,48 @@ describe('StackEnvironment.set / unset', () => {
     await env.unset('MY_URL');
     assert.equal(env.get('MY_URL'), 'http://localhost:15020');
   });
+
+  it('unset() throws on unknown key', async () => {
+    const stackDir = join(tmpDir, 'mystack');
+    await mkdir(stackDir, { recursive: true });
+
+    const env = await StackEnvironment.initialize(
+      stackDir, 'mystack', {}, new Map(), new Map(), [], slotVars, tmpDir,
+    );
+
+    await assert.rejects(
+      () => env.unset('NEVER_SET'),
+      (e: Error) => /NEVER_SET/.test(e.message) && /not set/.test(e.message),
+    );
+  });
+
+  it('unset() throws on inherited (file-sourced) resolution with actionable message', async () => {
+    const stackDir = join(tmpDir, 'mystack');
+    await mkdir(stackDir, { recursive: true });
+    const fakeTokenPath = join(tmpDir, '.vault-token');
+    await writeFile(fakeTokenPath, 'token-v1\n', 'utf-8');
+
+    const schema: Record<string, EnvVarDeclaration> = {
+      VAULT_TOKEN: { type: 'secret', source: 'file', file: fakeTokenPath, mask: true },
+    };
+
+    const env = await StackEnvironment.initialize(
+      stackDir, 'mystack', schema, new Map(), new Map(), [], slotVars, tmpDir,
+    );
+    assert.equal(env.get('VAULT_TOKEN'), 'token-v1');
+    assert.equal(env.getManifestEntry('VAULT_TOKEN')?.resolution, 'inherited');
+
+    await assert.rejects(
+      () => env.unset('VAULT_TOKEN'),
+      (e: Error) =>
+        /VAULT_TOKEN/.test(e.message) &&
+        /inherited/.test(e.message) &&
+        /refresh/.test(e.message),
+    );
+
+    // Value is untouched after failed unset — no silent corruption
+    assert.equal(env.get('VAULT_TOKEN'), 'token-v1');
+  });
 });
 
 describe('StackEnvironment.explain', () => {
@@ -267,6 +309,108 @@ describe('StackEnvironment.explain', () => {
     assert.ok(result.inputs);
     assert.equal(result.inputs?.MY_PORT, '15030');
     assert.equal(result.overridable, true);
+  });
+});
+
+describe('StackEnvironment.refreshSourcedVars', () => {
+  it('re-reads source:file when the file contents change', async () => {
+    const stackDir = join(tmpDir, 'mystack');
+    await mkdir(stackDir, { recursive: true });
+    const tokenPath = join(tmpDir, '.vault-token');
+    await writeFile(tokenPath, 'token-v1\n', 'utf-8');
+
+    const schema: Record<string, EnvVarDeclaration> = {
+      VAULT_TOKEN: { type: 'secret', source: 'file', file: tokenPath, mask: true },
+    };
+
+    const env = await StackEnvironment.initialize(
+      stackDir, 'mystack', schema, new Map(), new Map(), [], slotVars, tmpDir,
+    );
+    assert.equal(env.get('VAULT_TOKEN'), 'token-v1');
+
+    // User re-runs `vault login` — file contents change on disk
+    await writeFile(tokenPath, 'token-v2\n', 'utf-8');
+
+    // Without refresh, the stack manifest still has the stale value
+    assert.equal(env.get('VAULT_TOKEN'), 'token-v1');
+
+    const result = await env.refreshSourcedVars();
+    assert.deepEqual(result.refreshed, ['VAULT_TOKEN']);
+    assert.equal(result.errors.length, 0);
+    assert.equal(env.get('VAULT_TOKEN'), 'token-v2');
+
+    // Manifest entry still shows inherited (not flipped to override)
+    assert.equal(env.getManifestEntry('VAULT_TOKEN')?.resolution, 'inherited');
+  });
+
+  it('preserves user overrides on refresh', async () => {
+    const stackDir = join(tmpDir, 'mystack');
+    await mkdir(stackDir, { recursive: true });
+    const tokenPath = join(tmpDir, '.vault-token');
+    await writeFile(tokenPath, 'token-v1\n', 'utf-8');
+
+    const schema: Record<string, EnvVarDeclaration> = {
+      VAULT_TOKEN: { type: 'secret', source: 'file', file: tokenPath, mask: true },
+    };
+
+    const env = await StackEnvironment.initialize(
+      stackDir, 'mystack', schema, new Map(), new Map(), [], slotVars, tmpDir,
+    );
+
+    // User overrides explicitly — override must win over any file refresh
+    await env.set('VAULT_TOKEN', 'manual-override');
+    assert.equal(env.get('VAULT_TOKEN'), 'manual-override');
+
+    // Rotate the file — refresh should NOT clobber the override
+    await writeFile(tokenPath, 'token-v2\n', 'utf-8');
+    const result = await env.refreshSourcedVars();
+
+    assert.equal(result.refreshed.length, 0, 'no refreshed entries — override protected');
+    assert.deepEqual(result.skipped, [{ name: 'VAULT_TOKEN', reason: 'overridden' }]);
+    assert.equal(env.get('VAULT_TOKEN'), 'manual-override');
+  });
+
+  it('re-reads source:env when process.env changes', async () => {
+    const stackDir = join(tmpDir, 'mystack');
+    await mkdir(stackDir, { recursive: true });
+
+    const schema: Record<string, EnvVarDeclaration> = {
+      ZBB_TEST_ENV_VAR: { type: 'string', source: 'env' },
+    };
+
+    process.env.ZBB_TEST_ENV_VAR = 'first';
+    try {
+      const env = await StackEnvironment.initialize(
+        stackDir, 'mystack', schema, new Map(), new Map(), [], slotVars, tmpDir,
+      );
+      assert.equal(env.get('ZBB_TEST_ENV_VAR'), 'first');
+
+      process.env.ZBB_TEST_ENV_VAR = 'second';
+      const result = await env.refreshSourcedVars();
+      assert.deepEqual(result.refreshed, ['ZBB_TEST_ENV_VAR']);
+      assert.equal(env.get('ZBB_TEST_ENV_VAR'), 'second');
+    } finally {
+      delete process.env.ZBB_TEST_ENV_VAR;
+    }
+  });
+
+  it('reports unchanged when the source value matches current', async () => {
+    const stackDir = join(tmpDir, 'mystack');
+    await mkdir(stackDir, { recursive: true });
+    const tokenPath = join(tmpDir, '.vault-token');
+    await writeFile(tokenPath, 'stable\n', 'utf-8');
+
+    const schema: Record<string, EnvVarDeclaration> = {
+      VAULT_TOKEN: { type: 'secret', source: 'file', file: tokenPath, mask: true },
+    };
+
+    const env = await StackEnvironment.initialize(
+      stackDir, 'mystack', schema, new Map(), new Map(), [], slotVars, tmpDir,
+    );
+
+    const result = await env.refreshSourcedVars();
+    assert.equal(result.refreshed.length, 0);
+    assert.deepEqual(result.unchanged, ['VAULT_TOKEN']);
   });
 });
 

@@ -12,6 +12,7 @@
 
 import { SlotManager } from './slot/SlotManager.js';
 import type { Slot } from './slot/Slot.js';
+import { isSlotLevelVar } from './slot/SlotEnvironment.js';
 import { runPreflightChecks, formatPreflightResults } from './preflight.js';
 import { checkDeprecatedAlias, runGradle } from './gradle.js';
 import {
@@ -1007,14 +1008,23 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Usage: zbb env unset <VAR>');
         process.exit(1);
       }
-      if (stackCtx) {
-        await stackCtx.env.unset(key);
-        // Sync merged slot .env
-        await slot.stacks.syncSlotEnv();
-      } else {
-        await slot.env.unset(key);
+      // Slot-level path vars (ZB_SLOT, ZB_SLOT_DIR, …) are never stack-owned,
+      // so even when we're inside a stack context we route them to slot.env
+      // to avoid a silent no-op against the stack's manifest.
+      const routeToSlot = isSlotLevelVar(key) || !stackCtx;
+      try {
+        if (routeToSlot) {
+          await slot.env.unset(key);
+          console.log(`  ${key}: override cleared`);
+        } else {
+          await stackCtx!.env.unset(key);
+          await slot.stacks.syncSlotEnv();
+          console.log(`  ${key}: override cleared (stack: ${stackCtx!.name})`);
+        }
+      } catch (err: unknown) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exit(1);
       }
-      console.log(`  ${key}: unset`);
       break;
     }
 
@@ -1034,8 +1044,8 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Could not find repo root (.zbb.yaml or gradlew)');
         process.exit(1);
       }
-      console.log('Resolving external sources (DNS + vault)...');
-      const result = await slot.resolve(repoRoot, stackCtx);
+      console.log('Re-reading external sources (DNS + file + env + vault)...');
+      const result = await slot.resolve(repoRoot, stackCtx ?? null);
       if (result.refreshed.length > 0) {
         for (const name of result.refreshed) {
           console.log(`  \u2713 ${name}`);
@@ -1048,7 +1058,12 @@ async function handleEnv(args: string[]): Promise<void> {
         process.exit(1);
       }
       if (result.refreshed.length === 0 && result.errors.length === 0) {
-        console.log('  No vars to refresh.');
+        console.log('  No values changed.');
+      }
+      // Sync merged slot .env so any stack-level updates are visible to
+      // process-level consumers that read slot.env.getAll().
+      if (result.refreshed.length > 0) {
+        await slot.stacks.syncSlotEnv();
       }
       break;
     }
