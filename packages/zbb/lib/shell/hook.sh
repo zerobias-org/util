@@ -64,18 +64,23 @@ _zbb_scope_env() {
   local stack_name=""
   local stack_full=""
 
+  # Walk up looking for the nearest zbb.yaml whose stack is actually added
+  # to the slot. Nested packages (e.g. appliance/zbb.yaml inside
+  # com/hub/zbb.yaml) may declare their own identity without being
+  # standalone stacks in the slot — in that case the hub stack from the
+  # parent dir is the right scope. Don't stop at the first zbb.yaml;
+  # stop at the first one that matches an added stack.
   while [ "$dir" != "/" ]; do
     if [ -f "$dir/zbb.yaml" ]; then
       local name
       name=$(grep -m1 '^name:' "$dir/zbb.yaml" 2>/dev/null | sed 's/^name:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
       if [ -n "$name" ]; then
         local candidate="${name##*/}"
-        # Only activate if this stack has been added to the slot
         if [ -d "$stacks_dir/$candidate" ]; then
           stack_name="$candidate"
           stack_full="$name"
+          break
         fi
-        break
       fi
     fi
     dir=$(dirname "$dir")

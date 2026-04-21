@@ -113,6 +113,18 @@ export interface RepoConfig {
    * the new zb.monorepo-* Gradle plugins.
    */
   lifecycle?: LifecycleConfig;
+
+  /**
+   * User-defined scripts invoked via `zbb run <name>`. Separate from
+   * `lifecycle:` — lifecycle entries are canonical build/test/publish
+   * verbs dispatched by `zbb <verb>` with preflight and the full
+   * lifecycle pipeline; scripts are ad-hoc dev utilities (boot a VM,
+   * tail a log, seed a DB) that just need slot+stack env preloaded.
+   *
+   * Each entry is a shell command string. Args passed after the script
+   * name on the command line are appended verbatim.
+   */
+  scripts?: Record<string, string>;
 }
 
 export interface UserConfig {

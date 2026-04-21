@@ -158,7 +158,7 @@ export function prefixArgs(args: string[], projectPath: string): string[] {
 const DEPRECATED_ALIASES: Record<string, string> = {
   up: 'zbb stack start',
   down: 'zbb stack stop',
-  destroy: 'zbb stack remove',
+  destroy: 'zbb reset',
   info: 'zbb stack info',
 };
 

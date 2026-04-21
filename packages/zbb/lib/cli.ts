@@ -134,6 +134,54 @@ async function prepareSlot(
   return repoRoot;
 }
 
+/**
+ * Resolve the stack context for the current invocation.
+ *
+ * Resolution order:
+ *   1. Explicit hint (from --stack flag, or ZB_STACK already in env).
+ *   2. cwd's zbb.yaml manifest — match its `name` against the slot's
+ *      added stacks (same logic as the lifecycle dispatcher).
+ *   3. null — no stack context.
+ *
+ * Returning null is normal for invocations outside any stack (e.g.
+ * `zbb slot list` from a random directory). Callers that require a
+ * stack should error at their call site.
+ *
+ * Shared by --slot flag, `zbb run`, and the Gradle wrapper fallback
+ * so all three dispatch paths load stack env identically to the
+ * lifecycle dispatcher.
+ */
+async function resolveStackForCwd(slot: Slot, hint?: string): Promise<Stack | null> {
+  if (hint) {
+    try {
+      return await slot.stacks.load(hint);
+    } catch {
+      return null;
+    }
+  }
+  // Walk up from cwd looking for the nearest zbb.yaml whose name matches
+  // an added stack. Nested packages (e.g. appliance/zbb.yaml inside
+  // com/hub/zbb.yaml) can declare their own identity without being
+  // standalone stacks in the slot — in that case the parent's stack is
+  // the right scope. Mirrors the bash cd hook's walk-up logic.
+  const addedStacks = await slot.stacks.list();
+  const { resolve: resolvePath, dirname } = await import('node:path');
+  let dir = process.cwd();
+  while (true) {
+    const manifest = await loadStackManifest(dir);
+    if (manifest) {
+      const shortName = manifest.name.split('/').pop() ?? manifest.name;
+      const match = addedStacks.find(
+        s => s.name === shortName || s.identity.name === manifest.name,
+      );
+      if (match) return match;
+    }
+    const parent = resolvePath(dir, '..');
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 export async function main(argv: string[]): Promise<void> {
   try {
     await _main(argv);
@@ -149,8 +197,16 @@ export async function main(argv: string[]): Promise<void> {
 async function _main(argv: string[]): Promise<void> {
   let args = argv.slice(2);
 
-  // Global --slot flag: load slot env before running any command
-  // Usage: zbb --slot local build, zbb --slot local testDocker
+  // Global --stack flag: parsed first so --slot handler can use it.
+  // Usage: zbb --slot local --stack hub start
+  const stackIdx = args.indexOf('--stack');
+  if (stackIdx !== -1 && args[stackIdx + 1]) {
+    process.env.ZB_STACK = args[stackIdx + 1];
+    args = [...args.slice(0, stackIdx), ...args.slice(stackIdx + 2)];
+  }
+
+  // Global --slot flag: load slot + stack env before running any command
+  // Usage: zbb --slot local build, zbb --slot local --stack hub run qemu
   const slotIdx = args.indexOf('--slot');
   if (slotIdx !== -1 && args[slotIdx + 1]) {
     const slotName = args[slotIdx + 1];
@@ -170,15 +226,12 @@ async function _main(argv: string[]): Promise<void> {
       }
     }
 
-    await prepareSlot(slot);
-  }
-
-  // Global --stack flag: set stack context for non-interactive use
-  // Usage: zbb --slot local --stack hub start
-  const stackIdx = args.indexOf('--stack');
-  if (stackIdx !== -1 && args[stackIdx + 1]) {
-    process.env.ZB_STACK = args[stackIdx + 1];
-    args = [...args.slice(0, stackIdx), ...args.slice(stackIdx + 2)];
+    // Resolve stack from ZB_STACK (set above by --stack) or cwd manifest,
+    // then apply slot + stack env in one prepareSlot call. Without this,
+    // downstream dispatch paths (run, Gradle wrapper fallback) only see
+    // slot env — no ports, no imported vars from dep stacks.
+    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    await prepareSlot(slot, { stack });
   }
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
@@ -240,7 +293,9 @@ async function _main(argv: string[]): Promise<void> {
     return handleDataloader(args.slice(1));
   }
 
-  // Run — execute a command or npm script with slot/stack env
+  // Run — execute a named script defined in zbb.yaml lifecycle or
+  // package.json scripts. Error if neither defines it. All trailing args
+  // pass through to the script implementation.
   if (command === 'run') {
     const slotName = process.env.ZB_SLOT;
     if (!slotName) {
@@ -248,35 +303,95 @@ async function _main(argv: string[]): Promise<void> {
       process.exit(1);
     }
     const slot = await SlotManager.load(slotName);
-    await prepareSlot(slot);
+    // Resolve stack context so scripts see the full composed env (ports,
+    // imports from dep stacks). Without this, `zbb run` degrades to plain
+    // bash with only ZB_SLOT/ZB_SLOT_DIR — defeats the whole point.
+    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    await prepareSlot(slot, { stack });
 
     const runArgs = args.slice(1);
     if (runArgs.length === 0) {
-      console.error('Usage: zbb run <npm-script> [args...]');
-      console.error('       zbb run -- <command> [args...]');
+      console.error('Usage: zbb run <script> [args...]');
+      console.error('       zbb exec <command> [args...]');
       process.exit(1);
     }
 
+    const scriptName = runArgs[0];
+    const scriptArgs = runArgs.slice(1);
     const { spawnSync } = await import('node:child_process');
-    let cmd: string;
-    let cmdArgs: string[];
+    const { readFile } = await import('node:fs/promises');
+    const { join } = await import('node:path');
 
-    if (runArgs[0] === '--') {
-      // Arbitrary command: zbb run -- node src/seed.js
-      cmdArgs = runArgs.slice(1);
-      if (cmdArgs.length === 0) {
-        console.error('No command specified after --');
-        process.exit(1);
-      }
-      cmd = cmdArgs[0];
-      cmdArgs = cmdArgs.slice(1);
-    } else {
-      // npm script: zbb run test:integration
-      cmd = 'npm';
-      cmdArgs = ['run', ...runArgs];
+    // 1. zbb.yaml `scripts:` — canonical home for user-defined dev scripts.
+    const repoRootForRun = findRepoRoot(process.cwd());
+    const zbbYaml = repoRootForRun ? await loadRepoConfig(repoRootForRun) : {};
+    const zbbScripts = zbbYaml.scripts ?? {};
+    const zbbScriptCmd = zbbScripts[scriptName];
+    if (zbbScriptCmd) {
+      const fullCmd = scriptArgs.length > 0
+        ? `${zbbScriptCmd} ${scriptArgs.join(' ')}`
+        : zbbScriptCmd;
+      const result = spawnSync('bash', ['-c', fullCmd], {
+        stdio: 'inherit',
+        env: process.env,
+        cwd: repoRootForRun ?? process.cwd(),
+      });
+      process.exit(result.status ?? 1);
     }
 
-    const result = spawnSync(cmd, cmdArgs, {
+    // 2. package.json scripts — fallback for npm-native projects.
+    let npmScripts: Record<string, string> = {};
+    try {
+      const pkg = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf-8'));
+      if (pkg && typeof pkg.scripts === 'object') npmScripts = pkg.scripts;
+    } catch {
+      // no package.json or unreadable
+    }
+    if (scriptName in npmScripts) {
+      const result = spawnSync('npm', ['run', scriptName, ...scriptArgs], {
+        stdio: 'inherit',
+        env: process.env,
+        cwd: process.cwd(),
+      });
+      process.exit(result.status ?? 1);
+    }
+
+    // 3. Error — not defined anywhere.
+    console.error(`zbb: no script '${scriptName}' defined.`);
+    const zbbKeys = Object.keys(zbbScripts);
+    const npmKeys = Object.keys(npmScripts);
+    if (zbbKeys.length > 0) {
+      console.error(`  zbb.yaml scripts: ${zbbKeys.join(', ')}`);
+    }
+    if (npmKeys.length > 0) {
+      console.error(`  package.json scripts: ${npmKeys.join(', ')}`);
+    }
+    if (zbbKeys.length === 0 && npmKeys.length === 0) {
+      console.error(`  No scripts defined in zbb.yaml or package.json.`);
+    }
+    console.error(`\nFor arbitrary commands with slot+stack env, use: zbb exec <command>`);
+    process.exit(1);
+  }
+
+  // Exec — run an arbitrary command with slot+stack env applied.
+  // Replaces the legacy `zbb run -- <cmd>` form.
+  if (command === 'exec') {
+    const slotName = process.env.ZB_SLOT;
+    if (!slotName) {
+      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+      process.exit(1);
+    }
+    const slot = await SlotManager.load(slotName);
+    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    await prepareSlot(slot, { stack });
+
+    const execArgs = args.slice(1);
+    if (execArgs.length === 0) {
+      console.error('Usage: zbb exec <command> [args...]');
+      process.exit(1);
+    }
+    const { spawnSync } = await import('node:child_process');
+    const result = spawnSync(execArgs[0], execArgs.slice(1), {
       stdio: 'inherit',
       env: process.env,
       cwd: process.cwd(),
@@ -419,13 +534,52 @@ async function _main(argv: string[]): Promise<void> {
     return spawnStandardLifecycleAndExit(repoRoot, command, cmd, parsed);
   }
 
+  // ── Custom lifecycle verb from local zbb.yaml ────────────────────────
+  // The standard lifecycle dispatcher above only handles the 6 canonical
+  // verbs (clean/build/test/gate/publish/dockerBuild). A package can
+  // declare additional verbs in its zbb.yaml lifecycle: block — e.g.
+  // appliance/zbb.yaml has `buildVm`. If cwd's zbb.yaml declares this
+  // command, dispatch it directly: bash the command string with slot +
+  // stack env. No monorepo aggregation, no preflight — just env-wrapped
+  // execution, same as `zbb run`. This is what makes nested packages
+  // with their own zbb.yaml ("substacks") work.
+  if (repoRoot) {
+    const zbbYaml = await loadRepoConfig(repoRoot);
+    const lifecycleMap = (zbbYaml.lifecycle ?? {}) as Record<string, unknown>;
+    const entry = lifecycleMap[command];
+    if (typeof entry === 'string') {
+      if (!process.env.ZB_SLOT) {
+        console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+        process.exit(1);
+      }
+      const slot = await SlotManager.load(process.env.ZB_SLOT);
+      const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+      await prepareSlot(slot, { stack });
+
+      const extraArgs = args.slice(1);
+      const fullCmd = extraArgs.length > 0
+        ? `${entry} ${extraArgs.join(' ')}`
+        : entry;
+      const { spawnSync } = await import('node:child_process');
+      const result = spawnSync('bash', ['-c', fullCmd], {
+        stdio: 'inherit',
+        env: process.env,
+        cwd: repoRoot,
+      });
+      process.exit(result.status ?? 1);
+    }
+  }
+
   // ── Permissive gradle fallback ───────────────────────────────────────
   // No zbb.yaml in cwd, or command isn't a lifecycle command. Just run
   // gradle. This preserves the smart-wrapper behaviour for non-zbb repos
-  // (resolves subproject from cwd, prefixes task names).
+  // (resolves subproject from cwd, prefixes task names). Gradle IS the
+  // task DAG — custom verbs like `buildVm` wire up their own dependsOn
+  // chains. zbb's job here is just to load the env Gradle will inherit.
   if (process.env.ZB_SLOT) {
     const slot = await SlotManager.load(process.env.ZB_SLOT);
-    await prepareSlot(slot);
+    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    await prepareSlot(slot, { stack });
   }
   runGradle(args);
 }
@@ -1271,8 +1425,8 @@ Usage:
   zbb env <list|get|set|unset|reset|resolve|refresh|explain|diff>  Environment variables
   zbb secret <create|get|list|update|delete>          Secret management
   zbb logs <list|show|debug|info>                     Log viewer + log level control
-  zbb run <npm-script> [args...]                      Run npm script with slot/stack env
-  zbb run -- <command> [args...]                      Run arbitrary command with slot/stack env
+  zbb run <script> [args...]                          Run a script defined in zbb.yaml lifecycle or package.json, with slot+stack env
+  zbb exec <command> [args...]                        Run an arbitrary command with slot+stack env
   zbb dataloader [args...]                            Run dataloader with slot SQL env
   zbb publish [--dry-run]                             Publish all artifacts (Gradle)
   zbb <gradle-task> [args...]                         Run Gradle task
