@@ -189,10 +189,30 @@ export class StackEnvironment extends EventEmitter {
     this.emit('change', { key, value });
   }
 
+  /**
+   * Clear a user override, reverting the var to whatever its schema decides
+   * (derived formula, file-sourced value, etc). Only user-set overrides are
+   * unsettable — calling `unset` on an inherited/dns/allocated/generated/etc
+   * entry throws, since those values come from an external source and cannot
+   * be "cleared" without redefining the schema. Use `zbb env refresh` to
+   * re-read file/env/vault-sourced values from their source of truth.
+   */
   async unset(key: string): Promise<void> {
     const entry = this.manifest.get(key);
-    if (!entry) return;
-    if (entry.resolution === 'override' && entry.default_formula) {
+    if (!entry) {
+      throw new Error(
+        `Cannot unset '${key}' — not set in this stack. Nothing to clear.`,
+      );
+    }
+    if (entry.resolution !== 'override') {
+      throw new Error(
+        `Cannot unset '${key}' — its resolution is '${entry.resolution}', ` +
+        `not a user override. To change the value, either:\n` +
+        `  - 'zbb env refresh' to re-read from its declared source (file/env/vault), or\n` +
+        `  - 'zbb env set ${key} <value>' to override it explicitly.`,
+      );
+    }
+    if (entry.default_formula) {
       // Revert to derived
       this.manifest.set(key, {
         ...entry,
@@ -202,12 +222,108 @@ export class StackEnvironment extends EventEmitter {
         set_by: undefined,
         set_at: undefined,
       } as StackManifestEntry);
-    } else if (entry.resolution === 'override') {
+    } else {
       this.manifest.delete(key);
     }
     await this.saveManifest();
     await this.computeEnv();
     this.emit('change', { key, value: undefined });
+  }
+
+  /**
+   * Re-read schema-declared vars from their live source and update the
+   * matching inherited manifest entries in place. Covers `source: file` and
+   * `source: env`. Vault-sourced vars are handled separately by
+   * `refreshVaultVars` in slot/refresh.ts.
+   *
+   * User overrides (resolution === 'override') are always preserved — if a
+   * user explicitly set a value, a refresh must never clobber it. `cwd`-
+   * sourced vars are skipped: their value is the stack's source path, which
+   * only changes on re-add.
+   *
+   * Called by `zbb env refresh`. Writes manifest + .env once at the end if
+   * any value changed, to keep watcher storms down.
+   */
+  async refreshSourcedVars(): Promise<{
+    refreshed: string[];
+    unchanged: string[];
+    skipped: Array<{ name: string; reason: string }>;
+    errors: Array<{ name: string; error: string }>;
+  }> {
+    if (this.schema.size === 0) await this.loadSchema();
+    if (this.manifest.size === 0) await this.loadManifest();
+
+    const refreshed: string[] = [];
+    const unchanged: string[] = [];
+    const skipped: Array<{ name: string; reason: string }> = [];
+    const errors: Array<{ name: string; error: string }> = [];
+    let manifestChanged = false;
+
+    for (const [name, decl] of this.schema) {
+      const src = decl.source;
+      if (src !== 'file' && src !== 'env') continue;
+
+      const current = this.manifest.get(name);
+      if (current?.resolution === 'override') {
+        skipped.push({ name, reason: 'overridden' });
+        continue;
+      }
+
+      let value: string | undefined;
+      let sourceLabel: string;
+      try {
+        if (src === 'file' && decl.file) {
+          const { homedir } = await import('node:os');
+          const filePath = decl.file.replace(/^~/, homedir());
+          try {
+            value = (await readFile(filePath, 'utf-8')).trim();
+          } catch {
+            // File not found — fall back to env var (matches initialize())
+            value = process.env[name];
+          }
+          sourceLabel = `file:${decl.file}`;
+        } else if (src === 'env') {
+          value = process.env[name];
+          sourceLabel = 'env';
+        } else {
+          continue;
+        }
+      } catch (e: unknown) {
+        errors.push({ name, error: e instanceof Error ? e.message : String(e) });
+        continue;
+      }
+
+      if (!value) {
+        if (decl.required && !current) {
+          errors.push({ name, error: `required var not found in ${src} source` });
+        } else {
+          skipped.push({ name, reason: `no-value-from-${src}` });
+        }
+        continue;
+      }
+
+      if (current?.value === value) {
+        unchanged.push(name);
+        continue;
+      }
+
+      this.manifest.set(name, {
+        ...current,
+        resolution: 'inherited',
+        value,
+        source: sourceLabel,
+      });
+      manifestChanged = true;
+      refreshed.push(name);
+      this.emit('change', { key: name, value });
+    }
+
+    if (manifestChanged) {
+      await this.saveManifest();
+      await this.computeEnv();
+    }
+
+    return { refreshed, unchanged, skipped, errors };
   }
 
   /**
