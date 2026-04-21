@@ -360,6 +360,22 @@ gradle.projectsEvaluated {
                 commandLine = listOf("npm", "run", phase)
                 dependsOn(workspaceInstall)
 
+                // Capture stdout+stderr to log files so failure output is
+                // ALWAYS surfaced, independent of Gradle console mode or
+                // CI log-streaming quirks. Without this, parallel Exec
+                // task buffering can swallow tsc/eslint output on failure
+                // and the CI log shows only `FAILED — exit 1` with no clue.
+                // isIgnoreExitValue=true lets us handle the exit code in
+                // doLast so the captured log gets dumped BEFORE we throw.
+                isIgnoreExitValue = true
+                val stdoutLog = pkg.dir.resolve("build/${phase}.stdout.log")
+                val stderrLog = pkg.dir.resolve("build/${phase}.stderr.log")
+                doFirst {
+                    stdoutLog.parentFile.mkdirs()
+                    standardOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stdoutLog))
+                    errorOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stderrLog))
+                }
+
                 // Directory inputs (always declared — empty FileTree if missing)
                 inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
                 // generated/ is only an input for transpile/test (the consumers
@@ -387,6 +403,30 @@ gradle.projectsEvaluated {
                 outputs.file(stampFile).withPropertyName("phaseStamp")
 
                 doLast {
+                    // Ensure streams are flushed before reading logs back.
+                    (standardOutput as? java.io.Closeable)?.close()
+                    (errorOutput as? java.io.Closeable)?.close()
+
+                    val exitValue = executionResult.get().exitValue
+                    if (exitValue != 0) {
+                        logger.lifecycle("")
+                        logger.lifecycle("===== npm run $phase FAILED for $pkgName (exit $exitValue) =====")
+                        // tsc and most node tools write errors to stdout,
+                        // not stderr — dump stdout first, stderr second.
+                        if (stdoutLog.exists() && stdoutLog.length() > 0) {
+                            logger.lifecycle(stdoutLog.readText())
+                        }
+                        if (stderrLog.exists() && stderrLog.length() > 0) {
+                            logger.lifecycle("----- stderr -----")
+                            logger.lifecycle(stderrLog.readText())
+                        }
+                        logger.lifecycle("===== end $pkgName:$phase output =====")
+                        logger.lifecycle("")
+                        throw GradleException(
+                            "npm run $phase failed for $pkgName (exit $exitValue) — " +
+                            "full output above; also at ${stdoutLog.relativeTo(rootProject.projectDir)}"
+                        )
+                    }
                     stampFile.parentFile.mkdirs()
                     stampFile.writeText("$phase completed at ${java.time.Instant.now()}\n")
                 }
@@ -430,6 +470,18 @@ gradle.projectsEvaluated {
                 commandLine = listOf("npm", "run", testPhase)
                 dependsOn(workspaceInstall)
 
+                // Capture stdout+stderr to log files (same rationale as
+                // the phase Exec above — parallel Gradle + CI streaming
+                // swallows test-failure output otherwise).
+                isIgnoreExitValue = true
+                val stdoutLog = pkg.dir.resolve("build/${testPhase}.stdout.log")
+                val stderrLog = pkg.dir.resolve("build/${testPhase}.stderr.log")
+                doFirst {
+                    stdoutLog.parentFile.mkdirs()
+                    standardOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stdoutLog))
+                    errorOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stderrLog))
+                }
+
                 inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
                 inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
                 inputs.files(fileTreeOf(generatedDir)).withPropertyName("generatedFiles")
@@ -439,6 +491,27 @@ gradle.projectsEvaluated {
                 outputs.file(stampFile).withPropertyName("phaseStamp")
 
                 doLast {
+                    (standardOutput as? java.io.Closeable)?.close()
+                    (errorOutput as? java.io.Closeable)?.close()
+
+                    val exitValue = executionResult.get().exitValue
+                    if (exitValue != 0) {
+                        logger.lifecycle("")
+                        logger.lifecycle("===== npm run $testPhase FAILED for $pkgName (exit $exitValue) =====")
+                        if (stdoutLog.exists() && stdoutLog.length() > 0) {
+                            logger.lifecycle(stdoutLog.readText())
+                        }
+                        if (stderrLog.exists() && stderrLog.length() > 0) {
+                            logger.lifecycle("----- stderr -----")
+                            logger.lifecycle(stderrLog.readText())
+                        }
+                        logger.lifecycle("===== end $pkgName:$testPhase output =====")
+                        logger.lifecycle("")
+                        throw GradleException(
+                            "npm run $testPhase failed for $pkgName (exit $exitValue) — " +
+                            "full output above; also at ${stdoutLog.relativeTo(rootProject.projectDir)}"
+                        )
+                    }
                     stampFile.parentFile.mkdirs()
                     stampFile.writeText("$testPhase completed at ${java.time.Instant.now()}\n")
                 }
