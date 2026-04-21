@@ -182,30 +182,14 @@ val publishPlan = tasks.register("publishPlan") {
             logger.lifecycle("  ${name} → ${rv.version}$bump")
         }
 
-        // Patch version fields in package.json for each package in the plan
-        if (!publishDryRun) {
-            for (name in plan.publishOrdered) {
-                val pkg = service.graph.packages[name] ?: continue
-                val rv = plan.resolvedVersions[name] ?: continue
-                if (rv.bumped || rv.version != pkg.version) {
-                    PublishChangeDetector.patchPackageJsonVersion(pkg.dir, rv.version)
-                    logger.lifecycle("  [version] ${name}: ${pkg.version} → ${rv.version}")
-                }
-            }
-
-            // Cross-update workspace dependency references so published
-            // packages reference the resolved (potentially bumped) versions
-            // of their workspace deps.
-            for (name in plan.publishOrdered) {
-                val pkg = service.graph.packages[name] ?: continue
-                for (depName in pkg.internalDeps) {
-                    val depVersion = plan.resolvedVersions[depName] ?: continue
-                    PublishChangeDetector.updateDependencyVersion(
-                        pkg.dir, depName, depVersion.version
-                    )
-                }
-            }
-        }
+        // Version patching (patchPackageJsonVersion + cross-workspace
+        // updateDependencyVersion) deliberately DOES NOT run here — it is
+        // deferred to commitVersionBumps.doLast so every per-package build
+        // runs against the ORIGINAL package.json state (same state `zbb
+        // gate` sees locally). Building against the pre-bump state is how
+        // we guarantee local-gate / CI-publish parity; bumping then
+        // running the build causes workspace resolution to see versions
+        // that don't exist on the registry yet.
 
         // Write the plan to a side file so per-package tasks can read it.
         // `path` is the package's relDir — used by the release-announcement
@@ -683,13 +667,14 @@ gradle.projectsEvaluated {
         }
     }
 
-    // ── Commit version bumps BEFORE per-package publish ──
-    // publishPlan patches each package.json with the bumped version. We
-    // commit that BEFORE prepublish/npm-publish so the published tarball's
-    // git HEAD matches the version it claims.
+    // ── Patch versions + commit BEFORE per-package publish ──
+    // Runs AFTER every eligible package's build (wired in projectsEvaluated
+    // below). Patching deferred from publishPlan to here so builds compile
+    // against the original package.json state. If any build fails upstream,
+    // this task never runs → no commit, no prepublish, no publish, no tag.
     val commitVersionBumps = tasks.register("commitVersionBumps") {
         group = "monorepo"
-        description = "Git commit the version-bumped package.json files written by publishPlan"
+        description = "Patch bumped versions + git commit the version-bumped package.json files"
         dependsOn(publishPlan)
         onlyIf { !publishDryRun && publishPlanFile.exists() && publishPlanFile.readText() != "[]" }
 
@@ -697,10 +682,44 @@ gradle.projectsEvaluated {
             val repoRoot = rootProject.projectDir
             val om = ObjectMapper().registerKotlinModule()
 
-            // Stage all version-bumped package.json files
-            val filesToStage = mutableListOf<String>()
             @Suppress("UNCHECKED_CAST")
             val plan = om.readValue<List<Map<String, Any?>>>(publishPlanFile)
+
+            // ── Apply the bumped versions to each package.json ──
+            // Moved from publishPlan so the preceding build step compiles
+            // against the original state (parity with local `zbb gate`).
+            for (entry in plan) {
+                val name = entry["name"] as? String ?: continue
+                val newVersion = entry["version"] as? String ?: continue
+                val bumped = entry["bumped"] as? Boolean ?: false
+                val pkg = service.graph.packages[name] ?: continue
+                if (bumped || newVersion != pkg.version) {
+                    PublishChangeDetector.patchPackageJsonVersion(pkg.dir, newVersion)
+                    logger.lifecycle("  [version] ${name}: ${pkg.version} → ${newVersion}")
+                }
+            }
+
+            // Cross-update workspace dependency references so published
+            // tarballs reference the resolved (potentially bumped) versions
+            // of their workspace deps. Build a name→version map from the
+            // plan (the in-memory ResolvedVersion map from publishPlan is
+            // out of scope by the time this doLast runs).
+            val planVersions = plan.mapNotNull { e ->
+                val n = e["name"] as? String
+                val v = e["version"] as? String
+                if (n != null && v != null) n to v else null
+            }.toMap()
+            for (entry in plan) {
+                val name = entry["name"] as? String ?: continue
+                val pkg = service.graph.packages[name] ?: continue
+                for (depName in pkg.internalDeps) {
+                    val depVersion = planVersions[depName] ?: continue
+                    PublishChangeDetector.updateDependencyVersion(pkg.dir, depName, depVersion)
+                }
+            }
+
+            // Stage all version-bumped package.json files
+            val filesToStage = mutableListOf<String>()
             for (entry in plan) {
                 val name = entry["name"] as? String ?: continue
                 val pkg = service.graph.packages[name] ?: continue
@@ -775,6 +794,16 @@ gradle.projectsEvaluated {
         if (subproject.tasks.findByName("compileGroovy") != null) return true
         return false
     }
+    // FAIL-FAST wiring: commitVersionBumps depends on EVERY eligible
+    // package's build. Since every prepublishPackage depends on
+    // commitVersionBumps (wired above at line 751), and every
+    // publishPackage depends on its prepublishPackage, this makes the
+    // entire per-package publish chain wait for ALL builds to finish
+    // green before anything publishes. A single transpile failure
+    // anywhere in the monorepo now blocks npm publish across the board —
+    // preventing the partial-publish / ghost-publish state where some
+    // packages land on the registry while others' builds are still
+    // failing (or never ran).
     val buildPhases = service.config.buildPhases  // ["lint", "generate", "transpile"] default
     for ((pkgName, pkg) in service.graph.packages) {
         if (pkg.private) continue
@@ -785,7 +814,10 @@ gradle.projectsEvaluated {
 
         if (publishHasExistingBuildInfra(subproject)) {
             // JVM subproject — mirror monorepoBuild: use the existing `build`.
-            subproject.tasks.findByName("build")?.let { prepublish.dependsOn(it) }
+            subproject.tasks.findByName("build")?.let { buildTask ->
+                prepublish.dependsOn(buildTask)
+                commitVersionBumps.configure { dependsOn(buildTask) }
+            }
         } else {
             // Pure-npm subproject — mirror monorepoBuild: use the fallback
             // phase tasks registered by zb.monorepo-build. Do NOT wire `build`
@@ -793,7 +825,10 @@ gradle.projectsEvaluated {
             // exists but may dependsOn hub-specific custom tasks that are not
             // in the gate graph, causing publish to diverge from gate.
             for (phase in buildPhases) {
-                subproject.tasks.findByName(phase)?.let { prepublish.dependsOn(it) }
+                subproject.tasks.findByName(phase)?.let { phaseTask ->
+                    prepublish.dependsOn(phaseTask)
+                    commitVersionBumps.configure { dependsOn(phaseTask) }
+                }
             }
         }
     }
