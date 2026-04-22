@@ -108,6 +108,26 @@ class StampValidatorIntegrationTest {
         val pkgDir = File(comUtilRoot, "packages/dynamodb")
         assumeTrue(pkgDir.exists())
 
+        // The stamp's recorded rootDeps were captured at gate time. If
+        // com/util/package.json has been edited (deps bumped, overrides
+        // changed) without re-running `zbb gate`, the stamp will validly
+        // be INVALID — which is correct behavior, not a bug. Skip in that
+        // case so this test still catches real validator regressions when
+        // the stamp IS fresh, without flapping on routine dep bumps.
+        val stampEntry = stamp!!.packages[pkgName]
+        assertNotNull(stampEntry) { "$pkgName not in stamp" }
+        val rootDepsFresh = stampEntry!!.rootDeps?.let { recorded ->
+            val currentDeps = (rootPkg["dependencies"] as? Map<String, Any?>).orEmpty() +
+                (rootPkg["devDependencies"] as? Map<String, Any?>).orEmpty()
+            val currentOverrides = (rootPkg["overrides"] as? Map<String, Any?>).orEmpty()
+            recorded.all { (depName, stampVersion) ->
+                val currentDep = currentDeps[depName] as? String
+                val currentOverride = currentOverrides[depName]?.let { mapper.writeValueAsString(it) }
+                currentDep == stampVersion || currentOverride == stampVersion
+            }
+        } ?: true
+        assumeTrue(rootDepsFresh, "com/util gate-stamp.json rootDeps have drifted — re-run `zbb gate` in com/util to refresh")
+
         val result = validator.validate(
             packageDir = pkgDir,
             packageName = pkgName,

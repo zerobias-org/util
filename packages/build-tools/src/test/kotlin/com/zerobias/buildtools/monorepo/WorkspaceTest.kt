@@ -116,6 +116,7 @@ class WorkspaceTest {
                     else -> emptyList()
                 },
                 packageJson = emptyMap(),
+                publishDirectory = null,
             )
         }
 
@@ -129,8 +130,8 @@ class WorkspaceTest {
     @Test
     fun `buildDependencyGraph detects cycles`() {
         val packages = linkedMapOf<String, WorkspacePackage>()
-        packages["a"] = WorkspacePackage("a", File("/tmp/a"), "a", "1.0.0", false, emptyMap(), listOf("b"), emptyMap())
-        packages["b"] = WorkspacePackage("b", File("/tmp/b"), "b", "1.0.0", false, emptyMap(), listOf("a"), emptyMap())
+        packages["a"] = WorkspacePackage("a", File("/tmp/a"), "a", "1.0.0", false, emptyMap(), listOf("b"), emptyMap(), null)
+        packages["b"] = WorkspacePackage("b", File("/tmp/b"), "b", "1.0.0", false, emptyMap(), listOf("a"), emptyMap(), null)
 
         assertThrows(IllegalStateException::class.java) {
             Workspace.buildDependencyGraph(packages)
@@ -141,10 +142,10 @@ class WorkspaceTest {
     fun `getTransitiveDependents BFS through reverse graph`() {
         // Diamond: a → b, a → c, b → d, c → d
         val packages = linkedMapOf<String, WorkspacePackage>()
-        packages["a"] = WorkspacePackage("a", File("/tmp/a"), "a", "1.0.0", false, emptyMap(), listOf("b", "c"), emptyMap())
-        packages["b"] = WorkspacePackage("b", File("/tmp/b"), "b", "1.0.0", false, emptyMap(), listOf("d"), emptyMap())
-        packages["c"] = WorkspacePackage("c", File("/tmp/c"), "c", "1.0.0", false, emptyMap(), listOf("d"), emptyMap())
-        packages["d"] = WorkspacePackage("d", File("/tmp/d"), "d", "1.0.0", false, emptyMap(), emptyList(), emptyMap())
+        packages["a"] = WorkspacePackage("a", File("/tmp/a"), "a", "1.0.0", false, emptyMap(), listOf("b", "c"), emptyMap(), null)
+        packages["b"] = WorkspacePackage("b", File("/tmp/b"), "b", "1.0.0", false, emptyMap(), listOf("d"), emptyMap(), null)
+        packages["c"] = WorkspacePackage("c", File("/tmp/c"), "c", "1.0.0", false, emptyMap(), listOf("d"), emptyMap(), null)
+        packages["d"] = WorkspacePackage("d", File("/tmp/d"), "d", "1.0.0", false, emptyMap(), emptyList(), emptyMap(), null)
 
         val graph = Workspace.buildDependencyGraph(packages)
         // Build order: d, b/c (any order), a

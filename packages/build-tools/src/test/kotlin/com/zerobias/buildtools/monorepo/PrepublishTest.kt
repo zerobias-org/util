@@ -345,4 +345,114 @@ class PrepublishTest {
         // Scoped: command name is the part after the slash (without the scope)
         assertEquals("@scope/scoped-tool", binMap["scoped-tool"])
     }
+
+    // ── resolve() with publishConfig.directory (ng-packagr layout) ───────
+
+    @Test
+    fun `resolve writes to targetDir for ng-packagr layout`(@TempDir tmp: Path) {
+        val root = tmp.toFile()
+
+        // Root package.json with workspaces and the dep our package imports
+        File(root, "package.json").writeText("""
+            {
+              "name": "@test/root",
+              "private": true,
+              "workspaces": ["packages/lib"],
+              "dependencies": { "lodash": "^4.17.21" },
+              "devDependencies": {}
+            }
+        """.trimIndent())
+
+        // Service package: source at packages/lib/src, published artifact at packages/lib/dist
+        val pkgDir = File(root, "packages/lib")
+        File(pkgDir, "src").mkdirs()
+        File(pkgDir, "package.json").writeText("""
+            {
+              "name": "@test/lib",
+              "version": "1.0.0",
+              "publishConfig": { "directory": "dist" },
+              "dependencies": {}
+            }
+        """.trimIndent())
+        File(pkgDir, "src/index.ts").writeText("""
+            import _ from 'lodash';
+            export const x = _.identity(1);
+        """.trimIndent())
+
+        // Pre-existing dist/package.json (as ng-packagr would have generated)
+        val distDir = File(pkgDir, "dist")
+        distDir.mkdirs()
+        File(distDir, "package.json").writeText("""
+            {
+              "name": "@test/lib",
+              "version": "1.0.0",
+              "main": "index.js",
+              "dependencies": {}
+            }
+        """.trimIndent())
+
+        val targetDir = distDir
+        val result = Prepublish.resolve(
+            pkgDir, root,
+            Prepublish.Options(targetDir = targetDir),
+        )
+
+        // Resolved deps written to dist/package.json, not source package.json
+        assertEquals(distDir.resolve("package.json").absolutePath, result.outputPath.absolutePath)
+        assertEquals("^4.17.21", result.dependencies["lodash"])
+
+        // Source package.json should remain untouched
+        val sourcePkgContent = File(pkgDir, "package.json").readText()
+        assertTrue(sourcePkgContent.contains("\"dependencies\": {}"),
+            "Source package.json should not have been mutated")
+
+        // No backup created on the source side
+        assertFalse(File(pkgDir, "package.json.prepublish-backup").exists(),
+            "Source package.json.prepublish-backup should not exist when targetDir is set")
+
+        // dist/package.json should keep its `main` field (merged, not overwritten)
+        val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(com.fasterxml.jackson.module.kotlin.KotlinModule.Builder().build())
+        @Suppress("UNCHECKED_CAST")
+        val distPkg = mapper.readValue(distDir.resolve("package.json"), Map::class.java) as Map<String, Any?>
+        assertEquals("index.js", distPkg["main"], "main field from existing dist/package.json should be preserved")
+        @Suppress("UNCHECKED_CAST")
+        val distDeps = distPkg["dependencies"] as? Map<String, Any?> ?: emptyMap()
+        assertEquals("^4.17.21", distDeps["lodash"], "resolved dep should appear in dist/package.json")
+    }
+
+    @Test
+    fun `Workspace exposes publishConfig directory on WorkspacePackage`(@TempDir tmp: Path) {
+        val root = tmp.toFile()
+        File(root, "package.json").writeText("""
+            {
+              "name": "@test/root",
+              "private": true,
+              "workspaces": ["packages/lib", "packages/plain"]
+            }
+        """.trimIndent())
+
+        val libDir = File(root, "packages/lib").apply { mkdirs() }
+        File(libDir, "package.json").writeText("""
+            {
+              "name": "@test/lib",
+              "version": "1.0.0",
+              "publishConfig": { "directory": "dist", "registry": "https://example.com/" }
+            }
+        """.trimIndent())
+
+        val plainDir = File(root, "packages/plain").apply { mkdirs() }
+        File(plainDir, "package.json").writeText("""
+            {
+              "name": "@test/plain",
+              "version": "1.0.0",
+              "publishConfig": { "registry": "https://example.com/" }
+            }
+        """.trimIndent())
+
+        val packages = Workspace.discoverWorkspaces(root)
+        assertEquals("dist", packages["@test/lib"]?.publishDirectory)
+        assertEquals(null, packages["@test/plain"]?.publishDirectory,
+            "publishDirectory should be null when publishConfig.directory is absent")
+    }
 }
