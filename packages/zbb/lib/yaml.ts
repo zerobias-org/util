@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 
 export async function loadYaml<T = any>(filePath: string): Promise<T> {
   const content = await readFile(filePath, 'utf-8');
-  return yamlParse(content) as T;
+  return yamlParse(content, { uniqueKeys: true, strict: true }) as T;
 }
 
 export async function loadYamlOrDefault<T = any>(filePath: string, defaultValue: T): Promise<T> {

@@ -255,11 +255,17 @@ val monorepoGate = tasks.register("monorepoGate") {
             )
         }
 
+        // Sort packages by name so every user gets the same gate-stamp.json
+        // regardless of filesystem directory ordering.
+        val sortedEntries = packageEntries.entries
+            .sortedBy { it.key }
+            .associateTo(linkedMapOf()) { it.toPair() }
+
         val stamp = GateStamp(
             version = 1,
             branch = branch,
             timestamp = java.time.Instant.now().toString(),
-            packages = packageEntries,
+            packages = sortedEntries,
         )
 
         GateStampIO.write(rootStampFile, stamp)

@@ -38,12 +38,12 @@ pluginManagement {
 }
 
 // ── 2. Buildscript classpath for direct Workspace.discoverWorkspaces() ──
+//     Same resolution order as consumer repos (com/hub, com/platform):
+//     mavenLocal → GitHub Packages Maven. Use `publishToMavenLocal` from
+//     packages/build-tools when developing locally.
 buildscript {
-    val localBuildToolsLibs = file("packages/build-tools/build/libs")
     repositories {
-        if (localBuildToolsLibs.exists()) {
-            flatDir { dirs(localBuildToolsLibs) }
-        }
+        mavenLocal()
         maven {
             url = uri("https://maven.pkg.github.com/zerobias-org/util")
             credentials {
@@ -54,23 +54,11 @@ buildscript {
                     ?: ""
             }
         }
-        // gradle-node-plugin (a transitive of build-tools) lives at the
-        // Gradle Plugin Portal, not Maven Central. Without this repo CI
-        // resolves build-tools fine but fails on the transitive dep.
         gradlePluginPortal()
         mavenCentral()
     }
     dependencies {
-        if (localBuildToolsLibs.exists()) {
-            val jars: Array<java.io.File> = localBuildToolsLibs.listFiles { f ->
-                f.name.startsWith("build-tools-") && f.name.endsWith(".jar")
-            } ?: arrayOf<java.io.File>()
-            classpath(files(*jars))
-        } else {
-            classpath("com.zerobias:build-tools:1.+")
-        }
-        classpath("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
-        classpath("org.yaml:snakeyaml:2.2")
+        classpath("com.zerobias:build-tools:1.+")
     }
 }
 

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { loadYamlOrDefault } from './yaml.js';
+import { loadYaml, loadYamlOrDefault } from './yaml.js';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -297,6 +297,11 @@ export function isStackManifest(config: ProjectConfig | StackManifest): config i
 }
 
 export async function loadStackManifest(dir: string): Promise<StackManifest | null> {
-  const config = await loadYamlOrDefault<Partial<StackManifest> & ProjectConfig>(join(dir, 'zbb.yaml'), {});
+  const filePath = join(dir, 'zbb.yaml');
+  if (!existsSync(filePath)) return null;
+  // Fail fast on invalid YAML (bad syntax, duplicate keys, etc.) rather than
+  // silently defaulting to {} and reporting a confusing "missing name" error.
+  const config = await loadYaml<Partial<StackManifest> & ProjectConfig>(filePath);
+  if (config == null) return null;
   return isStackManifest(config) ? config as StackManifest : null;
 }

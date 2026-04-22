@@ -99,7 +99,7 @@ data class GateStamp(
  * - Newline before each value/element
  * - `": "` (colon space) between key and value
  * - Trailing newline at end of file
- * - LinkedHashMap insertion order preserved (don't sort)
+ * - LinkedHashMap insertion order preserved (sorted by package name at write time)
  */
 object GateStampIO {
 

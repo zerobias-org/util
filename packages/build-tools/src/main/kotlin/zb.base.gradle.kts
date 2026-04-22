@@ -1359,12 +1359,12 @@ val commitVersion by tasks.registering {
     }
 }
 
-// Release event — handled by CI workflow (release-announcement action)
-// which sends Slack notification + Lambda event with full metadata.
-// This task is a no-op placeholder to keep the publish chain intact.
+// Release announcement: Slack webhook + Lambda event for each published package.
+// Gated on env vars — silently skips Slack when SLACK_RELEASES_WEBHOOK is absent,
+// skips Lambda when AWS_REGION / aws CLI is absent (i.e. local runs).
 val publishReleaseEvent by tasks.registering {
     group = "publish"
-    description = "Release announcement (handled by CI workflow)"
+    description = "Send release announcement (Slack + Lambda event)"
     mustRunAfter(tagVersion)
     onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag }
     doLast {
@@ -1373,7 +1373,11 @@ val publishReleaseEvent by tasks.registering {
         val name = if (pkgJson.exists()) {
             Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1) ?: "unknown"
         } else "unknown"
-        logger.lifecycle("Published ${name}@${ver} — release announcement handled by CI workflow")
+        // location is relative path from repo root to this project
+        val location = project.projectDir.relativeTo(project.rootDir).path
+        val pkg = com.zerobias.buildtools.util.ReleaseAnnouncement.PublishedPackage(name, ver, location)
+        val githubRepo = com.zerobias.buildtools.util.ReleaseAnnouncement.detectGithubRepo(project.rootDir)
+        com.zerobias.buildtools.util.ReleaseAnnouncement.announce(listOf(pkg), project.rootDir, branch, githubRepo, logger)
     }
 }
 

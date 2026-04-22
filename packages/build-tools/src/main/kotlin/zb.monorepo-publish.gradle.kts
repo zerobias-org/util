@@ -36,6 +36,7 @@ import com.zerobias.buildtools.monorepo.MonorepoGraphService
 import com.zerobias.buildtools.monorepo.Prepublish
 import com.zerobias.buildtools.monorepo.PublishChangeDetector
 import com.zerobias.buildtools.monorepo.StampValidator
+import com.zerobias.buildtools.util.ReleaseAnnouncement
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -241,7 +242,7 @@ val dispatchImageWorkflows = tasks.register("dispatchImageWorkflows") {
         }
 
         // Detect GitHub repo from git remote
-        val githubRepo = detectGithubRepo(rootProject.projectDir)
+        val githubRepo = ReleaseAnnouncement.detectGithubRepo(rootProject.projectDir)
         if (githubRepo == null) {
             logger.warn("[images] could not detect GitHub repo from git remote — skipping dispatch")
             return@doLast
@@ -287,25 +288,6 @@ val dispatchImageWorkflows = tasks.register("dispatchImageWorkflows") {
     }
 }
 
-fun detectGithubRepo(repoRoot: java.io.File): String? {
-    return try {
-        val proc = ProcessBuilder("git", "remote", "get-url", "origin")
-            .directory(repoRoot)
-            .redirectErrorStream(false)
-            .start()
-        val output = proc.inputStream.bufferedReader().readText().trim()
-        proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
-        // SSH: git@github.com:owner/repo.git
-        val sshMatch = Regex("""github\.com[:/]([^/]+/[^/.]+)""").find(output)
-        if (sshMatch != null) return sshMatch.groupValues[1]
-        // HTTPS: https://github.com/owner/repo.git
-        val httpsMatch = Regex("""github\.com/([^/]+/[^/.]+)""").find(output)
-        if (httpsMatch != null) return httpsMatch.groupValues[1]
-        null
-    } catch (_: Exception) {
-        null
-    }
-}
 
 // ── Root-level monorepoPublish (deps wired in projectsEvaluated) ──
 
@@ -902,12 +884,17 @@ gradle.projectsEvaluated {
                     logger.warn("[publish] git push failed: ${e.message}")
                 }
 
-                // Write /tmp/published-packages.json for the release-announcement
-                // action. Format: [{ name, version, path }] — the `path` field is
-                // used by generate_slack_message.sh to build changelog URLs.
-                val planJson = publishPlanFile.readText()
-                java.io.File("/tmp/published-packages.json").writeText(planJson)
-                logger.lifecycle("[publish] wrote /tmp/published-packages.json")
+                // Release announcement: Slack + Lambda event for each package.
+                // Gated on env vars — silently skips when not in CI.
+                val announcePkgs = plan.mapNotNull { entry ->
+                    val n = entry["name"] as? String ?: return@mapNotNull null
+                    val v = entry["version"] as? String ?: return@mapNotNull null
+                    val loc = entry["location"] as? String ?: return@mapNotNull null
+                    ReleaseAnnouncement.PublishedPackage(n, v, loc)
+                }
+                val announceBranch = currentBranch(rootProject.projectDir)
+                val githubRepo = ReleaseAnnouncement.detectGithubRepo(rootProject.projectDir)
+                ReleaseAnnouncement.announce(announcePkgs, rootProject.projectDir, announceBranch, githubRepo, logger)
             }
         }
     }
