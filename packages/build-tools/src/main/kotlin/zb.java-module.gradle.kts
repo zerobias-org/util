@@ -54,10 +54,24 @@ val mavenBuild by tasks.registering(Exec::class) {
     dependsOn(tasks.named("transpile"))
     workingDir(project.file("java"))
     commandLine("mvn", "clean", "package", "-DskipTests", "-U")
+    // Declare inputs/outputs so gradle tracks the jar properly. Without this,
+    // downstream tasks (buildImageExec) treat the jar as implicit state and
+    // never invalidate their own up-to-date check when java sources change.
+    inputs.dir(project.file("java/src"))
+    inputs.file(project.file("java/pom.xml"))
+    outputs.dir(project.file("java/target"))
 }
 
 tasks.named("compile") {
     dependsOn(mavenBuild)
+}
+
+// Wire the maven-built jar as an input to buildImageExec so Docker image
+// rebuilds when the jar content changes. Without this, buildImageExec only
+// tracks Dockerfile/dist/package.json and stays "UP-TO-DATE" forever after
+// the first successful build, silently testing stale code.
+tasks.named("buildImageExec") {
+    inputs.dir(project.file("java/target"))
 }
 
 // ════════════════════════════════════════════════════════════
@@ -87,6 +101,13 @@ val mavenTestIntegration by tasks.registering(Exec::class) {
 
 tasks.named("testIntegration") {
     dependsOn(mavenTestIntegration)
+}
+
+// Skip testDirect for java-http modules — the implementation runs as a
+// container, not a TypeScript class loaded in-process. testDocker covers
+// the equivalent coverage against the real HTTP surface.
+tasks.named("testDirectExec") {
+    enabled = false
 }
 
 // ════════════════════════════════════════════════════════════
