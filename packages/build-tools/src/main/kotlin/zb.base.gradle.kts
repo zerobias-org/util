@@ -1611,7 +1611,10 @@ gradle.taskGraph.whenReady {
 
         // Exec/NpxTask: redirect stdout/stderr to the per-task log file so
         // the live TTY display doesn't get polluted by child process output.
-        if (task is Exec) {
+        // Skipped when ZBB_NO_TTY=1 — user wants raw output in the terminal
+        // (display is disabled in zbb too), so there's nothing to protect.
+        val zbbNoTty = System.getenv("ZBB_NO_TTY") == "1"
+        if (task is Exec && !zbbNoTty) {
             val execTask: Exec = task
             var logStream: java.io.OutputStream? = null
             execTask.doFirst {

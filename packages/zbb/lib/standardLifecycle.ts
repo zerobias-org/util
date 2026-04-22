@@ -38,8 +38,6 @@ import {
 } from './gradle.js';
 import type { ParsedLifecycleArgs } from './monorepo/index.js';
 
-// Sync `require` for use in ESM — lazy-load Display.js without making the
-// whole call chain async. Same pattern used by the monorepo dispatcher.
 const requireCJS = createRequire(import.meta.url);
 
 /**
@@ -86,10 +84,13 @@ export async function spawnStandardLifecycleAndExit(
   // Use the project-centric TTY display for commands that produce per-task
   // events. Same logic as the monorepo dispatcher — clean/gateCheck have
   // no per-task events worth rendering, so they fall through to plain bash.
+  // Opt out per-user with ZBB_NO_TTY=1 (wins over ZBB_FORCE_TTY).
+  const noDisplay = process.env.ZBB_NO_TTY === '1';
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
+    !noDisplay &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
     (process.stdout.isTTY || forceDisplay);
@@ -167,27 +168,12 @@ export function resolveCommandForCwd(repoRoot: string, baseCommand: string): str
   if (taskName.includes(':')) return baseCommand;
 
   // If cwd doesn't have a build.gradle.kts, it's not a gradle subproject.
-  // Per the user's design rule, a package must have build.gradle.kts to
-  // be buildable/publishable as a standalone unit — refuse with a clear
-  // error that points at the fix.
+  // Zbb's #1 job is being a Gradle wrapper — run the raw command at the
+  // gradle root so Gradle gets to decide what to do. Don't bail.
   const hasBuildFile =
     existsSync(join(cwd, 'build.gradle.kts')) ||
     existsSync(join(cwd, 'build.gradle'));
-  const hasPackageJson = existsSync(join(cwd, 'package.json'));
-  if (!hasBuildFile) {
-    if (hasPackageJson) {
-      console.error(
-        `This package has package.json but no build.gradle.kts — it is not\n` +
-        `a registered gradle subproject, so \`zbb ${taskName}\` can't target it\n` +
-        `individually. Add a build.gradle.kts to make it publishable.`,
-      );
-      process.exit(1);
-    }
-    // Neither build.gradle.kts nor package.json — probably a random
-    // subfolder (docs, scripts, etc.). Run the root task as declared;
-    // the user probably meant to run from repoRoot.
-    return baseCommand;
-  }
+  if (!hasBuildFile) return baseCommand;
 
   // Look up the gradle subproject path from the cached projectPaths map.
   const found = findGradleRoot(cwd);
@@ -206,13 +192,7 @@ export function resolveCommandForCwd(repoRoot: string, baseCommand: string): str
     }
   }
   const projectPath = detectProject(found.root, projects);
-  if (!projectPath) {
-    console.error(
-      `cwd ${cwd} has build.gradle.kts but isn't registered in settings.gradle.kts.\n` +
-      `Add it to settings.gradle.kts or run \`zbb\` from the repo root.`,
-    );
-    process.exit(1);
-  }
+  if (!projectPath) return baseCommand;
 
   const newRest = [...rest];
   newRest[taskIdx] = `${projectPath}:${taskName}`;

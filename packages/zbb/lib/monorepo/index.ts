@@ -156,10 +156,13 @@ export async function spawnLifecycleAndExit(
   // Use the project-centric display for commands that produce per-task events
   // (build, test, gate). Skip clean (single root task — no per-task events)
   // and gate --check (fast file read — no point spinning up the display).
+  // Opt out per-user with ZBB_NO_TTY=1 (wins over ZBB_FORCE_TTY).
+  const noDisplay = process.env.ZBB_NO_TTY === '1';
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
+    !noDisplay &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
     (process.stdout.isTTY || forceDisplay);

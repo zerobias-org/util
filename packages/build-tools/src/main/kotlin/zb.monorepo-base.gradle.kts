@@ -161,7 +161,9 @@ gradle.taskGraph.whenReady {
             // Cast through BaseExecSpec to avoid NoSuchMethodError when the
             // Kotlin-compiled setter targets a covariant return type that
             // doesn't match the runtime Gradle API.
-            if (task is Exec) {
+            // Skipped when ZBB_NO_TTY=1 — user wants raw output in the terminal.
+            val zbbNoTty = System.getenv("ZBB_NO_TTY") == "1"
+            if (task is Exec && !zbbNoTty) {
                 val execTask: Exec = task
                 // Store the stream so doLast can flush it. Declared outside
                 // the doFirst lambda so both doFirst and doLast see it.
