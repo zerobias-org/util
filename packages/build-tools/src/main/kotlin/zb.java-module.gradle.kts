@@ -130,8 +130,10 @@ val ensureJavaEcrRepo by tasks.registering(Exec::class) {
     doFirst {
         val awsRegion = System.getenv("AWS_REGION")
             ?: throw GradleException("AWS_REGION not set in slot env — add to zbb.yaml")
-        val ecrRepoName = System.getenv("ECR_REPO_NAME")
-            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
+        // Derive from package name (matches zb.typescript pattern). ECR_REPO_NAME
+        // env var is honoured as an override when explicitly set.
+        val ecrRepoName = System.getenv("ECR_REPO_NAME")?.takeIf { it.isNotBlank() }
+            ?: zb.dockerImageName.get()
         commandLine("aws", "ecr", "create-repository",
             "--repository-name", ecrRepoName,
             "--region", awsRegion)
@@ -149,15 +151,18 @@ val publishJavaImageEcr by tasks.registering(Exec::class) {
     doFirst {
         val ver = project.version.toString().substringBefore("+")
         if (javaIsDryRun) {
-            val ecrRepoName = System.getenv("ECR_REPO_NAME") ?: "<ECR_REPO_NAME>"
+            val ecrRepoName = System.getenv("ECR_REPO_NAME")?.takeIf { it.isNotBlank() }
+                ?: zb.dockerImageName.get()
             val ecrRegistry = System.getenv("ECR_REGISTRY") ?: "<ECR_REGISTRY>"
             logger.lifecycle("[DRY RUN] Would push multi-arch Java module image to ECR: ${ecrRegistry}/${ecrRepoName}:${ver}")
             throw org.gradle.api.tasks.StopExecutionException()
         }
         val ecrRegistry = System.getenv("ECR_REGISTRY")
             ?: throw GradleException("ECR_REGISTRY not set in slot env — add to zbb.yaml")
-        val ecrRepoName = System.getenv("ECR_REPO_NAME")
-            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
+        // Derive from package name (matches zb.typescript pattern). ECR_REPO_NAME
+        // env var is honoured as an override when explicitly set.
+        val ecrRepoName = System.getenv("ECR_REPO_NAME")?.takeIf { it.isNotBlank() }
+            ?: zb.dockerImageName.get()
         commandLine("docker", "buildx", "build",
             "--platform", "linux/amd64,linux/arm64",
             "-t", "${ecrRegistry}/${ecrRepoName}:${ver}", "--push", ".")
@@ -174,15 +179,18 @@ val publishJavaImageGhcr by tasks.registering(Exec::class) {
     doFirst {
         val ver = project.version.toString().substringBefore("+")
         if (javaIsDryRun) {
-            val ecrRepoName = System.getenv("ECR_REPO_NAME") ?: "<ECR_REPO_NAME>"
+            val ecrRepoName = System.getenv("ECR_REPO_NAME")?.takeIf { it.isNotBlank() }
+                ?: zb.dockerImageName.get()
             val ghcrRegistry = System.getenv("GHCR_REGISTRY") ?: "<GHCR_REGISTRY>"
             logger.lifecycle("[DRY RUN] Would push multi-arch Java module image to GHCR: ${ghcrRegistry}/${ecrRepoName}:${ver}")
             throw org.gradle.api.tasks.StopExecutionException()
         }
         val ghcrRegistry = System.getenv("GHCR_REGISTRY")
             ?: throw GradleException("GHCR_REGISTRY not set in slot env — add to zbb.yaml")
-        val ecrRepoName = System.getenv("ECR_REPO_NAME")
-            ?: throw GradleException("ECR_REPO_NAME not set in slot env — add to zbb.yaml")
+        // Derive from package name (matches zb.typescript pattern). ECR_REPO_NAME
+        // env var is honoured as an override when explicitly set.
+        val ecrRepoName = System.getenv("ECR_REPO_NAME")?.takeIf { it.isNotBlank() }
+            ?: zb.dockerImageName.get()
         commandLine("docker", "buildx", "build",
             "--platform", "linux/amd64,linux/arm64",
             "-t", "${ghcrRegistry}/${ecrRepoName}:${ver}", "--push", ".")
