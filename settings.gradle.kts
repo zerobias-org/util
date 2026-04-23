@@ -64,29 +64,10 @@ buildscript {
 
 rootProject.name = "util"
 
-// ── Env var → Gradle project property mapping ───────────────────────
-// Readable env vars in the shell (SONATYPE_USERNAME, GPG_SIGNING_KEY, ...)
-// mapped to the gradle property names that Vanniktech's maven.publish
-// plugin + Gradle's signing plugin read via providers.gradleProperty().
-// Settings phase is the right place: startParameter.projectProperties
-// is equivalent to `-P<name>=<value>` and IS seen by the provider layer.
-// Extra properties (`project.extra[...]`) are NOT — that's a common
-// gotcha. Set once here so every Java package picks them up.
-//
-// Gradle 8 returns the map as immutable from the getter — copy, mutate,
-// set via the setter.
-val updatedProps = gradle.startParameter.projectProperties.toMutableMap()
-listOf(
-    "SONATYPE_USERNAME"        to "mavenCentralUsername",
-    "SONATYPE_PASSWORD"        to "mavenCentralPassword",
-    "GPG_SIGNING_KEY"          to "signingInMemoryKey",
-    "GPG_SIGNING_KEY_PASSWORD" to "signingInMemoryKeyPassword",
-).forEach { (envVar, propName) ->
-    System.getenv(envVar)?.takeIf { it.isNotEmpty() }?.let {
-        updatedProps[propName] = it
-    }
-}
-gradle.startParameter.projectProperties = updatedProps
+// Env var → gradle property mapping for Sonatype/GPG credentials lives
+// in each Java package's own settings.gradle.kts (build-tools,
+// lite-filter, codegen). They're standalone Gradle roots — no longer
+// included as monorepo subprojects here. See their settings files.
 
 // ── 3. Discover npm workspaces and include each as a Gradle subproject ──
 //     `packages/build-tools` has its own standalone Gradle setup AND
@@ -100,7 +81,17 @@ gradle.startParameter.projectProperties = updatedProps
 //     codegen's existing tasks (notably `test`) and skips registering
 //     conflicting fallbacks. codegen's npm scripts still drive the
 //     workflow; the gradle build is invoked transitively via npm.
-val excluded = setOf("packages/build-tools")
+// Standalone Gradle roots: each has its own gradlew, settings, zbb.yaml,
+// and publishes independently from its package dir. Keep them out of
+// util's monorepo inclusion so root-level `zbb build` doesn't run their
+// Gradle. (build-tools additionally stays composite-included via
+// pluginManagement.includeBuild above so consumers in this repo resolve
+// its convention plugins.)
+val excluded = setOf(
+    "packages/build-tools",
+    "packages/lite-filter",
+    "packages/codegen",
+)
 val packages = Workspace.discoverWorkspaces(settings.rootDir)
     .filterValues { it.relDir !in excluded }
 for ((_, pkg) in packages) {

@@ -1,10 +1,14 @@
-rootProject.name = "build-tools"
+rootProject.name = "lite-filter"
 
-// Map clean slot env vars (SONATYPE_*, GPG_*) to gradle property names
-// the maven-publish / Vanniktech / signing plugins read via
-// providers.gradleProperty(). See lite-filter/settings.gradle.kts for
-// the reasoning — startParameter.projectProperties is the only
-// settings-phase API the provider layer observes.
+pluginManagement {
+    includeBuild("../build-tools")
+}
+
+// Map clean slot env vars (SONATYPE_*, GPG_*) to the gradle property
+// names Vanniktech + signing plugins read via providers.gradleProperty().
+// Settings phase is the only reliable place: startParameter.projectProperties
+// is what providers.gradleProperty sees. Repeated in codegen + build-tools
+// since each is its own standalone Gradle root.
 run {
     val updated = gradle.startParameter.projectProperties.toMutableMap()
     listOf(
