@@ -1,16 +1,48 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        maven {
+            url = uri('https://maven.pkg.github.com/zerobias-org/util')
+            credentials {
+                username = System.getenv('GITHUB_ACTOR') ?: 'zerobias-org'
+                password = System.getenv('NPM_TOKEN') ?: System.getenv('GITHUB_TOKEN') ?: ''
+            }
+        }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.zerobias:build-tools:1.+'
+    }
+}
+
 rootProject.name = 'hub-module-codegen'
 
-// Map clean slot env vars (SONATYPE_*, GPG_*) to gradle property names
-// the Vanniktech + signing plugins read via providers.gradleProperty().
-// See lite-filter/settings.gradle.kts for the reasoning.
-def updated = new HashMap<String, String>(gradle.startParameter.projectProperties)
-[
-    'SONATYPE_USERNAME'        : 'mavenCentralUsername',
-    'SONATYPE_PASSWORD'        : 'mavenCentralPassword',
-    'GPG_SIGNING_KEY'          : 'signingInMemoryKey',
-    'GPG_SIGNING_KEY_PASSWORD' : 'signingInMemoryKeyPassword',
-].each { envVar, propName ->
-    def v = System.getenv(envVar)
-    if (v != null && !v.isEmpty()) updated[propName] = v
+// Load zbb slot + stack env via build-tools' canonical ZbbSlotProvider.
+// Reads .env files directly from $ZB_SLOT_DIR (slot) and stacks/$ZB_STACK/.env.
+// Stack env overlays slot env — same precedence as `zbb env list`.
+// Declared env vars from zbb.yaml `env:` live at the stack level, so
+// getStackEnv() is the required source.
+//
+// Map to gradle property names Vanniktech + signing plugins read via
+// providers.gradleProperty().
+import com.zerobias.buildtools.util.ZbbSlotProvider
+
+if (ZbbSlotProvider.INSTANCE.isInsideSlot()) {
+    def merged = new LinkedHashMap<String, String>()
+    merged.putAll(ZbbSlotProvider.INSTANCE.getSlotEnv(null))
+    if (ZbbSlotProvider.INSTANCE.activeStackName() != null) {
+        merged.putAll(ZbbSlotProvider.INSTANCE.getStackEnv())
+    }
+    def updated = new LinkedHashMap<String, String>(gradle.startParameter.projectProperties)
+    [
+        'SONATYPE_USERNAME'        : 'mavenCentralUsername',
+        'SONATYPE_PASSWORD'        : 'mavenCentralPassword',
+        'GPG_SIGNING_KEY'          : 'signingInMemoryKey',
+        'GPG_SIGNING_KEY_PASSWORD' : 'signingInMemoryKeyPassword',
+    ].each { envVar, propName ->
+        def v = merged[envVar]
+        if (v != null && !v.isEmpty()) updated[propName] = v
+    }
+    gradle.startParameter.projectProperties = updated
 }
-gradle.startParameter.projectProperties = updated
