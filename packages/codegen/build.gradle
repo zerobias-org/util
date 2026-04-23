@@ -1,27 +1,15 @@
-buildscript {
-  repositories {
-    mavenCentral()
-    mavenLocal()
-  }
-}
-
 plugins {
-  id 'com.vanniktech.maven.publish' version '0.30.0'
+  id 'zb.maven-central-publish'
 }
 apply plugin: 'java'
-apply plugin: 'maven-publish'
+
 group = 'com.zerobias.hub'
 version = '2.0.50'
 description = 'OpenAPI Generator for creating Hub Modules'
 
-// Env var → Gradle property mapping lives in util's root settings.gradle.kts
-
-// Force the artifact name regardless of whether gradle is invoked from this
-// directory (rootProject.name = 'hub-module-codegen' via settings.gradle) or
-// from the monorepo root (subproject name = 'codegen' from the directory
-// name). Without this, root-gradle builds produce `codegen-1.0.0.jar` while
-// nested builds produce `hub-module-codegen-1.0.0.jar`, and the `copyDeps`
-// npm script only expects the latter.
+// Force the artifact name regardless of how gradle is invoked (e.g. from
+// the monorepo root vs from this directory). Downstream npm consumers
+// (bin/hub-generator.js, copyDeps) expect hub-module-codegen-*.jar.
 base {
     archivesName = 'hub-module-codegen'
 }
@@ -42,35 +30,6 @@ tasks.withType(JavaCompile) {
 processResources {
   from ('package.json')
 }
-
-dependencies {
-  implementation 'org.openapitools:openapi-generator-cli:5.4.0'
-}
-
-task copyDependencies(type: Copy) {
-   from configurations.compileClasspath
-   into "${project.layout.buildDirectory.get().asFile}/dependencies"
-}
-build.dependsOn += copyDependencies
-
-// Stage the built hub-module-codegen jar and the openapi-generator-cli
-// runtime jar into `bin/` so `bin/hub-generator.js` can invoke them.
-// Locally this is normally done by `npm run copyDeps`; monorepoBuild
-// only runs gradle's :build and never invokes that npm script, so wire
-// the staging directly into :build instead. This keeps local + CI behavior
-// identical for downstream packages (e.g. hub-module-utils) that invoke
-// `hub-generator`.
-task stageBinJars(type: Copy) {
-    dependsOn jar, copyDependencies
-    from jar.archiveFile
-    from fileTree("${project.layout.buildDirectory.get().asFile}/dependencies") {
-        include 'openapi-generator-cli-*.jar'
-    }
-    into "$projectDir/bin"
-    rename(/hub-module-codegen-.*\.jar/, 'hub-module-codegen.jar')
-    rename(/openapi-generator-cli-.*\.jar/, 'openapi-generator-cli.jar')
-}
-build.dependsOn += stageBinJars
 
 repositories {
   mavenLocal()
@@ -93,71 +52,37 @@ repositories {
   mavenCentral()
 }
 
+dependencies {
+  implementation 'org.openapitools:openapi-generator-cli:5.4.0'
+}
+
+task copyDependencies(type: Copy) {
+   from configurations.compileClasspath
+   into "${project.layout.buildDirectory.get().asFile}/dependencies"
+}
+build.dependsOn += copyDependencies
+
+// Stage the built hub-module-codegen jar and the openapi-generator-cli
+// runtime jar into `bin/` so `bin/hub-generator.js` can invoke them.
+// Locally this is normally done by `npm run copyDeps`; monorepoBuild
+// only runs gradle's :build and never invokes that npm script, so wire
+// the staging directly into :build instead. This keeps local + CI
+// behavior identical for downstream packages (e.g. hub-module-utils)
+// that invoke `hub-generator`.
+task stageBinJars(type: Copy) {
+    dependsOn jar, copyDependencies
+    from jar.archiveFile
+    from fileTree("${project.layout.buildDirectory.get().asFile}/dependencies") {
+        include 'openapi-generator-cli-*.jar'
+    }
+    into "$projectDir/bin"
+    rename(/hub-module-codegen-.*\.jar/, 'hub-module-codegen.jar')
+    rename(/openapi-generator-cli-.*\.jar/, 'openapi-generator-cli.jar')
+}
+build.dependsOn += stageBinJars
+
 test.useTestNG()
 
-
-// ── Maven Central (via Vanniktech) ───────────────────────────────────
-// Stages on Central Portal; release is manual at central.sonatype.com.
-import com.vanniktech.maven.publish.JavaLibrary
-import com.vanniktech.maven.publish.JavadocJar
-import com.vanniktech.maven.publish.SonatypeHost
-
-mavenPublishing {
-  publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, false)
-  signAllPublications()
-  configure(new JavaLibrary(new JavadocJar.Javadoc(), true))
-
-  coordinates('com.zerobias.hub', 'hub-module-codegen', project.version.toString())
-
-  pom {
-    name = 'hub-module-codegen'
-    description = project.description
-    url = 'https://github.com/zerobias-org/util'
-    licenses {
-      license {
-        name = 'Apache License, Version 2.0'
-        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-        distribution = 'repo'
-      }
-    }
-    developers {
-      developer {
-        id = 'kmccarthy'
-        name = 'Kevin McCarthy'
-        email = 'kmccarthy@zerobias.com'
-        organization = 'Zerobias'
-        organizationUrl = 'https://github.com/zerobias-org'
-      }
-    }
-    scm {
-      url = 'https://github.com/zerobias-org/util/tree/main'
-      connection = 'scm:git:git://github.com/zerobias-org/util.git'
-      developerConnection = 'scm:git:ssh://github.com:zerobias-org/util.git'
-    }
-  }
-}
-
-// ── GitHub Packages (second publish target) ──────────────────────────
-publishing {
-  repositories {
-    maven {
-      name = 'github'
-      url = uri('https://maven.pkg.github.com/zerobias-org/util')
-      credentials {
-        username = System.getenv('GITHUB_ACTOR') ?: 'zerobias-org'
-        password = System.getenv('NPM_TOKEN') ?: System.getenv('GITHUB_TOKEN') ?: ''
-      }
-    }
-  }
-}
-
-tasks.register('publishToGithub') {
-  group = 'publishing'
-  description = 'Publish to GitHub Packages Maven repository'
-  dependsOn 'publishMavenPublicationToGithubRepository'
-}
-
-// `publish` runs all three targets.
-tasks.named('publish') {
-  dependsOn 'publishToMavenLocal', 'publishToMavenCentral', 'publishToGithub'
+zbMavenCentral {
+    artifactId.set('hub-module-codegen')
 }

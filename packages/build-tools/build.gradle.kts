@@ -69,6 +69,10 @@ dependencies {
     // JSON serialization for monorepo gate stamp (matches JS JSON.stringify byte-for-byte)
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
 
+    // Vanniktech Maven Central publishing — consumed by the precompiled
+    // `zb.maven-central-publish` script plugin.
+    implementation("com.vanniktech:gradle-maven-publish-plugin:0.30.0")
+
     // Kotlin test runner
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
