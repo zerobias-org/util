@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.zerobias"
-version = "1.0.1"
+version = "1.0.2"
 description = "A lightweight library for RFC4515 LDAP-style filters with extensions"
 
 // Source lives in java/ subdirectory (dual-language project: java/ + npm/)
