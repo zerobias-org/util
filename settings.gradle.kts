@@ -72,6 +72,10 @@ rootProject.name = "util"
 // is equivalent to `-P<name>=<value>` and IS seen by the provider layer.
 // Extra properties (`project.extra[...]`) are NOT — that's a common
 // gotcha. Set once here so every Java package picks them up.
+//
+// Gradle 8 returns the map as immutable from the getter — copy, mutate,
+// set via the setter.
+val updatedProps = gradle.startParameter.projectProperties.toMutableMap()
 listOf(
     "SONATYPE_USERNAME"        to "mavenCentralUsername",
     "SONATYPE_PASSWORD"        to "mavenCentralPassword",
@@ -79,9 +83,10 @@ listOf(
     "GPG_SIGNING_KEY_PASSWORD" to "signingInMemoryKeyPassword",
 ).forEach { (envVar, propName) ->
     System.getenv(envVar)?.takeIf { it.isNotEmpty() }?.let {
-        gradle.startParameter.projectProperties[propName] = it
+        updatedProps[propName] = it
     }
 }
+gradle.startParameter.projectProperties = updatedProps
 
 // ── 3. Discover npm workspaces and include each as a Gradle subproject ──
 //     `packages/build-tools` has its own standalone Gradle setup AND
