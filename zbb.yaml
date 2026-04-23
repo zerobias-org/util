@@ -33,12 +33,12 @@ env:
   # `useInMemoryPgpKeys(signingKey, signingPassword)` in zb.java-library.
   ORG_GRADLE_PROJECT_signingKey:
     source: vault
-    vault: "operations-kv/sonatype/mavencentral/publish.signingKey"
+    vault: "operations-kv/sonatype/mavencentral/publish.gpg_key"
     mask: true
     description: "ASCII-armored GPG private key for artifact signing."
   ORG_GRADLE_PROJECT_signingPassword:
     source: vault
-    vault: "operations-kv/sonatype/mavencentral/publish.signingPassword"
+    vault: "operations-kv/sonatype/mavencentral/publish.gpg_key_password"
     mask: true
     description: "Passphrase for the GPG private key."
 

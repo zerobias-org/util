@@ -1,0 +1,6 @@
+{
+  "name": "@zerobias-org/util-lite-filter-java",
+  "version": "1.0.2",
+  "private": true,
+  "description": "Java lite-filter — workspace marker so the util monorepo discovery sees this package. The Java artifact is built + published via build.gradle.kts (zb.java-library); the TypeScript sibling lives in npm/ with its own package.json."
+}
