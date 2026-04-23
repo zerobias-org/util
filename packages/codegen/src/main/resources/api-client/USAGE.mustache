@@ -162,9 +162,10 @@ Access via `client.get{{classname}}()`
 | `url` | string | Yes | Base URL of the API server |
 | `apiKey` | string | No* | API key for authentication |
 | `jwt` | string | No* | JWT token for authentication |
+| `session` | string | No* | Session token for authentication (e.g., Dana session); takes precedence over `jwt` and `apiKey` |
 | `orgId` | string | Yes | Organization ID for multi-tenancy |
 
-*Either `apiKey` or `jwt` is required for authentication.
+*One of `apiKey`, `jwt`, or `session` is required for authentication.
 
 ## TypeScript Support
 

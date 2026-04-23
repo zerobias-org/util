@@ -133,11 +133,12 @@ export class BaseApiClient {
    * Establishes connection with given profile
    *
    * This method stores the connection profile and configures the HTTP client
-   * with the base URL. Authentication credentials (jwt, apiKey) and org context (orgId)
+   * with the base URL. Authentication credentials (session, jwt, apiKey) and org context (orgId)
    * should be applied by the extending class in subsequent requests.
    *
    * @param connectionProfile - Connection configuration including:
    *   - url: Full URL string (e.g., 'http://localhost:8888' or 'https://ci.zerobias.com/api/hub')
+   *   - session: Session token for authentication, e.g. Dana session (optional, overrides jwt/apiKey)
    *   - jwt: JWT token for authentication (optional)
    *   - apiKey: API key for authentication (optional)
    *   - orgId: Organization ID for multi-tenancy (optional)
@@ -171,12 +172,15 @@ export class BaseApiClient {
 
       axiosClient.defaults.baseURL = baseURL;
 
-      // Set authentication headers
+      // Set authentication headers (session > jwt > apiKey)
       if (connectionProfile.apiKey) {
         axiosClient.defaults.headers.common['Authorization'] = `APIKey ${connectionProfile.apiKey}`;
       }
       if (connectionProfile.jwt) {
         axiosClient.defaults.headers.common['Authorization'] = `Bearer ${connectionProfile.jwt}`;
+      }
+      if (connectionProfile.session) {
+        axiosClient.defaults.headers.common['Authorization'] = `session ${connectionProfile.session}`;
       }
 
       // Set org context header

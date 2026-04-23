@@ -32,3 +32,18 @@ export function apiKey(apiKeyStr: string): string {
   return apiKeyStr?.startsWith('APIKey ')
     ? apiKeyStr : `APIKey ${apiKeyStr}`;
 }
+
+/**
+ * Ensures session token has session prefix
+ * @param sessionStr - Session token string
+ * @returns Session token with session prefix
+ * @example
+ * ```typescript
+ * const token = AuthUtils.session('sess_abc123');
+ * // Returns: 'session sess_abc123'
+ * ```
+ */
+export function session(sessionStr: string): string {
+  return sessionStr?.startsWith('session ')
+    ? sessionStr : `session ${sessionStr}`;
+}

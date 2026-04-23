@@ -39,18 +39,5 @@
     "node": ">=22.0.0",
     "npm": ">=10.0.0"
   },
-  "dependencies": {
-    "axios": "^1.13.5",
-    "dockerode": "^4.0.0",
-    "get-port": "^7.1.0",
-    "uuid": "^13.0.0",
-    "yaml": "2.8.3"
-  },
-  "overrides": {
-    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
-    "diff": "^8.0.4",
-    "glob": ">=11",
-    "serialize-javascript": "7.0.5",
-    "yaml": "2.8.3"
-  }
+  "dependencies": {}
 }

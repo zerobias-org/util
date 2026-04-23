@@ -51,16 +51,5 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "dependencies": {
-    "jsonata": "^2.0.0",
-    "semver": "^7.6.0",
-    "yaml": "2.8.3"
-  },
-  "overrides": {
-    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
-    "diff": "^8.0.4",
-    "glob": ">=11",
-    "serialize-javascript": "7.0.5",
-    "yaml": "2.8.3"
-  }
+  "dependencies": {}
 }

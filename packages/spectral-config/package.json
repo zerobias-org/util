@@ -20,11 +20,6 @@
   "publishConfig": {
     "registry": "https://pkg.zerobias.org/"
   },
-  "dependencies": {
-    "@stoplight/json-ref-resolver": "^3.1.6",
-    "@zerobias-org/eslint-config": "^1.0.31",
-    "@zerobias-org/types-format-spectral-ruleset": "^1.0.37"
-  },
   "files": [
     "index.js",
     "rules/*.yml",
@@ -34,11 +29,5 @@
     "node": ">=22.0.0",
     "npm": ">=10.0.0"
   },
-  "overrides": {
-    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
-    "diff": "^8.0.4",
-    "glob": ">=11",
-    "serialize-javascript": "7.0.5",
-    "yaml": "2.8.3"
-  }
+  "dependencies": {}
 }
