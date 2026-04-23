@@ -382,8 +382,14 @@ gradle.projectsEvaluated {
                 isIgnoreExitValue = true
                 val stdoutLog = pkg.dir.resolve("build/${phase}.stdout.log")
                 val stderrLog = pkg.dir.resolve("build/${phase}.stderr.log")
+                // Display log: .zbb-monorepo/logs/<safeName>-<phase>.log
+                // Must match the path Display.ts computes from the gradle
+                // project path so the TTY failure block can read it.
+                val safeName = gradlePath.removePrefix(":").replace(":", "-")
+                val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-${phase}.log")
                 doFirst {
                     stdoutLog.parentFile.mkdirs()
+                    displayLog.parentFile.mkdirs()
                     standardOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stdoutLog))
                     errorOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stderrLog))
                 }
@@ -419,19 +425,22 @@ gradle.projectsEvaluated {
                     (standardOutput as? java.io.Closeable)?.close()
                     (errorOutput as? java.io.Closeable)?.close()
 
+                    // Write combined stdout+stderr to .zbb-monorepo/logs/ so the
+                    // zbb TTY display can read it for inline failure output.
+                    val combined = buildString {
+                        if (stdoutLog.exists() && stdoutLog.length() > 0) append(stdoutLog.readText())
+                        if (stderrLog.exists() && stderrLog.length() > 0) {
+                            append("----- stderr -----\n")
+                            append(stderrLog.readText())
+                        }
+                    }
+                    displayLog.writeText(combined)
+
                     val exitValue = executionResult.get().exitValue
                     if (exitValue != 0) {
                         logger.lifecycle("")
                         logger.lifecycle("===== npm run $phase FAILED for $pkgName (exit $exitValue) =====")
-                        // tsc and most node tools write errors to stdout,
-                        // not stderr — dump stdout first, stderr second.
-                        if (stdoutLog.exists() && stdoutLog.length() > 0) {
-                            logger.lifecycle(stdoutLog.readText())
-                        }
-                        if (stderrLog.exists() && stderrLog.length() > 0) {
-                            logger.lifecycle("----- stderr -----")
-                            logger.lifecycle(stderrLog.readText())
-                        }
+                        logger.lifecycle(combined)
                         logger.lifecycle("===== end $pkgName:$phase output =====")
                         logger.lifecycle("")
                         throw GradleException(
@@ -488,8 +497,11 @@ gradle.projectsEvaluated {
                 isIgnoreExitValue = true
                 val stdoutLog = pkg.dir.resolve("build/${testPhase}.stdout.log")
                 val stderrLog = pkg.dir.resolve("build/${testPhase}.stderr.log")
+                val safeName = gradlePath.removePrefix(":").replace(":", "-")
+                val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-${testPhase}.log")
                 doFirst {
                     stdoutLog.parentFile.mkdirs()
+                    displayLog.parentFile.mkdirs()
                     standardOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stdoutLog))
                     errorOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stderrLog))
                 }
@@ -506,17 +518,22 @@ gradle.projectsEvaluated {
                     (standardOutput as? java.io.Closeable)?.close()
                     (errorOutput as? java.io.Closeable)?.close()
 
+                    // Write combined stdout+stderr to .zbb-monorepo/logs/ so the
+                    // zbb TTY display can read it for inline failure output.
+                    val combined = buildString {
+                        if (stdoutLog.exists() && stdoutLog.length() > 0) append(stdoutLog.readText())
+                        if (stderrLog.exists() && stderrLog.length() > 0) {
+                            append("----- stderr -----\n")
+                            append(stderrLog.readText())
+                        }
+                    }
+                    displayLog.writeText(combined)
+
                     val exitValue = executionResult.get().exitValue
                     if (exitValue != 0) {
                         logger.lifecycle("")
                         logger.lifecycle("===== npm run $testPhase FAILED for $pkgName (exit $exitValue) =====")
-                        if (stdoutLog.exists() && stdoutLog.length() > 0) {
-                            logger.lifecycle(stdoutLog.readText())
-                        }
-                        if (stderrLog.exists() && stderrLog.length() > 0) {
-                            logger.lifecycle("----- stderr -----")
-                            logger.lifecycle(stderrLog.readText())
-                        }
+                        logger.lifecycle(combined)
                         logger.lifecycle("===== end $pkgName:$testPhase output =====")
                         logger.lifecycle("")
                         throw GradleException(

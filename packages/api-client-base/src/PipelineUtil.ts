@@ -5,7 +5,7 @@
 
 import { RequestPrototype } from '@zerobias-org/util-api-invoker-api';
 import { ConnectionProfile } from './types.js';
-import { apiKey, jwt } from './AuthUtils.js';
+import { apiKey, jwt, session } from './AuthUtils.js';
 
 /**
  * Prepares request prototype with connection profile settings
@@ -80,9 +80,12 @@ export async function ensureRequestPrototype(
   // Initialize headers
   input.headers = {};
 
-  // Add authentication header
+  // Add authentication header (session wins over apiKey/jwt when set)
   let auth: string | undefined;
-  if (connectionProfile?.apiKey) {
+  if (connectionProfile?.session) {
+    auth = session(connectionProfile?.session);
+    input.headers['Authorization'] = auth;
+  } else if (connectionProfile?.apiKey) {
     auth = apiKey(connectionProfile?.apiKey);
     input.headers['Authorization'] = auth;
   } else if (connectionProfile?.jwt) {

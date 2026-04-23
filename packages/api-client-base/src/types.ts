@@ -37,6 +37,13 @@ export interface ConnectionProfile {
   apiKey?: string;
 
   /**
+   * Session token for authentication (e.g., Dana session)
+   * Will be sent as 'Authorization: session <session>' header
+   * Takes precedence over jwt and apiKey when set
+   */
+  session?: string;
+
+  /**
    * Organization ID for multi-tenancy
    * Will be sent as 'dana-org-id' header
    */

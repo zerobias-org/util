@@ -34,6 +34,16 @@ data class WorkspacePackage(
     val internalDeps: List<String>,
     /** Raw package.json content */
     val packageJson: Map<String, Any?>,
+    /**
+     * Value of `publishConfig.directory` from package.json (npm-standard).
+     * Set for packages whose publishable artifact lives in a subdirectory
+     * (e.g. ng-packagr writes the published package.json into `dist/`).
+     * The publish flow runs `npm publish` from this subdirectory and
+     * writes resolved deps + bumped versions there instead of the root.
+     * Null for the common case where the published artifact IS the
+     * package directory.
+     */
+    val publishDirectory: String?,
 )
 
 data class DependencyGraph(
@@ -119,6 +129,11 @@ object Workspace {
                 if (v is String) k to v else null
             }.toMap()
 
+            @Suppress("UNCHECKED_CAST")
+            val publishConfig = info.pkg["publishConfig"] as? Map<String, Any?>
+            val publishDirectory = (publishConfig?.get("directory") as? String)
+                ?.takeIf { it.isNotBlank() }
+
             packages[name] = WorkspacePackage(
                 name = name,
                 dir = info.dir,
@@ -128,6 +143,7 @@ object Workspace {
                 scripts = scripts,
                 internalDeps = internalDeps,
                 packageJson = info.pkg,
+                publishDirectory = publishDirectory,
             )
         }
 
