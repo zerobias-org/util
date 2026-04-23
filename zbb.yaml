@@ -9,6 +9,39 @@
 name: "@zerobias-org/util"
 version: "1.0.0"
 
+# ── Environment (Vault-sourced credentials) ──────────────────────────
+# Maven Central publishing credentials for all Java packages (lite-filter,
+# build-tools, codegen). Uses Gradle's standard `ORG_GRADLE_PROJECT_*`
+# env-to-property convention — setting these makes Gradle auto-expose the
+# suffix as a project property, which the `zb.java-library` convention
+# plugin already reads via `providers.gradleProperty(...)`. No per-package
+# or build-tools code change required.
+env:
+  # Sonatype Central Portal login (user tokens from central.sonatype.com)
+  ORG_GRADLE_PROJECT_sonatypeUsername:
+    source: vault
+    vault: "operations-kv/sonatype/mavencentral/publish.username"
+    description: "Sonatype Central Portal username (user token name)."
+  ORG_GRADLE_PROJECT_sonatypePassword:
+    source: vault
+    vault: "operations-kv/sonatype/mavencentral/publish.password"
+    mask: true
+    description: "Sonatype Central Portal password (user token value)."
+
+  # PGP signing — required by Maven Central. In-memory key (ASCII-armored
+  # private key + passphrase), consumed by Gradle's `signing` plugin via
+  # `useInMemoryPgpKeys(signingKey, signingPassword)` in zb.java-library.
+  ORG_GRADLE_PROJECT_signingKey:
+    source: vault
+    vault: "operations-kv/sonatype/mavencentral/publish.signingKey"
+    mask: true
+    description: "ASCII-armored GPG private key for artifact signing."
+  ORG_GRADLE_PROJECT_signingPassword:
+    source: vault
+    vault: "operations-kv/sonatype/mavencentral/publish.signingPassword"
+    mask: true
+    description: "Passphrase for the GPG private key."
+
 # ── Tool preflight ────────────────────────────────────────────────────
 require:
   - tool: node
