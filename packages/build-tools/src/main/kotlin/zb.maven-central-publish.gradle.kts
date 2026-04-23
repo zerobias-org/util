@@ -45,6 +45,24 @@ plugins {
     id("com.vanniktech.maven.publish")
 }
 
+// Diagnostic: log whether the signing credentials are visible at plugin
+// apply time. If signingInMemoryKey is NULL here, Vanniktech's
+// signAllPublications() won't configure the signatory, and signing
+// tasks fail with "no configured signatory".
+listOf(
+    "mavenCentralUsername",
+    "signingInMemoryKey",
+    "signingInMemoryKeyPassword",
+).forEach { propName ->
+    val v = project.findProperty(propName) as? String
+    val status = when {
+        v == null -> "NULL"
+        v.isEmpty() -> "EMPTY"
+        else -> "SET (${v.length} chars)"
+    }
+    println("[zb.maven-central-publish] $propName = $status")
+}
+
 // ── Vanniktech Maven Central config ─────────────────────────────────
 mavenPublishing {
     publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = false)
