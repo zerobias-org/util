@@ -83,6 +83,6 @@ build.dependsOn += stageBinJars
 
 test.useTestNG()
 
-zbMavenCentral {
-    artifactId.set('hub-module-codegen')
-}
+// Vanniktech reads artifactId from project.name. codegen's
+// rootProject.name in settings.gradle is 'hub-module-codegen' — matches
+// the desired Maven coordinate + the jar name (base.archivesName).

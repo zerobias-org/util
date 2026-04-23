@@ -48,7 +48,3 @@ dependencies {
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
-
-zbMavenCentral {
-    artifactId.set("lite-filter")
-}
