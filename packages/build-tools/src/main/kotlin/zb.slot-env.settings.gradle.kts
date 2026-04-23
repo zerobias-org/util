@@ -45,8 +45,19 @@ if (ZbbSlotProvider.isInsideSlot()) {
         }
     }
     val updated = gradle.startParameter.projectProperties.toMutableMap()
+    val mapped = mutableListOf<String>()
     mappings.forEach { (envVar, propName) ->
-        merged[envVar]?.takeIf { it.isNotEmpty() }?.let { updated[propName] = it }
+        merged[envVar]?.takeIf { it.isNotEmpty() }?.let {
+            updated[propName] = it
+            mapped += "$envVar→$propName"
+        }
     }
     gradle.startParameter.projectProperties = updated
+    if (mapped.isNotEmpty()) {
+        println("[zb.slot-env] mapped ${mapped.size} slot var(s) to gradle properties: ${mapped.joinToString(", ")}")
+    } else {
+        println("[zb.slot-env] no env vars matched any configured mapping (slot=${ZbbSlotProvider.activeSlotName()}, stack=${ZbbSlotProvider.activeStackName()})")
+    }
+} else {
+    println("[zb.slot-env] not inside a loaded slot — no credentials mapped (run: zbb slot load <name>)")
 }
