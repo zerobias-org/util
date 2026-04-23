@@ -5,11 +5,25 @@ buildscript {
   }
 }
 
+plugins {
+  id 'com.vanniktech.maven.publish' version '0.30.0'
+}
 apply plugin: 'java'
 apply plugin: 'maven-publish'
 group = 'com.zerobias.hub'
-version = '1.0.0'
+version = '2.0.50'
 description = 'OpenAPI Generator for creating Hub Modules'
+
+// Map clean env vars to Vanniktech / signing property names
+[
+    'SONATYPE_USERNAME'        : 'mavenCentralUsername',
+    'SONATYPE_PASSWORD'        : 'mavenCentralPassword',
+    'GPG_SIGNING_KEY'          : 'signingInMemoryKey',
+    'GPG_SIGNING_KEY_PASSWORD' : 'signingInMemoryKeyPassword',
+].each { envVar, propName ->
+    def v = System.getenv(envVar)
+    if (v != null && !v.isEmpty()) ext[propName] = v
+}
 
 // Force the artifact name regardless of whether gradle is invoked from this
 // directory (rootProject.name = 'hub-module-codegen' via settings.gradle) or
@@ -91,20 +105,68 @@ repositories {
 test.useTestNG()
 
 
+// ── Maven Central (via Vanniktech) ───────────────────────────────────
+// Stages on Central Portal; release is manual at central.sonatype.com.
+import com.vanniktech.maven.publish.JavaLibrary
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.SonatypeHost
+
+mavenPublishing {
+  publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, false)
+  signAllPublications()
+  configure(new JavaLibrary(new JavadocJar.Javadoc(), true))
+
+  coordinates('com.zerobias.hub', 'hub-module-codegen', project.version.toString())
+
+  pom {
+    name = 'hub-module-codegen'
+    description = project.description
+    url = 'https://github.com/zerobias-org/util'
+    licenses {
+      license {
+        name = 'Apache License, Version 2.0'
+        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+        distribution = 'repo'
+      }
+    }
+    developers {
+      developer {
+        id = 'kmccarthy'
+        name = 'Kevin McCarthy'
+        email = 'kmccarthy@zerobias.com'
+        organization = 'Zerobias'
+        organizationUrl = 'https://github.com/zerobias-org'
+      }
+    }
+    scm {
+      url = 'https://github.com/zerobias-org/util/tree/main'
+      connection = 'scm:git:git://github.com/zerobias-org/util.git'
+      developerConnection = 'scm:git:ssh://github.com:zerobias-org/util.git'
+    }
+  }
+}
+
+// ── GitHub Packages (second publish target) ──────────────────────────
 publishing {
   repositories {
     maven {
-      name = 'GitHubPackages'
+      name = 'github'
       url = uri('https://maven.pkg.github.com/zerobias-org/util')
       credentials {
-        username = System.getenv('GITHUB_ACTOR')
-        password = System.getenv('GITHUB_TOKEN')
+        username = System.getenv('GITHUB_ACTOR') ?: 'zerobias-org'
+        password = System.getenv('NPM_TOKEN') ?: System.getenv('GITHUB_TOKEN') ?: ''
       }
     }
   }
-  publications {
-    gpr(MavenPublication) {
-      from(components.java)
-    }
-  }
+}
+
+tasks.register('publishToGithub') {
+  group = 'publishing'
+  description = 'Publish to GitHub Packages Maven repository'
+  dependsOn 'publishMavenPublicationToGithubRepository'
+}
+
+// `publish` runs all three targets.
+tasks.named('publish') {
+  dependsOn 'publishToMavenLocal', 'publishToMavenCentral', 'publishToGithub'
 }
