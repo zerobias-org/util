@@ -1,0 +1,48 @@
+name: "@zerobias-com/oidc"
+version: "1.0.0"
+
+exports:
+  - IDP_DISCOVERY_URL
+  - IDP_CLIENT_ID
+  - IDP_CLIENT_SECRET
+  - OIDC_PORT
+
+env:
+  OIDC_PORT:
+    type: port
+    description: Mock OIDC provider host port
+
+  IDP_CLIENT_ID:
+    type: string
+    default: "dana-local"
+
+  IDP_CLIENT_SECRET:
+    type: string
+    default: "dana-local-secret"
+
+  IDP_DISCOVERY_URL:
+    type: string
+    value: "http://${ZB_SLOT}-oidc:8080/default"
+    description: >-
+      Discovery URL reachable from peer containers in the slot.
+      Browser-side redirects are not yet solved — revisit when wiring
+      the end-to-end login flow.
+
+state:
+  status:
+    type: enum
+    values: [starting, healthy, stopped, error]
+
+lifecycle:
+  start: docker compose -f compose.yml -p ${ZB_SLOT} up -d
+  stop: docker stop ${ZB_SLOT}-oidc 2>/dev/null; docker rm ${ZB_SLOT}-oidc 2>/dev/null; true
+  health:
+    command: "curl -sf http://localhost:${OIDC_PORT}/default/.well-known/openid-configuration >/dev/null"
+    interval: 2
+    timeout: 30
+  cleanup:
+    - "docker stop ${ZB_SLOT}-oidc 2>/dev/null; docker rm ${ZB_SLOT}-oidc 2>/dev/null; true"
+
+logs:
+  source: docker
+  container: "${ZB_SLOT}-oidc"
