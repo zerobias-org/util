@@ -68,9 +68,8 @@ tasks.withType<Test>().configureEach {
 }
 
 // ── Maven Central publishing (Vanniktech) ────────────────────────────
-// publishAndReleaseToMavenCentral — bundles, uploads, and auto-releases
-// once Sonatype validation passes. Set automaticRelease=false to stage
-// only and release manually from central.sonatype.com.
+// publishToMavenCentral — stages the bundle on Central Portal; release
+// confirmation is manual at central.sonatype.com (automaticRelease=false).
 mavenPublishing {
     publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = false)
     signAllPublications()
@@ -104,4 +103,33 @@ mavenPublishing {
             developerConnection.set("scm:git:ssh://github.com:zerobias-org/util.git")
         }
     }
+}
+
+// ── GitHub Packages (second publish target) ──────────────────────────
+publishing {
+    repositories {
+        maven {
+            name = "github"
+            url = uri("https://maven.pkg.github.com/zerobias-org/util")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: "zerobias-org"
+                password = System.getenv("NPM_TOKEN") ?: System.getenv("GITHUB_TOKEN") ?: ""
+            }
+        }
+    }
+}
+
+// Convenience alias — the underlying auto-generated task is named
+// publishMavenPublicationToGithubRepository; publishToGithub reads cleaner.
+tasks.register("publishToGithub") {
+    group = "publishing"
+    description = "Publish to GitHub Packages Maven repository"
+    dependsOn("publishMavenPublicationToGithubRepository")
+}
+
+// `zbb publish` (or `./gradlew publish`) runs all three targets: local,
+// Maven Central (stages only), GitHub Packages. Order isn't enforced —
+// Gradle parallelizes where possible.
+tasks.named("publish") {
+    dependsOn("publishToMavenLocal", "publishToMavenCentral", "publishToGithub")
 }
