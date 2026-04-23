@@ -14,16 +14,7 @@ group = 'com.zerobias.hub'
 version = '2.0.50'
 description = 'OpenAPI Generator for creating Hub Modules'
 
-// Map clean env vars to Vanniktech / signing property names
-[
-    'SONATYPE_USERNAME'        : 'mavenCentralUsername',
-    'SONATYPE_PASSWORD'        : 'mavenCentralPassword',
-    'GPG_SIGNING_KEY'          : 'signingInMemoryKey',
-    'GPG_SIGNING_KEY_PASSWORD' : 'signingInMemoryKeyPassword',
-].each { envVar, propName ->
-    def v = System.getenv(envVar)
-    if (v != null && !v.isEmpty()) ext[propName] = v
-}
+// Env var → Gradle property mapping lives in util's root settings.gradle.kts
 
 // Force the artifact name regardless of whether gradle is invoked from this
 // directory (rootProject.name = 'hub-module-codegen' via settings.gradle) or

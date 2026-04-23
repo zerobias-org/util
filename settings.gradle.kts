@@ -64,6 +64,25 @@ buildscript {
 
 rootProject.name = "util"
 
+// ── Env var → Gradle project property mapping ───────────────────────
+// Readable env vars in the shell (SONATYPE_USERNAME, GPG_SIGNING_KEY, ...)
+// mapped to the gradle property names that Vanniktech's maven.publish
+// plugin + Gradle's signing plugin read via providers.gradleProperty().
+// Settings phase is the right place: startParameter.projectProperties
+// is equivalent to `-P<name>=<value>` and IS seen by the provider layer.
+// Extra properties (`project.extra[...]`) are NOT — that's a common
+// gotcha. Set once here so every Java package picks them up.
+listOf(
+    "SONATYPE_USERNAME"        to "mavenCentralUsername",
+    "SONATYPE_PASSWORD"        to "mavenCentralPassword",
+    "GPG_SIGNING_KEY"          to "signingInMemoryKey",
+    "GPG_SIGNING_KEY_PASSWORD" to "signingInMemoryKeyPassword",
+).forEach { (envVar, propName) ->
+    System.getenv(envVar)?.takeIf { it.isNotEmpty() }?.let {
+        gradle.startParameter.projectProperties[propName] = it
+    }
+}
+
 // ── 3. Discover npm workspaces and include each as a Gradle subproject ──
 //     `packages/build-tools` has its own standalone Gradle setup AND
 //     is loaded into the parent via the includeBuild composite above.

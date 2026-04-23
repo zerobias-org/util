@@ -10,15 +10,7 @@ plugins {
 
 group = "com.zerobias"
 
-// Map clean env vars to Vanniktech / signing property names
-listOf(
-    "SONATYPE_USERNAME"        to "mavenCentralUsername",
-    "SONATYPE_PASSWORD"        to "mavenCentralPassword",
-    "GPG_SIGNING_KEY"          to "signingInMemoryKey",
-    "GPG_SIGNING_KEY_PASSWORD" to "signingInMemoryKeyPassword",
-).forEach { (envVar, propName) ->
-    System.getenv(envVar)?.takeIf { it.isNotEmpty() }?.let { extra[propName] = it }
-}
+// Env var → Gradle property mapping lives in util's root settings.gradle.kts
 
 // Auto-bump patch version: check what's published, use next available
 val baseVersion = "1.0"

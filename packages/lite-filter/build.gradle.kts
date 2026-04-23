@@ -11,19 +11,9 @@ group = "com.zerobias"
 version = "1.0.2"
 description = "A lightweight library for RFC4515 LDAP-style filters with extensions"
 
-// ── Env var → Gradle property mapping ────────────────────────────────
-// Readable env vars in the shell (SONATYPE_USERNAME, GPG_SIGNING_KEY, …)
-// get mapped here to the property names Vanniktech + Gradle's signing
-// plugin expect. Keeps the env surface clean; all name-coupling lives
-// in this one file.
-listOf(
-    "SONATYPE_USERNAME"        to "mavenCentralUsername",
-    "SONATYPE_PASSWORD"        to "mavenCentralPassword",
-    "GPG_SIGNING_KEY"          to "signingInMemoryKey",
-    "GPG_SIGNING_KEY_PASSWORD" to "signingInMemoryKeyPassword",
-).forEach { (envVar, propName) ->
-    System.getenv(envVar)?.takeIf { it.isNotEmpty() }?.let { extra[propName] = it }
-}
+// Env var → Gradle property mapping lives in util's root settings.gradle.kts
+// (only place where startParameter.projectProperties is reachable; extra
+// properties set per-project aren't visible to providers.gradleProperty).
 
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
