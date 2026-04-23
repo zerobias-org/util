@@ -200,15 +200,35 @@ object ZbbSlotProvider {
         return File(System.getProperty("user.home"), ".zbb/slots")
     }
 
+    /**
+     * Parse a .env file. Supports multi-line values: zbb writes ASCII-armored
+     * PGP keys, certs, and similar multi-line secrets as a `KEY=<first-line>`
+     * header followed by the body as continuation lines (no quoting, no
+     * escaping). A line is treated as a new key iff it matches
+     * `^[A-Za-z_][A-Za-z0-9_]*=`; anything else is appended to the current
+     * value. Comments and blank lines BEFORE any key are skipped.
+     */
     private fun readEnvFile(file: File): Map<String, String> {
-        return file.readLines()
-            .filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
-            .mapNotNull { line ->
-                val idx = line.indexOf('=')
-                if (idx > 0) line.substring(0, idx).trim() to line.substring(idx + 1).trim()
-                else null
+        val envKeyPattern = Regex("^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+        val result = mutableMapOf<String, String>()
+        var currentKey: String? = null
+        val currentValue = StringBuilder()
+
+        for (line in file.readLines()) {
+            val match = envKeyPattern.matchEntire(line)
+            if (match != null) {
+                currentKey?.let { result[it] = currentValue.toString().trim() }
+                currentKey = match.groupValues[1]
+                currentValue.clear()
+                currentValue.append(match.groupValues[2])
+            } else if (currentKey != null) {
+                if (currentValue.isNotEmpty()) currentValue.append('\n')
+                currentValue.append(line)
             }
-            .toMap()
+            // else: comment / blank line before any key — ignore
+        }
+        currentKey?.let { result[it] = currentValue.toString().trim() }
+        return result
     }
 
     private fun execZbb(command: List<String>): String {

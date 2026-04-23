@@ -10,16 +10,30 @@ rootProject.name = "build-tools"
 // providers.gradleProperty(). startParameter.projectProperties is the
 // only settings-phase API the provider layer observes.
 run {
+    // Multi-line-aware reader: zbb writes PGP keys / certs as a KEY=<first>
+    // line followed by the body as continuation lines. Only treat a line as
+    // a new key when it matches ^[A-Za-z_][A-Za-z0-9_]*= — otherwise append
+    // to the current value. Mirrors ZbbSlotProvider.readEnvFile.
     fun readEnvFile(file: java.io.File): Map<String, String> {
         if (!file.exists()) return emptyMap()
-        return file.readLines()
-            .filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
-            .mapNotNull { line ->
-                val idx = line.indexOf('=')
-                if (idx > 0) line.substring(0, idx).trim() to line.substring(idx + 1).trim()
-                else null
+        val envKeyPattern = Regex("^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+        val result = mutableMapOf<String, String>()
+        var currentKey: String? = null
+        val currentValue = StringBuilder()
+        for (line in file.readLines()) {
+            val match = envKeyPattern.matchEntire(line)
+            if (match != null) {
+                currentKey?.let { result[it] = currentValue.toString().trim() }
+                currentKey = match.groupValues[1]
+                currentValue.clear()
+                currentValue.append(match.groupValues[2])
+            } else if (currentKey != null) {
+                if (currentValue.isNotEmpty()) currentValue.append('\n')
+                currentValue.append(line)
             }
-            .toMap()
+        }
+        currentKey?.let { result[it] = currentValue.toString().trim() }
+        return result
     }
 
     val slotDir = System.getenv("ZB_SLOT_DIR") ?: return@run
