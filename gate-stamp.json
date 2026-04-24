@@ -1,25 +1,25 @@
 {
   "version": 1,
   "branch": "main",
-  "timestamp": "2026-04-24T19:23:39.823379651Z",
+  "timestamp": "2026-04-24T19:35:14.551406524Z",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "1.0.33",
       "sourceHash": "1e60d6315837ab729bc2b456ce5380e20b7df4e66d545c6e04b48ebcefb43aae",
       "testHash": "853b146457fdd677eb3ed74a6bc579f44913967f663defd910246a5cbf9be5b0",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
-        "test": "passed"
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "skipped"
       },
       "tests": {
         "unit": {
           "expected": 1,
-          "ran": 1,
-          "status": "passed"
+          "ran": 0,
+          "status": "skipped"
         },
         "integration": {
           "expected": 0,
@@ -130,11 +130,11 @@
       "sourceHash": "b90c288ade4368976363a736f038dc448202f3e168e29f72ed312be7d02a6174",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
         "test": "skipped"
       },
       "tests": {
@@ -169,23 +169,23 @@
       "sourceHash": "9e06698c9d5a12be3f19127c692fb4d5419255527fe41d982a720f7fc0641332",
       "testHash": "cde5b931c178ea511af07afca046a323dd387db237e7b7eff2eb3bb64a1f1c9c",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
-        "test": "passed"
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "skipped"
       },
       "tests": {
         "unit": {
           "expected": 55,
-          "ran": 55,
-          "status": "passed"
+          "ran": 0,
+          "status": "skipped"
         },
         "integration": {
           "expected": 10,
-          "ran": 10,
-          "status": "passed"
+          "ran": 0,
+          "status": "skipped"
         },
         "e2e": {
           "expected": 0,
@@ -368,18 +368,18 @@
       "sourceHash": "1439475540d95091ac2a699ceaf6333f21e2254ddd2b2299e2f47ef2f726e4ad",
       "testHash": "538007cc6c8a0c66415559ba2d3c2c8059f58b3476939056f98460ba5ca91647",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
-        "test": "passed"
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "skipped"
       },
       "tests": {
         "unit": {
           "expected": 1,
-          "ran": 1,
-          "status": "passed"
+          "ran": 0,
+          "status": "skipped"
         },
         "integration": {
           "expected": 0,
@@ -486,18 +486,18 @@
       "sourceHash": "9e4f34a22e1a2b0b41de85992a31e68305c2c426f6577e74b770e030eeb8bde5",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
-        "test": "passed"
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "skipped"
       },
       "tests": {
         "unit": {
           "expected": 38,
-          "ran": 38,
-          "status": "passed"
+          "ran": 0,
+          "status": "skipped"
         },
         "integration": {
           "expected": 0,
@@ -568,7 +568,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.58",
-      "sourceHash": "e26920515b60871084d15a5b59c22f85d34172e215bd0654865edca4cec5d512",
+      "sourceHash": "7a699aff5705bc4201b43d70f0cd17dda02054adb35b0bd9c9744f8baba3a840",
       "testHash": "14ec2b796b0083a59fab875cecc57d0c7d1cc898212d5602c9ab1711a55882a4",
       "tasks": {
         "lint": "passed",

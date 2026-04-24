@@ -141,7 +141,15 @@ async function prepareSlot(
       // message — the user needs to fix their zbb.yaml.
       throw new Error(`Failed to resolve stack '${stack.name}':\n${e.message}`);
     }
-    const stackEnv = stack.env.getAll();
+    // Pass showHidden=true so `hidden: true` vars still reach child
+    // processes. `hidden` is a UI concern (suppresses from `zbb env list`) —
+    // it must NOT filter env injection into subprocess env. Without this,
+    // derived vars like `ORG_GRADLE_PROJECT_mavenCentralUsername` (used to
+    // pass Sonatype + signing creds to gradle via its env-to-property
+    // convention) are declared `hidden: true` to keep `env list` tidy and
+    // end up stripped out here — gradle then reads them as NULL and
+    // signing/publishing fails.
+    const stackEnv = stack.env.getAll(true);
     for (const [k, v] of Object.entries(stackEnv)) {
       if (v) process.env[k] = v;
     }
