@@ -1162,171 +1162,343 @@ behavior for repos without a `zbb.yaml`: `findGradleRoot(cwd)` → run
 
 ## 11. Scenarios — concrete walk-throughs
 
-Using the hub and util repos as examples.
+Every lifecycle dispatch resolves **three independent concerns** and
+combines them. Reading the scenarios with this split in mind is the
+fastest way to understand what zbb is going to do from any cwd:
 
-### Scenario A — `zbb build` from `com/hub/` (monorepo root)
+| Concern | Helper | Answers |
+|---------|--------|---------|
+| **Lifecycle owner** | `findLifecycleOwner(chain, cmd)` | Which `zbb.yaml`'s `lifecycle[cmd]` string runs, and from what directory. |
+| **Active stack** | `findActiveStackInChain(chain, addedStacks)` | Whose `tools:` / `env:` / `require:` drives preflight and gate resolution. |
+| **Scope** | `derivePackageScope(cwd, monorepoRoot)` | Which workspace package is passed as `-Pmonorepo.scope` to gradle. |
 
-1. Chain = `[com/hub/zbb.yaml]` — stops at monorepo block.
-2. `monorepoEntry = com/hub/zbb.yaml`. `isMonorepo = true`.
-3. `owner = com/hub/zbb.yaml`, `lifecycleCmd = "./gradlew
-   monorepoBuild"`, `env: ["NPM_TOKEN"]`, `tools: undefined`.
-4. Scope = `{kind: 'root'}` → no scope flag.
-5. Preflight: `require: [nvm, node, java]` → resolved against tools
-   registry → all pass.
-6. Env gate: `NPM_TOKEN` is declared in `env:` and `source: env,
-   required: true` → must have resolved via `process.env.NPM_TOKEN`
-   at slot create; if empty, gate fails.
-7. Dispatch: `spawnLifecycleAndExit(com/hub, 'build', './gradlew
-   monorepoBuild', parsed, undefined)`.
-8. Gradle runs `./gradlew monorepoBuild` from `com/hub/`. Plugin
-   computes `changeResult.affected` via git diff; per-subproject
-   `build` tasks wire up via `dependsOn`. TTY display renders
-   per-phase rows.
+These three can land on three *different* files. The overlay rule is
+what allows them to diverge — a sub-dir `zbb.yaml` can author a
+command (lifecycle owner = sub) while borrowing env and tools from the
+monorepo stack (active stack = root) and scoping to just its own
+package (scope = sub's npm pkg).
 
-### Scenario B — `zbb build` from `com/hub/server/` (workspace subpackage)
+### Summary — monorepo scenarios
 
-1. Chain = `[com/hub/zbb.yaml]` — `com/hub/server/` has no
-   `zbb.yaml` of its own; walk up to hub's root.
-2. `isMonorepo = true` (same monorepo entry).
-3. `owner = com/hub/zbb.yaml`, `lifecycleCmd = "./gradlew
-   monorepoBuild"`.
-4. Scope: `derivePackageScope("com/hub/server", "com/hub")` →
-   workspace member in `workspaces: [server]` → `{kind: 'npm',
-   packageName: '@zerobias-com/hub-server', relPath: 'server'}`.
-5. Preflight + env gate: same as A.
-6. Dispatch: `spawnLifecycleAndExit(com/hub, 'build', './gradlew
-   monorepoBuild', parsed, {scopePackage:
-   '@zerobias-com/hub-server'})`.
-7. Final gradle command: `./gradlew monorepoBuild
-   -Pmonorepo.scope=@zerobias-com/hub-server`.
-8. `MonorepoGraphService.changeResult` substitutes to
-   `{affected={@zerobias-com/hub-server}}`. `monorepoBuild`'s for-each
-   loop only wires one subproject's tasks.
+Setup: `com/hub/zbb.yaml` (stack `hub`, added, has `monorepo:` block).
+User runs `zbb build`.
 
-### Scenario C — `zbb build` from `com/hub/node-stack/` (nested stack)
+| # | cwd | Lifecycle owner | Active stack | Scope | Command that runs |
+|---|-----|-----------------|--------------|-------|-------------------|
+| 1 | `com/hub/` | hub | hub | `root` | `./gradlew monorepoBuild` |
+| 2 | `com/hub/packages/server/` (no local zbb.yaml) | hub | hub | `npm: @scope/hub-server` | `./gradlew monorepoBuild -Pmonorepo.scope=@scope/hub-server` |
+| 3 | `com/hub/packages/server/` (local overlay zbb.yaml with `lifecycle.build: ./build.sh`) | server | hub | `npm: @scope/hub-server` | `./build.sh` from `server/` |
+| 4 | `com/hub/packages/foo/src/helpers/` (no zbb.yaml; `foo/zbb.yaml` is an overlay) | foo | hub | `npm: @scope/hub-foo` (scope walks up to `foo/`) | foo's command from `foo/` |
 
-Setup: both `hub` and `node-stack` are added as separate stacks in
-the slot. `node-stack/zbb.yaml` has `name:` and defines
-`lifecycle.start/stop/health` but NO `build`.
+Specialty scenarios:
+| # | Situation | Key behavior |
+|---|-----------|--------------|
+| 5 | `zbb gate --check` from any cwd | Slot-less fast path; no preflight, no env gates; scope honored |
+| 6 | `zbb publish` from a subpackage | Blocked early — publish requires cwd = monorepo root |
+| 7 | Custom verb (`zbb buildVm` from `appliance/`) | Not in canonical lifecycle set; custom-verb dispatch takes over |
+| 8 | Standard mode (no `monorepo:` block) | No scope, plain `./gradlew <cmd>` with `:subproject:` prefix if applicable |
 
-1. Chain walk from `com/hub/node-stack/`:
-   - `node-stack/zbb.yaml` — has name, no `lifecycle.build`.
-   - `com/hub/zbb.yaml` — has monorepo block. Stops chain.
-   - Chain = `[node-stack, hub]`.
-2. `isMonorepo = true` (hub's monorepo block).
-3. **Active stack** (`findActiveStackInChain`): node-stack is named AND
-   added → returns node-stack. (It's closer than hub.)
-4. **Lifecycle owner** (`findLifecycleOwner`): node-stack has no
-   `build` → walk up → hub has `lifecycle.build`. Owner = hub.
-   `lifecycleCmd = "./gradlew monorepoBuild"`, `env: ["NPM_TOKEN"]`.
-5. Scope: `derivePackageScope("com/hub/node-stack", "com/hub")` →
-   `{kind: 'npm', packageName: '@zerobias-com/hub-node-stack', ...}`.
-6. Preflight + gate registry: pulled from the **active stack**
-   (node-stack), NOT the lifecycle owner. So `NPM_TOKEN` must be
-   declared in node-stack's `env:` block, not hub's. If it isn't, the
-   gate fails with "NPM_TOKEN not declared in the stack manifest's
-   env: block" — an intentional enforcement: a standalone stack
-   borrowing a parent's lifecycle command must declare the vocabulary
-   that command expects.
-7. **If you want node-stack to transparently use hub's registry
-   instead,** mark `node-stack/zbb.yaml` with `overlay: true`. The
-   walk-up will skip it and the active stack becomes hub.
-8. Dispatch: same as scenario B but scope is node-stack's npm name.
+---
 
-**Key points:**
-- Walk-up finds the lifecycle definition; scope is driven by cwd.
-- Registry comes from the **active stack** (closest added). The
-  lifecycle owner and the active stack can be different files — the
-  owner authors the command, the active stack authors the vocabulary.
-- To suppress a sub-stack's own identity and borrow the parent's, use
-  `overlay: true`.
+### Scenario 1 — at the monorepo / stack root
 
-### Scenario C2 — `zbb build` from a pure overlay sub-dir
+```
+Filesystem:
+  com/hub/
+  ├── zbb.yaml            ← stack 'hub' (has monorepo:)
+  └── packages/…
 
-Setup: `com/hub/zbb.yaml` (stack `hub`, added) + `com/hub/packages/server/zbb.yaml`
-(nameless, pure overlay with its own `lifecycle.build`):
-
-```yaml
-# com/hub/packages/server/zbb.yaml
-lifecycle:
-  build:
-    command: ./my-special-build.sh
-    tools: [node]
-    env:   [NPM_TOKEN]
+cwd:     com/hub/
+command: zbb build
 ```
 
-1. Chain = `[server/zbb.yaml, hub/zbb.yaml]`.
-2. **Active stack**: server is nameless → skip; hub is named + added
-   → active = hub.
-3. **Lifecycle owner**: server has `lifecycle.build` → owner = server.
-4. Scope: `derivePackageScope` → `{kind: 'npm', packageName: '@scope/server'}`.
-5. Gate registry: hub's `tools:` + `env:` blocks. server's overlay
-   borrows hub's vocabulary — `[node]` resolves to hub's `tools.node`,
-   `[NPM_TOKEN]` resolves to hub's `env.NPM_TOKEN`.
-6. Dispatch: runs `./my-special-build.sh` (server's override command)
-   from `server/` directory, with hub's env applied to `process.env`
-   and `ZB_STACK=hub`.
+```
+Chain walk-up: [com/hub/zbb.yaml]
+                 └─ stops (has monorepo: block)
 
-**Same scenario with `overlay: true` on server:** identical behavior.
-The marker is belt-and-suspenders — it just prevents a teammate from
-running `zbb stack add packages/server/` and accidentally promoting
-the overlay to a real stack.
-
-### Scenario D — `zbb gate --check` from any cwd
-
-1. Chain walk + monorepo detection + scope derivation same as above.
-2. **Fast path triggers before slot preflight.** No slot, no stack,
-   no prepareSlot. No env gates (no slot env yet).
-3. If invalid scope (cwd isn't a workspace member) → refuse.
-4. Dispatch: `spawnLifecycleAndExit(ownerDir, 'gate', './gradlew
-   monorepoGateCheck', parsed, {scopePackage?})`.
-5. Gradle runs `monorepoGateCheck`. The plugin's gate-check loop
-   skips packages not in scope — only the scoped package's stamp
-   entry is validated.
-
-### Scenario E — `zbb publish` from `com/hub/server/`
-
-1. Chain + owner + scope resolution runs normally. Scope = `{kind:
-   'npm', packageName: '@zerobias-com/hub-server'}`.
-2. **Publish subdir block fires** (Phase 6): `command === 'publish'
-   && scope.kind !== 'root'` → error, exit 1, no gradle invocation.
-3. User message: "zbb publish must be run from the monorepo root
-   (/home/cscarola/nfa-repos/com/hub)."
-
-### Scenario F — `zbb buildVm` from `com/hub/appliance/`
-
-Appliance has a custom lifecycle verb:
-
-```yaml
-# com/hub/appliance/zbb.yaml
-lifecycle:
-  buildVm: ./scripts/build-vm.sh
+Resolution:
+  lifecycle owner → com/hub/zbb.yaml            (defines lifecycle.build)
+  active stack    → hub                          (named + added + not overlay)
+  scope           → { kind: 'root' }             (cwd == monorepo root)
 ```
 
-1. Chain = `[appliance, hub]`.
-2. `buildVm` is not a canonical lifecycle verb → skip lifecycle
-   dispatch entirely.
-3. Custom verb dispatch: `findCustomVerbOwner(chain, 'buildVm')` →
-   appliance.
-4. Load slot (required for custom verbs), resolve stack, prepareSlot.
-5. `spawnSync('bash', ['-c', './scripts/build-vm.sh'], {cwd:
-   applianceDir, env: process.env})`.
+```
+Dispatch:
+  from:    com/hub/
+  command: ./gradlew monorepoBuild
+  env:     hub's resolved env + ZB_STACK=hub
+  flags:   (none — no scope)
+  gates:   tools/env lists from hub.lifecycle.build, resolved against hub
+```
 
-### Scenario G — `zbb build` in a repo with no `monorepo:` block (standard mode)
+Runs the full-repo aggregator. Plugin computes `changeResult.affected`
+via git diff; every affected subproject's `build` tasks wire up.
 
-1. Chain = `[someRepo/zbb.yaml]`. No monorepo block → `isMonorepo =
-   false`.
-2. Owner = same zbb.yaml, `lifecycleCmd = "./gradlew build"` (or
-   whatever the repo declares).
-3. Scope is not derived (standard mode).
-4. Preflight + env gate same as monorepo.
-5. Dispatch: `spawnStandardLifecycleAndExit`.
-6. `resolveCommandForCwd(someRepo, "./gradlew build")`:
-   - If cwd == someRepo → `./gradlew build` unchanged.
-   - If cwd has `build.gradle.kts` + in settings →
-     `./gradlew :packages:foo:build`.
-   - If cwd has `package.json` but no `build.gradle.kts` → error out.
-7. No monorepo flags, no TUI display — plain inherited stdio.
+---
+
+### Scenario 2 — workspace subpackage with no local `zbb.yaml`
+
+```
+Filesystem:
+  com/hub/
+  ├── zbb.yaml                ← stack 'hub' (has monorepo:)
+  └── packages/
+      └── server/
+          ├── package.json    (workspace member)
+          └── src/
+
+cwd:     com/hub/packages/server/
+command: zbb build
+```
+
+```
+Chain walk-up: [com/hub/zbb.yaml]
+                 └─ walk past packages/, server/ (no zbb.yaml)
+
+Resolution:
+  lifecycle owner → com/hub/zbb.yaml            (only chain entry)
+  active stack    → hub
+  scope           → { kind: 'npm', packageName: '@scope/hub-server' }
+```
+
+```
+Dispatch:
+  from:    com/hub/
+  command: ./gradlew monorepoBuild -Pmonorepo.scope=@scope/hub-server
+  env:     hub's resolved env + ZB_STACK=hub
+  gates:   same as Scenario 1 (hub's)
+```
+
+Plugin substitutes `changeResult.affected = {@scope/hub-server}`; only
+that package's build tasks wire up. Same command as Scenario 1,
+narrowed.
+
+---
+
+### Scenario 3 — workspace subpackage with a local overlay `zbb.yaml`
+
+```
+Filesystem:
+  com/hub/
+  ├── zbb.yaml                ← stack 'hub' (has monorepo:)
+  └── packages/
+      └── server/
+          ├── package.json
+          ├── zbb.yaml        ← overlay (no name: OR overlay: true)
+          │     lifecycle:
+          │       build:
+          │         command: ./my-build.sh
+          │         tools: [node]
+          │         env: [NPM_TOKEN]
+          └── src/
+
+cwd:     com/hub/packages/server/
+command: zbb build
+```
+
+```
+Chain walk-up: [server/zbb.yaml, com/hub/zbb.yaml]
+                 └─ server has no monorepo:; hub's monorepo stops walk
+
+Resolution:
+  lifecycle owner → server/zbb.yaml             (server defines lifecycle.build)
+  active stack    → hub                          (server is overlay — walked past)
+  scope           → { kind: 'npm', packageName: '@scope/hub-server' }
+```
+
+```
+Dispatch:
+  from:    com/hub/packages/server/              ← lifecycle owner's dir
+  command: ./my-build.sh                          ← overlay's command
+  env:     hub's resolved env + ZB_STACK=hub     ← from active stack
+  gates:   tools: [node]    → looked up in hub.tools.node      (borrowed)
+           env:   [NPM_TOKEN] → looked up in hub.env.NPM_TOKEN (borrowed)
+```
+
+`-Pmonorepo.scope` isn't passed (overlay's command isn't gradle). If
+it fell through to the gradle fallback, the scope would be appended.
+
+---
+
+### Scenario 4 — deeper cwd, overlay one level up
+
+```
+Filesystem:
+  com/hub/
+  ├── zbb.yaml                ← stack 'hub' (has monorepo:)
+  └── packages/
+      └── foo/
+          ├── package.json
+          ├── zbb.yaml        ← overlay with lifecycle.build
+          │     lifecycle:
+          │       build:
+          │         command: ./build-foo.sh
+          │         tools: [docker]
+          └── src/
+              └── helpers/    ← cwd
+
+cwd:     com/hub/packages/foo/src/helpers/
+command: zbb build
+```
+
+```
+Chain walk-up: [foo/zbb.yaml, com/hub/zbb.yaml]
+                 └─ walk past src/, helpers/ (no zbb.yaml)
+                    first zbb.yaml found: foo's
+
+Resolution:
+  lifecycle owner → foo/zbb.yaml                (foo defines lifecycle.build)
+  active stack    → hub                          (foo is overlay — walked past)
+  scope           → derivePackageScope walks UP from helpers/
+                    → src/ not a workspace member → keep walking
+                    → foo/ IS a workspace member (matches packages/*)
+                    → { kind: 'npm', packageName: '@scope/hub-foo' }
+```
+
+```
+Dispatch:
+  from:    com/hub/packages/foo/                 ← lifecycle owner's dir
+  command: ./build-foo.sh                         ← overlay's command
+  env:     hub's resolved env + ZB_STACK=hub
+  gates:   tools: [docker] → resolved against hub.tools.docker
+```
+
+Identical behavior to Scenario 3 even though cwd started deeper inside
+foo. Scope walk-up keeps behavior consistent regardless of how deep in
+the package tree the user is when they run the command.
+
+---
+
+### Scenario 5 — `zbb gate --check` (fast path)
+
+```
+cwd:     anywhere under the monorepo
+command: zbb gate --check
+```
+
+```
+Resolution (same machinery as above):
+  lifecycle owner → hub (or owner if someone overrode gateCheck)
+  active stack    → hub
+  scope           → per cwd (root, npm, or walks up)
+
+Fast path:
+  SKIPS: slot load, stack preflight, env gates
+  ONLY RUNS: spawnLifecycleAndExit(ownerDir, 'gate', './gradlew monorepoGateCheck', ...)
+
+Dispatch:
+  from:    monorepo root (or wherever lifecycle.gateCheck is defined)
+  command: ./gradlew monorepoGateCheck [-Pmonorepo.scope=<pkg>]
+  env:     inherited (no slot env applied)
+```
+
+Reads `gate-stamp.json`, validates each affected package's stamp.
+Scope clamps the validation loop to a single package if set. No slot
+required — safe to run in CI without `zbb slot load`.
+
+---
+
+### Scenario 6 — `zbb publish` from a subpackage (blocked)
+
+```
+cwd:     com/hub/packages/server/
+command: zbb publish
+```
+
+```
+Resolution starts normally:
+  lifecycle owner → hub
+  active stack    → hub
+  scope           → { kind: 'npm', packageName: '@scope/hub-server' }
+
+Publish subdir block fires (cli.ts Phase 6):
+  command === 'publish' && scope.kind !== 'root' → REFUSE
+
+Output:
+  zbb publish must be run from the monorepo root (com/hub).
+  Running from a subpackage is currently not supported — the publish
+  pipeline's change-detector guard has caveats that need resolving first.
+
+Nothing runs. No gradle invocation.
+```
+
+See `project_publish_subdir_block` memory for the rationale.
+
+---
+
+### Scenario 7 — custom verb (`zbb buildVm` from `appliance/`)
+
+```
+Filesystem:
+  com/hub/
+  ├── zbb.yaml
+  └── appliance/
+      └── zbb.yaml
+            lifecycle:
+              buildVm: ./scripts/build-vm.sh
+
+cwd:     com/hub/appliance/
+command: zbb buildVm
+```
+
+```
+`buildVm` is NOT in the canonical lifecycle set
+(clean/build/test/gate/publish/dockerBuild). Lifecycle dispatch is
+skipped; custom-verb dispatch takes over.
+
+Resolution:
+  custom owner    → appliance/zbb.yaml          (defines lifecycle.buildVm)
+  active stack    → hub                          (required for slot + env)
+  scope           → not derived (custom-verb path doesn't care)
+
+Dispatch:
+  from:    com/hub/appliance/                    ← custom owner's dir
+  command: bash -c './scripts/build-vm.sh'
+  env:     hub's resolved env + ZB_STACK=hub
+```
+
+No preflight, no gates, no monorepo flags. Just env-wrapped execution,
+same as `zbb run`.
+
+---
+
+### Scenario 8 — standard mode (no `monorepo:` block)
+
+```
+Filesystem:
+  some-repo/
+  ├── zbb.yaml                  ← stack (named, added — but NO monorepo:)
+  │     lifecycle:
+  │       build: ./gradlew build
+  ├── gradlew
+  └── packages/
+      └── github/
+          └── build.gradle.kts  (registered gradle subproject)
+
+cwd:     some-repo/packages/github/
+command: zbb build
+```
+
+```
+Resolution:
+  monorepo root   → null   (no monorepo: block anywhere)
+  isMonorepo      → false  → standard dispatch path
+  lifecycle owner → some-repo/zbb.yaml
+  active stack    → that stack
+  scope           → not derived (standard mode doesn't use scope)
+
+Dispatch → spawnStandardLifecycleAndExit → resolveCommandForCwd:
+  cwd has build.gradle.kts + registered in settings.gradle.kts
+  → task name rewritten from `build` to `:packages:github:build`
+
+  command: ./gradlew :packages:github:build
+  from:    some-repo/
+```
+
+No monorepo flags, no TUI display, plain inherited stdio. If cwd had
+`package.json` but no `build.gradle.kts`, dispatch would error with
+"this package must have build.gradle.kts to be publishable as a
+standalone unit."
 
 ---
 

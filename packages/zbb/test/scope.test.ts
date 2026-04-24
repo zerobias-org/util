@@ -161,16 +161,40 @@ describe('derivePackageScope', () => {
     const scope = derivePackageScope(cwd, tmpRoot);
     assert.equal(scope.kind, 'invalid');
     if (scope.kind !== 'invalid') throw new Error('unreachable');
-    assert.match(scope.reason, /workspace member/);
+    assert.match(scope.reason, /not inside any workspace package/);
   });
 
-  it('returns {kind:"invalid"} for a subdir with no package.json', async () => {
-    const cwd = join(tmpRoot, 'packages/npm-pkg/subdir');
+  it('walks up from a deep subdir to the containing workspace package', async () => {
+    // cwd is INSIDE a workspace package but below its root. The walk-up
+    // should climb to packages/npm-pkg/ and use that as the scope.
+    const cwd = join(tmpRoot, 'packages/npm-pkg/src/helpers');
+    await mkdir(cwd, { recursive: true });
+    const scope = derivePackageScope(cwd, tmpRoot);
+    assert.equal(scope.kind, 'npm');
+    if (scope.kind !== 'npm') throw new Error('unreachable');
+    assert.equal(scope.packageName, '@scope/npm-pkg');
+    assert.equal(scope.relPath, 'packages/npm-pkg');
+  });
+
+  it('walks up into a gradle workspace package correctly', async () => {
+    const cwd = join(tmpRoot, 'packages/gradle-pkg/nested/deep');
+    await mkdir(cwd, { recursive: true });
+    const scope = derivePackageScope(cwd, tmpRoot);
+    assert.equal(scope.kind, 'gradle');
+    if (scope.kind !== 'gradle') throw new Error('unreachable');
+    assert.equal(scope.packageName, '@scope/gradle-pkg');
+    assert.equal(scope.projectPath, ':packages:gradle-pkg');
+  });
+
+  it('returns {kind:"invalid"} when cwd is under the monorepo but not inside any workspace package', async () => {
+    // scripts/ exists and has a package.json but isn't in the workspaces
+    // array; a dir nested under it is also not a member.
+    const cwd = join(tmpRoot, 'scripts/helpers');
     await mkdir(cwd, { recursive: true });
     const scope = derivePackageScope(cwd, tmpRoot);
     assert.equal(scope.kind, 'invalid');
     if (scope.kind !== 'invalid') throw new Error('unreachable');
-    assert.match(scope.reason, /package\.json/);
+    assert.match(scope.reason, /not inside any workspace package/);
   });
 
   it('returns {kind:"invalid"} for a cwd outside the monorepo root', async () => {

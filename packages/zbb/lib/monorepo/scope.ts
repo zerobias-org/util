@@ -37,6 +37,13 @@ export type PackageScope =
 /**
  * Resolve cwd's scope relative to `monorepoRootDir`.
  *
+ * Walks UP from cwd to find the nearest ancestor that IS a workspace
+ * package (has `package.json` with a `name:` AND matches a workspace
+ * glob from root's `package.json`). That ancestor's path, name, and
+ * gradle-vs-npm flavor drive the scope — running `zbb build` from
+ * `packages/foo/src/helpers/` scopes to `packages/foo` the same as
+ * running it from `packages/foo/` directly.
+ *
  * @param cwd              — the working directory to classify
  * @param monorepoRootDir  — the directory whose zbb.yaml has a `monorepo:`
  *                            block (i.e. findMonorepoRoot(chain).dir)
@@ -59,60 +66,62 @@ export function derivePackageScope(
       reason: `cwd (${cwdAbs}) is not under monorepo root (${rootAbs})`,
     };
   }
-  const relNorm = rel.split(sep).join('/');
 
-  // cwd's own package.json — must exist and carry a `name` for any
-  // subpackage classification.
-  const ownPkg = readPackageJson(cwdAbs);
-  if (!ownPkg || typeof ownPkg.name !== 'string') {
-    return {
-      kind: 'invalid',
-      reason: `cwd (${cwdAbs}) is not a workspace package — no package.json with "name" found here. ` +
-        `Run from the monorepo root or a workspace package directory.`,
-    };
-  }
-  const packageName = ownPkg.name;
-
-  // Verify cwd actually IS a workspace member of the monorepo root
-  // (rather than an unrelated package.json that happens to live under
-  // the repo tree). This is cheap and catches typos / dropped globs.
   const workspaces = readRootWorkspaces(rootAbs);
-  if (!matchesWorkspace(relNorm, workspaces)) {
-    return {
-      kind: 'invalid',
-      reason: `cwd (${cwdAbs}) has a package.json but '${relNorm}' is not a workspace member of the monorepo root. ` +
-        `Check the "workspaces" array in ${rootAbs}/package.json.`,
-    };
+
+  // Walk up from cwd toward monorepoRoot looking for the nearest
+  // ancestor that's a workspace member. Stop just before rootAbs —
+  // if we reach it without a match, cwd isn't inside any workspace
+  // package.
+  let dir = cwdAbs;
+  while (dir !== rootAbs) {
+    const pkg = readPackageJson(dir);
+    if (pkg && typeof pkg.name === 'string') {
+      const dirRel = relative(rootAbs, dir).split(sep).join('/');
+      if (matchesWorkspace(dirRel, workspaces)) {
+        return classifyWorkspacePackage(dir, dirRel, pkg.name, rootAbs);
+      }
+    }
+    const parent = resolve(dir, '..');
+    if (parent === dir) break; // safety — shouldn't hit filesystem root
+    dir = parent;
   }
 
+  return {
+    kind: 'invalid',
+    reason:
+      `cwd (${cwdAbs}) is not inside any workspace package of ${rootAbs}. ` +
+      `Either cd into a workspace directory, or run from the monorepo root. ` +
+      `Workspace globs: ${workspaces.join(', ') || '(none)'}.`,
+  };
+}
+
+/** Classify a confirmed-workspace-member package as gradle vs npm. */
+function classifyWorkspacePackage(
+  pkgDir: string,
+  relPath: string,
+  packageName: string,
+  rootAbs: string,
+): PackageScope {
   // Gradle vs npm flavor. A package is "gradle-flavored" when it has
   // build.gradle.kts AND is registered as a subproject in
   // settings.gradle.kts. Both conditions matter — an orphan build file
   // that isn't in settings can't be targeted by `:<path>:<task>`.
   const hasBuildFile =
-    existsSync(join(cwdAbs, 'build.gradle.kts')) ||
-    existsSync(join(cwdAbs, 'build.gradle'));
+    existsSync(join(pkgDir, 'build.gradle.kts')) ||
+    existsSync(join(pkgDir, 'build.gradle'));
 
   if (hasBuildFile) {
-    const gradlePath = resolveGradleProjectPath(rootAbs, cwdAbs);
+    const gradlePath = resolveGradleProjectPath(rootAbs, pkgDir);
     if (gradlePath) {
-      return {
-        kind: 'gradle',
-        projectPath: gradlePath,
-        packageName,
-        relPath: relNorm,
-      };
+      return { kind: 'gradle', projectPath: gradlePath, packageName, relPath };
     }
-    // Has build.gradle.kts but isn't registered. In monorepo mode we
-    // still scope by npm package name (that's the plugin's key), so
-    // this is functionally equivalent to an npm-only package. The
-    // user's build.gradle.kts may still get picked up via the
-    // per-subproject wiring inside the aggregator — the plugin's job,
-    // not ours. Downgrade silently.
-    return { kind: 'npm', packageName, relPath: relNorm };
+    // Has build.gradle.kts but isn't registered — treat as npm. The
+    // aggregator's per-subproject wiring picks it up via npm package
+    // name anyway.
+    return { kind: 'npm', packageName, relPath };
   }
-
-  return { kind: 'npm', packageName, relPath: relNorm };
+  return { kind: 'npm', packageName, relPath };
 }
 
 // ── Internals ───────────────────────────────────────────────────────

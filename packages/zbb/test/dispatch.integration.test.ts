@@ -202,7 +202,7 @@ describe('dispatch integration — monorepo scope wiring', () => {
     );
     const r = runZbb(['gate', '--check'], join(tmpRoot, 'scripts'));
     assert.notEqual(r.status, 0, 'expected non-zero exit for non-workspace dir');
-    assert.match(r.stderr, /workspace member/);
+    assert.match(r.stderr, /not inside any workspace package/);
     assert.equal(r.gradlewArgv.length, 0, 'gradlew should not be invoked');
   });
 
