@@ -64,6 +64,11 @@ buildscript {
 
 rootProject.name = "util"
 
+// Env var → gradle property mapping for Sonatype/GPG credentials lives
+// in each Java package's own settings.gradle.kts (build-tools,
+// lite-filter, codegen). They're standalone Gradle roots — no longer
+// included as monorepo subprojects here. See their settings files.
+
 // ── 3. Discover npm workspaces and include each as a Gradle subproject ──
 //     `packages/build-tools` has its own standalone Gradle setup AND
 //     is loaded into the parent via the includeBuild composite above.
@@ -76,7 +81,17 @@ rootProject.name = "util"
 //     codegen's existing tasks (notably `test`) and skips registering
 //     conflicting fallbacks. codegen's npm scripts still drive the
 //     workflow; the gradle build is invoked transitively via npm.
-val excluded = setOf("packages/build-tools")
+// Standalone Gradle roots: each has its own gradlew, settings, zbb.yaml,
+// and publishes independently from its package dir. Keep them out of
+// util's monorepo inclusion so root-level `zbb build` doesn't run their
+// Gradle. (build-tools additionally stays composite-included via
+// pluginManagement.includeBuild above so consumers in this repo resolve
+// its convention plugins.)
+val excluded = setOf(
+    "packages/build-tools",
+    "packages/lite-filter",
+    "packages/codegen",
+)
 val packages = Workspace.discoverWorkspaces(settings.rootDir)
     .filterValues { it.relDir !in excluded }
 for ((_, pkg) in packages) {
