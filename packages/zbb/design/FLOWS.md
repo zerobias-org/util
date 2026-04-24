@@ -583,7 +583,11 @@ a bash subshell with all the env vars set and the cd hook installed.
    preflight — the newer chain walk-up is used by lifecycle dispatch,
    not here.)
 4. **Run `prepareSlot(slot)`** (see [§8](#8-env-handling--layers-sources-resolution)):
-   - `slot.resolve(repoRoot)` — DNS TXT provisioning + vault refresh.
+   - `slot.resolve()` — DNS TXT provisioning only (no args).
+   - `slot.stacks.refreshAll({repoRoot})` — two-pass external refresh
+     for every added stack: per-stack `refreshSourcedVars` (file/env)
+     + repo-root vault scan, then import re-eval across stacks so
+     dependents see freshly-refreshed dep values.
    - Apply slot-level vars to `process.env` (the 7 framework vars).
    - No stack context yet — stack env isn't loaded until cd into a
      stack dir fires the shell hook.
@@ -786,9 +790,9 @@ file      (source: file — re-read at resolve time)
 
 | `source:` | What it does | When fetched |
 |-----------|--------------|--------------|
-| `env` | Read from `process.env` at slot create (or CI mode), then frozen | Once at create; `env refresh` re-reads |
-| `vault` | Read from Vault KV v2 via `vault:` path + field | At `slot.resolve()` / `env refresh` / lifecycle dispatch |
-| `file` | Read file contents (supports `~`) | At `slot.resolve()` / `env refresh` |
+| `env` | Read from `process.env` at slot create (or CI mode), then frozen | Once at create; `env refresh` / `stacks.refreshAll` re-reads |
+| `vault` | Read from Vault KV v2 via `vault:` path + field | At `env refresh` / lifecycle dispatch (via `stacks.refreshAll`) |
+| `file` | Read file contents (supports `~`) | At `env refresh` / lifecycle dispatch |
 | `expression:jsonata` | Evaluate `expr:` with other env vars as input | At every `stack.load()` — values are always current |
 | `cwd` | Set to `process.cwd()` at the zbb invocation | At dispatch time |
 
@@ -801,18 +805,31 @@ Both look similar. The difference is re-evaluation:
 - **`value:`** — "live formula, always re-evaluated." Every
   `stack.load()` recomputes. Reference other vars with `${FOO}`.
 
-### `slot.resolve()` — the refresh step
+### `slot.resolve()` vs `slot.stacks.refreshAll()` — the refresh pipeline
 
-Called at slot load AND before every lifecycle command via
-`prepareSlot()`. Two phases:
+Two distinct steps, both called at slot load and before every lifecycle
+command via `prepareSlot()`.
 
-1. **DNS TXT lookup** — queries `_hub.<domain>` TXT records for
-   `KEY=value` pairs. Results cached to `<slot>/dns-cache.yml` with
-   30-second TTL. Never overwrites user overrides.
-2. **Vault refresh** — walks every added stack for `source: vault`
-   vars, re-fetches from Vault, writes back to the stack's manifest +
-   .env. Errors here are non-fatal by default (warn only); pass
-   `fatal: true` to abort.
+**`slot.resolve()` — DNS only.** No args, no per-stack work.
+- Queries `_hub.<domain>` TXT records for `KEY=value` pairs.
+- Results cached to `<slot>/dns-cache.yml` with 30-second TTL.
+- Never overwrites user overrides.
+
+**`slot.stacks.refreshAll({repoRoot?, stack?})` — per-stack external
+refresh + import re-eval.** Two passes:
+1. **External re-fetch.** Per-stack `refreshSourcedVars()` handles
+   `source: file` and `source: env`. Repo-root vault scan (when
+   `repoRoot` provided) fetches `source: vault` vars and writes them
+   to the provided stack context. Each stack's `.env` is recomputed
+   via `computeEnv()` at the end of this pass.
+2. **Import re-eval.** Every stack gets `stack.env.resolve()` called
+   so cross-stack `manifest.imports` entries pick up the freshly-
+   written dep values. Without this pass, a stack that imports a
+   newly-rotated Vault secret from a dep would carry the stale value.
+
+**CLI surface.** `zbb env refresh` runs both. `zbb env resolve` is a
+narrower "recompute without external calls" — useful after `zbb env
+set` changes a formula input, rarely needed in normal workflows.
 
 ### Stack dep chain recursion
 
@@ -1002,36 +1019,51 @@ spawnStandardLifecycleAndExit(ownerDir, command, cmd, parsed)
                               ./gradlew [-PdryRun] [:subproject:]gateCheck  (via resolveCommandForCwd)
 ```
 
-### Phase 8 — Slot + stack preflight
+### Phase 8 — Slot + active-stack resolution + preflight
 
 For any lifecycle command that is NOT `gate --check`:
 
-1. **Require ZB_SLOT.** Fail fast if not inside a loaded slot.
-2. **Load slot** + look up the stack manifest from the chain via
-   `findStackManifestOwner(chain)`. Fail if missing `name`/`version`.
-3. **Match stack to slot.** The stack must be added to the current
-   slot. Error with `Run: zbb stack add <ownerDir>` if not.
-4. **Apply repo-level cleanse** — unset any vars listed in
-   `cleanse:` BEFORE prepareSlot (so the stack's own values aren't
-   overwritten later).
+1. **Require ZB_SLOT.** Fail fast if not inside a loaded slot via
+   `requireLoadedSlot()`.
+2. **Resolve the active stack.** `findActiveStackInChain(chain,
+   addedShortNames, addedIdentityNames)` walks the chain closest-first
+   and returns the first entry that:
+   - Has a `name:`
+   - Is NOT marked `overlay: true`
+   - Is currently added to the slot
+   Entries that fail any of those checks are skipped — so a sub-dir
+   `zbb.yaml` with just lifecycle overrides (or with `name:` but not
+   yet added) is walked past; the active stack ends up at the nearest
+   added ancestor.
+3. **If no active stack is reachable,** error with the list of added
+   stacks in this slot and suggest `--stack <name>`, `cd`, or
+   `zbb stack add <path>`. Do NOT tell the user to `zbb stack add .`
+   (wrong direction when cwd is an overlay).
+4. **Apply repo-level cleanse** — unset any vars listed in `cleanse:`
+   BEFORE prepareSlot (so the stack's own values aren't overwritten
+   later).
 5. **`prepareSlot(slot, {stack})`:**
-   - `slot.resolve()` — DNS + vault refresh.
+   - `slot.resolve()` — DNS TXT lookup only.
+   - `slot.stacks.refreshAll({repoRoot, stack})` — two-pass external
+     refresh (file/env/vault) + import re-eval across stacks.
    - Apply slot-level vars to `process.env`.
    - Recursively `stack.load()` the dep chain.
    - Apply stack env (resolved imports included) to `process.env`.
-   - Set `ZB_STACK` to the stack's short name.
+   - Set `ZB_STACK` to the active stack's short name.
 6. **Stack-level `require:` preflight.** Resolve name references
-   against the stack manifest's `tools:` registry. Run the
-   `runPreflightChecks()` pipeline. Fail if any tool is missing.
+   against the active stack's `tools:` registry. Inline `ToolRequirement`
+   entries pass through for back-compat. Run the `runPreflightChecks()`
+   pipeline. Fail if any tool is missing.
 
 ### Phase 9 — Per-command tools/env gates (object form only)
 
 For lifecycle entries in object form:
 
-1. **Resolve gate registry.** `resolveGateRegistry(chain, owner.dir)`
-   walks from the owner's dir outward until it finds the closest
-   named `zbb.yaml` (the stack manifest). That file's `tools:` and
-   `env:` blocks ARE the registry.
+1. **Resolve gate registry.** `resolveGateRegistry(activeStackEntry)` is
+   a simple getter — pulls `tools:` and `env:` blocks off the active
+   stack. Overlay entries borrow the stack's vocabulary, so the lookup
+   always uses the active stack's registry regardless of which file
+   defined the lifecycle entry.
 2. **Tool gates** (`checkToolGates`). Each name in `owner.tools`
    looks up in the registry; undefined name → hard error. Resolved
    definitions go through `runPreflightChecks()` just like `require:`
@@ -1173,25 +1205,72 @@ Using the hub and util repos as examples.
 
 ### Scenario C — `zbb build` from `com/hub/node-stack/` (nested stack)
 
+Setup: both `hub` and `node-stack` are added as separate stacks in
+the slot. `node-stack/zbb.yaml` has `name:` and defines
+`lifecycle.start/stop/health` but NO `build`.
+
 1. Chain walk from `com/hub/node-stack/`:
-   - `node-stack/zbb.yaml` — has name, has `lifecycle.start/stop/health`
-     but NO `build`. Include in chain; keep walking.
-   - `com/hub/zbb.yaml` — has monorepo block. Include; stop.
+   - `node-stack/zbb.yaml` — has name, no `lifecycle.build`.
+   - `com/hub/zbb.yaml` — has monorepo block. Stops chain.
    - Chain = `[node-stack, hub]`.
 2. `isMonorepo = true` (hub's monorepo block).
-3. `findLifecycleOwner(chain, 'build')`: node-stack has no `build` →
-   walk up → hub has `lifecycle.build`. Owner = hub. `lifecycleCmd
-   = "./gradlew monorepoBuild"`, `env: ["NPM_TOKEN"]`.
-4. Scope: `derivePackageScope("com/hub/node-stack", "com/hub")`.
-   `node-stack` is a workspace member (in hub's `workspaces:`) →
+3. **Active stack** (`findActiveStackInChain`): node-stack is named AND
+   added → returns node-stack. (It's closer than hub.)
+4. **Lifecycle owner** (`findLifecycleOwner`): node-stack has no
+   `build` → walk up → hub has `lifecycle.build`. Owner = hub.
+   `lifecycleCmd = "./gradlew monorepoBuild"`, `env: ["NPM_TOKEN"]`.
+5. Scope: `derivePackageScope("com/hub/node-stack", "com/hub")` →
    `{kind: 'npm', packageName: '@zerobias-com/hub-node-stack', ...}`.
-5. Preflight + env gate: run against **hub's** registry (the owner's
-   registry) — node-stack's tools/env blocks are irrelevant because
-   hub defines `lifecycle.build`.
-6. Dispatch: same as scenario B but scope is node-stack's npm name.
-7. **Key point:** walk-up finds the lifecycle definition; scope is
-   still driven by cwd. User gets "build just node-stack" behavior
-   even though the lifecycle command is defined at hub's root.
+6. Preflight + gate registry: pulled from the **active stack**
+   (node-stack), NOT the lifecycle owner. So `NPM_TOKEN` must be
+   declared in node-stack's `env:` block, not hub's. If it isn't, the
+   gate fails with "NPM_TOKEN not declared in the stack manifest's
+   env: block" — an intentional enforcement: a standalone stack
+   borrowing a parent's lifecycle command must declare the vocabulary
+   that command expects.
+7. **If you want node-stack to transparently use hub's registry
+   instead,** mark `node-stack/zbb.yaml` with `overlay: true`. The
+   walk-up will skip it and the active stack becomes hub.
+8. Dispatch: same as scenario B but scope is node-stack's npm name.
+
+**Key points:**
+- Walk-up finds the lifecycle definition; scope is driven by cwd.
+- Registry comes from the **active stack** (closest added). The
+  lifecycle owner and the active stack can be different files — the
+  owner authors the command, the active stack authors the vocabulary.
+- To suppress a sub-stack's own identity and borrow the parent's, use
+  `overlay: true`.
+
+### Scenario C2 — `zbb build` from a pure overlay sub-dir
+
+Setup: `com/hub/zbb.yaml` (stack `hub`, added) + `com/hub/packages/server/zbb.yaml`
+(nameless, pure overlay with its own `lifecycle.build`):
+
+```yaml
+# com/hub/packages/server/zbb.yaml
+lifecycle:
+  build:
+    command: ./my-special-build.sh
+    tools: [node]
+    env:   [NPM_TOKEN]
+```
+
+1. Chain = `[server/zbb.yaml, hub/zbb.yaml]`.
+2. **Active stack**: server is nameless → skip; hub is named + added
+   → active = hub.
+3. **Lifecycle owner**: server has `lifecycle.build` → owner = server.
+4. Scope: `derivePackageScope` → `{kind: 'npm', packageName: '@scope/server'}`.
+5. Gate registry: hub's `tools:` + `env:` blocks. server's overlay
+   borrows hub's vocabulary — `[node]` resolves to hub's `tools.node`,
+   `[NPM_TOKEN]` resolves to hub's `env.NPM_TOKEN`.
+6. Dispatch: runs `./my-special-build.sh` (server's override command)
+   from `server/` directory, with hub's env applied to `process.env`
+   and `ZB_STACK=hub`.
+
+**Same scenario with `overlay: true` on server:** identical behavior.
+The marker is belt-and-suspenders — it just prevents a teammate from
+running `zbb stack add packages/server/` and accidentally promoting
+the overlay to a real stack.
 
 ### Scenario D — `zbb gate --check` from any cwd
 
