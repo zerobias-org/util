@@ -128,15 +128,9 @@ jobs:
       # Annotated tags are created at HEAD; `git push --follow-tags` in
       # monorepoPublish.doLast pushes them alongside the npm tags.
 
-      - name: Release Announcement
-        if: success()
-        uses: zerobias-org/devops/nx-actions/release-announcement@main
-        with:
-          packages-file: /tmp/published-packages.json
-          branch: ${{ github.ref_name }}
-          dist-tag: latest
-        env:
-          READ_TOKEN: ${{ env.READ_TOKEN }}
+      # Release Slack + Lambda events are emitted inside `zbb publish`
+      # itself — monorepoPublish.doLast calls ReleaseAnnouncement.announce()
+      # for every published npm package. No separate workflow step needed.
 
       - name: Slack Notification on failure
         uses: slackapi/slack-github-action@v2.0.0

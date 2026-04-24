@@ -32,6 +32,13 @@ object ReleaseAnnouncement {
         val name: String,
         val version: String,
         val location: String,
+        /**
+         * True for Java/Maven Central publishes. Kept out of the Lambda
+         * release-event path (which reads package.json + npm dist-tags
+         * — neither applies to Java artifacts). Slack announce still
+         * includes them.
+         */
+        val isJava: Boolean = false,
     )
 
     /**
@@ -210,6 +217,7 @@ object ReleaseAnnouncement {
 
         var sent = 0
         for (pkg in packages) {
+            if (pkg.isJava) continue  // Java artifacts have no package.json / npm dist-tags
             val pkgDir = File(repoRoot, pkg.location)
             val pkgJsonFile = File(pkgDir, "package.json")
             if (!pkgJsonFile.exists()) {

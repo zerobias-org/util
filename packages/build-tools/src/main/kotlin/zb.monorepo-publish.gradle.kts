@@ -359,6 +359,8 @@ fun resolveGradleVersion(pkgDir: java.io.File): String? {
     }
 }
 
+val javaPublishFile = rootProject.file(".zbb-monorepo/java-publish.json")
+
 val publishJavaPackages = tasks.register("publishJavaPackages") {
     group = "monorepo"
     description = "Publish Java packages (zb.maven-central-publish consumers) to Maven Central and tag"
@@ -367,10 +369,21 @@ val publishJavaPackages = tasks.register("publishJavaPackages") {
         val repoRoot = rootProject.projectDir
         val javaPkgs = discoverJavaPackages(repoRoot)
 
+        // Start fresh each run so stale entries from a prior failed run
+        // don't leak into this run's announcement.
+        javaPublishFile.parentFile.mkdirs()
+        javaPublishFile.writeText("[]\n")
+
         if (javaPkgs.isEmpty()) {
             logger.lifecycle("[java-publish] no packages apply zb.maven-central-publish — nothing to do")
             return@doLast
         }
+
+        // Coordinates the publishJavaPackages task shares with
+        // monorepoPublish.doLast for Slack announce. Each successful
+        // publish appends {name, version, location} so the announce
+        // picks up Java releases alongside npm ones.
+        val publishedForAnnounce = mutableListOf<Map<String, String>>()
 
         val failures = mutableListOf<String>()
         var published = 0
@@ -446,7 +459,20 @@ val publishJavaPackages = tasks.register("publishJavaPackages") {
                     logger.warn("[java-publish] $name: tag creation failed: $tagOut")
                 }
             }
+
+            // Record for Slack announce. Name uses the dir — matches what
+            // the tag uses and what developers recognize. Location is the
+            // relative path from repo root so the changelog URL resolves
+            // (even if Java packages typically don't ship CHANGELOG.md).
+            publishedForAnnounce.add(
+                mapOf("name" to name, "version" to version, "location" to "packages/$name")
+            )
         }
+
+        val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+        javaPublishFile.writeText(
+            mapper.writerWithDefaultPrettyPrinter().writeValueAsString(publishedForAnnounce)
+        )
 
         logger.lifecycle("[java-publish] summary: published=$published skipped=$skipped failed=${failures.size}")
 
@@ -1109,12 +1135,36 @@ gradle.projectsEvaluated {
 
                 // Release announcement: Slack + Lambda event for each package.
                 // Gated on env vars — silently skips when not in CI.
-                val announcePkgs = plan.mapNotNull { entry ->
-                    val n = entry["name"] as? String ?: return@mapNotNull null
-                    val v = entry["version"] as? String ?: return@mapNotNull null
-                    val loc = entry["location"] as? String ?: return@mapNotNull null
-                    ReleaseAnnouncement.PublishedPackage(n, v, loc)
+                val announcePkgs = mutableListOf<ReleaseAnnouncement.PublishedPackage>()
+                for (entry in plan) {
+                    val n = entry["name"] as? String ?: continue
+                    val v = entry["version"] as? String ?: continue
+                    val loc = entry["location"] as? String ?: continue
+                    announcePkgs.add(ReleaseAnnouncement.PublishedPackage(n, v, loc))
                 }
+
+                // Merge in Java publishes from publishJavaPackages (side file
+                // .zbb-monorepo/java-publish.json). isJava=true keeps them out
+                // of the Lambda event path (no package.json / npm dist-tags)
+                // but includes them in the Slack message.
+                if (javaPublishFile.exists()) {
+                    val javaMapper = ObjectMapper().registerKotlinModule()
+                    try {
+                        @Suppress("UNCHECKED_CAST")
+                        val javaEntries = javaMapper.readValue<List<Map<String, String>>>(javaPublishFile)
+                        for (entry in javaEntries) {
+                            val n = entry["name"] ?: continue
+                            val v = entry["version"] ?: continue
+                            val loc = entry["location"] ?: continue
+                            announcePkgs.add(
+                                ReleaseAnnouncement.PublishedPackage(n, v, loc, isJava = true)
+                            )
+                        }
+                    } catch (e: Exception) {
+                        logger.warn("[announce] failed to read java-publish.json: ${e.message}")
+                    }
+                }
+
                 val announceBranch = currentBranch(rootProject.projectDir)
                 val githubRepo = ReleaseAnnouncement.detectGithubRepo(rootProject.projectDir)
                 ReleaseAnnouncement.announce(announcePkgs, rootProject.projectDir, announceBranch, githubRepo, logger)
