@@ -329,7 +329,15 @@ gradle.projectsEvaluated {
         // configuration time). Using project.fileTree() with optional means
         // missing paths don't change the input set between runs — Gradle's
         // up-to-date logic stays stable.
-        val srcDir = pkg.dir.resolve("src")
+        //
+        // Source dirs come from the monorepo config's sourceDirs list
+        // (default ["src"], configurable in zbb.yaml's monorepo block).
+        // This MUST match whatever the package's tsconfig/build script
+        // actually reads from — e.g. zbb reads from lib/, not src/. If
+        // only `src/` is tracked but the code lives in `lib/`, gradle's
+        // up-to-date check sees no input change and reports `cached`
+        // even when lib/ files were edited.
+        val srcDirs = service.config.sourceDirs.map { pkg.dir.resolve(it) }
         val packageJson = pkg.dir.resolve("package.json")
         val tsconfigJson = pkg.dir.resolve("tsconfig.json")
         val apiYml = pkg.dir.resolve("api.yml")
@@ -355,7 +363,7 @@ gradle.projectsEvaluated {
                     group = "monorepo"
                     description = "No-op `$phase` for $pkgName (script empty)"
                     dependsOn(workspaceInstall)
-                    inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                    inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
                     if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
                     outputs.file(stampFile).withPropertyName("phaseStamp")
                     doLast {
@@ -395,7 +403,7 @@ gradle.projectsEvaluated {
                 }
 
                 // Directory inputs (always declared — empty FileTree if missing)
-                inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
                 // generated/ is only an input for transpile/test (the consumers
                 // of generated code). lint scans src/ only and would otherwise
                 // be invalidated whenever generate produces new output, since
@@ -473,7 +481,7 @@ gradle.projectsEvaluated {
                     group = "monorepo"
                     description = "No-op `$testPhase` for $pkgName (script empty)"
                     dependsOn(workspaceInstall)
-                    inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                    inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
                     inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
                     if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
                     outputs.file(stampFile).withPropertyName("phaseStamp")
@@ -506,7 +514,7 @@ gradle.projectsEvaluated {
                     errorOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stderrLog))
                 }
 
-                inputs.files(fileTreeOf(srcDir)).withPropertyName("srcFiles")
+                inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
                 inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
                 inputs.files(fileTreeOf(generatedDir)).withPropertyName("generatedFiles")
                 if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")

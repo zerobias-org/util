@@ -81,8 +81,15 @@ jobs:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-      - name: Build build-tools jar
-        run: cd packages/build-tools && ./gradlew jar
+      # publishToMavenLocal (not just `jar`) so util's root buildscript
+      # — which resolves `com.zerobias:build-tools:1.+` with mavenLocal
+      # listed FIRST — picks up the freshly-compiled plugin classes
+      # including the `mavenCentralPublish` extension that codegen +
+      # lite-filter now apply. Without the install, the root build
+      # resolves against GitHub Packages' last-published version and
+      # evaluation fails with `Could not find method mavenCentralPublish()`.
+      - name: Build + install build-tools to mavenLocal
+        run: cd packages/build-tools && ./gradlew publishToMavenLocal
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           READ_TOKEN: ${{ env.READ_TOKEN }}
@@ -106,7 +113,7 @@ jobs:
           CI: 'true'
 
       - name: Publish
-        run: npx zbb publish --force
+        run: npx zbb publish
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}

@@ -97,7 +97,22 @@ export async function refreshStackEnv(
     return { refreshed, errors };
   }
 
-  // Verify vault connection before attempting any secret fetches
+  // Filter to just the vault vars we actually need to fetch. A vault
+  // var needs fetching if `refresh: true` is declared (always re-pull)
+  // OR its current value is undefined. This lets us skip the vault
+  // connection check entirely in CI, where vault-action pre-populates
+  // process.env with all the secrets — the StackEnvironment CI snapshot
+  // picks them up without ever touching vault from zbb.
+  const toFetch = vaultVars.filter(v => {
+    const currentValue = stack.env.get(v.name);
+    return v.declaration.refresh === true || currentValue === undefined;
+  });
+
+  if (toFetch.length === 0) {
+    return { refreshed, errors };
+  }
+
+  // Verify vault connection — only reached when we genuinely need to fetch.
   try {
     await verifyVaultConnection();
   } catch (e: unknown) {
@@ -108,10 +123,7 @@ export async function refreshStackEnv(
     return { refreshed, errors };
   }
 
-  for (const v of vaultVars) {
-    const currentValue = stack.env.get(v.name);
-    if (!v.declaration.refresh && currentValue !== undefined) continue;
-
+  for (const v of toFetch) {
     try {
       const value = await resolveVaultRef(v.declaration.vault!);
       // setFromSource records `resolution: 'inherited'` + `source:
