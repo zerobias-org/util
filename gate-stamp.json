@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "branch": "cdn_kb",
-  "timestamp": "2026-04-24T03:19:18.290419232Z",
+  "branch": "gradle_fix",
+  "timestamp": "2026-04-24T03:31:56.714187348Z",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "1.0.33",
@@ -568,14 +568,14 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.56",
-      "sourceHash": "0300a1269743c62aa1c15e05c5e2989d2a4d1bbfcc6a539d3d585404e089b2c2",
-      "testHash": "61adea9f4894905cfc531aa5bc6c6c4c7aa8f64d5555c2493b314966a5e88b9e",
+      "sourceHash": "f03af60c4d470c78ae7dafa58b9c257b3f2c267bbd91de03c35a3144ce0fd352",
+      "testHash": "e79630ad8687f6ba96fc3c5a8e5a5be0bcbc9874966ae85f2f2448487fdf3298",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
         "test": "skipped"
       },
       "tests": {
