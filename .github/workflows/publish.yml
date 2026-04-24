@@ -68,6 +68,10 @@ jobs:
           secrets: |
             operations-kv/data/ci/github writePackagesToken | NPM_TOKEN ;
             operations-kv/data/ci/github readPackagesToken | READ_TOKEN ;
+            operations-kv/data/sonatype/mavencentral/publish username | SONATYPE_USERNAME ;
+            operations-kv/data/sonatype/mavencentral/publish password | SONATYPE_PASSWORD ;
+            operations-kv/data/sonatype/mavencentral/publish gpg_key | GPG_SIGNING_KEY ;
+            operations-kv/data/sonatype/mavencentral/publish gpg_key_password | GPG_SIGNING_KEY_PASSWORD ;
 
       - name: Install dependencies
         run: |
@@ -109,30 +113,13 @@ jobs:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           READ_TOKEN: ${{ env.READ_TOKEN }}
 
-      # If build-tools source changed, publish the Maven artifact so
-      # consumer repos (hub, hydra, platform, etc.) pick up the new jar.
-      #
-      # NOTE: use $GITHUB_SHA~1 as the diff base, NOT HEAD~1. `zbb publish`
-      # above creates a `commitVersionBumps` commit that becomes HEAD, so
-      # HEAD~1 would be the push commit itself and the diff would only show
-      # the version bumps (never build-tools). $GITHUB_SHA is fixed at
-      # workflow start and always points at the triggering push commit.
-      - name: Publish build-tools to Maven
-        if: success()
-        run: |
-          BASE="${GITHUB_SHA}~1"
-          if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
-            echo "No parent commit at $BASE (shallow or first commit) — publishing to be safe"
-            cd packages/build-tools && ./gradlew publishAllPublicationsToGitHubPackagesRepository
-          elif git diff --name-only "$BASE" "$GITHUB_SHA" -- packages/build-tools/ | grep -q .; then
-            echo "build-tools changed in $BASE..$GITHUB_SHA — publishing to Maven"
-            cd packages/build-tools && ./gradlew publishAllPublicationsToGitHubPackagesRepository
-          else
-            echo "build-tools unchanged — skipping Maven publish"
-          fi
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+      # Java publish to Maven Central is handled inside `zbb publish` above
+      # via the `publishJavaPackages` task in zb.monorepo-publish.gradle.kts.
+      # That task auto-discovers every package applying `zb.maven-central-publish`,
+      # runs tag-based change detection (`<name>-v*`), and calls
+      # `./gradlew publishAndReleaseToMavenCentral` per changed package.
+      # Annotated tags are created at HEAD; `git push --follow-tags` in
+      # monorepoPublish.doLast pushes them alongside the npm tags.
 
       - name: Release Announcement
         if: success()

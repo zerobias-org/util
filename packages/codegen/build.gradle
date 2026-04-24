@@ -4,7 +4,15 @@ plugins {
 }
 
 group = 'com.zerobias.hub'
-version = '2.0.50'
+// Auto-bump patch is delegated to the zb.maven-central-publish plugin,
+// which resolves project.version by querying Maven Central + GitHub
+// Packages metadata and picking the next free patch in 2.0.* . GitHub
+// Packages has historical codegen publishes up to 2.0.50 — the resolver
+// checks both sources to avoid collisions during the Central cutover.
+// Artifact id comes from base.archivesName = 'hub-module-codegen' below.
+mavenCentralPublish {
+  baseVersion = '2.0'
+}
 description = 'OpenAPI Generator for creating Hub Modules'
 
 // Force the artifact name regardless of how gradle is invoked (e.g. from

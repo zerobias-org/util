@@ -40,9 +40,51 @@
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.SonatypeHost
+import com.zerobias.buildtools.util.VersionResolver
 
 plugins {
     id("com.vanniktech.maven.publish")
+}
+
+// ── Extension: `mavenCentralPublish { baseVersion = "1.0" }` ─────────
+//
+// When baseVersion is set, the plugin resolves project.version by
+// querying both Maven Central + GitHub Packages metadata for the
+// artifact and picking the next available patch in <baseVersion>.* .
+// This pushes auto-bump responsibility into the plugin so consumer
+// build files don't import VersionResolver (which isn't on the root
+// monorepo's buildscript classpath when the package is a subproject).
+//
+// Consumer usage:
+//
+//   plugins { `java-library`; id("zb.maven-central-publish") }
+//   group = "com.zerobias"
+//   mavenCentralPublish { baseVersion = "1.0" }
+//
+// If baseVersion is NOT set, project.version is left to the consumer
+// (back-compat for anyone pinning an explicit version).
+abstract class MavenCentralPublishExtension {
+    abstract val baseVersion: org.gradle.api.provider.Property<String>
+}
+
+val mcpExt = extensions.create<MavenCentralPublishExtension>("mavenCentralPublish")
+
+afterEvaluate {
+    if (!mcpExt.baseVersion.isPresent) return@afterEvaluate
+
+    // Artifact id defaults to base.archivesName when set (e.g. codegen
+    // overrides to `hub-module-codegen`), else project.name.
+    val artifact = project.extensions.findByType<BasePluginExtension>()
+        ?.archivesName?.orNull
+        ?: project.name
+
+    val resolved = VersionResolver.autoBumpPatch(
+        project.group.toString(),
+        artifact,
+        mcpExt.baseVersion.get(),
+    )
+    project.version = resolved
+    logger.lifecycle("[zb.maven-central-publish] resolved version for $artifact: $resolved")
 }
 
 // Diagnostic: log whether the signing credentials are visible at plugin
@@ -117,12 +159,27 @@ publishing {
 tasks.register("publishToGithub") {
     group = "publishing"
     description = "Publish to GitHub Packages Maven repository"
-    dependsOn("publishMavenPublicationToGithubRepository")
+    dependsOn(tasks.matching {
+        it.name.startsWith("publish") && it.name.endsWith("PublicationToGithubRepository")
+    })
 }
 
 // `publish` runs all three targets.
 tasks.named("publish") {
     dependsOn("publishToMavenLocal", "publishToMavenCentral", "publishToGithub")
+}
+
+// Signing is only required by Maven Central. GitHub Packages and Maven
+// Local accept unsigned artifacts. Skip sign tasks when signing creds
+// aren't configured — lets local `./gradlew publishToGithub` work
+// without needing a PGP key. In CI, vault provides the creds so signing
+// runs normally as a prerequisite of publishToMavenCentral.
+tasks.withType<Sign>().configureEach {
+    onlyIf("signing creds present") {
+        val key = providers.gradleProperty("signingInMemoryKey").orNull
+        val pw = providers.gradleProperty("signingInMemoryKeyPassword").orNull
+        !key.isNullOrBlank() && !pw.isNullOrBlank()
+    }
 }
 
 // Idempotency: skip GitHub Packages upload when the artifact version already

@@ -289,12 +289,179 @@ val dispatchImageWorkflows = tasks.register("dispatchImageWorkflows") {
 }
 
 
+// ── publishJavaPackages — maven-central publish for Java workspaces ──
+//
+// Discovers every package applying `zb.maven-central-publish` (scanning
+// packages/*/build.gradle(.kts)), runs change detection against the
+// package's last `<name>-v*` annotated tag, and for changed packages:
+//   1. Resolves the next version by querying the package's own Gradle
+//      (which uses VersionResolver to check Maven Central + GH Packages
+//      metadata) — so two publishes never collide on the same version.
+//   2. Spawns `./gradlew publishAndReleaseToMavenCentral` in the package's
+//      own Gradle root. These Java packages are deliberately NOT included
+//      as monorepo subprojects (see util's settings.gradle.kts), so they
+//      must be invoked as standalone Gradle builds.
+//   3. On success, creates an annotated tag `<name>-v<version>` pointing
+//      at HEAD. Annotated tags are required so the `git push --follow-tags`
+//      in monorepoPublish.doLast actually pushes them (lightweight tags
+//      are ignored by --follow-tags).
+//
+// Tag-based change detection (not HEAD~1) means a failed publish retries
+// on the next push even if that push didn't touch the package — the diff
+// still reaches back to the last SUCCESSFUL tag, so the unpublished change
+// remains visible to the detector until it's tagged.
+//
+// Env inheritance: this task spawns `./gradlew` as a child process, which
+// inherits all env vars including the ORG_GRADLE_PROJECT_* signing +
+// Sonatype creds that `zbb exec` (or the CI workflow's vault-action step)
+// exported into the parent process.
+
+fun discoverJavaPackages(repoRoot: java.io.File): List<java.io.File> {
+    val packagesDir = repoRoot.resolve("packages")
+    if (!packagesDir.isDirectory) return emptyList()
+    return packagesDir.listFiles()
+        ?.filter { it.isDirectory }
+        ?.filter { dir ->
+            listOf(dir.resolve("build.gradle"), dir.resolve("build.gradle.kts")).any { f ->
+                f.exists() && f.readText().contains("zb.maven-central-publish")
+            }
+        }
+        ?.sortedBy { it.name }
+        ?: emptyList()
+}
+
+fun runGit(repoRoot: java.io.File, vararg args: String): Pair<Int, String> {
+    val proc = ProcessBuilder(listOf("git") + args)
+        .directory(repoRoot)
+        .redirectErrorStream(true)
+        .start()
+    val output = proc.inputStream.bufferedReader().readText()
+    proc.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
+    return proc.exitValue() to output
+}
+
+fun resolveGradleVersion(pkgDir: java.io.File): String? {
+    return try {
+        val proc = ProcessBuilder("./gradlew", "-q", "properties")
+            .directory(pkgDir)
+            .redirectErrorStream(false)
+            .start()
+        val stdout = proc.inputStream.bufferedReader().readText()
+        proc.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)
+        if (proc.exitValue() != 0) return null
+        stdout.lines()
+            .firstOrNull { it.startsWith("version: ") }
+            ?.substringAfter("version: ")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+val publishJavaPackages = tasks.register("publishJavaPackages") {
+    group = "monorepo"
+    description = "Publish Java packages (zb.maven-central-publish consumers) to Maven Central and tag"
+
+    doLast {
+        val repoRoot = rootProject.projectDir
+        val javaPkgs = discoverJavaPackages(repoRoot)
+
+        if (javaPkgs.isEmpty()) {
+            logger.lifecycle("[java-publish] no packages apply zb.maven-central-publish — nothing to do")
+            return@doLast
+        }
+
+        val failures = mutableListOf<String>()
+        var published = 0
+        var skipped = 0
+
+        for (pkgDir in javaPkgs) {
+            val name = pkgDir.name
+
+            val (tagListExit, tagListOut) = runGit(
+                repoRoot, "tag", "-l", "$name-v*", "--sort=-version:refname"
+            )
+            val latestTag = if (tagListExit == 0) {
+                tagListOut.lines().firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+            } else null
+
+            val base = latestTag ?: run {
+                val (rc, out) = runGit(repoRoot, "rev-parse", "HEAD~1")
+                if (rc == 0) out.trim().takeIf { it.isNotBlank() } else null
+            }
+
+            if (base != null) {
+                val (diffExit, diffOut) = runGit(
+                    repoRoot, "diff", "--name-only", base, "HEAD", "--", "packages/$name/"
+                )
+                if (diffExit == 0 && diffOut.isBlank()) {
+                    logger.lifecycle("[java-publish] $name unchanged since ${latestTag ?: "HEAD~1"} — skipping")
+                    skipped++
+                    continue
+                }
+            } else {
+                logger.lifecycle("[java-publish] $name: no prior tag and no HEAD~1 — forcing publish")
+            }
+
+            if (publishDryRun) {
+                logger.lifecycle("[java-publish] DRY RUN: would publish $name (changed since ${latestTag ?: "HEAD~1"})")
+                skipped++
+                continue
+            }
+
+            val version = resolveGradleVersion(pkgDir)
+            if (version == null) {
+                logger.error("[java-publish] $name: could not resolve version via ./gradlew properties")
+                failures.add(name)
+                continue
+            }
+
+            logger.lifecycle("[java-publish] $name → $version (publishing to Maven Central)")
+
+            val publishProc = ProcessBuilder("./gradlew", "publishAndReleaseToMavenCentral")
+                .directory(pkgDir)
+                .inheritIO()
+                .start()
+            publishProc.waitFor(30, java.util.concurrent.TimeUnit.MINUTES)
+
+            if (publishProc.exitValue() != 0) {
+                logger.error("[java-publish] $name PUBLISH FAILED")
+                failures.add(name)
+                continue
+            }
+
+            val tag = "$name-v$version"
+            val (tagCheckExit, _) = runGit(repoRoot, "rev-parse", "--verify", tag)
+            if (tagCheckExit == 0) {
+                logger.warn("[java-publish] $name: tag $tag already exists — not re-creating")
+            } else {
+                val (tagExit, tagOut) = runGit(
+                    repoRoot, "tag", "-a", tag, "-m", "Release $name@$version"
+                )
+                if (tagExit == 0) {
+                    logger.lifecycle("[java-publish] tagged $tag")
+                    published++
+                } else {
+                    logger.warn("[java-publish] $name: tag creation failed: $tagOut")
+                }
+            }
+        }
+
+        logger.lifecycle("[java-publish] summary: published=$published skipped=$skipped failed=${failures.size}")
+
+        if (failures.isNotEmpty()) {
+            throw GradleException("[java-publish] ${failures.size} package(s) failed: ${failures.joinToString(", ")}")
+        }
+    }
+}
+
 // ── Root-level monorepoPublish (deps wired in projectsEvaluated) ──
 
 val monorepoPublish = tasks.register("monorepoPublish") {
     group = "monorepo"
     description = "Build + publish changed workspace packages (monorepoBuild dep added in projectsEvaluated)"
-    dependsOn(publishGuard, publishPlan)
+    dependsOn(publishGuard, publishPlan, publishJavaPackages)
     finalizedBy(dispatchImageWorkflows)
 }
 
@@ -664,6 +831,21 @@ gradle.projectsEvaluated {
 
     // ── Wire root monorepoPublish to depend on all per-package publishPackage tasks ──
     monorepoPublish.configure {
+        for ((pkgName, pkg) in service.graph.packages) {
+            if (pkg.private) continue
+            if (service.config.skipPublish.contains(pkgName)) continue
+            val gradlePath = ":" + pkg.relDir.replace("/", ":")
+            val subproject = rootProject.findProject(gradlePath) ?: continue
+            subproject.tasks.findByName("publishPackage")?.let { dependsOn(it) }
+        }
+    }
+
+    // ── Order Java publish AFTER all npm publishes ──
+    // Without this, Gradle parallelism could start Java publish while
+    // npm packages are still in flight (or even before them). Sequencing
+    // npm → Java matches the prior workflow order and keeps Java's
+    // failure impact isolated: if Java fails, npm already shipped.
+    publishJavaPackages.configure {
         for ((pkgName, pkg) in service.graph.packages) {
             if (pkg.private) continue
             if (service.config.skipPublish.contains(pkgName)) continue

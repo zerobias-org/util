@@ -12,31 +12,47 @@ group = "com.zerobias"
 
 // Env var → Gradle property mapping lives in util's root settings.gradle.kts
 
-// Auto-bump patch version: check what's published, use next available
+// Auto-bump patch: query both Maven Central and GitHub Packages, take
+// max+1. Downstream consumers (codegen, lite-filter) call the same
+// logic via com.zerobias.buildtools.util.VersionResolver — build-tools
+// can't import its own not-yet-compiled helper, so the logic is
+// duplicated inline here. Keep the two in sync.
 val baseVersion = "1.0"
 version = run {
-    val token = System.getenv("GITHUB_TOKEN") ?: ""
-    if (token.isEmpty()) return@run "$baseVersion.0"
+    val groupPath = "com/zerobias"
+    val artifact = "build-tools"
 
-    val repoUrl = "https://maven.pkg.github.com/zerobias-org/util"
-    val metadataUrl = "$repoUrl/com/zerobias/build-tools/maven-metadata.xml"
-    try {
-        val url = uri(metadataUrl).toURL()
-        val conn = url.openConnection()
-        conn.setRequestProperty("Authorization", "Bearer $token")
+    fun queryMetadata(url: String, authHeader: String?): Int = try {
+        val conn = uri(url).toURL().openConnection() as java.net.HttpURLConnection
+        if (authHeader != null) conn.setRequestProperty("Authorization", authHeader)
         conn.connectTimeout = 5000
         conn.readTimeout = 5000
+        conn.connect()
+        if (conn.responseCode != 200) {
+            conn.disconnect()
+            -1
+        } else {
+            val xml = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            val pattern = Regex("""\Q$baseVersion\E\.(\d+)""")
+            pattern.findAll(xml)
+                .mapNotNull { it.groupValues[1].toIntOrNull() }
+                .maxOrNull() ?: -1
+        }
+    } catch (_: Exception) { -1 }
 
-        val xml = conn.getInputStream().bufferedReader().readText()
-        // Find all versions matching baseVersion.N
-        val pattern = Regex("""\Q$baseVersion\E\.(\d+)""")
-        val maxPatch = pattern.findAll(xml)
-            .mapNotNull { it.groupValues[1].toIntOrNull() }
-            .maxOrNull() ?: -1
-        "$baseVersion.${maxPatch + 1}"
-    } catch (_: Exception) {
-        "$baseVersion.0"
-    }
+    val centralMax = queryMetadata(
+        "https://repo1.maven.org/maven2/$groupPath/$artifact/maven-metadata.xml",
+        null,
+    )
+    val token = System.getenv("GITHUB_TOKEN")?.takeIf { it.isNotEmpty() }
+    val githubMax = if (token != null) queryMetadata(
+        "https://maven.pkg.github.com/zerobias-org/util/$groupPath/$artifact/maven-metadata.xml",
+        "Bearer $token",
+    ) else -1
+
+    val max = maxOf(centralMax, githubMax)
+    if (max < 0) "$baseVersion.0" else "$baseVersion.${max + 1}"
 }
 
 java {
@@ -142,4 +158,16 @@ tasks.register("publishToGithub") {
 
 tasks.named("publish") {
     dependsOn("publishToMavenLocal", "publishToMavenCentral", "publishToGithub")
+}
+
+// Same escape hatch as zb.maven-central-publish: skip Sign tasks when
+// no signing creds are configured. Lets local `publishToMavenLocal`
+// work without needing a PGP key; in CI the vault step provides creds
+// and signing runs normally.
+tasks.withType<Sign>().configureEach {
+    onlyIf("signing creds present") {
+        val key = providers.gradleProperty("signingInMemoryKey").orNull
+        val pw = providers.gradleProperty("signingInMemoryKeyPassword").orNull
+        !key.isNullOrBlank() && !pw.isNullOrBlank()
+    }
 }

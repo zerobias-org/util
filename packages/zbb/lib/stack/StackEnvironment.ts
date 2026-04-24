@@ -190,6 +190,32 @@ export class StackEnvironment extends EventEmitter {
   }
 
   /**
+   * Record a value fetched from an external source (vault/file/env) with
+   * the correct provenance. Unlike set() — which marks `resolution:
+   * 'override'` + `set_by: 'user'` — this preserves the declared source
+   * so `zbb env list` shows where the value came from, and a future
+   * `zbb env refresh` knows to re-fetch instead of treating the value
+   * as a sticky user override.
+   *
+   * Used by refresh.ts' vault loop; the file/env refresh in
+   * refreshSourcedVars() uses the same manifest shape inline.
+   */
+  async setFromSource(key: string, value: string, source: string): Promise<void> {
+    const existing = this.manifest.get(key);
+    this.manifest.set(key, {
+      ...existing,
+      resolution: 'inherited',
+      value,
+      source,
+      set_by: 'refresh',
+      set_at: new Date().toISOString(),
+    } as StackManifestEntry);
+    await this.saveManifest();
+    await this.computeEnv();
+    this.emit('change', { key, value });
+  }
+
+  /**
    * Clear a user override, reverting the var to whatever its schema decides
    * (derived formula, file-sourced value, etc). Only user-set overrides are
    * unsettable — calling `unset` on an inherited/dns/allocated/generated/etc
@@ -600,6 +626,38 @@ export class StackEnvironment extends EventEmitter {
       ? parseEnvFile(await readFile(this.envPath, 'utf-8'))
       : new Map<string, string>();
 
+    // Map a schema declaration with an external source to the manifest
+    // shape used for inherited-from-source values. Returns null for
+    // declarations without a recognized external source.
+    const sourceLabel = (decl: EnvVarDeclaration): string | null => {
+      if (decl.source === 'vault' && decl.vault) return `vault:${decl.vault}`;
+      if (decl.source === 'file' && decl.file) return `file:${decl.file}`;
+      if (decl.source === 'env') return 'env';
+      return null;
+    };
+
+    // 3a. Auto-heal: any existing entry mislabeled as `override` by a
+    // prior recovery pass (set_by === 'recovered') whose schema declares
+    // an external source gets reclassified as `inherited` with the
+    // proper source label. Before this fix, vault/file/env-sourced vars
+    // whose value existed in .env but not in the manifest were blindly
+    // recovered as user overrides — which caused `zbb env refresh` to
+    // treat them as sticky and never re-pull from the declared source.
+    for (const [name, entry] of this.manifest) {
+      if (entry.resolution !== 'override') continue;
+      if (entry.set_by !== 'recovered') continue;
+      const decl = this.schema.get(name);
+      if (!decl) continue;
+      const source = sourceLabel(decl);
+      if (!source) continue;
+      this.manifest.set(name, {
+        ...entry,
+        resolution: 'inherited',
+        source,
+      });
+      manifestChanged = true;
+    }
+
     for (const [name, decl] of this.schema) {
       if (this.manifest.has(name)) continue;
       if (decl.source === 'expression:jsonata' && decl.expr) {
@@ -617,8 +675,17 @@ export class StackEnvironment extends EventEmitter {
         }
         manifestChanged = true;
       } else if (existingEnv.has(name)) {
-        // Value exists in .env but not in manifest — recover as override
-        this.manifest.set(name, { resolution: 'override', value: existingEnv.get(name)!, set_by: 'recovered' });
+        // Value exists in .env but not in manifest. If the schema
+        // declares an external source, record it as `inherited` with
+        // the source label so refresh can re-fetch later. Otherwise
+        // fall back to the old override-recovery behavior.
+        const value = existingEnv.get(name)!;
+        const source = sourceLabel(decl);
+        if (source) {
+          this.manifest.set(name, { resolution: 'inherited', value, source, set_by: 'recovered' });
+        } else {
+          this.manifest.set(name, { resolution: 'override', value, set_by: 'recovered' });
+        }
         manifestChanged = true;
       }
     }

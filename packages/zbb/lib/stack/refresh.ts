@@ -114,7 +114,13 @@ export async function refreshStackEnv(
 
     try {
       const value = await resolveVaultRef(v.declaration.vault!);
-      await stack.env.set(v.name, value);
+      // setFromSource records `resolution: 'inherited'` + `source:
+      // 'vault:<path>'` so subsequent `zbb env list` shows the vault
+      // provenance and the entry isn't treated as a sticky user
+      // override. The prior call here was `stack.env.set()`, which
+      // hardcoded `resolution: 'override'` + `set_by: 'user'` —
+      // making every vault refresh look like a manual user override.
+      await stack.env.setFromSource(v.name, value, `vault:${v.declaration.vault!}`);
       refreshed.push(v.name);
     } catch (e: unknown) {
       errors.push({ name: v.name, error: e instanceof Error ? e.message : String(e) });

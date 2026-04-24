@@ -4,7 +4,12 @@ plugins {
 }
 
 group = "com.zerobias"
-version = "1.0.2"
+// Auto-bump patch is delegated to the zb.maven-central-publish plugin,
+// which resolves project.version by querying Maven Central + GitHub
+// Packages metadata and picking the next free patch in 1.0.* .
+mavenCentralPublish {
+    baseVersion = "1.0"
+}
 description = "A lightweight library for RFC4515 LDAP-style filters with extensions"
 
 java {
