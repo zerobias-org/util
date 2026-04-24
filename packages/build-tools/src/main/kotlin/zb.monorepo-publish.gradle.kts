@@ -399,26 +399,29 @@ val publishJavaPackages = tasks.register("publishJavaPackages") {
                 tagListOut.lines().firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
             } else null
 
-            val base = latestTag ?: run {
-                val (rc, out) = runGit(repoRoot, "rev-parse", "HEAD~1")
-                if (rc == 0) out.trim().takeIf { it.isNotBlank() } else null
-            }
-
-            if (base != null) {
+            // Bootstrap case: no prior `<name>-v*` tag means this package has
+            // never been published through this flow. Publish unconditionally
+            // to establish the baseline tag. Falling back to HEAD~1 here is
+            // wrong: if the triggering commit didn't touch the package, we'd
+            // skip a package that genuinely needs its first publish —
+            // especially when a previous run failed before tagging. Once
+            // `<name>-v*` exists, tag-based detection takes over.
+            if (latestTag == null) {
+                logger.lifecycle("[java-publish] $name: no prior $name-v* tag — forcing publish to bootstrap")
+            } else {
                 val (diffExit, diffOut) = runGit(
-                    repoRoot, "diff", "--name-only", base, "HEAD", "--", "packages/$name/"
+                    repoRoot, "diff", "--name-only", latestTag, "HEAD", "--", "packages/$name/"
                 )
                 if (diffExit == 0 && diffOut.isBlank()) {
-                    logger.lifecycle("[java-publish] $name unchanged since ${latestTag ?: "HEAD~1"} — skipping")
+                    logger.lifecycle("[java-publish] $name unchanged since $latestTag — skipping")
                     skipped++
                     continue
                 }
-            } else {
-                logger.lifecycle("[java-publish] $name: no prior tag and no HEAD~1 — forcing publish")
             }
 
             if (publishDryRun) {
-                logger.lifecycle("[java-publish] DRY RUN: would publish $name (changed since ${latestTag ?: "HEAD~1"})")
+                val reason = latestTag ?: "bootstrap (no prior tag)"
+                logger.lifecycle("[java-publish] DRY RUN: would publish $name (changed since $reason)")
                 skipped++
                 continue
             }
