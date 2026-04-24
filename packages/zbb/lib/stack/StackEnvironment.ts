@@ -790,6 +790,13 @@ export class StackEnvironment extends EventEmitter {
             source: 'ci-env',
             mask: decl.mask,
           });
+        } else if (decl.required && decl.source === 'env') {
+          // Same required-enforcement as local mode. CI mode trusts
+          // process.env as the source of truth (vault-action already
+          // injected everything), so a missing required `source: env`
+          // var means the CI config is incomplete — fail fast instead
+          // of letting it surface as a cryptic downstream error.
+          throw new Error(`Required env var '${name}' not found in environment`);
         }
       }
     } else {
