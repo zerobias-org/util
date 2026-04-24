@@ -208,26 +208,57 @@ object ZbbSlotProvider {
      * `^[A-Za-z_][A-Za-z0-9_]*=`; anything else is appended to the current
      * value. Comments and blank lines BEFORE any key are skipped.
      */
+    private fun unescapeEnvValue(raw: String): String {
+        val sb = StringBuilder(raw.length)
+        var i = 0
+        while (i < raw.length) {
+            if (raw[i] == '\\' && i + 1 < raw.length) {
+                when (raw[i + 1]) {
+                    'n'  -> { sb.append('\n'); i += 2 }
+                    'r'  -> { sb.append('\r'); i += 2 }
+                    '\\' -> { sb.append('\\'); i += 2 }
+                    else -> { sb.append(raw[i]); i++ }
+                }
+            } else {
+                sb.append(raw[i]); i++
+            }
+        }
+        return sb.toString()
+    }
+
     private fun readEnvFile(file: File): Map<String, String> {
         val envKeyPattern = Regex("^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
         val result = mutableMapOf<String, String>()
         var currentKey: String? = null
-        val currentValue = StringBuilder()
+        val currentParts = mutableListOf<String>()
+
+        fun flush() {
+            currentKey?.let { key ->
+                val value = if (currentParts.size == 1) {
+                    // New format: single line with \n escapes
+                    unescapeEnvValue(currentParts[0]).trim()
+                } else {
+                    // Old format: multi-line continuation — join as-is
+                    currentParts.joinToString("\n").trim()
+                }
+                result[key] = value
+            }
+            currentKey = null
+            currentParts.clear()
+        }
 
         for (line in file.readLines()) {
             val match = envKeyPattern.matchEntire(line)
             if (match != null) {
-                currentKey?.let { result[it] = currentValue.toString().trim() }
+                flush()
                 currentKey = match.groupValues[1]
-                currentValue.clear()
-                currentValue.append(match.groupValues[2])
+                currentParts.add(match.groupValues[2])
             } else if (currentKey != null) {
-                if (currentValue.isNotEmpty()) currentValue.append('\n')
-                currentValue.append(line)
+                currentParts.add(line)
             }
             // else: comment / blank line before any key — ignore
         }
-        currentKey?.let { result[it] = currentValue.toString().trim() }
+        flush()
         return result
     }
 
