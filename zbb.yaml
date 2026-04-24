@@ -16,21 +16,21 @@ version: "1.0.0"
 env:
   SONATYPE_USERNAME:
     source: vault
-    vault: "operations-kv/sonatype/mavencentral/publish.username"
+    vault: "operations-kv/ci/sonatype/mavencentral/publish.username"
     description: "Sonatype Central Portal username (user token name)."
   SONATYPE_PASSWORD:
     source: vault
-    vault: "operations-kv/sonatype/mavencentral/publish.password"
+    vault: "operations-kv/ci/sonatype/mavencentral/publish.password"
     mask: true
     description: "Sonatype Central Portal password (user token value)."
   GPG_SIGNING_KEY:
     source: vault
-    vault: "operations-kv/sonatype/mavencentral/publish.gpg_key"
+    vault: "operations-kv/ci/sonatype/mavencentral/publish.gpg_key"
     mask: true
     description: "ASCII-armored GPG private key for artifact signing."
   GPG_SIGNING_KEY_PASSWORD:
     source: vault
-    vault: "operations-kv/sonatype/mavencentral/publish.gpg_key_password"
+    vault: "operations-kv/ci/sonatype/mavencentral/publish.gpg_key_password"
     mask: true
     description: "Passphrase for the GPG private key."
   GITHUB_ACTOR:

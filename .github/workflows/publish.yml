@@ -68,10 +68,10 @@ jobs:
           secrets: |
             operations-kv/data/ci/github writePackagesToken | NPM_TOKEN ;
             operations-kv/data/ci/github readPackagesToken | READ_TOKEN ;
-            operations-kv/data/sonatype/mavencentral/publish username | SONATYPE_USERNAME ;
-            operations-kv/data/sonatype/mavencentral/publish password | SONATYPE_PASSWORD ;
-            operations-kv/data/sonatype/mavencentral/publish gpg_key | GPG_SIGNING_KEY ;
-            operations-kv/data/sonatype/mavencentral/publish gpg_key_password | GPG_SIGNING_KEY_PASSWORD ;
+            operations-kv/data/ci/sonatype/mavencentral/publish username | SONATYPE_USERNAME ;
+            operations-kv/data/ci/sonatype/mavencentral/publish password | SONATYPE_PASSWORD ;
+            operations-kv/data/ci/sonatype/mavencentral/publish gpg_key | GPG_SIGNING_KEY ;
+            operations-kv/data/ci/sonatype/mavencentral/publish gpg_key_password | GPG_SIGNING_KEY_PASSWORD ;
 
       - name: Install dependencies
         run: |
