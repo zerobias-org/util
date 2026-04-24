@@ -118,6 +118,23 @@ val workspaceInstall = tasks.register<Exec>("workspaceInstall") {
     if (rootProject.file("package-lock.json").exists()) {
         inputs.file(rootProject.file("package-lock.json"))
     }
+
+    // Registry injection invalidation signal: when a slot is loaded with
+    // Verdaccio + locally-published packages, publishes.json lists them.
+    // Declaring it as an input makes Gradle invalidate this task when a new
+    // package is published to Verdaccio — but stay UP-TO-DATE when nothing
+    // has changed since the last install. Previously this branch short-
+    // circuited `upToDateWhen { false }`, forcing every build to re-taint +
+    // reinstall, which cascaded through every downstream task consuming
+    // node_modules (buildDist → buildRaw → buildFoo).
+    val slotName: String? = System.getenv("ZB_SLOT")
+    val publishesFile: java.io.File? = slotName?.let {
+        java.io.File(System.getProperty("user.home"), ".zbb/slots/$it/stacks/registry/publishes.json")
+    }
+    if (publishesFile?.exists() == true) {
+        inputs.file(publishesFile).withPropertyName("registryPublishes")
+    }
+
     outputs.dir(rootProject.file("node_modules"))
         .withPropertyName("nodeModules")
 
@@ -136,12 +153,7 @@ val workspaceInstall = tasks.register<Exec>("workspaceInstall") {
         }
     }
 
-    // Without registry injection, skip when node_modules exists. With injection
-    // (taint), force re-run.
-    outputs.upToDateWhen {
-        if (registryInjection.get().isActive) false
-        else rootProject.file("node_modules").exists()
-    }
+    outputs.upToDateWhen { rootProject.file("node_modules").exists() }
 }
 
 // Restore task: always runs after workspaceInstall (success OR failure)

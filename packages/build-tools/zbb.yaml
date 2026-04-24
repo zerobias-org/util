@@ -1,0 +1,8 @@
+name: "@zerobias/build-tools"
+version: "1.0.38"
+
+lifecycle:
+  clean:   ./gradlew clean
+  build:   ./gradlew build
+  test:    ./gradlew test
+  publish: ./gradlew publish

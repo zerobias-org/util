@@ -44,6 +44,10 @@ _zbb_load_stack_env() {
       [ -z "$key" ] && continue
       [[ "$key" =~ ^[[:space:]]*# ]] && continue
       key=$(echo "$key" | xargs)
+      # Unescape \n and \r written by serializeEnv (new single-line format)
+      value="${value//\\n/$'\n'}"
+      value="${value//\\r/$'\r'}"
+      value="${value//\\\\/\\}"
       export "$key=$value"
       _ZBB_CURRENT_STACK_VARS+=("$key")
     done < "$env_file"

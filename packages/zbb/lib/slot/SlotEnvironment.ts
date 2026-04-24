@@ -362,24 +362,55 @@ function canonicalSlotVar(slotDir: string, key: string): string | undefined {
 
 // ── Env file parsing ─────────────────────────────────────────────────
 
+function unescapeEnvValue(raw: string): string {
+  return raw.replace(/\\(\\|n|r)/g, (_, c: string) => {
+    if (c === 'n') return '\n';
+    if (c === 'r') return '\r';
+    return '\\';
+  });
+}
+
 function parseEnvFile(content: string): Map<string, string> {
   const env = new Map<string, string>();
+  const keyPattern = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)/;
+  let currentKey: string | null = null;
+  const currentParts: string[] = [];
+
+  const flush = () => {
+    if (currentKey !== null) {
+      if (currentParts.length === 1) {
+        // New format: single line with \n escapes — unescape
+        env.set(currentKey, unescapeEnvValue(currentParts[0]).trim());
+      } else {
+        // Old format: multi-line continuation — join as-is
+        env.set(currentKey, currentParts.join('\n').trim());
+      }
+    }
+    currentKey = null;
+    currentParts.length = 0;
+  };
+
   for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const idx = trimmed.indexOf('=');
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim();
-    const value = trimmed.slice(idx + 1).trim();
-    env.set(key, value);
+    const match = keyPattern.exec(line);
+    if (match) {
+      flush();
+      currentKey = match[1];
+      currentParts.push(match[2]);
+    } else if (currentKey !== null) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('#')) currentParts.push(trimmed);
+    }
   }
+  flush();
   return env;
 }
 
 function serializeEnv(env: Map<string, string>): string {
   const lines: string[] = [];
   for (const key of [...env.keys()].sort()) {
-    lines.push(`${key}=${env.get(key)}`);
+    const raw = env.get(key) ?? '';
+    const value = raw.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    lines.push(`${key}=${value}`);
   }
   return lines.join('\n') + '\n';
 }

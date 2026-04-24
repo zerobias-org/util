@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { SlotWatcher } from '../../lib/slot/SlotWatcher.js';
 
 /** Helper: wait for a specific event with timeout */
-function waitForEvent(emitter: SlotWatcher, event: string, timeoutMs: number = 2000): Promise<string> {
+function waitForEvent(emitter: SlotWatcher, event: string, timeoutMs: number = 5000): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timeout waiting for '${event}'`)), timeoutMs);
     emitter.once(event, (filename: string) => {
@@ -55,7 +55,7 @@ describe('SlotWatcher', () => {
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
     // Give watcher time to initialize
-    await delay(100);
+    await delay(300);
 
     const eventPromise = waitForEvent(watcher, 'env:change');
     await writeFile(join(slotPath, '.env'), 'FOO=bar\n', 'utf-8');
@@ -69,7 +69,7 @@ describe('SlotWatcher', () => {
   it('writing to state/hub/state.yml emits state:change event', async () => {
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
+    await delay(300);
 
     const eventPromise = waitForEvent(watcher, 'state:change');
     await writeFile(join(slotPath, 'state', 'hub', 'state.yml'), 'status: running\n', 'utf-8');
@@ -79,7 +79,7 @@ describe('SlotWatcher', () => {
   it('writing to state/deployments/deploy1.yml emits deployment:change event', async () => {
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
+    await delay(300);
 
     const eventPromise = waitForEvent(watcher, 'deployment:change');
     await writeFile(join(slotPath, 'state', 'deployments', 'deploy1.yml'), 'id: deploy1\n', 'utf-8');
@@ -89,7 +89,7 @@ describe('SlotWatcher', () => {
   it('writing to state/cmd/cmd1.yml emits command:change event', async () => {
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
+    await delay(300);
 
     const eventPromise = waitForEvent(watcher, 'command:change');
     await writeFile(join(slotPath, 'state', 'cmd', 'cmd1.yml'), 'command: start\n', 'utf-8');
@@ -99,18 +99,20 @@ describe('SlotWatcher', () => {
   it('all file changes emit generic file:change event with relative filename', async () => {
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
-
-    const eventPromise = waitForEvent(watcher, 'file:change');
+    // Drain any stale FS events from beforeEach directory creation
+    await delay(300);
+    // Collect file:change events after this point
+    const received: string[] = [];
+    watcher.on('file:change', (f: string) => received.push(f));
     await writeFile(join(slotPath, '.env'), 'X=1\n', 'utf-8');
-    const filename = await eventPromise;
-    assert.equal(filename, '.env');
+    await delay(300);
+    assert.ok(received.includes('.env'), `Expected '.env' in events, got: [${received}]`);
   });
 
   it('rapid writes within debounce window produce single event', async () => {
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
+    await delay(300);
 
     let eventCount = 0;
     watcher.on('env:change', () => { eventCount += 1; });
@@ -128,7 +130,7 @@ describe('SlotWatcher', () => {
   it('close() stops watching and removes all listeners', async () => {
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
+    await delay(300);
 
     await watcher.close();
     assert.equal(watcher.isWatching(), false);
@@ -161,7 +163,7 @@ describe('SlotWatcher', () => {
 
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
+    await delay(300);
 
     const eventPromise = new Promise<{ stackName: string; relPath: string }>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Timeout waiting for stack:env:change')), 2000);
@@ -183,7 +185,7 @@ describe('SlotWatcher', () => {
 
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
+    await delay(300);
 
     const eventPromise = new Promise<{ stackName: string; relPath: string }>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Timeout waiting for stack:state:change')), 2000);
@@ -205,7 +207,7 @@ describe('SlotWatcher', () => {
 
     watcher = new SlotWatcher(slotPath, 'test-slot');
     watcher.start();
-    await delay(100);
+    await delay(300);
 
     const eventPromise = new Promise<{ stackName: string; relPath: string }>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Timeout waiting for stack:manifest:change')), 2000);

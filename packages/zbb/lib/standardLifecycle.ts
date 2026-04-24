@@ -26,7 +26,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 
@@ -142,7 +142,7 @@ export async function spawnStandardLifecycleAndExit(
  */
 export function resolveCommandForCwd(repoRoot: string, baseCommand: string): string {
   const cwd = process.cwd();
-  const atRoot = resolve(cwd) === resolve(repoRoot);
+  const atRoot = realpathSync(cwd) === realpathSync(repoRoot);
   if (atRoot) return baseCommand;
 
   // Bail if the command looks like something we can't safely parse.
@@ -191,7 +191,7 @@ export function resolveCommandForCwd(repoRoot: string, baseCommand: string): str
 
   // Look up the gradle subproject path from the cached projectPaths map.
   const found = findGradleRoot(cwd);
-  if (!found || resolve(found.root) !== resolve(repoRoot)) {
+  if (!found || realpathSync(found.root) !== realpathSync(repoRoot)) {
     // Gradle root is somewhere else — user is in a nested gradle tree
     // we don't know about. Don't prefix; let it fail or succeed on its own.
     return baseCommand;
