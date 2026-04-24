@@ -44,8 +44,9 @@ describe('SlotEnvironment.registerResolver', () => {
   it('override values take precedence over resolver', async () => {
     SlotEnvironment.registerResolver('MY_VAR', (_env) => 'from-resolver');
 
-    await writeFile(join(slotDir, '.env'), '', 'utf-8');
-    await writeFile(join(slotDir, 'overrides.env'), 'MY_VAR=overridden\n', 'utf-8');
+    // Overrides now live in .env directly (alongside any declared values)
+    // — there is no separate overrides.env file.
+    await writeFile(join(slotDir, '.env'), 'MY_VAR=overridden\n', 'utf-8');
     const env = new SlotEnvironment(slotDir);
     await env.load();
 
@@ -76,7 +77,7 @@ describe('SlotEnvironment.registerResolver', () => {
     assert.equal(env.get('MY_VAR'), 'second');
   });
 
-  it('get() returns undefined when no declared, no override, and no resolver', async () => {
+  it('get() returns undefined when no declared value and no resolver', async () => {
     await writeFile(join(slotDir, '.env'), '', 'utf-8');
     const env = new SlotEnvironment(slotDir);
     await env.load();
@@ -93,6 +94,17 @@ describe('SlotEnvironment.registerResolver', () => {
     await env.load();
 
     assert.equal(env.get('MY_VAR'), undefined);
+  });
+
+  it('returns "set" value ahead of resolver after set() writes into .env', async () => {
+    SlotEnvironment.registerResolver('ZB_SLOT_DIR', (_env) => '/resolver/default');
+
+    await writeFile(join(slotDir, '.env'), 'ZB_SLOT=local\n', 'utf-8');
+    const env = new SlotEnvironment(slotDir);
+    await env.load();
+
+    await env.set('ZB_SLOT_DIR', '/overridden');
+    assert.equal(env.get('ZB_SLOT_DIR'), '/overridden');
   });
 });
 
@@ -149,11 +161,10 @@ describe('SlotEnvironment lockdown (zbb-only vars)', () => {
     assert.equal(all.DANA_PORT, undefined, 'polluted DANA_PORT filtered out');
   });
 
-  it('getAll() also filters polluted overrides.env', async () => {
-    await writeFile(join(slotDir, '.env'), 'ZB_SLOT=local\n', 'utf-8');
+  it('getAll() filters a polluted .env mixing slot + non-slot vars', async () => {
     await writeFile(
-      join(slotDir, 'overrides.env'),
-      'AWS_ACCESS_KEY_ID=AKIA_BAD\nZB_SLOT_DIR=/home/x/.zbb/slots/local\n',
+      join(slotDir, '.env'),
+      'ZB_SLOT=local\nAWS_ACCESS_KEY_ID=AKIA_BAD\nZB_SLOT_DIR=/home/x/.zbb/slots/local\n',
       'utf-8',
     );
 
@@ -161,8 +172,9 @@ describe('SlotEnvironment lockdown (zbb-only vars)', () => {
     await env.load();
 
     const all = env.getAll();
+    assert.equal(all.ZB_SLOT, 'local');
     assert.equal(all.ZB_SLOT_DIR, '/home/x/.zbb/slots/local', 'ZB_SLOT_DIR is slot-level, should appear');
-    assert.equal(all.AWS_ACCESS_KEY_ID, undefined, 'polluted override filtered');
+    assert.equal(all.AWS_ACCESS_KEY_ID, undefined, 'polluted non-slot entry filtered');
   });
 
   it('set() throws when trying to set a non-slot-level var', async () => {
@@ -182,12 +194,12 @@ describe('SlotEnvironment lockdown (zbb-only vars)', () => {
 
   it('set() succeeds for legitimate slot-level vars (ZB_SLOT_DIR)', async () => {
     await writeFile(join(slotDir, '.env'), 'ZB_SLOT=local\n', 'utf-8');
-    await writeFile(join(slotDir, 'overrides.env'), '', 'utf-8');
     const env = new SlotEnvironment(slotDir);
     await env.load();
 
     await env.set('ZB_SLOT_DIR', '/tmp/relocated');
     assert.equal(env.get('ZB_SLOT_DIR'), '/tmp/relocated');
+    assert.equal(env.isOverride('ZB_SLOT_DIR'), true, 'manifest tracks override provenance');
   });
 
   it('set() throws when trying to set ZB_STACK (stack-scoped, not slot-level)', async () => {
@@ -200,25 +212,24 @@ describe('SlotEnvironment lockdown (zbb-only vars)', () => {
     );
   });
 
-  it('writeOverrides() only serializes zbb-level vars to disk', async () => {
-    // Set up a polluted overrides.env as the starting state
-    await writeFile(join(slotDir, '.env'), 'ZB_SLOT=local\n', 'utf-8');
+  it('set() writes through to .env and prunes any polluted non-slot vars from disk', async () => {
+    // Set up a polluted .env as the starting state — includes a legitimate
+    // slot var plus an AWS_* that doesn't belong here.
     await writeFile(
-      join(slotDir, 'overrides.env'),
-      'AWS_ACCESS_KEY_ID=leaked\nZB_SLOT_DIR=/tmp/orig\n',
+      join(slotDir, '.env'),
+      'ZB_SLOT=local\nAWS_ACCESS_KEY_ID=leaked\nZB_SLOT_DIR=/tmp/orig\n',
       'utf-8',
     );
 
     const env = new SlotEnvironment(slotDir);
     await env.load();
 
-    // A single legitimate set triggers writeOverrides(), which should
-    // rewrite the file WITHOUT the non-zbb entry
+    // A single legitimate set rewrites .env filtered to ZBB_SLOT_VARS only.
     await env.set('ZB_SLOT_DIR', '/tmp/new');
 
-    const rewritten = await readFile(join(slotDir, 'overrides.env'), 'utf-8');
+    const rewritten = await readFile(join(slotDir, '.env'), 'utf-8');
     assert.ok(rewritten.includes('ZB_SLOT_DIR=/tmp/new'));
-    assert.ok(!rewritten.includes('AWS_ACCESS_KEY_ID'), 'polluted var should not survive writeOverrides');
+    assert.ok(!rewritten.includes('AWS_ACCESS_KEY_ID'), 'polluted var should not survive write');
   });
 
   it('loading a polluted file succeeds without throwing', async () => {
@@ -244,9 +255,10 @@ describe('SlotEnvironment lockdown (zbb-only vars)', () => {
     );
   });
 
-  it('unset() throws on declared slot var that is not an override', async () => {
-    // ZB_SLOT_DIR in .env (declared), not in overrides.env — unset should fail
-    // rather than silently no-op and lie to the user.
+  it('unset() throws on a slot var that has no override (manifest source != override)', async () => {
+    // ZB_SLOT_DIR declared in .env but never set by user → unset should
+    // fail rather than silently no-op and lie to the user. Manifest has
+    // no 'override' entry for it.
     await writeFile(join(slotDir, '.env'), 'ZB_SLOT=local\nZB_SLOT_DIR=/tmp/x\n', 'utf-8');
     const env = new SlotEnvironment(slotDir);
     await env.load();
@@ -258,20 +270,42 @@ describe('SlotEnvironment lockdown (zbb-only vars)', () => {
     assert.equal(env.get('ZB_SLOT_DIR'), '/tmp/x');
   });
 
-  it('unset() clears an override and rewrites overrides.env', async () => {
-    await writeFile(join(slotDir, '.env'), 'ZB_SLOT=local\nZB_SLOT_DIR=/tmp/orig\n', 'utf-8');
+  it('unset() reverts an override to the canonical slot-derived value', async () => {
+    await writeFile(join(slotDir, '.env'), 'ZB_SLOT=local\n', 'utf-8');
     const env = new SlotEnvironment(slotDir);
     await env.load();
 
     await env.set('ZB_SLOT_DIR', '/tmp/overridden');
     assert.equal(env.get('ZB_SLOT_DIR'), '/tmp/overridden');
+    assert.equal(env.isOverride('ZB_SLOT_DIR'), true);
 
     await env.unset('ZB_SLOT_DIR');
-    // After unset, override is gone → back to the declared value
-    assert.equal(env.get('ZB_SLOT_DIR'), '/tmp/orig');
+    // After unset, value reverts to canonical <slotDir> (the .env file
+    // is filtered to ZBB_SLOT_VARS; canonical comes from the slot dir).
+    assert.equal(env.get('ZB_SLOT_DIR'), slotDir);
+    assert.equal(env.isOverride('ZB_SLOT_DIR'), false, 'manifest override entry removed');
 
-    const overridesOnDisk = await readFile(join(slotDir, 'overrides.env'), 'utf-8');
-    assert.ok(!overridesOnDisk.includes('ZB_SLOT_DIR'), 'override should be removed from disk');
+    const envOnDisk = await readFile(join(slotDir, '.env'), 'utf-8');
+    assert.ok(envOnDisk.includes(`ZB_SLOT_DIR=${slotDir}`), '.env carries the reverted value');
+  });
+
+  it('reset() reverts every override but leaves declared defaults in place', async () => {
+    await writeFile(join(slotDir, '.env'), 'ZB_SLOT=local\n', 'utf-8');
+    const env = new SlotEnvironment(slotDir);
+    await env.load();
+
+    await env.set('ZB_SLOT_DIR', '/tmp/a');
+    await env.set('ZB_SLOT_LOGS', '/tmp/b');
+    assert.equal(env.isOverride('ZB_SLOT_DIR'), true);
+    assert.equal(env.isOverride('ZB_SLOT_LOGS'), true);
+
+    await env.reset();
+    assert.equal(env.isOverride('ZB_SLOT_DIR'), false);
+    assert.equal(env.isOverride('ZB_SLOT_LOGS'), false);
+    assert.equal(env.get('ZB_SLOT_DIR'), slotDir);
+    assert.equal(env.get('ZB_SLOT_LOGS'), join(slotDir, 'logs'));
+    // Declared but non-override var (ZB_SLOT) is untouched
+    assert.equal(env.get('ZB_SLOT'), 'local');
   });
 });
 

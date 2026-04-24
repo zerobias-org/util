@@ -116,9 +116,8 @@ Each slot has three subdirectories for runtime data plus root-level files manage
 ```
 ~/.zbb/slots/local/
   slot.yaml              # metadata (created, ephemeral, ttl, portRange)
-  .env                   # declared env vars (managed by zbb — do not edit)
-  manifest.yaml          # var provenance (source project, type, masking)
-  overrides.env          # user overrides (via zbb env set)
+  .env                   # slot env vars (managed by zbb — do not edit)
+  manifest.yaml          # var provenance (source, type, masking, override tracking)
 
   config/                # per-slot app configuration files
     nginx.conf           # (if project generates per-slot config)
@@ -418,7 +417,9 @@ zbb env reset
 
 ### Overrides
 
-`zbb env set` writes to `~/.zbb/slots/<name>/overrides.env`. These persist across `exit` / `zbb slot load` cycles. Use `zbb env reset` to clear them.
+`zbb env set` at the slot level updates `~/.zbb/slots/<name>/.env` in place and tags the entry as `source: override` in `manifest.yaml`. Overrides persist across `exit` / `zbb slot load` cycles. Use `zbb env reset` to clear them (reverts each overridden var to its canonical slot-derived value).
+
+Stack-level overrides follow the same model on the stack: `zbb env set` inside a stack context writes to the stack's `manifest.yaml` with `resolution: override` and regenerates the stack's `.env`.
 
 ## Secrets
 
@@ -836,9 +837,8 @@ Secret commands:
   slots/
     local/
       slot.yaml                     # metadata (created, ephemeral, ttl, portRange)
-      .env                          # declared vars (managed by zbb)
-      manifest.yaml                 # var provenance (source, type, masking)
-      overrides.env                 # user overrides (via zbb env set)
+      .env                          # slot env vars (managed by zbb)
+      manifest.yaml                 # var provenance + override tracking
       config/                       # per-slot app config files
       logs/                         # service log files
       state/                        # runtime state per service

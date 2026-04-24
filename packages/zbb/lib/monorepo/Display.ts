@@ -179,6 +179,7 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 function phaseDisplayName(phase: string): string {
   if (phase === 'monorepoGate') return 'Stamp';
   if (phase === 'monorepoGateCheck') return 'StampCheck';
+  if (phase === 'workspaceInstall') return 'Install';
   return phase.replace(/^monorepo/, '');
 }
 
