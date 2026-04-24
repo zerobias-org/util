@@ -601,6 +601,20 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
 
             if (op.returnType != null && op.returnType.startsWith(PAGED_RESULTS)) {
                 op.vendorExtensions.put("x-returns-paged-results", true);
+
+                // Auto-inject pageToken on every PagedResults op that didn't
+                // already declare one (mirrors HubModuleCodegenGenerator). Without
+                // this the generated client never sends pageToken upstream and
+                // cursor pagination breaks end-to-end.
+                boolean hasPageToken = allActualParams.stream()
+                        .anyMatch(p -> p.baseName.equalsIgnoreCase(PAGE_TOKEN));
+                if (!hasPageToken) {
+                    CodegenParameter pageToken = synthesizePageTokenParam();
+                    op.allParams.add(pageToken);
+                    op.queryParams.add(pageToken);
+                    allActualParams.add(pageToken);
+                }
+
                 for (CodegenParameter param : allActualParams) {
                     if (param.baseName.equalsIgnoreCase(PAGE_SIZE)
                             || param.baseName.equalsIgnoreCase(PAGE_NUMBER)
@@ -961,7 +975,33 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
             result = result.replace("&amp;", "&");
             result = result.replace("&quot;", "\"");
         }
-        
+
         return result;
+    }
+
+    /**
+     * Mirror of HubModuleCodegenGenerator.synthesizePageTokenParam — see its
+     * doc comment for rationale.
+     */
+    private CodegenParameter synthesizePageTokenParam() {
+        CodegenParameter param = new CodegenParameter();
+        param.baseName = PAGE_TOKEN;
+        param.paramName = PAGE_TOKEN;
+        param.nameInLowerCase = PAGE_TOKEN.toLowerCase();
+        param.dataType = "string";
+        param.datatypeWithEnum = "string";
+        param.baseType = "string";
+        param.isString = true;
+        param.isPrimitiveType = true;
+        param.isQueryParam = true;
+        param.required = false;
+        param.description = "Opaque cursor for cursor-based pagination. When provided, "
+                + "pageNumber is ignored. Use the token from the previous response's "
+                + "pageToken header to get the next page.";
+        param.unescapedDescription = param.description;
+        if (param.vendorExtensions == null) {
+            param.vendorExtensions = new HashMap<>();
+        }
+        return param;
     }
 }
