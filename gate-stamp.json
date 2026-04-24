@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "cdn_kb",
-  "timestamp": "2026-04-24T02:47:17.903156912Z",
+  "timestamp": "2026-04-24T03:19:18.290419232Z",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "1.0.33",
@@ -335,13 +335,13 @@
         "copyDeps": "skipped",
         "generate": "skipped",
         "transpile": "skipped",
-        "test": "skipped"
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 6,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 6,
+          "status": "passed"
         },
         "integration": {
           "expected": 0,

@@ -70,27 +70,24 @@ rootProject.name = "util"
 // included as monorepo subprojects here. See their settings files.
 
 // ── 3. Discover npm workspaces and include each as a Gradle subproject ──
-//     `packages/build-tools` has its own standalone Gradle setup AND
-//     is loaded into the parent via the includeBuild composite above.
-//     Including it as a subproject too would double-register tasks and
-//     create circular evaluation. Exclude it.
 //
-//     `packages/codegen` ALSO has its own standalone Gradle setup
-//     (apply plugin: 'java'), but we KEEP it as a subproject — the
-//     monorepo-build plugin's `hasExistingBuildInfra` check defers to
-//     codegen's existing tasks (notably `test`) and skips registering
-//     conflicting fallbacks. codegen's npm scripts still drive the
-//     workflow; the gradle build is invoked transitively via npm.
-// Standalone Gradle roots: each has its own gradlew, settings, zbb.yaml,
-// and publishes independently from its package dir. Keep them out of
-// util's monorepo inclusion so root-level `zbb build` doesn't run their
-// Gradle. (build-tools additionally stays composite-included via
-// pluginManagement.includeBuild above so consumers in this repo resolve
-// its convention plugins.)
+// Excluded (standalone Gradle roots that publish independently):
+//   packages/build-tools — already composite-included above for plugin
+//     resolution; including as subproject too would double-register tasks.
+//   packages/lite-filter — standalone Java library; nothing in the monorepo
+//     depends on its JARs at build time.
+//
+// NOT excluded:
+//   packages/codegen — hub-module-utils:generate invokes hub-generator, which
+//     needs JARs staged into packages/codegen/bin/ by codegen's Gradle build.
+//     monorepo-build's hasExistingBuildInfra() detects compileJava and wires
+//     hub-module-utils:compile → packages:codegen:build automatically, ensuring
+//     the JARs exist before generate runs. Codegen still publishes independently
+//     from its own directory (./gradlew publish there), but the root build runs
+//     its Gradle build as a dependency of consumers.
 val excluded = setOf(
     "packages/build-tools",
     "packages/lite-filter",
-    "packages/codegen",
 )
 val packages = Workspace.discoverWorkspaces(settings.rootDir)
     .filterValues { it.relDir !in excluded }
