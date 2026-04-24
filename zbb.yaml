@@ -9,11 +9,10 @@
 name: "@zerobias-org/util"
 version: "1.0.0"
 
-# ── Environment (Vault-sourced credentials) ──────────────────────────
-# Maven Central publishing credentials for Java packages. Readable env
-# var names; the Gradle build scripts map them to whatever property
-# names Vanniktech / maven-publish / signing expect. No long
-# ORG_GRADLE_PROJECT_* prefixes in the shell.
+# ── Environment ───────────────────────────────────────────────────────
+# Vault-sourced publishing credentials. Short names in the shell.
+# ORG_GRADLE_PROJECT_* vars are derived below so Gradle picks them up
+# at startup (before settings evaluation) via the env var mechanism.
 env:
   SONATYPE_USERNAME:
     source: vault
@@ -34,6 +33,37 @@ env:
     vault: "operations-kv/sonatype/mavencentral/publish.gpg_key_password"
     mask: true
     description: "Passphrase for the GPG private key."
+  GITHUB_ACTOR:
+    source: env
+    required: true
+    description: "GitHub username for package publishing."
+  GITHUB_TOKEN:
+    source: env
+    required: true
+    mask: true
+    description: "GitHub PAT with write:packages scope."
+  # Gradle reads ORG_GRADLE_PROJECT_* from the environment before any
+  # settings or build scripts run — the only reliable injection path for
+  # providers.gradleProperty() used by Vanniktech maven-publish + signing.
+  ORG_GRADLE_PROJECT_mavenCentralUsername:
+    value: "${SONATYPE_USERNAME}"
+    hidden: true
+    description: "Gradle property — Sonatype Central Portal username."
+  ORG_GRADLE_PROJECT_mavenCentralPassword:
+    value: "${SONATYPE_PASSWORD}"
+    hidden: true
+    mask: true
+    description: "Gradle property — Sonatype Central Portal password."
+  ORG_GRADLE_PROJECT_signingInMemoryKey:
+    value: "${GPG_SIGNING_KEY}"
+    hidden: true
+    mask: true
+    description: "Gradle property — ASCII-armored GPG private key."
+  ORG_GRADLE_PROJECT_signingInMemoryKeyPassword:
+    value: "${GPG_SIGNING_KEY_PASSWORD}"
+    hidden: true
+    mask: true
+    description: "Gradle property — GPG key passphrase."
 
 # ── Tool preflight ────────────────────────────────────────────────────
 require:

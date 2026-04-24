@@ -105,7 +105,7 @@ publishing {
             url = uri("https://maven.pkg.github.com/zerobias-org/util")
             credentials {
                 username = System.getenv("GITHUB_ACTOR") ?: "zerobias-org"
-                password = System.getenv("NPM_TOKEN") ?: System.getenv("GITHUB_TOKEN") ?: ""
+                password = System.getenv("GITHUB_TOKEN") ?: ""
             }
         }
     }
@@ -123,4 +123,42 @@ tasks.register("publishToGithub") {
 // `publish` runs all three targets.
 tasks.named("publish") {
     dependsOn("publishToMavenLocal", "publishToMavenCentral", "publishToGithub")
+}
+
+// Idempotency: skip GitHub Packages upload when the artifact version already
+// exists (409 Conflict otherwise). maven-publish registers its tasks lazily
+// so we configure in afterEvaluate.
+afterEvaluate {
+    tasks.named("publishMavenPublicationToGithubRepository") {
+        onlyIf("version not yet published to GitHub Packages") {
+            val token = System.getenv("GITHUB_TOKEN")
+            if (token.isNullOrEmpty()) {
+                true
+            } else {
+                val groupPath = project.group.toString().replace('.', '/')
+                val artifact = project.name
+                val ver = project.version.toString()
+                val url = "https://maven.pkg.github.com/zerobias-org/util/$groupPath/$artifact/$ver/$artifact-$ver.jar"
+                try {
+                    val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "HEAD"
+                    conn.setRequestProperty("Authorization", "Bearer $token")
+                    conn.connectTimeout = 5000
+                    conn.readTimeout = 5000
+                    conn.connect()
+                    val code = conn.responseCode
+                    conn.disconnect()
+                    if (code == 200) {
+                        logger.lifecycle("[:$artifact:$ver] already on GitHub Packages — skipping")
+                        false
+                    } else {
+                        true
+                    }
+                } catch (e: Exception) {
+                    logger.warn("[:$artifact] GitHub Packages HEAD check failed — proceeding: ${e.message}")
+                    true
+                }
+            }
+        }
+    }
 }

@@ -2,8 +2,4 @@ pluginManagement {
     includeBuild('../build-tools')
 }
 
-plugins {
-    id 'zb.slot-env'
-}
-
 rootProject.name = 'hub-module-codegen'

@@ -15,7 +15,7 @@ group = "com.zerobias"
 // Auto-bump patch version: check what's published, use next available
 val baseVersion = "1.0"
 version = run {
-    val token = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
+    val token = System.getenv("GITHUB_TOKEN") ?: ""
     if (token.isEmpty()) return@run "$baseVersion.0"
 
     val repoUrl = "https://maven.pkg.github.com/zerobias-org/util"
@@ -128,7 +128,7 @@ publishing {
             url = uri("https://maven.pkg.github.com/zerobias-org/util")
             credentials {
                 username = System.getenv("GITHUB_ACTOR") ?: "zerobias-org"
-                password = System.getenv("NPM_TOKEN") ?: System.getenv("GITHUB_TOKEN") ?: ""
+                password = System.getenv("GITHUB_TOKEN") ?: ""
             }
         }
     }
