@@ -301,19 +301,11 @@ export async function handleLifecycle(
 }
 
 /**
- * Detect stack context from cwd — walk up looking for zbb.yaml with a name field,
- * then match against stacks in the slot.
+ * Resolve a default stack target from cwd — walk up looking for zbb.yaml
+ * with a name field, then match against stacks added to this slot. Used
+ * by subcommands (stop/restart/build/test/gate) that accept an optional
+ * target arg and want to default to "the stack I'm standing in."
  */
-export async function detectStackContext(slot: Slot): Promise<Stack | null> {
-  const name = await detectStackName(slot);
-  if (!name) return null;
-  try {
-    return await slot.stacks.load(name);
-  } catch {
-    return null;
-  }
-}
-
 async function detectStackName(slot: Slot): Promise<string | null> {
   const repoRoot = findRepoRoot(process.cwd());
   if (!repoRoot) return null;

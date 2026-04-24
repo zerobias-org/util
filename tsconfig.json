@@ -14,10 +14,6 @@
     "declaration": true,
     "lib": ["ES2023", "DOM"],
     "outDir": "dist",
-    "types": ["chai", "node", "mocha"],
-    "typeRoots": [
-      "node_modules/@types",
-      "../node_modules/@types"
-    ]
+    "types": ["chai", "node", "mocha"]
   }
 }

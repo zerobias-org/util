@@ -234,7 +234,7 @@ export class StackEnvironment extends EventEmitter {
    * Re-read schema-declared vars from their live source and update the
    * matching inherited manifest entries in place. Covers `source: file` and
    * `source: env`. Vault-sourced vars are handled separately by
-   * `refreshVaultVars` in slot/refresh.ts.
+   * `refreshStackEnv` in stack/refresh.ts.
    *
    * User overrides (resolution === 'override') are always preserved — if a
    * user explicitly set a value, a refresh must never clobber it. `cwd`-

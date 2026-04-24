@@ -110,9 +110,14 @@ A **slot** is a named, persistent (or ephemeral) environment context stored at `
 
 ### Slot env priority
 
-Override > declared (.env) > resolver
-
-Resolvers are registered globally at startup via `SlotEnvironment.registerResolver(key, fn)`. They provide computed values that cannot be expressed as `${VAR}` references.
+Slot `.env` carries the current effective value for each of the 7
+`ZB_SLOT_*` framework vars. `manifest.yaml` records provenance
+(`source: 'zbb'` for framework defaults, `'override'` for user
+`zbb env set` writes, `'dns'` for TXT-provisioned values). `zbb env
+unset` / `reset` revert overrides to the canonical slot-derived
+value. For computed values derived from other vars, use a stack
+manifest with `source: expression:jsonata` or `value: "${OTHER}"` —
+slot env has no resolver layer.
 
 ### Slot var sources
 

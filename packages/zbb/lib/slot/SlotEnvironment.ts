@@ -77,32 +77,6 @@ export class SlotEnvironment extends EventEmitter {
   private declared: Map<string, string> = new Map();
   private manifest: Map<string, ManifestEntry> = new Map();
 
-  /**
-   * Global resolver map. Resolvers are registered once at process startup
-   * and apply to all SlotEnvironment instances. They provide computed values
-   * for env vars that cannot be expressed as simple ${VAR} references
-   * (e.g., HUB_SERVER_URL derived from HUB_SERVER_PORT).
-   */
-  private static resolvers: Map<string, (env: SlotEnvironment) => string | undefined> = new Map();
-
-  /**
-   * Register a global resolver function for an environment variable key.
-   * The resolver is called by get() when the key is not found in declared
-   * or override values. Resolvers are static and global -- called once at
-   * process startup, not per-slot.
-   *
-   * @param key - The environment variable name to resolve
-   * @param fn - Resolver function receiving the SlotEnvironment instance
-   */
-  static registerResolver(key: string, fn: (env: SlotEnvironment) => string | undefined): void {
-    SlotEnvironment.resolvers.set(key, fn);
-  }
-
-  /** Clear all registered resolvers. Used for test isolation. */
-  static clearResolvers(): void {
-    SlotEnvironment.resolvers.clear();
-  }
-
   readonly slotDir: string;
 
   constructor(slotDir: string) {
@@ -125,9 +99,9 @@ export class SlotEnvironment extends EventEmitter {
     }
   }
 
-  /** Get var value. .env (which carries any overrides) > resolver. */
+  /** Get var value from `<slot>/.env` (which carries any overrides). */
   get(key: string): string | undefined {
-    return this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
+    return this.declared.get(key);
   }
 
   /** Get var value masked for display. */
@@ -230,17 +204,6 @@ export class SlotEnvironment extends EventEmitter {
     await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
     await writeFile(this.envPath, serializeEnv(this.declared), 'utf-8');
     this.emit('change', { key, value });
-  }
-
-  /** Alias for getManifestEntry — backward compat. */
-  getMetadata(key: string): ManifestEntry | undefined {
-    return this.manifest.get(key);
-  }
-
-  /** Reload env from disk (alias for load when already initialized). */
-  async reload(): Promise<void> {
-    await this.load();
-    this.emit('change', {});
   }
 
   /**
@@ -361,62 +324,6 @@ export class SlotEnvironment extends EventEmitter {
     await writeFile(envPath, serializeEnv(filteredEnv), 'utf-8');
     const { saveYaml } = await import('../yaml.js');
     await saveYaml(manifestPath, filteredManifest);
-  }
-
-  // ── Static: append new vars to existing slot env ──────────────────
-
-  /**
-   * Merge new env vars and manifest entries into an existing slot.
-   * Never overwrites existing keys — only adds new ones.
-   */
-  static async appendDeclaredEnv(
-    slotDir: string,
-    newEnv: Map<string, string>,
-    newManifest: Map<string, ManifestEntry>,
-  ): Promise<void> {
-    const envPath = join(slotDir, '.env');
-    const manifestPath = join(slotDir, 'manifest.yaml');
-
-    // Read existing .env and strip any non-slot-level entries that may
-    // have leaked in from a legacy writer. This self-heals polluted
-    // legacy slot .env files over time.
-    const existingRaw = existsSync(envPath)
-      ? parseEnvFile(await readFile(envPath, 'utf-8'))
-      : new Map<string, string>();
-    const existingEnv = new Map<string, string>();
-    for (const [k, v] of existingRaw) {
-      if (isSlotLevelVar(k)) existingEnv.set(k, v);
-    }
-
-    // Merge: existing wins (never overwrite). Only accept new slot-level
-    // vars — anything else is silently dropped.
-    const merged = new Map<string, string>(existingEnv);
-    for (const [k, v] of newEnv) {
-      if (!isSlotLevelVar(k)) continue;
-      if (!merged.has(k)) {
-        merged.set(k, v);
-      }
-    }
-
-    await writeFile(envPath, serializeEnv(merged), 'utf-8');
-
-    // Read existing manifest and strip non-slot-level entries too
-    const { loadYamlOrDefault, saveYaml } = await import('../yaml.js');
-    const existingManifestRaw = await loadYamlOrDefault<Record<string, ManifestEntry>>(manifestPath, {});
-    const existingManifest: Record<string, ManifestEntry> = {};
-    for (const [k, v] of Object.entries(existingManifestRaw)) {
-      if (isSlotLevelVar(k)) existingManifest[k] = v;
-    }
-
-    // Merge manifest: existing wins, filtered
-    for (const [k, v] of newManifest) {
-      if (!isSlotLevelVar(k)) continue;
-      if (!(k in existingManifest)) {
-        existingManifest[k] = v;
-      }
-    }
-
-    await saveYaml(manifestPath, existingManifest);
   }
 
   /**

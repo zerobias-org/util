@@ -39,7 +39,6 @@ import {
   type ZbbChainEntry,
 } from './config.js';
 import { derivePackageScope, type PackageScope } from './monorepo/scope.js';
-import { scanEnvDeclarations } from './env/Scanner.js';
 import { spawn } from 'node:child_process';
 import {
   isLifecycleCommand,
@@ -47,7 +46,7 @@ import {
   spawnLifecycleAndExit,
   spawnGradleFallbackAndExit,
 } from './monorepo/index.js';
-import { handleStack, detectStackContext } from './stack/commands.js';
+import { handleStack } from './stack/commands.js';
 import type { Stack } from './stack/Stack.js';
 
 /**
@@ -93,10 +92,16 @@ async function prepareSlot(
 ): Promise<string | null> {
   const repoRoot = findRepoRoot(process.cwd());
 
-  // Run resolve: DNS + vault secrets refresh. Pass the stack so
-  // vault-sourced vars declared in the stack's zbb.yaml write to the
-  // stack's own env instead of the slot.
-  const vaultResult = await slot.resolve(repoRoot ?? undefined, options?.stack ?? null);
+  // DNS TXT provisioning (slot-level) + per-stack env refresh
+  // (file/env/vault). Split explicitly: slot.resolve() is DNS only;
+  // StackManager.refreshAll() handles the per-stack work. Pass the
+  // stack so vault-sourced vars declared in the stack's zbb.yaml
+  // write to the stack's own env instead of the slot.
+  await slot.resolve();
+  const vaultResult = await slot.stacks.refreshAll({
+    repoRoot: repoRoot ?? undefined,
+    stack: options?.stack ?? null,
+  });
 
   if (vaultResult.refreshed.length > 0) {
     console.log('Vault credentials refreshed:');
@@ -205,6 +210,31 @@ function findCustomVerbOwner(
     }
   }
   return null;
+}
+
+/**
+ * Require a loaded slot for the current invocation. Fails fast with
+ * the standard "zbb slot load" hint if `ZB_SLOT` isn't set.
+ */
+async function requireLoadedSlot(): Promise<Slot> {
+  const slotName = process.env.ZB_SLOT;
+  if (!slotName) {
+    console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+    process.exit(1);
+  }
+  return SlotManager.load(slotName);
+}
+
+/**
+ * Require a loaded slot AND resolve the active stack context from cwd /
+ * `ZB_STACK`. Stack may be null when cwd doesn't map to any added stack —
+ * most dispatchers tolerate that (run/exec/gradle fallback). Callers that
+ * require a stack must check and error on null themselves.
+ */
+async function requireLoadedSlotAndStack(): Promise<{ slot: Slot; stack: Stack | null }> {
+  const slot = await requireLoadedSlot();
+  const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+  return { slot, stack };
 }
 
 async function resolveStackForCwd(slot: Slot, hint?: string): Promise<Stack | null> {
@@ -317,23 +347,13 @@ async function _main(argv: string[]): Promise<void> {
 
   // Stack subcommands
   if (command === 'stack') {
-    const slotName = process.env.ZB_SLOT;
-    if (!slotName) {
-      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
-      process.exit(1);
-    }
-    const slot = await SlotManager.load(slotName);
+    const slot = await requireLoadedSlot();
     return handleStack(args.slice(1), slot);
   }
 
   // Registry subcommands
   if (command === 'registry') {
-    const slotName = process.env.ZB_SLOT;
-    if (!slotName) {
-      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
-      process.exit(1);
-    }
-    const slot = await SlotManager.load(slotName);
+    const slot = await requireLoadedSlot();
     const { handleRegistry } = await import('./registry/commands.js');
     return handleRegistry(args.slice(1), slot);
   }
@@ -357,16 +377,10 @@ async function _main(argv: string[]): Promise<void> {
   // package.json scripts. Error if neither defines it. All trailing args
   // pass through to the script implementation.
   if (command === 'run') {
-    const slotName = process.env.ZB_SLOT;
-    if (!slotName) {
-      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
-      process.exit(1);
-    }
-    const slot = await SlotManager.load(slotName);
     // Resolve stack context so scripts see the full composed env (ports,
     // imports from dep stacks). Without this, `zbb run` degrades to plain
     // bash with only ZB_SLOT/ZB_SLOT_DIR — defeats the whole point.
-    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    const { slot, stack } = await requireLoadedSlotAndStack();
     await prepareSlot(slot, { stack });
 
     const runArgs = args.slice(1);
@@ -436,13 +450,7 @@ async function _main(argv: string[]): Promise<void> {
   // Exec — run an arbitrary command with slot+stack env applied.
   // Replaces the legacy `zbb run -- <cmd>` form.
   if (command === 'exec') {
-    const slotName = process.env.ZB_SLOT;
-    if (!slotName) {
-      console.error('Not inside a loaded slot. Run: zbb slot load <name>');
-      process.exit(1);
-    }
-    const slot = await SlotManager.load(slotName);
-    const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+    const { slot, stack } = await requireLoadedSlotAndStack();
     await prepareSlot(slot, { stack });
 
     const execArgs = args.slice(1);
@@ -574,11 +582,7 @@ async function _main(argv: string[]): Promise<void> {
     }
 
     // All other lifecycle commands require a loaded slot + an added stack
-    if (!process.env.ZB_SLOT) {
-      console.error(`Not inside a loaded slot. Run: zbb slot load <name>`);
-      process.exit(1);
-    }
-    const slot = await SlotManager.load(process.env.ZB_SLOT);
+    const slot = await requireLoadedSlot();
 
     // The repo's zbb.yaml IS the stack manifest in Phase 3 — its `name`
     // field identifies the stack. Match against the slot's added stacks.
@@ -736,12 +740,7 @@ async function _main(argv: string[]): Promise<void> {
   if (chain.length > 0) {
     const customOwner = findCustomVerbOwner(chain, command);
     if (customOwner) {
-      if (!process.env.ZB_SLOT) {
-        console.error('Not inside a loaded slot. Run: zbb slot load <name>');
-        process.exit(1);
-      }
-      const slot = await SlotManager.load(process.env.ZB_SLOT);
-      const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
+      const { slot, stack } = await requireLoadedSlotAndStack();
       await prepareSlot(slot, { stack });
 
       const extraArgs = args.slice(1);
@@ -1106,47 +1105,59 @@ async function handleSlot(args: string[]): Promise<void> {
 // ── Secret Commands ──────────────────────────────────────────────────
 
 async function handleSecretCmd(args: string[]): Promise<void> {
-  const slotName = process.env.ZB_SLOT;
-  if (!slotName) {
-    console.error('Not inside a loaded slot. Run: zbb slot load <name>');
-    process.exit(1);
-  }
-
   if (!args[0]) {
     console.error('Usage: zbb secret <create|get|list|update|delete>');
     process.exit(1);
   }
-
-  const slot = await SlotManager.load(slotName);
+  const slot = await requireLoadedSlot();
   const { handleSecret } = await import('./secret.js');
   return handleSecret(args, slot);
 }
 
 // ── Env Commands ─────────────────────────────────────────────────────
 
+/**
+ * Route an env key to the right env accessor.
+ *
+ * The slot only owns the 7 `ZB_SLOT_*` framework path vars; every
+ * other var belongs to a stack. Routing by `isSlotLevelVar(key)` picks
+ * the correct owner regardless of cwd — a ZB_SLOT_DIR override always
+ * hits slot.env, and an app var always hits the stack env even if the
+ * user ran the command from the slot root.
+ *
+ * Callers handle the no-stack-context case themselves (via the
+ * returned `scope: 'stack-missing'` signal) so they can emit a command-
+ * specific error message.
+ */
+type EnvAccessor =
+  | { scope: 'slot'; env: import('./slot/SlotEnvironment.js').SlotEnvironment }
+  | { scope: 'stack'; env: import('./stack/StackEnvironment.js').StackEnvironment; stack: Stack }
+  | { scope: 'stack-missing' };
+
+function envAccessorFor(
+  key: string,
+  slot: Slot,
+  stackCtx: Stack | null,
+): EnvAccessor {
+  if (isSlotLevelVar(key)) return { scope: 'slot', env: slot.env };
+  if (!stackCtx) return { scope: 'stack-missing' };
+  return { scope: 'stack', env: stackCtx.env, stack: stackCtx };
+}
+
 async function handleEnv(args: string[]): Promise<void> {
-  const slotName = process.env.ZB_SLOT;
-  if (!slotName) {
-    console.error('Not inside a loaded slot. Run: zbb slot load <name>');
-    process.exit(1);
-  }
-
-  const slot = await SlotManager.load(slotName);
+  const { slot, stack: stackCtx } = await requireLoadedSlotAndStack();
   const sub = args[0];
-
-  // Detect stack context for stack-scoped env operations
-  const stackCtx = slot.hasStacks
-    ? (process.env.ZB_STACK
-        ? await slot.stacks.load(process.env.ZB_STACK)
-        : await detectStackContext(slot))
-    : null;
 
   switch (sub) {
     case 'list': {
       const unmask = args.includes('--unmask');
+      const slotOnly = args.includes('--slot');
 
-      if (stackCtx) {
-        // Stack-scoped env list
+      // Default: stack env when a stack context exists; slot env otherwise
+      // (e.g. when the user hasn't cd'd into a stack yet). `--slot` forces
+      // the slot view — useful for inspecting the 7 framework path vars
+      // without cd'ing out of a stack.
+      if (stackCtx && !slotOnly) {
         const manifest = stackCtx.env.getManifest();
         console.log(`  [stack: ${stackCtx.name}]`);
         for (const key of stackCtx.env.list()) {
@@ -1157,8 +1168,8 @@ async function handleEnv(args: string[]): Promise<void> {
           console.log(`  ${key}=${value}  (${resolution} — ${typeInfo})`);
         }
       } else {
-        // Slot-level env list
         const manifest = slot.env.getManifest();
+        console.log(`  [slot: ${slot.name}]`);
         for (const key of slot.env.list()) {
           const value = unmask ? slot.env.get(key)! : (slot.env.shouldMask(key) ? '***' : slot.env.getMasked(key)!);
           const entry = manifest[key];
@@ -1177,7 +1188,12 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Usage: zbb env get <VAR>');
         process.exit(1);
       }
-      const value = stackCtx ? stackCtx.env.get(key) : slot.env.get(key);
+      const acc = envAccessorFor(key, slot, stackCtx);
+      if (acc.scope === 'stack-missing') {
+        console.error(`'${key}' is a stack-level var but no stack context is active. cd into a stack directory or pass --stack.`);
+        process.exit(1);
+      }
+      const value = acc.env.get(key);
       if (value === undefined) {
         console.error(`Variable '${key}' not set.`);
         process.exit(1);
@@ -1193,17 +1209,17 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Usage: zbb env set <VAR> <value>');
         process.exit(1);
       }
-      if (stackCtx) {
-        const old = stackCtx.env.get(key);
-        await stackCtx.env.set(key, value);
-        console.log(`  ${key}: ${old ?? '(unset)'} -> ${value} (stack: ${stackCtx.name})`);
-        // Sync merged slot .env
-        await slot.stacks.syncSlotEnv();
-      } else {
-        const old = slot.env.get(key);
-        await slot.env.set(key, value);
-        console.log(`  ${key}: ${old ?? '(unset)'} -> ${value} (saved; manifest source: override)`);
+      const acc = envAccessorFor(key, slot, stackCtx);
+      if (acc.scope === 'stack-missing') {
+        console.error(`'${key}' is a stack-level var but no stack context is active. cd into a stack directory or pass --stack.`);
+        process.exit(1);
       }
+      const old = acc.env.get(key);
+      await acc.env.set(key, value);
+      const where = acc.scope === 'stack'
+        ? `stack: ${acc.stack.name}`
+        : 'saved; manifest source: override';
+      console.log(`  ${key}: ${old ?? '(unset)'} -> ${value} (${where})`);
       break;
     }
 
@@ -1213,19 +1229,15 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Usage: zbb env unset <VAR>');
         process.exit(1);
       }
-      // Slot-level path vars (ZB_SLOT, ZB_SLOT_DIR, …) are never stack-owned,
-      // so even when we're inside a stack context we route them to slot.env
-      // to avoid a silent no-op against the stack's manifest.
-      const routeToSlot = isSlotLevelVar(key) || !stackCtx;
+      const acc = envAccessorFor(key, slot, stackCtx);
+      if (acc.scope === 'stack-missing') {
+        console.error(`'${key}' is a stack-level var but no stack context is active. cd into a stack directory or pass --stack.`);
+        process.exit(1);
+      }
       try {
-        if (routeToSlot) {
-          await slot.env.unset(key);
-          console.log(`  ${key}: override cleared`);
-        } else {
-          await stackCtx!.env.unset(key);
-          await slot.stacks.syncSlotEnv();
-          console.log(`  ${key}: override cleared (stack: ${stackCtx!.name})`);
-        }
+        await acc.env.unset(key);
+        const where = acc.scope === 'stack' ? ` (stack: ${acc.stack.name})` : '';
+        console.log(`  ${key}: override cleared${where}`);
       } catch (err: unknown) {
         console.error(err instanceof Error ? err.message : String(err));
         process.exit(1);
@@ -1234,12 +1246,20 @@ async function handleEnv(args: string[]): Promise<void> {
     }
 
     case 'reset': {
-      if (stackCtx) {
-        console.error('Reset is only supported at slot level, not per-stack.');
+      // Slot-only operation — clears the 7 framework-var overrides.
+      // Requires an explicit --slot flag so a user inside a stack
+      // context doesn't accidentally wipe their intended target.
+      // (There's no per-stack reset yet — use `zbb env unset <VAR>`
+      // on individual stack overrides.)
+      if (!args.includes('--slot')) {
+        console.error(
+          'zbb env reset clears SLOT-level overrides (the 7 ZB_SLOT_* path vars). ' +
+          'Pass --slot to confirm. For stack-level overrides, use `zbb env unset <VAR>`.',
+        );
         process.exit(1);
       }
       await slot.env.reset();
-      console.log('All overrides cleared.');
+      console.log('Slot overrides cleared.');
       break;
     }
 
@@ -1250,7 +1270,8 @@ async function handleEnv(args: string[]): Promise<void> {
         process.exit(1);
       }
       console.log('Re-reading external sources (DNS + file + env + vault)...');
-      const result = await slot.resolve(repoRoot, stackCtx ?? null);
+      await slot.resolve();
+      const result = await slot.stacks.refreshAll({ repoRoot, stack: stackCtx ?? null });
       if (result.refreshed.length > 0) {
         for (const name of result.refreshed) {
           console.log(`  \u2713 ${name}`);
@@ -1265,11 +1286,6 @@ async function handleEnv(args: string[]): Promise<void> {
       if (result.refreshed.length === 0 && result.errors.length === 0) {
         console.log('  No values changed.');
       }
-      // Sync merged slot .env so any stack-level updates are visible to
-      // process-level consumers that read slot.env.getAll().
-      if (result.refreshed.length > 0) {
-        await slot.stacks.syncSlotEnv();
-      }
       break;
     }
 
@@ -1279,11 +1295,15 @@ async function handleEnv(args: string[]): Promise<void> {
         console.error('Usage: zbb env explain <VAR>');
         process.exit(1);
       }
-
-      if (stackCtx) {
-        const result = stackCtx.env.explain(key, stackCtx.manifest.env);
+      const acc = envAccessorFor(key, slot, stackCtx);
+      if (acc.scope === 'stack-missing') {
+        console.error(`'${key}' is a stack-level var but no stack context is active. cd into a stack directory or pass --stack.`);
+        process.exit(1);
+      }
+      if (acc.scope === 'stack') {
+        const result = acc.env.explain(key, acc.stack.manifest.env);
         console.log(`  Name:        ${result.name}`);
-        if (result.type) console.log(`  Type:        ${result.type} (from ${stackCtx.identity.name})`);
+        if (result.type) console.log(`  Type:        ${result.type} (from ${acc.stack.identity.name})`);
         if (result.description) console.log(`  Description: ${result.description}`);
         console.log(`  Resolution:  ${result.resolution}`);
         if (result.formula) console.log(`  Formula:     ${result.formula}`);
@@ -1296,10 +1316,10 @@ async function handleEnv(args: string[]): Promise<void> {
         if (result.original_name) console.log(`  Original:    ${result.original_name}`);
         console.log(`  Overridable: ${result.overridable ? 'yes' : 'no'}`);
       } else {
-        const value = slot.env.get(key);
-        const entry = slot.env.getManifestEntry(key);
+        const value = acc.env.get(key);
+        const entry = acc.env.getManifestEntry(key);
         console.log(`  Name:   ${key}`);
-        console.log(`  Value:  ${slot.env.shouldMask(key) ? '***MASKED***' : (value ?? '(unset)')}`);
+        console.log(`  Value:  ${acc.env.shouldMask(key) ? '***MASKED***' : (value ?? '(unset)')}`);
         console.log(`  Source: ${entry?.source ?? 'unknown'}`);
         console.log(`  Type:   ${entry?.type ?? 'string'}`);
         if (entry?.derived) console.log('  Derived: yes');
@@ -1312,26 +1332,42 @@ async function handleEnv(args: string[]): Promise<void> {
         await stackCtx.env.resolve();
         console.log(`Resolved stack '${stackCtx.name}' environment.`);
       } else {
-        const repoRoot = findRepoRoot(process.cwd());
-        await slot.resolve(repoRoot ?? undefined);
-        console.log(`Resolved slot '${slot.name}' environment.`);
+        // Slot-level resolve = DNS. For file/env/vault sources, use
+        // `zbb env refresh` (which orchestrates DNS + stack refresh).
+        await slot.resolve();
+        console.log(`Resolved slot '${slot.name}' environment (DNS).`);
       }
       break;
     }
 
     case 'diff': {
-      const slotEnv = slot.env.getAll();
-      const parentKeys = new Set(Object.keys(process.env));
-      const slotKeys = new Set(Object.keys(slotEnv));
+      // Show the delta between the current shell env and what the slot
+      // + active stack would produce at command dispatch time. This
+      // composes the same two layers that `prepareSlot` in cli.ts
+      // applies to process.env before spawning a lifecycle command —
+      // without actually applying them.
+      const composed: Record<string, string> = { ...slot.env.getAll() };
+      const maskFor = new Map<string, (key: string) => boolean>();
+      for (const k of Object.keys(composed)) maskFor.set(k, (key) => slot.env.shouldMask(key));
 
-      // Vars added by slot
-      for (const key of slotKeys) {
+      if (stackCtx) {
+        const stackEnv = stackCtx.env.getAll();
+        for (const [k, v] of Object.entries(stackEnv)) {
+          composed[k] = v;
+          maskFor.set(k, (key) => stackCtx.env.shouldMask(key));
+        }
+        composed.ZB_STACK = stackCtx.name;
+        maskFor.set('ZB_STACK', () => false);
+      }
+
+      const parentKeys = new Set(Object.keys(process.env));
+      for (const key of Object.keys(composed).sort()) {
+        const masker = maskFor.get(key);
+        const shown = masker && masker(key) ? '***' : composed[key];
         if (!parentKeys.has(key)) {
-          const value = slot.env.shouldMask(key) ? '***' : slotEnv[key];
-          console.log(`  + ${key}=${value}`);
-        } else if (process.env[key] !== slotEnv[key]) {
-          const value = slot.env.shouldMask(key) ? '***' : slotEnv[key];
-          console.log(`  ~ ${key}=${value}`);
+          console.log(`  + ${key}=${shown}`);
+        } else if (process.env[key] !== composed[key]) {
+          console.log(`  ~ ${key}=${shown}`);
         }
       }
       break;
@@ -1347,21 +1383,8 @@ async function handleEnv(args: string[]): Promise<void> {
 // ── Logs Commands ────────────────────────────────────────────────────
 
 async function handleLogs(args: string[]): Promise<void> {
-  const slotName = process.env.ZB_SLOT;
-  if (!slotName) {
-    console.error('Not inside a loaded slot. Run: zbb slot load <name>');
-    process.exit(1);
-  }
-
-  const slot = await SlotManager.load(slotName);
+  const { slot, stack: logStackCtx } = await requireLoadedSlotAndStack();
   const sub = args[0];
-
-  // Resolve stack log sources if in stack context
-  const logStackCtx = slot.hasStacks
-    ? (process.env.ZB_STACK
-        ? await slot.stacks.load(process.env.ZB_STACK)
-        : await detectStackContext(slot))
-    : null;
 
   switch (sub) {
     case 'list': {

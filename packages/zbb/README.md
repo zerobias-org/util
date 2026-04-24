@@ -353,17 +353,17 @@ Resolution rules:
 3. User overrides (`zbb env set`) replace the final value — derivation is skipped
 4. `zbb env list` shows whether a value is derived or overridden
 
-For complex derivations that go beyond string interpolation (protocol transforms, conditional logic), projects can register custom resolvers via the library API:
+For complex derivations that go beyond string interpolation (protocol transforms, conditional logic), declare the var in the stack manifest with `source: expression:jsonata` and an `expr:` body:
 
-```javascript
-import { SlotEnvironment } from '@zerobias-org/zbb';
-
-SlotEnvironment.registerResolver('WEBSOCKET_URL', (env) => {
-  const hubUrl = env.get('HUB_SERVER_URL');
-  if (!hubUrl) return undefined;
-  return hubUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
-});
+```yaml
+# packages/<pkg>/zbb.yaml
+env:
+  WEBSOCKET_URL:
+    source: expression:jsonata
+    expr: "$replace($replace(HUB_SERVER_URL, /^https:/, 'wss:'), /^http:/, 'ws:')"
 ```
+
+Stack env resolution runs the expression on every `stack.load()` with every other env var available as an input. This replaces the older `SlotEnvironment.registerResolver()` hook (removed in favor of schema-driven expressions).
 
 ### Deprecation
 
@@ -753,11 +753,12 @@ await slot.env.set('LOG_LEVEL', 'debug');
 // Garbage collect expired ephemeral slots
 await SlotManager.gc();
 
-// Register custom resolver (used by hub-node-lib)
-SlotEnvironment.registerResolver('WEBSOCKET_URL', (env) => {
-  const hubUrl = env.get('HUB_SERVER_URL');
-  return hubUrl?.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
-});
+// Computed env values — declare in the stack manifest:
+//   env:
+//     WEBSOCKET_URL:
+//       source: expression:jsonata
+//       expr: "$replace(HUB_SERVER_URL, /^https:/, 'wss:')"
+// Stack env resolution runs expressions on every stack.load().
 ```
 
 ### Package Exports
