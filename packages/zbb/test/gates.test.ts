@@ -193,40 +193,26 @@ describe('findLifecycleOwner — gate metadata', () => {
 });
 
 describe('resolveGateRegistry', () => {
-  it('returns the lifecycle-owner manifest registry when the owner IS a stack manifest', async () => {
+  it('extracts tools + env decls from the active stack entry', async () => {
     const chain = await findZbbChain(tmpRoot);
-    const reg = resolveGateRegistry(chain, tmpRoot);
-    assert.notEqual(reg, null);
-    assert.equal(reg!.manifestDir, tmpRoot);
-    assert.ok(reg!.tools.node);
-    assert.ok(reg!.tools.docker);
-    assert.ok(reg!.envDecls.NPM_TOKEN);
+    // The root entry IS the active stack in this fixture.
+    const reg = resolveGateRegistry(chain[chain.length - 1]);
+    assert.equal(reg.manifestDir, tmpRoot);
+    assert.ok(reg.tools.node);
+    assert.ok(reg.tools.docker);
+    assert.ok(reg.envDecls.NPM_TOKEN);
   });
 
-  it("returns the containing manifest when the owner is a nested sub-manifest", async () => {
-    // packages/foo owns lifecycle.custom; resolveGateRegistry(chain,
-    // packages/foo) must land on packages/foo's manifest (it has a
-    // name). Verifies "closest-or-self" walk-up.
+  it('returns empty tools/env for a stack entry with no tools: or env: block', async () => {
+    // packages/foo has a name: but no tools: block — the dispatcher
+    // would typically walk PAST it to find an added ancestor with a
+    // registry, but the helper is a pure getter: it returns whatever
+    // the entry carries.
     const chain = await findZbbChain(join(tmpRoot, 'packages/foo'));
-    const reg = resolveGateRegistry(chain, join(tmpRoot, 'packages/foo'));
-    assert.notEqual(reg, null);
-    assert.equal(reg!.manifestDir, join(tmpRoot, 'packages/foo'));
-    // packages/foo has no tools: block → empty registry. Gate resolution
-    // against this will error on `tools: [docker]` which is correct —
-    // the user must declare tools at the stack manifest level.
-    assert.deepEqual(reg!.tools, {});
-  });
-
-  it('returns null when no named manifest is reachable', async () => {
-    // Fabricate an unnamed-only chain by rewriting the root.
-    await writeFile(
-      join(tmpRoot, 'zbb.yaml'),
-      'monorepo:\n  sourceDirs: [src]\nlifecycle:\n  build: ./gradlew build\n',
-      'utf-8',
-    );
-    await rm(join(tmpRoot, 'packages/foo/zbb.yaml'), { force: true });
-    const chain = await findZbbChain(tmpRoot);
-    assert.equal(resolveGateRegistry(chain, tmpRoot), null);
+    const fooEntry = chain[0];
+    const reg = resolveGateRegistry(fooEntry);
+    assert.equal(reg.manifestDir, join(tmpRoot, 'packages/foo'));
+    assert.deepEqual(reg.tools, {});
   });
 });
 

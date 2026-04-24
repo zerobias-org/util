@@ -25,7 +25,7 @@ import {
   findLifecycleOwner,
   findMonorepoRoot,
   findRepoRoot,
-  findStackManifestOwner,
+  findActiveStackInChain,
   findZbbChain,
   loadRepoConfig,
   loadStackManifest,
@@ -522,16 +522,6 @@ async function _main(argv: string[]): Promise<void> {
     // cwd-aware subproject prefixing, no monorepo flags, no pipeline).
     const isMonorepo = monorepoEntry != null;
 
-    // Stack identity: closest chain entry that declares `name:`. This
-    // is typically the monorepo root or the nearest standalone stack
-    // manifest. Distinct from the lifecycle owner — sub-stacks
-    // (com/hub/node-stack/) carry their own identity but defer lifecycle
-    // verbs to the monorepo root above them.
-    const stackOwnerEntry = findStackManifestOwner(chain);
-    const manifest = stackOwnerEntry
-      ? (stackOwnerEntry.config as Partial<StackManifest>)
-      : null;
-
     // `zbbYaml` used by the preflight / cleanse block below comes from
     // the lifecycle owner — `require:` and `cleanse:` logically belong
     // next to the lifecycle definition they apply to.
@@ -584,23 +574,43 @@ async function _main(argv: string[]): Promise<void> {
     // All other lifecycle commands require a loaded slot + an added stack
     const slot = await requireLoadedSlot();
 
-    // The repo's zbb.yaml IS the stack manifest in Phase 3 — its `name`
-    // field identifies the stack. Match against the slot's added stacks.
-    if (!manifest || !manifest.name) {
-      console.error(`No zbb.yaml with 'name'/'version' found in cwd or any ancestor directory.`);
-      console.error(`Phase 3 requires a stack manifest at the monorepo root (or above cwd).`);
-      process.exit(1);
-    }
-    const stackShortName = manifest.name.split('/').pop() ?? manifest.name;
+    // Resolve the ACTIVE stack — the closest zbb.yaml in the chain
+    // whose name matches a stack currently added to the slot. This
+    // walks PAST nameless overlays, `overlay: true` markers, and
+    // named-but-not-added sub-manifests. The effect: running a
+    // lifecycle command from a sub-dir that has its own zbb.yaml
+    // (just for lifecycle overrides, not a standalone stack)
+    // correctly uses the parent monorepo's stack for context while
+    // still picking up the sub-dir's lifecycle overrides.
     const addedStacks = await slot.stacks.list();
-    const stack = addedStacks.find(
-      s => s.name === stackShortName || s.identity.name === manifest.name,
-    );
-    if (!stack) {
-      console.error(`Stack '${stackShortName}' is not added to slot '${slot.name}'.`);
-      console.error(`Run: zbb stack add ${stackOwnerEntry?.dir ?? '.'}`);
+    const addedStackNames = new Set(addedStacks.map(s => s.name));
+    const addedIdentityNames = new Set(addedStacks.map(s => s.identity.name));
+    const activeStackEntry = findActiveStackInChain(chain, addedStackNames, addedIdentityNames);
+
+    if (!activeStackEntry) {
+      if (addedStacks.length > 0) {
+        const stackList = addedStacks.map(s => `  - ${s.name}`).join('\n');
+        console.error(
+          `No added stack is reachable from ${process.cwd()}.\n` +
+          `Stacks in slot '${slot.name}':\n${stackList}\n\n` +
+          `Either cd into the stack's repo, pass --stack <name>, or ` +
+          `run zbb stack add on the stack's zbb.yaml.`,
+        );
+      } else {
+        console.error(
+          `Slot '${slot.name}' has no stacks added.\n` +
+          `Add one with: zbb stack add <path-to-stack-manifest>`,
+        );
+      }
       process.exit(1);
     }
+
+    const activeManifest = activeStackEntry.config as Partial<StackManifest>;
+    const activeName = activeManifest.name!;  // guaranteed by findActiveStackInChain
+    const activeShortName = activeName.split('/').pop() ?? activeName;
+    const stack = addedStacks.find(
+      s => s.name === activeShortName || s.identity.name === activeName,
+    )!;
 
     // Apply repo-level cleanse FIRST so parent-shell leaks get stripped
     // before the slot/stack env is applied. Ordering matters: if cleanse
@@ -634,8 +644,11 @@ async function _main(argv: string[]): Promise<void> {
     // lifecycle.<cmd>.tools.
     if (zbbYaml.require && zbbYaml.require.length > 0) {
       const userConfig = await loadUserConfig();
-      const stackOwner = findStackManifestOwner(chain);
-      const stackTools = (stackOwner?.config as { tools?: Record<string, ToolDefinition> } | undefined)?.tools;
+      // require: names resolve against the ACTIVE stack's tools registry.
+      // Overlay sub-dirs don't carry their own tools: — they borrow the
+      // active stack's, so the registry lookup must walk to the added
+      // ancestor rather than stopping at the closest named file.
+      const stackTools = (activeStackEntry.config as { tools?: Record<string, ToolDefinition> } | undefined)?.tools;
       const { requirements, unresolved } = resolveRequireEntries(zbbYaml.require, stackTools);
       if (unresolved.length > 0) {
         console.error(
@@ -658,20 +671,11 @@ async function _main(argv: string[]): Promise<void> {
 
     // New per-command gates: `lifecycle.<cmd>.tools` + `lifecycle.<cmd>.env`.
     // These only fire when the lifecycle entry is in object form. String
-    // shorthand = no gates. Both lists resolve against the registry of
-    // the stack manifest that DEFINES this lifecycle entry.
+    // shorthand = no gates. Both lists resolve against the ACTIVE stack's
+    // tools/env registry — overlay lifecycle entries borrow the stack's
+    // vocabulary, they don't declare their own.
     if ((owner.tools && owner.tools.length > 0) || (owner.env && owner.env.length > 0)) {
-      const registry = resolveGateRegistry(chain, ownerDir);
-      if (!registry) {
-        console.error(
-          `zbb ${command}: lifecycle entry has tools/env gates but no stack ` +
-          `manifest (zbb.yaml with 'name:') is reachable from ${ownerDir}. ` +
-          `Add a named stack manifest with a tools: / env: block, or remove ` +
-          `the gate references.`,
-        );
-        process.exit(1);
-      }
-
+      const registry = resolveGateRegistry(activeStackEntry);
       const userConfig = await loadUserConfig();
       let gateFailed = false;
 

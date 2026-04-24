@@ -184,6 +184,24 @@ export interface RepoConfig {
   env?: Record<string, EnvVarDeclaration>;
   require?: RequireEntry[];
   /**
+   * Marks this zbb.yaml as an intentional overlay — a lifecycle / env
+   * override layer, never a standalone stack.
+   *
+   * When true:
+   *   - `zbb stack add` refuses this file with a clear error.
+   *   - Dispatch walk-up skips this entry when resolving stack context,
+   *     even if it has a `name:`. Stack context continues to come from
+   *     the nearest added ancestor.
+   *
+   * Use this on sub-package `zbb.yaml` files that exist solely to
+   * define custom lifecycle commands for that path (e.g., a workspace
+   * package with its own `build: ./my-special-build.sh`). Without this
+   * marker, a zbb.yaml with a `name:` that hasn't been added is still
+   * treated as an overlay at runtime, but the marker makes the intent
+   * explicit and prevents accidental `zbb stack add`.
+   */
+  overlay?: boolean;
+  /**
    * Named tool definitions referenced by lifecycle gates. Lives on the
    * stack manifest (zbb.yaml with a `name:`); each lifecycle entry's
    * `tools: [name]` list resolves against this registry. See
@@ -541,6 +559,43 @@ export function findStackManifestOwner(chain: ZbbChainEntry[]): ZbbChainEntry | 
 }
 
 /**
+ * Resolve the active stack for a given chain — the closest chain entry
+ * whose `name:` matches a stack **currently added to the slot**.
+ *
+ * A zbb.yaml is a "stack" only when it's added to the slot. Everything
+ * else in the chain is a lifecycle/env overlay — contributes lifecycle
+ * entries but borrows stack context from the nearest added ancestor.
+ *
+ * Skips:
+ *   - Entries with no `name:` (pure overlays — a sub-dir zbb.yaml that
+ *     just defines custom lifecycle commands)
+ *   - Entries explicitly marked `overlay: true` (author opted out of
+ *     being treated as a stack even if a `name:` is present)
+ *   - Entries with `name:` but not currently added to the slot (could
+ *     be a stack in the future; for now, walk past it)
+ *
+ * Mirrors the shell cd hook's walk-up: "first zbb.yaml whose stack is
+ * actually in the slot." Returns null when no added stack is reachable.
+ */
+export function findActiveStackInChain(
+  chain: ZbbChainEntry[],
+  addedStackNames: ReadonlySet<string>,
+  addedIdentityNames: ReadonlySet<string>,
+): ZbbChainEntry | null {
+  for (const entry of chain) {
+    const cfg = entry.config as Partial<RepoConfig & StackManifest>;
+    if (cfg.overlay === true) continue;
+    const name = cfg.name;
+    if (typeof name !== 'string') continue;
+    const shortName = name.split('/').pop() ?? name;
+    if (addedStackNames.has(shortName) || addedIdentityNames.has(name)) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+/**
  * Resolution result for a `require:` list. Contains the fully-inlined
  * ToolRequirement entries ready to pass to runPreflightChecks, plus a
  * list of unresolved names (references that weren't defined in the
@@ -593,47 +648,31 @@ export function resolveRequireEntries(
 }
 
 /**
- * Resolve the gate registry for a given lifecycle owner.
+ * Extract the gate registry (tools + env declarations) from the active
+ * stack entry.
  *
- * The registry (tools + env declarations) lives at the stack manifest
- * that hosts the lifecycle definition — i.e. the closest named zbb.yaml
- * at or above `lifecycleOwnerDir` in the chain. This matches the "one
- * registry per stack, names authored by the stack manifest owner" rule.
+ * A lifecycle entry's `tools: [name]` and `env: [NAME]` gate lists
+ * resolve against the active stack's declarations — NOT the closest
+ * named zbb.yaml to the lifecycle owner. Overlay sub-dirs don't carry
+ * their own `tools:` / `env:` blocks; they borrow the active stack's.
  *
- * When the lifecycle owner IS a named stack manifest (the common case —
- * `com/hub/zbb.yaml` defines both `lifecycle.build` and `tools:`), the
- * owner's own blocks are returned. When the owner is a nameless
- * sub-manifest overlaying a stack, we walk up the chain to find the
- * containing stack manifest.
- *
- * Returns null when no stack manifest is reachable from the owner —
- * e.g. a gradle-only repo without `name:` anywhere. In that case gate
- * references are errors (the caller decides the message).
+ * Caller passes the active stack entry (as resolved via
+ * `findActiveStackInChain`). This function is a simple getter — the
+ * walk-up logic lives in the active-stack resolution step, not here.
  */
 export function resolveGateRegistry(
-  chain: ZbbChainEntry[],
-  lifecycleOwnerDir: string,
+  activeStackEntry: ZbbChainEntry,
 ): {
   manifestDir: string;
   tools: Record<string, ToolDefinition>;
   envDecls: Record<string, EnvVarDeclaration>;
-} | null {
-  const ownerIdx = chain.findIndex(e => e.dir === lifecycleOwnerDir);
-  if (ownerIdx < 0) return null;
-
-  // Walk from the owner outward (closest-first) so a nested named
-  // manifest overrides its parent.
-  for (let i = ownerIdx; i < chain.length; i += 1) {
-    const entry = chain[i];
-    if (typeof entry.config.name === 'string') {
-      return {
-        manifestDir: entry.dir,
-        tools: (entry.config.tools as Record<string, ToolDefinition> | undefined) ?? {},
-        envDecls: (entry.config.env as Record<string, EnvVarDeclaration> | undefined) ?? {},
-      };
-    }
-  }
-  return null;
+} {
+  const cfg = activeStackEntry.config as Partial<RepoConfig & StackManifest>;
+  return {
+    manifestDir: activeStackEntry.dir,
+    tools: cfg.tools ?? {},
+    envDecls: cfg.env ?? {},
+  };
 }
 
 

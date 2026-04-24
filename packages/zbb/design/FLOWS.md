@@ -69,13 +69,50 @@ Identified by `name:` in its `zbb.yaml` (npm package name shape:
 state declarations, and lifecycle verbs. Two stacks in one slot
 communicate via declared `imports:` / `exports:` (typed at add-time).
 
-### Stack manifest
+### Stack manifest vs overlay
 
-Any `zbb.yaml` that has a `name:` field. Each stack manifest is the
-authority for its own `env:`, `tools:`, `lifecycle:`, etc. Nested stack
-manifests (e.g. `com/hub/node-stack/zbb.yaml` inside
-`com/hub/zbb.yaml`) are SEPARATE stacks that get added to a slot
-independently.
+A `zbb.yaml` is a **stack** only when it has been added to the current
+slot via `zbb stack add`. Everything else is an **overlay** — a
+lifecycle / env override layer that contributes to dispatch but isn't
+a standalone stack.
+
+Three shapes in practice:
+
+1. **Stack manifest (added).** Has `name:` and `version:`. Lives at
+   the repo root for the common case, or as a standalone stack repo
+   (e.g. `com/hub/zbb.yaml`, `com/hub/node-stack/zbb.yaml` when added
+   as a separate stack). Authoritative for its own `env:`, `tools:`,
+   `require:`, `lifecycle:`.
+
+2. **Overlay (nameless).** No `name:`. Exists purely to override
+   `lifecycle:` entries for the directory it lives in — e.g. a
+   workspace package that wants its own `build: ./my-special-build.sh`.
+   Borrows `env:` / `tools:` / stack identity from the nearest added
+   stack ancestor.
+
+3. **Overlay (`overlay: true`).** Has `name:` but the author has
+   explicitly marked it as an overlay with the `overlay: true` field.
+   Cannot be added via `zbb stack add` — refused with a clear error.
+   Dispatch walk-up skips it for stack-context resolution regardless
+   of what's in the slot. Use this when a sub-package happens to have
+   an npm name but should NEVER be a standalone stack.
+
+**Runtime fallback:** a `zbb.yaml` with `name:` but **not** marked
+`overlay: true` that simply hasn't been added yet is treated as an
+overlay at dispatch time (walked past for stack context). It becomes
+a stack the moment someone runs `zbb stack add` against it. The
+marker is for authors who want to prevent that from happening
+accidentally.
+
+**The rule the dispatcher uses** (see `config.ts:findActiveStackInChain`):
+walk the chain closest-first, skip entries that are (a) nameless, (b)
+marked `overlay: true`, or (c) named but not in `slot.stacks.list()`.
+The first surviving entry is the active stack — its `tools:`, `env:`,
+and `require:` blocks drive preflight and gate resolution. The
+*lifecycle owner* for the running command is resolved separately (the
+closest chain entry whose `lifecycle[command]` is defined) and can be
+a different file — typically an overlay closer to cwd than the active
+stack.
 
 ### Chain / walk-up
 
@@ -228,6 +265,23 @@ Sources in priority order (highest wins): `override` (user-set via
 
 See [§8](#8-env-handling--layers-sources-resolution) for the full
 resolution flow.
+
+### Overlay marker
+
+```yaml
+overlay: true
+```
+
+Declares that this `zbb.yaml` is intentionally an overlay — lifecycle
+overrides only, never a standalone stack. `zbb stack add` refuses to
+add it, and the dispatcher walks past it when resolving the active
+stack. Use on sub-package `zbb.yaml` files that exist solely to
+override lifecycle commands (e.g., a workspace package with its own
+`build: ./my-special-build.sh`).
+
+Omitting `overlay:` means "addable if someone runs `zbb stack add`
+against it" — a sub-package can become a real stack later without a
+schema change.
 
 ### Tools registry (manifest-level, NEW in Phase 4)
 
@@ -1276,6 +1330,14 @@ lifecycle:
   identity/path vars and per-stack env files. See [§2](#slot).
 - **Stack** — Composable unit added to a slot. Identified by
   `name:` in its `zbb.yaml`. See [§2](#stack).
+- **Active stack** — The closest chain entry whose name matches a
+  stack currently added to the slot. Skips nameless overlays, entries
+  marked `overlay: true`, and entries whose names aren't added. See
+  `config.ts:findActiveStackInChain`.
+- **Overlay** — A `zbb.yaml` that contributes lifecycle entries but
+  isn't the active stack. Either nameless, or `overlay: true`, or
+  named-but-not-added. Borrows `env:`/`tools:`/`require:` from the
+  active stack above it.
 - **Stack manifest** — A `zbb.yaml` with a `name:` field. One
   registry per manifest for tools/env. See [§2](#stack-manifest).
 - **Chain** — Ordered list of ancestor `zbb.yaml` files from cwd to

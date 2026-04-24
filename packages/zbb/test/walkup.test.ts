@@ -9,6 +9,7 @@ import {
   findLifecycleOwner,
   findMonorepoRoot,
   findStackManifestOwner,
+  findActiveStackInChain,
 } from '../lib/config.js';
 
 /**
@@ -270,5 +271,88 @@ describe('findStackManifestOwner', () => {
     );
     const chain = await findZbbChain(join(tmpRoot, 'packages/foo'));
     assert.equal(findStackManifestOwner(chain), null);
+  });
+});
+
+describe('findActiveStackInChain', () => {
+  it('returns the closest entry whose name matches an added stack', async () => {
+    const chain = await findZbbChain(join(tmpRoot, 'packages/foo'));
+    // Only the root is added (by short name 'root').
+    const active = findActiveStackInChain(
+      chain,
+      new Set(['root']),
+      new Set(['@scope/root']),
+    );
+    assert.notEqual(active, null);
+    assert.equal(active!.dir, tmpRoot);
+  });
+
+  it('picks the sub-manifest when it IS added (stack > overlay)', async () => {
+    // Both foo and root could be stacks; foo is closer and added.
+    const chain = await findZbbChain(join(tmpRoot, 'packages/foo'));
+    const active = findActiveStackInChain(
+      chain,
+      new Set(['foo', 'root']),
+      new Set(['@scope/foo', '@scope/root']),
+    );
+    assert.equal(active!.dir, join(tmpRoot, 'packages/foo'));
+  });
+
+  it('walks past a named-but-not-added sub-manifest to the added ancestor', async () => {
+    // foo has name: but is NOT in the added set. Walk up to root.
+    const chain = await findZbbChain(join(tmpRoot, 'packages/foo'));
+    const active = findActiveStackInChain(
+      chain,
+      new Set(['root']),
+      new Set(['@scope/root']),
+    );
+    assert.equal(active!.dir, tmpRoot);
+  });
+
+  it('walks past an overlay: true entry even if it has a name and is in the set', async () => {
+    // Mark foo as an overlay. Even if by accident its name matches an
+    // added stack, the marker opts it out of stack-context resolution.
+    await writeFile(
+      join(tmpRoot, 'packages/foo/zbb.yaml'),
+      [
+        'name: "@scope/foo"',
+        'version: "1.0.0"',
+        'overlay: true',
+        'lifecycle:',
+        '  start: echo start',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const chain = await findZbbChain(join(tmpRoot, 'packages/foo'));
+    const active = findActiveStackInChain(
+      chain,
+      new Set(['foo', 'root']),
+      new Set(['@scope/foo', '@scope/root']),
+    );
+    // Skipped foo; resolved to root instead.
+    assert.equal(active!.dir, tmpRoot);
+  });
+
+  it('returns null when no entry in the chain matches', async () => {
+    const chain = await findZbbChain(join(tmpRoot, 'packages/foo'));
+    const active = findActiveStackInChain(chain, new Set(['other']), new Set([]));
+    assert.equal(active, null);
+  });
+
+  it('skips nameless overlay entries regardless of added set', async () => {
+    // Make foo's zbb.yaml nameless.
+    await writeFile(
+      join(tmpRoot, 'packages/foo/zbb.yaml'),
+      'lifecycle:\n  start: echo\n',
+      'utf-8',
+    );
+    const chain = await findZbbChain(join(tmpRoot, 'packages/foo'));
+    const active = findActiveStackInChain(
+      chain,
+      new Set(['root']),
+      new Set(['@scope/root']),
+    );
+    assert.equal(active!.dir, tmpRoot);
   });
 });

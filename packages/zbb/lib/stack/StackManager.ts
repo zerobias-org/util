@@ -76,6 +76,19 @@ export class StackManager {
       );
     }
 
+    // Refuse overlay-marked zbb.yamls. Authors use `overlay: true` to
+    // declare that a zbb.yaml is ONLY a lifecycle/env override layer
+    // for its path — never a standalone stack. Adding such a file would
+    // subvert the author's intent; surface a clear error instead.
+    if ((manifest as { overlay?: boolean }).overlay === true) {
+      throw new Error(
+        `${sourcePath}/zbb.yaml is marked as an overlay (overlay: true) — ` +
+        `it provides lifecycle overrides only, not a stack. It cannot be added.\n` +
+        `To add a stack, run \`zbb stack add\` against the stack manifest ` +
+        `zbb.yaml (typically at the monorepo root).`,
+      );
+    }
+
     const stackName = options?.as ?? this.extractShortName(manifest.name);
 
     // Check for existing stack with same name
