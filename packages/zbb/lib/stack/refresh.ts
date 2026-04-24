@@ -1,9 +1,8 @@
-import type { Slot } from './Slot.js';
-import type { Stack } from '../stack/Stack.js';
+import type { Slot } from '../slot/Slot.js';
+import type { Stack } from './Stack.js';
 import { scanEnvDeclarations } from '../env/Scanner.js';
 import { resolveVaultRef, clearVaultCache, verifyVaultConnection } from '../env/VaultResolver.js';
 import { loadProjectConfig } from '../config.js';
-import { isSlotLevelVar } from './SlotEnvironment.js';
 import { join } from 'node:path';
 
 export interface RefreshResult {
@@ -12,30 +11,33 @@ export interface RefreshResult {
 }
 
 /**
- * Refresh environment variables from their declared external sources.
+ * Refresh environment variables from their declared external sources
+ * for every stack in a slot.
+ *
+ * Lives under `lib/stack/` because every line of this function is
+ * stack-management work — the slot is just the container. It's invoked
+ * via `StackManager.refreshAll()`; direct callers should go through
+ * that entry point.
  *
  * Three sources are covered:
  *   - `source: file` — re-read the file path (e.g. ~/.vault-token). Per-stack.
  *   - `source: env`  — re-read from process.env. Per-stack.
- *   - `source: vault` — re-fetch from Vault. Per-repo-root scan (current
- *      behavior preserved for back-compat).
+ *   - `source: vault` — re-fetch from Vault. Per-repo-root scan.
  *
- * User overrides (manifest entry with resolution === 'override') are never
- * clobbered; a refresh leaves them alone so that an explicit `zbb env set`
- * wins over any external source.
+ * User overrides (manifest entry with resolution === 'override') are
+ * never clobbered; a refresh leaves them alone so an explicit
+ * `zbb env set` wins over any external source.
  *
  * Iteration model:
- *   - File/env: walks every stack added to the slot via slot.stacks.list(),
- *     calling stack.env.refreshSourcedVars() per stack. Each stack updates
- *     its own inherited manifest entry in place, preserving resolution type.
- *     This matches where the initial read happens (StackEnvironment.initialize).
- *   - Vault: scans the repo-root zbb.yaml for vault-declared vars. Slot-level
- *     vars (ZBB_SLOT_VARS) write to slot.env; the rest write to stack.env as
- *     overrides when a stack context is provided. Without a stack, non-slot
- *     vault vars are silently skipped — they'll be refreshed on the next
- *     command dispatched in the owning stack's scope.
+ *   - File/env: walks every stack via `slot.stacks.list()`, calling
+ *     `stack.env.refreshSourcedVars()` per stack. Each stack updates
+ *     its own inherited manifest entry in place.
+ *   - Vault: scans the repo-root zbb.yaml for vault-declared vars and
+ *     writes them as overrides on the given stack. Without a stack
+ *     context, vault vars are silently skipped — they'll refresh when
+ *     a command dispatches with the owning stack in scope.
  */
-export async function refreshVaultVars(
+export async function refreshStackEnv(
   slot: Slot,
   repoRoot: string,
   stack?: Stack | null,
@@ -89,6 +91,12 @@ export async function refreshVaultVars(
     return { refreshed, errors };
   }
 
+  // Without a stack context we have nowhere to write vault vars — skip
+  // silently; they refresh when the owning stack comes into scope.
+  if (!stack) {
+    return { refreshed, errors };
+  }
+
   // Verify vault connection before attempting any secret fetches
   try {
     await verifyVaultConnection();
@@ -101,28 +109,12 @@ export async function refreshVaultVars(
   }
 
   for (const v of vaultVars) {
-    // Determine the write target for this var:
-    //   - ZBB_SLOT_VARS → slot.env
-    //   - Anything else → stack.env if a stack is available, otherwise skip
-    //     (not a fatal error — the var will be refreshed when a command
-    //     dispatches with the owning stack in scope).
-    const isSlotVar = isSlotLevelVar(v.name);
-    if (!isSlotVar && !stack) {
-      continue;
-    }
-
-    const currentValue = isSlotVar
-      ? slot.env.get(v.name)
-      : stack!.env.get(v.name);
+    const currentValue = stack.env.get(v.name);
     if (!v.declaration.refresh && currentValue !== undefined) continue;
 
     try {
       const value = await resolveVaultRef(v.declaration.vault!);
-      if (isSlotVar) {
-        await slot.env.set(v.name, value, v.declaration.mask ?? true);
-      } else {
-        await stack!.env.set(v.name, value);
-      }
+      await stack.env.set(v.name, value);
       refreshed.push(v.name);
     } catch (e: unknown) {
       errors.push({ name: v.name, error: e instanceof Error ? e.message : String(e) });

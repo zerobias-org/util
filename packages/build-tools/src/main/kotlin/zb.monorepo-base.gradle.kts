@@ -33,6 +33,10 @@ import org.gradle.kotlin.dsl.support.serviceOf
 
 val monorepoAll = (project.findProperty("monorepo.all") as? String)?.toBoolean() ?: false
 val monorepoBase = project.findProperty("monorepo.base") as? String
+// Subpackage scope: set by zbb's lifecycle dispatcher when `zbb build`/
+// `test`/`gate`/`dockerBuild` is invoked from a workspace subpackage dir.
+// When set, MonorepoGraphService clamps `affected` to this one package.
+val monorepoScope = (project.findProperty("monorepo.scope") as? String)?.takeIf { it.isNotBlank() }
 
 val graphService = gradle.sharedServices.registerIfAbsent(
     "monorepoGraph",
@@ -41,6 +45,7 @@ val graphService = gradle.sharedServices.registerIfAbsent(
     parameters.repoRoot.set(rootProject.layout.projectDirectory)
     parameters.all.set(monorepoAll)
     monorepoBase?.let { parameters.baseRef.set(it) }
+    monorepoScope?.let { parameters.scope.set(it) }
 }
 
 extensions.extraProperties["monorepoGraphService"] = graphService
@@ -117,6 +122,8 @@ gradle.projectsEvaluated {
     println("zb.monorepo-base: ${packages.size} workspace packages discovered")
     if (monorepoAll) {
         println("  --all mode: affecting all ${packages.size} packages")
+    } else if (monorepoScope != null) {
+        println("  scope=$monorepoScope (clamped to single package)")
     } else {
         val affected = service.changeResult.affected.size
         val base = service.changeResult.baseRef
@@ -198,6 +205,7 @@ gradle.taskGraph.whenReady {
     // doFirst hook that fires emitPhaseStart; the finish side is already
     // handled by the OperationCompletionListener in EventEmitter.
     val phaseTaskNames = setOf(
+        "workspaceInstall",
         "monorepoBuild",
         "monorepoTest",
         "monorepoDockerBuild",

@@ -91,10 +91,18 @@ tasks.register("monorepoGateCheck") {
             try { mapper.readValue(rootPkgFile) } catch (_: Exception) { null }
         } else null
 
+        // Scope-aware: when `-Pmonorepo.scope=<pkg>` is set (subpackage
+        // invocation from zbb's lifecycle dispatcher), validate only
+        // that package's stamp entry. Without this, a scoped gate-check
+        // would fail on every OTHER package's stale stamp, even though
+        // the user only asked about one package.
+        val scopeFilter = (project.findProperty("monorepo.scope") as? String)?.takeIf { it.isNotBlank() }
+
         var allValid = true
         for ((name, pkg) in service.graph.packages) {
             // Skip private packages (they're not in the gate stamp anyway)
             if (pkg.private) continue
+            if (scopeFilter != null && name != scopeFilter) continue
 
             val result = validator.validate(
                 packageDir = pkg.dir,
@@ -155,10 +163,22 @@ val monorepoGate = tasks.register("monorepoGate") {
             proc.inputStream.bufferedReader().readText().trim()
         } catch (_: Exception) { "unknown" }
 
-        // Build per-package entries for ALL non-private packages
+        // Scope-aware full-gate write: when `-Pmonorepo.scope=<pkg>` is
+        // set, only the scoped package's tasks actually ran. The others'
+        // task states are "skipped" (never executed). Rewriting the
+        // whole stamp would wipe out correct entries for the unscoped
+        // packages. Strategy: in scope mode, build the entry for the
+        // scoped package only, then merge it into whatever the existing
+        // stamp has for the other packages.
+        val gateScope = (project.findProperty("monorepo.scope") as? String)?.takeIf { it.isNotBlank() }
+
+        // Build per-package entries. When scope is set, skip everyone
+        // else so we don't emit "skipped" rows for packages that simply
+        // weren't in scope this run.
         val packageEntries = linkedMapOf<String, PackageStampEntry>()
         for ((name, pkg) in packages) {
             if (pkg.private) continue
+            if (gateScope != null && name != gateScope) continue
 
             val sourceHash = SourceHasher.hashSources(pkg.dir, sourceFiles, sourceDirs)
             val testHash = SourceHasher.hashTests(pkg.dir)
@@ -255,9 +275,20 @@ val monorepoGate = tasks.register("monorepoGate") {
             )
         }
 
+        // Merge existing stamp in scope mode so we don't drop entries for
+        // packages that weren't in this run's scope.
+        val mergedEntries = linkedMapOf<String, PackageStampEntry>()
+        if (gateScope != null) {
+            val existing = GateStampIO.read(rootStampFile)
+            if (existing != null) {
+                mergedEntries.putAll(existing.packages)
+            }
+        }
+        mergedEntries.putAll(packageEntries)
+
         // Sort packages by name so every user gets the same gate-stamp.json
         // regardless of filesystem directory ordering.
-        val sortedEntries = packageEntries.entries
+        val sortedEntries = mergedEntries.entries
             .sortedBy { it.key }
             .associateTo(linkedMapOf()) { it.toPair() }
 
@@ -269,7 +300,11 @@ val monorepoGate = tasks.register("monorepoGate") {
         )
 
         GateStampIO.write(rootStampFile, stamp)
-        logger.lifecycle("Wrote ${rootStampFile.name} with ${packageEntries.size} packages")
+        if (gateScope != null) {
+            logger.lifecycle("Wrote ${rootStampFile.name} (scope=$gateScope, ${packageEntries.size} updated / ${sortedEntries.size} total)")
+        } else {
+            logger.lifecycle("Wrote ${rootStampFile.name} with ${packageEntries.size} packages")
+        }
 
         // Emit gate_stamp_written event so the display renders an explicit
         // footer confirming the stamp exists and how many packages it covers.

@@ -132,6 +132,19 @@ abstract class MonorepoGraphService : BuildService<MonorepoGraphService.Params> 
         val repoRoot: DirectoryProperty
         val all: Property<Boolean>
         val baseRef: Property<String>
+        /**
+         * Optional: npm package name to scope this build to. When set, every
+         * downstream consumer of `changeResult` sees ONLY this package in
+         * `affected`/`changed`/`affectedOrdered` — regardless of git state or
+         * `--all`. Set by zbb's lifecycle dispatcher when `zbb build`/`test`/
+         * `gate`/`dockerBuild` is invoked from a workspace subpackage dir.
+         *
+         * `--all` takes precedence over scope (explicit over-ride). If both
+         * are set — unusual — `--all` wins. Scope is not applied to publish
+         * by design (the TS layer blocks subdir publish outright; see the
+         * project_publish_subdir_block memory note).
+         */
+        val scope: Property<String>
     }
 
     private val rootFile: File by lazy { parameters.repoRoot.get().asFile }
@@ -149,12 +162,28 @@ abstract class MonorepoGraphService : BuildService<MonorepoGraphService.Params> 
     }
 
     val changeResult: ChangeDetectionResult by lazy {
-        ChangeDetector.detectChanges(
+        val raw = ChangeDetector.detectChanges(
             repoRoot = rootFile,
             graph = graph,
             all = parameters.all.getOrElse(false),
             overrideBase = parameters.baseRef.orNull,
         )
+        val scope = parameters.scope.orNull?.takeIf { it.isNotBlank() }
+        if (scope == null || parameters.all.getOrElse(false)) {
+            // No scope, or --all explicitly overrides scope.
+            raw
+        } else {
+            require(graph.packages.containsKey(scope)) {
+                "-Pmonorepo.scope=$scope is not a workspace package in this monorepo. " +
+                    "Known packages: ${graph.packages.keys.sorted().joinToString(", ")}"
+            }
+            ChangeDetectionResult(
+                changed = setOf(scope),
+                affected = setOf(scope),
+                affectedOrdered = listOf(scope),
+                baseRef = "N/A (scope=$scope)",
+            )
+        }
     }
 
     /** Map of Gradle subproject path → npm package name */

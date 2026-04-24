@@ -70,14 +70,18 @@ describe('slot.resolve()', () => {
       OVERRIDE_VALUE: 'dns-override-value',
     });
 
-    // Set a user value and an override value before loading
-    await writeFile(join(slotDir, '.env'), 'INSTALL_TYPE=custom\n', 'utf-8');
+    // Set a user value and an override value before loading.
+    // Overrides live in .env + manifest.yaml — there's no overrides.env.
+    await writeFile(
+      join(slotDir, '.env'),
+      'INSTALL_TYPE=custom\nUSER_VALUE=user-override\n',
+      'utf-8',
+    );
     await writeFile(
       join(slotDir, 'manifest.yaml'),
       'INSTALL_TYPE:\n  source: user\n  type: string\n',
       'utf-8',
     );
-    await writeFile(join(slotDir, 'overrides.env'), 'USER_VALUE=user-override\n', 'utf-8');
 
     await slot.load();
 

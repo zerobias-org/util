@@ -5,7 +5,6 @@ import { SlotEnvironment } from './SlotEnvironment.js';
 import { SlotWatcher } from './SlotWatcher.js';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
 import { lookupDnsTxt as _lookupDnsTxt } from '../env/DnsTxtResolver.js';
-import { refreshVaultVars, type RefreshResult } from './refresh.js';
 import { StackManager } from '../stack/StackManager.js';
 
 /** Default DNS cache TTL in seconds when not available from DNS response */
@@ -189,28 +188,20 @@ export class Slot extends EventEmitter {
   // ── DNS Provisioning ───────────────────────────────────────
 
   /**
-   * Resolve external env var sources for this slot.
+   * DNS TXT provisioning for this slot.
    *
-   * Runs in order:
-   *   1. DNS TXT provisioning (declared values, silent on failure)
-   *   2. Vault secret resolution (overrides, refresh:true always re-fetched)
+   * Queries `_hub.<searchDomain>` for `KEY=value` TXT records and merges
+   * the results into the slot's declared env (source: 'dns'). Silent on
+   * failure (network error, no records). Uses a 30s disk-cached TTL.
    *
-   * @param repoRoot - Repo root path (needed for vault var scanning)
-   * @returns Vault refresh result (DNS is silent)
+   * Per-stack env refresh (source: vault/file/env) lives on the stack
+   * manager — call `slot.stacks.refreshAll({repoRoot, stack})` to
+   * re-read those. This split lets `slot load` run DNS without needing
+   * a repo root or stack context, while `zbb env refresh` orchestrates
+   * both.
    */
-  async resolve(repoRoot?: string, stack?: import('../stack/Stack.js').Stack | null): Promise<RefreshResult> {
-    // ── DNS TXT provisioning ──
+  async resolve(): Promise<void> {
     await this.resolveDns();
-
-    // ── Vault secret resolution ──
-    // Pass the stack through so vault-sourced vars declared in the
-    // stack's zbb.yaml write to the stack's env, not the slot's. Without
-    // a stack, non-slot vault vars are silently skipped — they'll be
-    // refreshed when a command dispatches with the owning stack in scope.
-    if (repoRoot) {
-      return refreshVaultVars(this, repoRoot, stack);
-    }
-    return { refreshed: [], errors: [] };
   }
 
   /**

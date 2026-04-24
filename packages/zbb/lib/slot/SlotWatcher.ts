@@ -25,7 +25,7 @@ function debounce<T extends (...args: Array<any>) => void>(fn: T, delayMs: numbe
  *
  * Watches the entire slot directory (recursive) using node:fs.watch.
  * Emits typed events based on file paths:
- * - 'env:change'              - .env or overrides.env at slot root
+ * - 'env:change'              - .env at slot root
  * - 'state:change'            - state/hub/state.yml modified
  * - 'deployment:change'       - state/deployments/*.yml modified
  * - 'command:change'          - state/cmd/*.yml modified
@@ -104,8 +104,9 @@ export class SlotWatcher extends EventEmitter {
     // Always emit generic file:change with relative filename
     this.emit('file:change', rel);
 
-    // .env or overrides.env at slot root
-    if (rel === '.env' || rel === 'overrides.env') {
+    // .env at slot root (slot overrides now live in .env + manifest.yaml;
+    // there is no longer a separate overrides.env file)
+    if (rel === '.env') {
       this.emit('env:change', rel);
       return;
     }

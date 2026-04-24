@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "branch": "gradle_fix",
-  "timestamp": "2026-04-24T03:31:56.714187348Z",
+  "branch": "more-zbb-work",
+  "timestamp": "2026-04-24T16:12:55.165325894Z",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "1.0.33",
@@ -326,8 +326,8 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "2.0.50",
-      "sourceHash": "c661437c60798d7d621d641399f0088db5dc2048dcf1757bae2fafc1e025f8c3",
+      "version": "2.0.51",
+      "sourceHash": "794b736292faa4058671d8e485982dff382ebca345c8eb4d1294b5803e83e71c",
       "testHash": "ffd2c3654748679b3983df3bcc14c6ac63b37a636dac4fa65ebd6144805353db",
       "tasks": {
         "lint": "skipped",
@@ -482,8 +482,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "2.0.45",
-      "sourceHash": "9444eb2ac9db7963141bb32d50920f51118d66d199707d1f43c3f97750d82161",
+      "version": "2.0.46",
+      "sourceHash": "9e4f34a22e1a2b0b41de85992a31e68305c2c426f6577e74b770e030eeb8bde5",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
         "lint": "passed",
@@ -567,15 +567,15 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.56",
-      "sourceHash": "f03af60c4d470c78ae7dafa58b9c257b3f2c267bbd91de03c35a3144ce0fd352",
-      "testHash": "e79630ad8687f6ba96fc3c5a8e5a5be0bcbc9874966ae85f2f2448487fdf3298",
+      "version": "0.3.57",
+      "sourceHash": "44118402bc9a4a33a5a6861ff2154aac348c5718ba75f0cda2be5045684d5b24",
+      "testHash": "14ec2b796b0083a59fab875cecc57d0c7d1cc898212d5602c9ab1711a55882a4",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
         "test": "skipped"
       },
       "tests": {

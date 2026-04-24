@@ -76,6 +76,19 @@ export class StackManager {
       );
     }
 
+    // Refuse overlay-marked zbb.yamls. Authors use `overlay: true` to
+    // declare that a zbb.yaml is ONLY a lifecycle/env override layer
+    // for its path — never a standalone stack. Adding such a file would
+    // subvert the author's intent; surface a clear error instead.
+    if ((manifest as { overlay?: boolean }).overlay === true) {
+      throw new Error(
+        `${sourcePath}/zbb.yaml is marked as an overlay (overlay: true) — ` +
+        `it provides lifecycle overrides only, not a stack. It cannot be added.\n` +
+        `To add a stack, run \`zbb stack add\` against the stack manifest ` +
+        `zbb.yaml (typically at the monorepo root).`,
+      );
+    }
+
     const stackName = options?.as ?? this.extractShortName(manifest.name);
 
     // Check for existing stack with same name
@@ -161,9 +174,6 @@ export class StackManager {
       }
     }
 
-    // Sync merged slot-level .env (all stack exports combined)
-    await this.syncSlotEnv();
-
     return stack;
   }
 
@@ -215,9 +225,96 @@ export class StackManager {
     // Remove stack directory from slot
     await rm(stack.path, { recursive: true, force: true });
     console.log(`Removed stack '${name}'`);
+  }
 
-    // Sync merged slot-level .env (removed stack's vars purged)
-    await this.syncSlotEnv();
+  // ── Refresh ─────────────────────────────────────────────────
+
+  /**
+   * Fully refresh env for every stack in this slot.
+   *
+   * Two passes:
+   *   1. Re-read external sources (file / env / vault). Per-stack
+   *      file/env vars via `stack.env.refreshSourcedVars()`; vault vars
+   *      declared at the repo-root zbb.yaml via `refreshStackEnv` which
+   *      fetches + writes through the stack's env. Each stack's `.env`
+   *      is recomputed with fresh external values at the end of this
+   *      pass (computeEnv runs inside both paths).
+   *
+   *   2. Re-evaluate cross-stack imports. `stack.env.resolve()` re-reads
+   *      every dep stack's fresh `.env` and updates local manifest
+   *      entries whose resolution is `imported`. Without this pass, a
+   *      stack that imports a newly-rotated Vault secret from a dep
+   *      would still carry the stale imported value in its own `.env`.
+   *
+   * Pass 2 runs in `this.list()` order — any order works because pass 1
+   * already wrote every stack's fresh `.env` to disk, so dep-stack
+   * values are up-to-date by the time pass 2 reads them.
+   *
+   * Extracted from the former `slot.resolve(repoRoot, stack?)`. Slot
+   * now handles only DNS; this method handles every per-stack concern.
+   *
+   * @param opts.repoRoot - Path used to scan zbb.yaml for vault-declared
+   *                        vars. Without it, vault scanning is skipped
+   *                        (per-stack file/env refresh still runs).
+   * @param opts.stack    - Write target for vault-sourced vars. Without
+   *                        it, vault scanning is silently skipped —
+   *                        those vars refresh when a command dispatches
+   *                        with the owning stack in scope.
+   */
+  async refreshAll(opts: {
+    repoRoot?: string;
+    stack?: Stack | null;
+  } = {}): Promise<import('./refresh.js').RefreshResult> {
+    // ── Pass 1: external re-fetch ──
+    let result: import('./refresh.js').RefreshResult;
+    if (!opts.repoRoot) {
+      // Without a repoRoot we can only do per-stack file/env refresh.
+      const refreshed: string[] = [];
+      const errors: Array<{ name: string; error: string }> = [];
+      try {
+        for (const s of await this.list()) {
+          try {
+            const r = await s.env.refreshSourcedVars();
+            for (const n of r.refreshed) refreshed.push(`${s.name}.${n}`);
+            for (const e of r.errors) errors.push({ name: `${s.name}.${e.name}`, error: e.error });
+          } catch (e: unknown) {
+            errors.push({ name: s.name, error: e instanceof Error ? e.message : String(e) });
+          }
+        }
+      } catch (e: unknown) {
+        errors.push({ name: 'stacks-list', error: e instanceof Error ? e.message : String(e) });
+      }
+      result = { refreshed, errors };
+    } else {
+      const { refreshStackEnv } = await import('./refresh.js');
+      result = await refreshStackEnv(this.slot, opts.repoRoot, opts.stack ?? null);
+    }
+
+    // ── Pass 2: import re-eval across stacks ──
+    //
+    // Re-walks each stack's manifest.imports against its dep stacks'
+    // freshly-written .env files (pass 1 already updated those). Import
+    // failures (e.g. source stack not added, `optional: false`) surface
+    // here rather than blowing up later on the next lifecycle command.
+    try {
+      for (const s of await this.list()) {
+        try {
+          await s.env.resolve();
+        } catch (e: unknown) {
+          result.errors.push({
+            name: `${s.name} (imports)`,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    } catch (e: unknown) {
+      result.errors.push({
+        name: 'stacks-list-imports',
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
+    return result;
   }
 
   // ── List / Load / Info ──────────────────────────────────────
@@ -344,8 +441,6 @@ export class StackManager {
       }
     }
 
-    // Sync merged slot-level .env after full start sequence
-    await this.syncSlotEnv();
   }
 
   /**
@@ -842,43 +937,6 @@ export class StackManager {
 
     // Fresh allocation (with host port availability checks)
     return this.allocatePorts(manifest);
-  }
-
-  /**
-   * Re-sync the slot-level .env file.
-   *
-   * Under the current architecture (Option A — "stack owns its env"),
-   * the slot `.env` file holds ONLY the identity/path vars in
-   * ZBB_SLOT_VARS. It does NOT hold a merged projection of stack env.
-   * Stack env lives in each stack's own `<slot>/stacks/<name>/.env`
-   * and is composed on demand at command dispatch by `prepareSlot` in
-   * cli.ts.
-   *
-   * This method used to write a flat merge of every added stack's env
-   * into the slot `.env` (option C). That caused cross-stack pollution
-   * — a stack-scoped override could be stomped by the merge, and one
-   * stack's var could leak into another stack's subprocess. We killed
-   * the merge in favor of on-demand composition. The call sites that
-   * used to invoke this after stack add/remove/start are kept as no-ops
-   * for now so callers don't need to be audited.
-   *
-   * This method is idempotent and simply re-writes the slot-level vars
-   * in case anything got out of sync externally (file manually edited,
-   * etc). For normal operation it's essentially a no-op.
-   */
-  async syncSlotEnv(): Promise<void> {
-    const slotVars = this.slot.getSlotEnvVars();
-    const env = new Map<string, string>();
-    const manifest = new Map<string, { source: string; type: string }>();
-    for (const [k, v] of Object.entries(slotVars)) {
-      env.set(k, v);
-      manifest.set(k, { source: 'zbb', type: 'slot' });
-    }
-    await SlotEnvironment.writeDeclaredEnv(
-      this.slot.path,
-      env,
-      manifest as never,
-    );
   }
 
   /**

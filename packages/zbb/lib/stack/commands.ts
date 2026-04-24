@@ -181,14 +181,29 @@ export async function handleLifecycle(
       }
 
       // Run preflight checks for tools required during stack operations.
-      // Filter require entries to those with `commands:` including 'stack'
-      // (or no commands filter = always required).
+      // New model: require: is stack-level — always runs. Entries can be
+      // string name refs (resolved against the manifest's tools:
+      // registry) or inline ToolRequirement objects. Legacy inline
+      // entries with a `commands:` filter still honor 'stack' for
+      // back-compat during migration.
       const stackName = target.split(':')[0];
       const stack = await slot.stacks.load(stackName);
       if (stack.manifest.require && stack.manifest.require.length > 0) {
         const { runPreflightChecks, formatPreflightResults } = await import('../preflight.js');
-        const applicable = stack.manifest.require.filter(
-          (r: any) => !r.commands || r.commands.includes('stack'),
+        const { resolveRequireEntries } = await import('../config.js');
+        const { requirements, unresolved } = resolveRequireEntries(
+          stack.manifest.require,
+          stack.manifest.tools,
+        );
+        if (unresolved.length > 0) {
+          console.error(
+            `zbb stack: require: names not defined in tools: registry: ` +
+            `${unresolved.join(', ')}. Add them to the stack manifest's tools: block.`,
+          );
+          process.exit(1);
+        }
+        const applicable = requirements.filter(
+          r => !r.commands || r.commands.includes('stack'),
         );
         if (applicable.length > 0) {
           const results = runPreflightChecks(applicable);
@@ -286,19 +301,11 @@ export async function handleLifecycle(
 }
 
 /**
- * Detect stack context from cwd — walk up looking for zbb.yaml with a name field,
- * then match against stacks in the slot.
+ * Resolve a default stack target from cwd — walk up looking for zbb.yaml
+ * with a name field, then match against stacks added to this slot. Used
+ * by subcommands (stop/restart/build/test/gate) that accept an optional
+ * target arg and want to default to "the stack I'm standing in."
  */
-export async function detectStackContext(slot: Slot): Promise<Stack | null> {
-  const name = await detectStackName(slot);
-  if (!name) return null;
-  try {
-    return await slot.stacks.load(name);
-  } catch {
-    return null;
-  }
-}
-
 async function detectStackName(slot: Slot): Promise<string | null> {
   const repoRoot = findRepoRoot(process.cwd());
   if (!repoRoot) return null;

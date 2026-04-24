@@ -5,11 +5,19 @@ import { EventEmitter } from 'node:events';
 
 /**
  * Source values for ManifestEntry:
- *   "override"  — user set via `zbb env set` (written to overrides.env)
+ *   "override"  — user set via `zbb env set`. Value lives in .env; manifest
+ *                 marks it so `zbb env unset` / `reset` can revert it to the
+ *                 canonical slot-derived value.
+ *   "zbb"       — framework-default, computed from slot identity/path at create
  *   "resolver"  — computed by a registered resolver function
  *   "user"      — user-declared in .env directly
  *   "dns"       — provisioned from DNS TXT records by slot.resolve()
  *   "default"   — set by slot create as a default value
+ *
+ * Note: before Phase 4 slot overrides lived in a separate `overrides.env`
+ * file with its own Map. That file is gone. Overrides now merge into the
+ * single `.env` and are tagged in manifest.yaml — same pattern as
+ * StackEnvironment.
  */
 export interface ManifestEntry {
   source: string;
@@ -56,39 +64,18 @@ export function isSlotLevelVar(key: string): boolean {
 
 /**
  * Manages a slot's environment variables.
- * Reads from .env (declared) and overrides.env (user overrides).
- * Writes are only to overrides.env.
+ *
+ * Single source of truth: `<slot>/.env` holds the current effective
+ * value for every slot-level var. `<slot>/manifest.yaml` records
+ * provenance per var (source: 'zbb' | 'override' | 'dns' | ...).
+ *
+ * User overrides written by `zbb env set` update .env in place AND
+ * mark the manifest entry as `source: 'override'` so `zbb env unset`
+ * and `zbb env reset` can revert to the canonical slot-derived value.
  */
 export class SlotEnvironment extends EventEmitter {
   private declared: Map<string, string> = new Map();
-  private overrides: Map<string, string> = new Map();
   private manifest: Map<string, ManifestEntry> = new Map();
-
-  /**
-   * Global resolver map. Resolvers are registered once at process startup
-   * and apply to all SlotEnvironment instances. They provide computed values
-   * for env vars that cannot be expressed as simple ${VAR} references
-   * (e.g., HUB_SERVER_URL derived from HUB_SERVER_PORT).
-   */
-  private static resolvers: Map<string, (env: SlotEnvironment) => string | undefined> = new Map();
-
-  /**
-   * Register a global resolver function for an environment variable key.
-   * The resolver is called by get() when the key is not found in declared
-   * or override values. Resolvers are static and global -- called once at
-   * process startup, not per-slot.
-   *
-   * @param key - The environment variable name to resolve
-   * @param fn - Resolver function receiving the SlotEnvironment instance
-   */
-  static registerResolver(key: string, fn: (env: SlotEnvironment) => string | undefined): void {
-    SlotEnvironment.resolvers.set(key, fn);
-  }
-
-  /** Clear all registered resolvers. Used for test isolation. */
-  static clearResolvers(): void {
-    SlotEnvironment.resolvers.clear();
-  }
 
   readonly slotDir: string;
 
@@ -98,15 +85,11 @@ export class SlotEnvironment extends EventEmitter {
   }
 
   private get envPath() { return join(this.slotDir, '.env'); }
-  private get overridesPath() { return join(this.slotDir, 'overrides.env'); }
   private get manifestPath() { return join(this.slotDir, 'manifest.yaml'); }
 
   async load(): Promise<void> {
     if (existsSync(this.envPath)) {
       this.declared = parseEnvFile(await readFile(this.envPath, 'utf-8'));
-    }
-    if (existsSync(this.overridesPath)) {
-      this.overrides = parseEnvFile(await readFile(this.overridesPath, 'utf-8'));
     }
     if (existsSync(this.manifestPath)) {
       const { loadYaml } = await import('../yaml.js');
@@ -116,9 +99,9 @@ export class SlotEnvironment extends EventEmitter {
     }
   }
 
-  /** Get var value. Overrides > declared > resolver. Returns real value. */
+  /** Get var value from `<slot>/.env` (which carries any overrides). */
   get(key: string): string | undefined {
-    return this.overrides.get(key) ?? this.declared.get(key) ?? SlotEnvironment.resolvers.get(key)?.(this);
+    return this.declared.get(key);
   }
 
   /** Get var value masked for display. */
@@ -131,16 +114,13 @@ export class SlotEnvironment extends EventEmitter {
 
   /**
    * Get all slot-level vars. Returns ONLY the canonical ZBB_SLOT_VARS set;
-   * any non-zbb entries that happen to be in the on-disk .env/overrides.env
-   * (e.g. from slots created by older zbb versions) are filtered out.
-   * Stack env comes from the stack API — never through this method.
+   * any non-zbb entries that happen to be in the on-disk .env (e.g. from
+   * slots created by older zbb versions) are filtered out. Stack env
+   * comes from the stack API — never through this method.
    */
   getAll(): Record<string, string> {
     const result: Record<string, string> = {};
     for (const [k, v] of this.declared) {
-      if (isSlotLevelVar(k)) result[k] = v;
-    }
-    for (const [k, v] of this.overrides) {
       if (isSlotLevelVar(k)) result[k] = v;
     }
     return result;
@@ -153,15 +133,11 @@ export class SlotEnvironment extends EventEmitter {
       if (!isSlotLevelVar(k)) continue;
       result[k] = this.shouldMask(k) ? '***MASKED***' : v;
     }
-    for (const [k, v] of this.overrides) {
-      if (!isSlotLevelVar(k)) continue;
-      result[k] = this.shouldMask(k) ? '***MASKED***' : v;
-    }
     return result;
   }
 
   /**
-   * Set a slot-level override (persisted to overrides.env).
+   * Set a slot-level override.
    *
    * Only keys in ZBB_SLOT_VARS are writable at the slot level. Everything
    * else (AWS_*, PG*, app vars, port allocations, etc.) belongs to a
@@ -169,6 +145,11 @@ export class SlotEnvironment extends EventEmitter {
    * Attempting to set a non-slot-level var throws with a clear error
    * pointing at the correct API, so future code paths can't silently
    * pollute the slot like the old architecture did.
+   *
+   * Writes the new value directly into `<slot>/.env` (replacing the
+   * existing declared value if any) and marks the manifest entry as
+   * `source: 'override'`. Unlike the old dual-file model, there is no
+   * separate overrides.env — .env is the single source of truth.
    */
   async set(key: string, value: string, mask?: boolean): Promise<void> {
     if (!isSlotLevelVar(key)) {
@@ -179,10 +160,9 @@ export class SlotEnvironment extends EventEmitter {
         `on the appropriate stack instead.`,
       );
     }
-    this.overrides.set(key, value);
-    // Write value to disk FIRST — before manifest write can trigger watcher
-    await this.writeOverrides();
-    // Always update manifest source to 'override' so UI/consumers see correct provenance
+    this.declared.set(key, value);
+    // Write .env first — before manifest write can trigger watcher
+    await this.writeEnvFile();
     const existing = this.manifest.get(key);
     this.manifest.set(key, {
       ...(existing ?? { source: 'override', type: 'string' }),
@@ -226,22 +206,15 @@ export class SlotEnvironment extends EventEmitter {
     this.emit('change', { key, value });
   }
 
-  /** Alias for getManifestEntry — backward compat. */
-  getMetadata(key: string): ManifestEntry | undefined {
-    return this.manifest.get(key);
-  }
-
-  /** Reload env from disk (alias for load when already initialized). */
-  async reload(): Promise<void> {
-    await this.load();
-    this.emit('change', {});
-  }
-
   /**
    * Remove a user override. Throws if the caller tries to unset a non-slot
    * var (routing bug — those belong to a stack) or a key that isn't
-   * currently an override (declared slot paths like ZB_SLOT_DIR are not
-   * unsettable — they come from the slot itself, not the user).
+   * currently an override (framework-default slot paths like ZB_SLOT_DIR
+   * cannot be unset — they come from the slot itself, not the user).
+   *
+   * Reverts the .env value to the canonical slot-derived default and
+   * drops the manifest entry so the next load sees the default source
+   * ("zbb") again.
    */
   async unset(key: string): Promise<void> {
     if (!isSlotLevelVar(key)) {
@@ -252,28 +225,43 @@ export class SlotEnvironment extends EventEmitter {
         `on the appropriate stack instead.`,
       );
     }
-    if (!this.overrides.has(key)) {
+    const entry = this.manifest.get(key);
+    if (entry?.source !== 'override') {
       throw new Error(
         `Cannot unset '${key}' — it is not a user override. ` +
         `Slot-level path vars come from the slot itself and cannot be unset.`,
       );
     }
-    this.overrides.delete(key);
-    // Remove from manifest if it was an override-sourced entry (user-added)
-    const entry = this.manifest.get(key);
-    if (entry?.source === 'override') {
-      this.manifest.delete(key);
-      const { saveYaml } = await import('../yaml.js');
-      await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
+    const canonical = canonicalSlotVar(this.slotDir, key);
+    if (canonical === undefined) {
+      // Shouldn't happen: isSlotLevelVar already guarded the key set,
+      // and canonicalSlotVar covers every ZBB_SLOT_VARS entry.
+      throw new Error(`Cannot compute canonical value for slot var '${key}'`);
     }
-    await this.writeOverrides();
-    this.emit('change', { key, value: undefined });
+    this.declared.set(key, canonical);
+    await this.writeEnvFile();
+    this.manifest.delete(key);
+    const { saveYaml } = await import('../yaml.js');
+    await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
+    this.emit('change', { key, value: canonical });
   }
 
-  /** Clear all overrides back to declared defaults. */
+  /** Clear all user overrides, reverting every overridden var to its canonical value. */
   async reset(): Promise<void> {
-    this.overrides.clear();
-    await this.writeOverrides();
+    const toRevert: string[] = [];
+    for (const [key, entry] of this.manifest) {
+      if (entry.source === 'override') toRevert.push(key);
+    }
+    if (toRevert.length === 0) return;
+
+    for (const key of toRevert) {
+      const canonical = canonicalSlotVar(this.slotDir, key);
+      if (canonical !== undefined) this.declared.set(key, canonical);
+      this.manifest.delete(key);
+    }
+    await this.writeEnvFile();
+    const { saveYaml } = await import('../yaml.js');
+    await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
   }
 
   /** Get manifest entry for a var. */
@@ -288,8 +276,7 @@ export class SlotEnvironment extends EventEmitter {
 
   /** List all var names (sorted). */
   list(): string[] {
-    const keys = new Set([...this.declared.keys(), ...this.overrides.keys()]);
-    return [...keys].sort();
+    return [...this.declared.keys()].sort();
   }
 
   /** Check if var should be masked in output. */
@@ -301,9 +288,9 @@ export class SlotEnvironment extends EventEmitter {
     return /(?:key|secret|token|password|pass|jwt)$/i.test(key) || /credential/i.test(key);
   }
 
-  /** Is this an override vs declared value? */
+  /** Is this an override vs framework default? Based on manifest provenance. */
   isOverride(key: string): boolean {
-    return this.overrides.has(key);
+    return this.manifest.get(key)?.source === 'override';
   }
 
   // ── Static: write declared env during slot create ──────────────────
@@ -339,75 +326,37 @@ export class SlotEnvironment extends EventEmitter {
     await saveYaml(manifestPath, filteredManifest);
   }
 
-  // ── Static: append new vars to existing slot env ──────────────────
-
   /**
-   * Merge new env vars and manifest entries into an existing slot.
-   * Never overwrites existing keys — only adds new ones.
+   * Write the current declared map to `<slot>/.env`, filtering to
+   * ZBB_SLOT_VARS. Even if the in-memory map somehow contains non-slot
+   * vars (e.g. from loading a polluted legacy .env), only the canonical
+   * set is persisted back — the file self-heals over time.
    */
-  static async appendDeclaredEnv(
-    slotDir: string,
-    newEnv: Map<string, string>,
-    newManifest: Map<string, ManifestEntry>,
-  ): Promise<void> {
-    const envPath = join(slotDir, '.env');
-    const manifestPath = join(slotDir, 'manifest.yaml');
-
-    // Read existing .env and strip any non-slot-level entries that may
-    // have leaked in from a legacy writer. This self-heals polluted
-    // legacy slot .env files over time.
-    const existingRaw = existsSync(envPath)
-      ? parseEnvFile(await readFile(envPath, 'utf-8'))
-      : new Map<string, string>();
-    const existingEnv = new Map<string, string>();
-    for (const [k, v] of existingRaw) {
-      if (isSlotLevelVar(k)) existingEnv.set(k, v);
-    }
-
-    // Merge: existing wins (never overwrite). Only accept new slot-level
-    // vars — anything else is silently dropped.
-    const merged = new Map<string, string>(existingEnv);
-    for (const [k, v] of newEnv) {
-      if (!isSlotLevelVar(k)) continue;
-      if (!merged.has(k)) {
-        merged.set(k, v);
-      }
-    }
-
-    await writeFile(envPath, serializeEnv(merged), 'utf-8');
-
-    // Read existing manifest and strip non-slot-level entries too
-    const { loadYamlOrDefault, saveYaml } = await import('../yaml.js');
-    const existingManifestRaw = await loadYamlOrDefault<Record<string, ManifestEntry>>(manifestPath, {});
-    const existingManifest: Record<string, ManifestEntry> = {};
-    for (const [k, v] of Object.entries(existingManifestRaw)) {
-      if (isSlotLevelVar(k)) existingManifest[k] = v;
-    }
-
-    // Merge manifest: existing wins, filtered
-    for (const [k, v] of newManifest) {
-      if (!isSlotLevelVar(k)) continue;
-      if (!(k in existingManifest)) {
-        existingManifest[k] = v;
-      }
-    }
-
-    await saveYaml(manifestPath, existingManifest);
-  }
-
-  /**
-   * Write the overrides map to disk, filtering to zbb-slot-level vars only.
-   * Even if the in-memory map somehow contains non-slot vars (e.g. from
-   * loading a polluted legacy overrides.env), only the canonical set is
-   * persisted back. This lets an old polluted file eventually clean
-   * itself up the next time any legitimate slot-level var is set.
-   */
-  private async writeOverrides(): Promise<void> {
+  private async writeEnvFile(): Promise<void> {
     const filtered = new Map<string, string>();
-    for (const [k, v] of this.overrides) {
+    for (const [k, v] of this.declared) {
       if (isSlotLevelVar(k)) filtered.set(k, v);
     }
-    await writeFile(this.overridesPath, serializeEnv(filtered), 'utf-8');
+    await writeFile(this.envPath, serializeEnv(filtered), 'utf-8');
+  }
+}
+
+/**
+ * The canonical value for each slot-level var, derived from `slotDir`.
+ * Used by `unset` / `reset` to revert an overridden value back to what
+ * slot create would have produced. Kept in sync with Slot.getSlotEnvVars.
+ */
+function canonicalSlotVar(slotDir: string, key: string): string | undefined {
+  const name = slotDir.split('/').filter(Boolean).pop() ?? '';
+  switch (key) {
+    case 'ZB_SLOT': return name;
+    case 'ZB_SLOT_DIR': return slotDir;
+    case 'ZB_SLOT_CONFIG': return join(slotDir, 'config');
+    case 'ZB_SLOT_LOGS': return join(slotDir, 'logs');
+    case 'ZB_SLOT_STATE': return join(slotDir, 'state');
+    case 'ZB_SLOT_TMP': return join(slotDir, 'state', 'tmp');
+    case 'ZB_STACKS_DIR': return join(slotDir, 'stacks');
+    default: return undefined;
   }
 }
 

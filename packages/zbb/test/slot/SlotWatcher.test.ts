@@ -63,16 +63,8 @@ describe('SlotWatcher', () => {
     assert.equal(filename, '.env');
   });
 
-  it('writing to overrides.env emits env:change event', async () => {
-    watcher = new SlotWatcher(slotPath, 'test-slot');
-    watcher.start();
-    await delay(300);
-
-    const eventPromise = waitForEvent(watcher, 'env:change');
-    await writeFile(join(slotPath, 'overrides.env'), 'BAR=baz\n', 'utf-8');
-    const filename = await eventPromise;
-    assert.equal(filename, 'overrides.env');
-  });
+  // overrides.env no longer exists — slot overrides live in .env + manifest.yaml.
+  // The single env:change dispatch above covers the only path.
 
   it('writing to state/hub/state.yml emits state:change event', async () => {
     watcher = new SlotWatcher(slotPath, 'test-slot');

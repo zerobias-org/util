@@ -100,12 +100,20 @@ export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
 // ── Lifecycle lookup ─────────────────────────────────────────────────
 
 import type { LifecycleConfig } from '../config.js';
+import { normalizeLifecycleEntry } from '../config.js';
 
 /**
- * Look up a lifecycle command. `gate --check` reads `lifecycle.gateCheck`
- * if defined, falling back to `lifecycle.gate`. All other commands look
- * up by exact name. Returns null if no entry exists — caller falls
- * through to `./gradlew <command>`.
+ * Look up a lifecycle command string. `gate --check` reads
+ * `lifecycle.gateCheck` if defined. All other commands look up by
+ * exact name. Returns null if no entry exists — caller falls through
+ * to `./gradlew <command>`.
+ *
+ * Accepts both shorthand string form and object form (`{command,
+ * tools?, env?}`); this function returns only the command string and
+ * discards any gate metadata. The lifecycle dispatcher in cli.ts uses
+ * `findLifecycleOwner` from config.ts instead, which returns the full
+ * parsed entry so gates can run. This helper is retained for any
+ * callers that only need the command string.
  */
 export function lookupLifecycleCommand(
   lifecycle: LifecycleConfig | undefined,
@@ -114,15 +122,10 @@ export function lookupLifecycleCommand(
 ): string | null {
   if (!lifecycle) return null;
 
-  if (command === 'gate' && parsed.check) {
-    // gate --check has its own lifecycle entry. If it doesn't exist,
-    // return null so the caller falls through to monorepoGateCheck.
-    // Never return lifecycle.gate for --check — gate is the full run.
-    return lifecycle.gateCheck ?? null;
-  }
-
-  const value = (lifecycle as Record<string, unknown>)[command];
-  return typeof value === 'string' ? value : null;
+  const key = command === 'gate' && parsed.check ? 'gateCheck' : command;
+  const raw = (lifecycle as Record<string, unknown>)[key];
+  const entry = normalizeLifecycleEntry(raw);
+  return entry ? entry.command : null;
 }
 
 // ── Spawn with display ───────────────────────────────────────────────
@@ -141,12 +144,14 @@ export async function spawnLifecycleAndExit(
   command: string,
   baseCommand: string,
   parsed: ParsedLifecycleArgs,
+  opts?: { scopePackage?: string },
 ): Promise<never> {
   const passthrough: string[] = [];
   if (parsed.all) passthrough.push('-Pmonorepo.all=true');
   if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
   if (parsed.dryRun) passthrough.push('-PdryRun=true');
   if (parsed.force) passthrough.push('-Pforce=true');
+  if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
 
   if (parsed.verbose) {
     const args = passthrough.length > 0 ? ` ${passthrough.join(' ')}` : '';
@@ -201,7 +206,8 @@ export async function spawnGradleFallbackAndExit(
   repoRoot: string,
   command: string,
   parsed: ParsedLifecycleArgs,
+  opts?: { scopePackage?: string },
 ): Promise<never> {
   const baseCommand = `./gradlew ${command}`;
-  return spawnLifecycleAndExit(repoRoot, command, baseCommand, parsed);
+  return spawnLifecycleAndExit(repoRoot, command, baseCommand, parsed, opts);
 }

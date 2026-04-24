@@ -128,8 +128,15 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
      * set is ignored when it shows up as a root task — gradle has plenty of
      * internal root tasks (help, buildEnvironment, etc.) that would clutter
      * the display.
+     *
+     * `workspaceInstall` is listed as a phase even though it has no
+     * per-subproject events — the root `npm install` can take 30+s on a
+     * cold node_modules, and without a phase entry the breadcrumb was
+     * empty for that whole stretch. Showing it as a phase tells users
+     * "we're still working, install is running" instead of a silent pause.
      */
     private val PHASE_TASK_NAMES = setOf(
+        "workspaceInstall",
         "monorepoBuild",
         "monorepoTest",
         "monorepoDockerBuild",
