@@ -6,16 +6,25 @@
 
 import com.zerobias.buildtools.monorepo.Workspace
 
-// ── 1. pluginManagement: project plugins resolved via includeBuild ──
-//     Settings plugins can't be loaded from a composite build, so the
-//     buildscript classpath below loads build-tools directly for the
-//     workspace discovery code.
+// ── 1. pluginManagement: build-tools is treated as a normal Maven dep ──
+//     Resolution order: mavenLocal first (so a fresh `publishToMavenLocal`
+//     in packages/build-tools wins), then GitHub Packages (CI / fresh
+//     clones), then plugin portal / Maven Central. Version range `1.+`
+//     picks the highest available patch from whichever repo serves it.
+//
+//     Composite includeBuild is intentionally NOT used here: it overrides
+//     the Maven coordinate with the local source tree and discards the
+//     version range, which causes "always pick latest" semantics to
+//     silently break and shadows freshly-published mavenLocal jars with
+//     whatever the auto-bump in build-tools/build.gradle.kts produced
+//     this run (often 1.0.0 when the registry query can't reach the
+//     network). To iterate on build-tools locally:
+//
+//       cd packages/build-tools && ./gradlew publishToMavenLocal
+//       cd ../..                && ./gradlew <task>
 pluginManagement {
-    val localBuildTools = file("packages/build-tools")
-    if (localBuildTools.exists()) {
-        includeBuild(localBuildTools)
-    }
     repositories {
+        mavenLocal()
         maven {
             url = uri("https://maven.pkg.github.com/zerobias-org/util")
             credentials {
@@ -34,6 +43,7 @@ pluginManagement {
         id("zb.monorepo-gate") version "1.+"
         id("zb.monorepo-build") version "1.+"
         id("zb.monorepo-publish") version "1.+"
+        id("zb.maven-central-publish") version "1.+"
     }
 }
 

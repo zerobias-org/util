@@ -12,15 +12,29 @@ group = "com.zerobias"
 
 // Env var → Gradle property mapping lives in util's root settings.gradle.kts
 
-// Auto-bump patch: query both Maven Central and GitHub Packages, take
-// max+1. Downstream consumers (codegen, lite-filter) call the same
-// logic via com.zerobias.buildtools.util.VersionResolver — build-tools
-// can't import its own not-yet-compiled helper, so the logic is
-// duplicated inline here. Keep the two in sync.
+// Auto-bump patch: query Maven Central, GitHub Packages, and mavenLocal,
+// take max+1. mavenLocal is included so a local `publishToMavenLocal`
+// always ratchets above whatever was last published anywhere — without
+// it, an offline build (no GITHUB_TOKEN) falls through to "$baseVersion.0"
+// every run, can't beat the latest GitHub version, and root builds
+// resolve `com.zerobias:build-tools:1.+` to the stale GitHub jar instead
+// of the freshly-published local one.
+//
+// Downstream consumers (codegen, lite-filter) call the same logic via
+// com.zerobias.buildtools.util.VersionResolver — build-tools can't
+// import its own not-yet-compiled helper, so the logic is duplicated
+// inline here. Keep the two in sync.
 val baseVersion = "1.0"
 version = run {
     val groupPath = "com/zerobias"
     val artifact = "build-tools"
+
+    fun parseMaxPatch(xml: String): Int {
+        val pattern = Regex("""\Q$baseVersion\E\.(\d+)""")
+        return pattern.findAll(xml)
+            .mapNotNull { it.groupValues[1].toIntOrNull() }
+            .maxOrNull() ?: -1
+    }
 
     fun queryMetadata(url: String, authHeader: String?): Int = try {
         val conn = uri(url).toURL().openConnection() as java.net.HttpURLConnection
@@ -34,24 +48,33 @@ version = run {
         } else {
             val xml = conn.inputStream.bufferedReader().use { it.readText() }
             conn.disconnect()
-            val pattern = Regex("""\Q$baseVersion\E\.(\d+)""")
-            pattern.findAll(xml)
-                .mapNotNull { it.groupValues[1].toIntOrNull() }
-                .maxOrNull() ?: -1
+            parseMaxPatch(xml)
         }
     } catch (_: Exception) { -1 }
+
+    fun queryMavenLocal(): Int {
+        val home = System.getProperty("user.home") ?: return -1
+        val metadata = file("$home/.m2/repository/$groupPath/$artifact/maven-metadata-local.xml")
+        return if (metadata.exists()) parseMaxPatch(metadata.readText()) else -1
+    }
 
     val centralMax = queryMetadata(
         "https://repo1.maven.org/maven2/$groupPath/$artifact/maven-metadata.xml",
         null,
     )
-    val token = System.getenv("GITHUB_TOKEN")?.takeIf { it.isNotEmpty() }
+    // Match settings.gradle.kts's github maven repo credential chain so the
+    // auto-bump succeeds in any env where the resolution side already works
+    // (zbb populates NPM_TOKEN, CI provides GITHUB_TOKEN, etc.).
+    val token = sequenceOf("READ_TOKEN", "NPM_TOKEN", "GITHUB_TOKEN")
+        .mapNotNull { System.getenv(it)?.takeIf { v -> v.isNotEmpty() } }
+        .firstOrNull()
     val githubMax = if (token != null) queryMetadata(
         "https://maven.pkg.github.com/zerobias-org/util/$groupPath/$artifact/maven-metadata.xml",
         "Bearer $token",
     ) else -1
+    val localMax = queryMavenLocal()
 
-    val max = maxOf(centralMax, githubMax)
+    val max = maxOf(centralMax, githubMax, localMax)
     if (max < 0) "$baseVersion.0" else "$baseVersion.${max + 1}"
 }
 

@@ -40,6 +40,7 @@
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.SonatypeHost
+import com.zerobias.buildtools.util.MavenCentralPublishExtension
 import com.zerobias.buildtools.util.VersionResolver
 
 plugins {
@@ -63,10 +64,9 @@ plugins {
 //
 // If baseVersion is NOT set, project.version is left to the consumer
 // (back-compat for anyone pinning an explicit version).
-abstract class MavenCentralPublishExtension {
-    abstract val baseVersion: org.gradle.api.provider.Property<String>
-}
-
+//
+// MavenCentralPublishExtension must be a top-level class — see
+// com/zerobias/buildtools/util/MavenCentralPublishExtension.kt for why.
 val mcpExt = extensions.create<MavenCentralPublishExtension>("mavenCentralPublish")
 
 afterEvaluate {

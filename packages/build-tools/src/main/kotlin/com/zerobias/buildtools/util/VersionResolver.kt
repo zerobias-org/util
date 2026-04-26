@@ -5,7 +5,8 @@ import java.net.URI
 
 /**
  * Resolves the next available patch version for a Maven coordinate by
- * checking what's already published to Maven Central and GitHub Packages.
+ * checking what's already published to Maven Central, GitHub Packages,
+ * and the developer's local Maven repository (`~/.m2`).
  *
  * Intended usage from a consumer's build.gradle(.kts):
  *
@@ -13,10 +14,19 @@ import java.net.URI
  *   group = "com.zerobias"
  *   version = VersionResolver.autoBumpPatch("com.zerobias", "lite-filter", "1.0")
  *
- * Both sources are queried because the repo historically published to
- * GitHub Packages and has since pivoted to Maven Central — taking max
- * across both avoids accidentally reusing a version that already exists
- * on one side. GitHub Packages requires GITHUB_TOKEN; if absent, that
+ * All three sources are queried because:
+ *   - The repo historically published to GitHub Packages and has since
+ *     pivoted to Maven Central — taking max across both avoids reusing
+ *     a version that already exists on one side.
+ *   - mavenLocal is included so `publishToMavenLocal` always ratchets
+ *     above whatever was last published anywhere. Without it, an offline
+ *     dev (no `*_TOKEN` env var) would emit `<baseVersion>.0` on every
+ *     publish and never beat the latest GitHub version, leaving root
+ *     builds resolving the stale GitHub jar instead of local edits.
+ *
+ * GitHub Packages requires a token. The credential chain matches
+ * settings.gradle.kts's github maven repo block:
+ * `READ_TOKEN ?: NPM_TOKEN ?: GITHUB_TOKEN`. If none is set, that
  * source is skipped.
  *
  * Any network/parse failure falls back to `<baseVersion>.0`. Failing
@@ -36,7 +46,9 @@ object VersionResolver {
             baseVersion = baseVersion,
         )
 
-        val githubToken = System.getenv("GITHUB_TOKEN")?.takeIf { it.isNotEmpty() }
+        val githubToken = sequenceOf("READ_TOKEN", "NPM_TOKEN", "GITHUB_TOKEN")
+            .mapNotNull { System.getenv(it)?.takeIf { v -> v.isNotEmpty() } }
+            .firstOrNull()
         val githubMax = if (githubToken != null) {
             queryMetadata(
                 "https://maven.pkg.github.com/zerobias-org/util/$groupPath/$artifact/maven-metadata.xml",
@@ -47,7 +59,9 @@ object VersionResolver {
             -1
         }
 
-        val max = maxOf(centralMax, githubMax)
+        val localMax = queryMavenLocal(groupPath, artifact, baseVersion)
+
+        val max = maxOf(centralMax, githubMax, localMax)
         return if (max < 0) "$baseVersion.0" else "$baseVersion.${max + 1}"
     }
 
@@ -65,12 +79,22 @@ object VersionResolver {
             }
             val xml = conn.inputStream.bufferedReader().use { it.readText() }
             conn.disconnect()
-            val pattern = Regex("""\Q$baseVersion\E\.(\d+)""")
-            pattern.findAll(xml)
-                .mapNotNull { it.groupValues[1].toIntOrNull() }
-                .maxOrNull() ?: -1
+            parseMaxPatch(xml, baseVersion)
         } catch (_: Exception) {
             -1
         }
+    }
+
+    private fun queryMavenLocal(groupPath: String, artifact: String, baseVersion: String): Int {
+        val home = System.getProperty("user.home") ?: return -1
+        val metadata = java.io.File("$home/.m2/repository/$groupPath/$artifact/maven-metadata-local.xml")
+        return if (metadata.exists()) parseMaxPatch(metadata.readText(), baseVersion) else -1
+    }
+
+    private fun parseMaxPatch(xml: String, baseVersion: String): Int {
+        val pattern = Regex("""\Q$baseVersion\E\.(\d+)""")
+        return pattern.findAll(xml)
+            .mapNotNull { it.groupValues[1].toIntOrNull() }
+            .maxOrNull() ?: -1
     }
 }
