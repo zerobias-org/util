@@ -328,6 +328,31 @@ val transpile by tasks.registering(NpxTask::class) {
         val serverDir = project.file("generated/server")
         if (serverDir.exists()) serverDir.deleteRecursively()
 
+        // ── Invalidate downstream markers ───────────────────────────
+        //
+        // generateServerEntry/generateServerApi/compileServer declare
+        // markers in build/ as their `outputs`, not the actual TS or JS
+        // files in generated/ and dist/generated/. When we just deleted
+        // server-entry.ts and generated/server/ above, Gradle's
+        // up-to-date check still sees those markers — inputs unchanged,
+        // marker present — and SKIPS the regeneration tasks. Result:
+        // transpile cleans the server source, the regenerators no-op,
+        // tsc has nothing to emit, and dist/generated/server-entry.js
+        // never appears. The Docker container then exits at startup
+        // with "Cannot find module 'dist/generated/server-entry.js'".
+        //
+        // Fix: when we clean the source files, invalidate the markers
+        // so the downstream tasks actually re-run.
+        val markers = listOf(
+            "server-entry-generated.marker",
+            "server-api-generated.marker",
+            "server-compiled.marker",
+        )
+        for (name in markers) {
+            val f = layout.buildDirectory.file(name).get().asFile
+            if (f.exists()) f.delete()
+        }
+
         // ── Self-heal stale tsbuildinfo ─────────────────────────────
         //
         // tsc -b's incremental build cache (tsconfig*.tsbuildinfo) is
@@ -588,6 +613,11 @@ val generateServerApi by tasks.registering(NpxTask::class) {
     ))
     inputs.file(fullSpec)
     outputs.file(layout.buildDirectory.file("server-api-generated.marker"))
+    // Declare the actual generated directory as an output. Without this,
+    // gradle considers the task up-to-date based solely on the marker, and
+    // skips regeneration when transpile.doFirst has just deleted the source
+    // files — leaving downstream tsc with nothing to compile.
+    outputs.dir(project.file("generated/server"))
     onlyIf { needsGeneratedServer() }
     doLast {
         val serverDir = project.file("generated/server")
@@ -639,6 +669,10 @@ val generateServerEntry by tasks.registering {
     mustRunAfter(transpile)  // Avoid output overlap with generated/ directory
     inputs.file(fullSpec)
     outputs.file(layout.buildDirectory.file("server-entry-generated.marker"))
+    // Declare the actual generated file as an output so gradle reruns the task
+    // when transpile.doFirst deletes it — otherwise the marker alone wins the
+    // up-to-date check and the file is never regenerated.
+    outputs.file(project.file("generated/server-entry.ts"))
     onlyIf { needsGeneratedServer() }
     doLast {
         val pascal = ServerEntryPointGenerator.resolveModulePascalName(project.projectDir)
@@ -661,6 +695,10 @@ val compileServer by tasks.registering(NpxTask::class) {
     inputs.file(layout.buildDirectory.file("server-api-generated.marker"))
     inputs.file(layout.buildDirectory.file("server-entry-generated.marker"))
     outputs.file(layout.buildDirectory.file("server-compiled.marker"))
+    // The compiled server entry is what the Docker container actually runs.
+    // Declaring it as an output means gradle reruns tsc when the file is
+    // missing, even if the marker is up-to-date.
+    outputs.file(project.file("dist/generated/server-entry.js"))
     onlyIf { needsGeneratedServer() }
     doLast {
         layout.buildDirectory.file("server-compiled.marker").get().asFile.apply {
