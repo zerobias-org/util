@@ -111,6 +111,10 @@ val npmInstallContent by tasks.registering(NpmTask::class) {
 
 val testIntegrationDataloader by tasks.registering(NeonDataloaderTask::class) {
     packageDir.set(layout.projectDirectory)
+    // Dataloader resolves the artifact's dependencies from node_modules; without
+    // an explicit dep on npmInstallContent gradle 8+ flags the implicit input
+    // and fails the build (validation-type problem on parallel runs).
+    dependsOn(npmInstallContent)
 }
 
 tasks.named("testIntegration") {
