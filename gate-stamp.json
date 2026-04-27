@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "branch": "build_fix",
-  "timestamp": "2026-04-26T19:42:15.766367261Z",
+  "branch": "main",
+  "timestamp": "2026-04-27T19:56:28.363923266Z",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "1.0.33",
@@ -568,14 +568,14 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.60",
-      "sourceHash": "25a28853890c82b96f79cf1ad977e08b72207b77c8379d0a3dbfa6c62cd5d388",
+      "sourceHash": "5e81c3b5905c4d000b26132b04fca9ff48bbdd4c92c25061f0f4cc62f96d9595",
       "testHash": "14ec2b796b0083a59fab875cecc57d0c7d1cc898212d5602c9ab1711a55882a4",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
         "test": "skipped"
       },
       "tests": {

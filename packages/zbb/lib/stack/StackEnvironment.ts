@@ -63,7 +63,7 @@ export class StackEnvironment extends EventEmitter {
     if (!existsSync(stackYamlPath)) {
       throw new Error(`stack.yaml not found at ${stackYamlPath} — StackEnvironment requires a stack context`);
     }
-    const identity = await loadYamlOrDefault<{ source?: string }>(stackYamlPath, {});
+    const identity = await loadYamlOrDefault<{ source?: string; mode?: 'dev' | 'packaged' }>(stackYamlPath, {});
     const schemaDir = identity.source ?? this.stackDir;
     const zbbYamlPath = join(schemaDir, 'zbb.yaml');
     if (!existsSync(zbbYamlPath)) {
@@ -73,7 +73,20 @@ export class StackEnvironment extends EventEmitter {
     // A stack is allowed to have zero declared env vars (e.g. a library
     // monorepo like com/util that just needs lifecycle delegation and has
     // no ports/secrets/imports). Empty schema is valid.
-    this.schema = new Map(Object.entries(config.env ?? {}));
+    let entries = Object.entries(config.env ?? {});
+    if (identity.mode === 'dev') {
+      // *_IMAGE vars defaulting to a ghcr.io tag describe the published
+      // production image. In dev mode the locally-built image is used
+      // instead via the compose-file fallback (`${FOO_IMAGE:-foo:dev}`),
+      // and the published name can differ from the local tag, so we drop
+      // these declarations from the schema entirely. This prevents the
+      // resolve() reconcile loop and computeEnv default-fill from writing
+      // the GHCR tag into .env and shadowing the compose fallback.
+      entries = entries.filter(([key, decl]) =>
+        !(key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')),
+      );
+    }
+    this.schema = new Map(entries);
     this.imports = config.imports ? StackEnvironment.parseImports(config.imports) : [];
   }
 

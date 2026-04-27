@@ -130,11 +130,25 @@ export class StackManager {
     // stack-add time, scoped to this stack, not inherited from the slot.
     const slotVars = this.slot.getSlotEnvVars();
 
+    // In dev mode, *_IMAGE vars that default to a ghcr.io tag are omitted
+    // from the schema so they never land in .env. Compose files reference
+    // these as `${FOO_IMAGE:-foo:dev}` — leaving the var unset lets the
+    // fallback resolve to the locally-built image name (which can differ
+    // from the published GHCR name; the fallback is the source of truth
+    // for the local tag).
+    const envSchema = mode === 'dev' && manifest.env
+      ? Object.fromEntries(
+        Object.entries(manifest.env).filter(([key, decl]) =>
+          !(key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')),
+        ),
+      )
+      : manifest.env ?? {};
+
     // Initialize env (builds manifest + .env)
     await StackEnvironment.initialize(
       stackPath,
       stackName,
-      manifest.env ?? {},
+      envSchema,
       ports,
       secrets,
       imports,
@@ -160,19 +174,6 @@ export class StackManager {
     // Load and return
     const stack = new Stack(stackName, this.stacksDir);
     await stack.load();
-
-    // For dev mode, override *_IMAGE env vars to use local dev tags.
-    // Packaged stacks default to ghcr.io images; dev stacks use locally-built images.
-    if (mode === 'dev' && manifest.env) {
-      for (const [key, decl] of Object.entries(manifest.env)) {
-        if (key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')) {
-          const imageName = decl.default.split('/').pop()?.replace(/:.*$/, '') ?? key;
-          const localTag = `${imageName}:dev`;
-          stack.env.set(key, localTag);
-          console.log(`  [dev] ${key} = ${localTag}`);
-        }
-      }
-    }
 
     return stack;
   }
