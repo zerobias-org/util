@@ -56,8 +56,14 @@ jobs:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-      - name: Build build-tools jar
-        run: cd packages/build-tools && ./gradlew jar
+      - name: Publish build-tools to mavenLocal
+        # publishToMavenLocal (not just `jar`) so the fresh build-tools
+        # artifact lands in ~/.m2/ where pluginManagement.mavenLocal()
+        # picks it up. Otherwise `npx zbb gate` evaluates the rest of
+        # the monorepo against the stale registry version (currently
+        # 1.0.46), which lacks the latest plugin/extension fixes —
+        # `mavenCentralPublish() not found at packages/codegen` etc.
+        run: cd packages/build-tools && ./gradlew publishToMavenLocal
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           READ_TOKEN: ${{ env.READ_TOKEN }}
@@ -127,8 +133,14 @@ jobs:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-      - name: Build build-tools jar
-        run: cd packages/build-tools && ./gradlew jar
+      - name: Publish build-tools to mavenLocal
+        # publishToMavenLocal (not just `jar`) so the fresh build-tools
+        # artifact lands in ~/.m2/ where pluginManagement.mavenLocal()
+        # picks it up. Otherwise `npx zbb gate` evaluates the rest of
+        # the monorepo against the stale registry version (currently
+        # 1.0.46), which lacks the latest plugin/extension fixes —
+        # `mavenCentralPublish() not found at packages/codegen` etc.
+        run: cd packages/build-tools && ./gradlew publishToMavenLocal
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           READ_TOKEN: ${{ env.READ_TOKEN }}
