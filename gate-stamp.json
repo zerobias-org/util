@@ -1,11 +1,11 @@
 {
   "version": 1,
   "branch": "chore/data-utils-dataproducer-2.1.1",
-  "timestamp": "2026-04-28T23:12:12.927567178Z",
+  "timestamp": "2026-04-28T23:28:29.201581567Z",
   "packages": {
     "@zerobias-org/data-utils": {
-      "version": "1.0.34",
-      "sourceHash": "8ff8928c41bc716ad0b9433da3f9cdba69516a65871be1aa39c00ffbaedb760c",
+      "version": "2.0.0",
+      "sourceHash": "170464dd9b42c0b294aab3c6778347cbcbcb50ae1160a5f8103662ae206fa640",
       "testHash": "9d1da0b0ac655d0b2679cd7bf3ab9a2e91d70a7bf05b01d5f010d12b5c330a25",
       "tasks": {
         "lint": "passed",
