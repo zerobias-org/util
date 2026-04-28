@@ -1,6 +1,7 @@
 import com.zerobias.buildtools.module.ZbExtension
 import com.zerobias.buildtools.core.PropertyResolver
 import com.zerobias.buildtools.core.VaultSecretsService
+import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.util.SourceHasher
 import com.zerobias.buildtools.standard.StandardGateStampValidator
 import com.zerobias.buildtools.lifecycle.EventEmitter
@@ -80,6 +81,76 @@ val vaultService = gradle.sharedServices.registerIfAbsent("vaultSecrets", VaultS
         vaultAddress.set(providers.gradleProperty("vaultAddr").orElse(
             providers.environmentVariable("VAULT_ADDR").orElse("")
         ))
+    }
+}
+
+// ────────────────────────────────────────────────────────────
+// RegistryInjectionService — Verdaccio-aware npm install handling
+//
+// Detects whether the active zbb slot has a healthy local Verdaccio registry
+// stack with locally-published packages. When so, install lifecycles (both
+// monorepo and standard) opt in via `usesService` + a doFirst that
+// short-circuits when state is already fresh.
+//
+// Registered here at the base level so it's available to every applied
+// plugin (zb.base, zb.typescript, zb.monorepo-build, zb.monorepo-gate, …).
+// `registerIfAbsent` keeps registration idempotent — duplicate calls from
+// downstream plugins are a no-op.
+// ────────────────────────────────────────────────────────────
+val registryInjection = gradle.sharedServices.registerIfAbsent(
+    "registryInjection",
+    RegistryInjectionService::class.java
+) {
+    parameters.repoRoot.set(rootProject.layout.projectDirectory)
+}
+
+// ────────────────────────────────────────────────────────────
+// verifyNoLocalRegistry — gate-side guard for accidental localhost lockfile
+//
+// Local dev legitimately resolves zbb-tracked scopes through Verdaccio,
+// which leaves `resolved` URLs like `http://localhost:15016/...` in
+// `package-lock.json`. Those are unsafe to commit (CI can't reach the
+// developer's Verdaccio) and the gate must block any path that would
+// publish or tag with a localhost-tainted lockfile.
+//
+// Behavior:
+//   - No localhost URL found → silent pass.
+//   - Found, no -Pcleanlocalregistry → throw with a two-block message:
+//     why it's blocked + how to fix (rerun with -Pcleanlocalregistry, or
+//     manually rm the lockfile and reinstall).
+//   - Found, -Pcleanlocalregistry set → rm -rf each offending node_modules
+//     entry, set forcePublic=true on the registry service so subsequent
+//     install tasks skip injection, and pass through. The next install
+//     will rewrite the lockfile against the public registry.
+// ────────────────────────────────────────────────────────────
+val verifyNoLocalRegistry by tasks.registering {
+    group = "lifecycle"
+    description = "Fail fast if package-lock.json carries localhost registry URLs (zbb local dev state)"
+    usesService(registryInjection)
+
+    doLast {
+        val repoRoot = rootProject.rootDir
+        val offenders = com.zerobias.buildtools.monorepo.LocalRegistryScanner.scan(repoRoot)
+        if (offenders.isEmpty()) return@doLast
+
+        val cleanFlag = project.hasProperty("cleanlocalregistry")
+        if (!cleanFlag) {
+            throw GradleException(
+                com.zerobias.buildtools.monorepo.LocalRegistryScanner.buildFailureMessage(offenders)
+            )
+        }
+
+        val cleaned = com.zerobias.buildtools.monorepo.LocalRegistryScanner
+            .cleanOffendingNodeModules(repoRoot, offenders)
+        registryInjection.get().forcePublic = true
+        if (cleaned.isNotEmpty()) {
+            logger.lifecycle("verifyNoLocalRegistry: -Pcleanlocalregistry set — wiped ${cleaned.size} node_modules entries:")
+            for (entry in cleaned.take(10)) logger.lifecycle("  - $entry")
+            if (cleaned.size > 10) logger.lifecycle("  ...and ${cleaned.size - 10} more")
+        } else {
+            logger.lifecycle("verifyNoLocalRegistry: -Pcleanlocalregistry set — nothing to wipe in node_modules; forcing public registry on next install.")
+        }
+        logger.lifecycle("verifyNoLocalRegistry: forcing public registry for the rest of this build (forcePublic=true).")
     }
 }
 
@@ -786,7 +857,7 @@ val testDataloader by tasks.registering {
 val gate by tasks.registering {
     group = "lifecycle"
     description = "Full CI gate — all checks must pass"
-    dependsOn(validate, lint, compile, test, testDirect, testDocker, testDataloader, buildArtifacts)
+    dependsOn(verifyNoLocalRegistry, validate, lint, compile, test, testDirect, testDocker, testDataloader, buildArtifacts)
 }
 
 // ── Gate stamp — written after gate passes, verified before publish ──
@@ -1490,7 +1561,7 @@ val pushVersion by tasks.registering {
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
-    dependsOn(publishAll, promoteAll, commitVersion, tagVersion, pushVersion, publishReleaseEvent)
+    dependsOn(verifyNoLocalRegistry, publishAll, promoteAll, commitVersion, tagVersion, pushVersion, publishReleaseEvent)
 }
 
 // Ordering:

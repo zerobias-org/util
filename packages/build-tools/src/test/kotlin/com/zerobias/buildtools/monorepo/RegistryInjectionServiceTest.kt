@@ -11,27 +11,18 @@ import java.io.File
 import java.nio.file.Path
 
 /**
- * Tests for RegistryInjectionService trigger detection + apply/restore.
+ * Tests for RegistryInjectionService trigger detection, apply/restore, the
+ * needsApply short-circuit, and the forcePublic gate-side override.
  *
  * The service reads from $HOME/.zbb/slots/<slot>/stacks/registry/{state.yaml,
- * .env, publishes.json}, so each test sets up a fake slot dir under tmp and
- * overrides HOME for the subprocess call. (We can't override HOME for the
- * BuildService's lazy properties, so we instead point ZB_SLOT at a slot
- * inside a tmp dir we control by symlinking.)
- *
- * Simpler approach: each test sets up the fake state, sets ZB_SLOT, but
- * we test the apply/restore logic directly via reflection on the BuildService
- * — we can also unit-test the state file detection by manually constructing
- * the trigger info and bypassing the env-var lookup.
- *
- * For now: test only the apply/restore state machine using a TestRegistryInjectionService
- * that bypasses trigger detection.
+ * .env, publishes.json}, so trigger-positive paths are exercised via a
+ * TestRegistryInjectionService subclass that bypasses env-var lookup with a
+ * synthetic trigger.
  */
 class RegistryInjectionServiceTest {
 
     /**
      * Build a real BuildService instance via Gradle's ProjectBuilder.
-     * Note: this requires the tmp repo root to be set.
      */
     private fun newService(repoRoot: File): RegistryInjectionService {
         val project = ProjectBuilder.builder().withProjectDir(repoRoot).build()
@@ -44,12 +35,41 @@ class RegistryInjectionServiceTest {
         return provider.get()
     }
 
+    /**
+     * Build a TestRegistryInjectionService with a hand-rolled trigger,
+     * bypassing env-var detection.
+     */
+    private fun newServiceWithTrigger(
+        repoRoot: File,
+        slot: String = "test-slot",
+        registryUrl: String = "http://localhost:15016",
+        publishes: List<RegistryInjectionService.PublishedPackage>,
+    ): RegistryInjectionService {
+        val project = ProjectBuilder.builder().withProjectDir(repoRoot).build()
+        val provider = project.gradle.sharedServices.registerIfAbsent(
+            "registryInjection-test-${System.nanoTime()}",
+            TestRegistryInjectionService::class.java,
+        ) {
+            parameters.repoRoot.set(project.layout.projectDirectory)
+        }
+        val service = provider.get()
+        service.fakeTrigger = RegistryInjectionService.TriggerInfo(slot, registryUrl, publishes)
+        return service
+    }
+
+    /**
+     * Test double that returns a settable [fakeTrigger] from
+     * [detectTrigger], bypassing env-var lookup.
+     */
+    abstract class TestRegistryInjectionService : RegistryInjectionService() {
+        @Volatile
+        var fakeTrigger: RegistryInjectionService.TriggerInfo? = null
+        override fun detectTrigger(): RegistryInjectionService.TriggerInfo? = fakeTrigger
+    }
+
     @Test
     fun `isActive returns false when ZB_SLOT is unset`(@TempDir tmp: Path) {
         val previous = System.getenv("ZB_SLOT")
-        // Best-effort: this test runs in JUnit's process where env is read-only
-        // at the OS level, but System.getenv() may return null if not set in
-        // the parent shell. We assume the test runner doesn't have ZB_SLOT set.
         if (previous != null) return  // skip — can't reliably test in this env
 
         val service = newService(tmp.toFile())
@@ -60,12 +80,11 @@ class RegistryInjectionServiceTest {
 
     @Test
     fun `apply with no trigger is a no-op`(@TempDir tmp: Path) {
-        // Without ZB_SLOT, apply() should return empty map and not touch any files
         val previous = System.getenv("ZB_SLOT")
         if (previous != null) return
 
         val repoRoot = tmp.toFile()
-        // Create a fake lockfile and node_modules so we can verify they're untouched
+        // Create a fake lockfile + node_modules so we can verify they're untouched.
         val lockfile = File(repoRoot, "package-lock.json")
         lockfile.writeText("""{"lockfileVersion": 3}""")
         File(repoRoot, "node_modules").mkdirs()
@@ -74,12 +93,11 @@ class RegistryInjectionServiceTest {
         val overrides = service.apply()
         assertEquals(emptyMap<String, String>(), overrides)
 
-        // Lockfile should be unchanged
+        // Lockfile MUST NOT be touched — local dev's lockfile carries
+        // localhost URLs as legitimate working state.
         assertTrue(lockfile.exists())
         assertEquals("""{"lockfileVersion": 3}""", lockfile.readText())
-        // No backup created
-        assertFalse(File(repoRoot, "package-lock.json.zbb-registry-backup").exists())
-        // No tarballs dir
+        // No tarballs dir.
         assertFalse(File(repoRoot, ".zbb-local-deps").exists())
     }
 
@@ -89,19 +107,175 @@ class RegistryInjectionServiceTest {
         if (previous != null) return
 
         val service = newService(tmp.toFile())
-        // Should not throw
-        service.restore()
+        service.restore()  // should not throw
     }
 
     @Test
-    fun `npmEnvOverrides covers all expected scopes`(@TempDir tmp: Path) {
-        // We need a "fake active" trigger for this test, but we can't easily
-        // mock the lazy trigger field. Instead verify the empty map case
-        // (no trigger → empty map) and trust that the active case works
-        // because it's identical code with a populated registryUrl.
+    fun `npmEnvOverrides empty without trigger`(@TempDir tmp: Path) {
         val previous = System.getenv("ZB_SLOT")
         if (previous != null) return
         val service = newService(tmp.toFile())
         assertEquals(emptyMap<String, String>(), service.npmEnvOverrides())
+    }
+
+    // ── needsApply ────────────────────────────────────────────────
+
+    @Test
+    fun `needsApply returns false without trigger`(@TempDir tmp: Path) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+        val service = newService(tmp.toFile())
+        assertFalse(service.needsApply(tmp.toFile()))
+    }
+
+    @Test
+    fun `needsApply returns false when every published package is fully installed`(
+        @TempDir tmp: Path,
+    ) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+
+        // Lockfile entry resolved through localhost — passes checks 3-5.
+        File(repoRoot, "package-lock.json").writeText(
+            """
+            {
+              "lockfileVersion": 3,
+              "packages": {
+                "node_modules/@zerobias-org/foo": {
+                  "version": "1.2.3",
+                  "resolved": "http://localhost:15016/@zerobias-org/foo/-/foo-1.2.3.tgz"
+                }
+              }
+            }
+            """.trimIndent()
+        )
+        // node_modules entry with matching version — passes checks 1-2.
+        val installed = File(repoRoot, "node_modules/@zerobias-org/foo")
+        installed.mkdirs()
+        File(installed, "package.json").writeText("""{"name":"@zerobias-org/foo","version":"1.2.3"}""")
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        assertFalse(service.needsApply(repoRoot), "all 5 checks pass → no apply needed")
+    }
+
+    @Test
+    fun `needsApply returns true when node_modules entry is missing`(@TempDir tmp: Path) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+        File(repoRoot, "package-lock.json").writeText(
+            """
+            {
+              "lockfileVersion": 3,
+              "packages": {
+                "node_modules/@zerobias-org/foo": {
+                  "version": "1.2.3",
+                  "resolved": "http://localhost:15016/@zerobias-org/foo/-/foo-1.2.3.tgz"
+                }
+              }
+            }
+            """.trimIndent()
+        )
+        // node_modules absent — check 1 fails.
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        assertTrue(service.needsApply(repoRoot))
+    }
+
+    @Test
+    fun `needsApply returns true when installed version mismatches`(@TempDir tmp: Path) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+        File(repoRoot, "package-lock.json").writeText(
+            """
+            {
+              "lockfileVersion": 3,
+              "packages": {
+                "node_modules/@zerobias-org/foo": {
+                  "version": "1.2.3",
+                  "resolved": "http://localhost:15016/@zerobias-org/foo/-/foo-1.2.3.tgz"
+                }
+              }
+            }
+            """.trimIndent()
+        )
+        val installed = File(repoRoot, "node_modules/@zerobias-org/foo")
+        installed.mkdirs()
+        // Wrong version on disk — check 2 fails.
+        File(installed, "package.json").writeText("""{"name":"@zerobias-org/foo","version":"1.0.0"}""")
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        assertTrue(service.needsApply(repoRoot))
+    }
+
+    @Test
+    fun `needsApply returns true when lockfile resolves via GHCR`(@TempDir tmp: Path) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+        // Public-registry-resolved URL — check 5 fails (no "localhost" substring).
+        File(repoRoot, "package-lock.json").writeText(
+            """
+            {
+              "lockfileVersion": 3,
+              "packages": {
+                "node_modules/@zerobias-org/foo": {
+                  "version": "1.2.3",
+                  "resolved": "https://npm.pkg.github.com/download/@zerobias-org/foo/1.2.3/abc"
+                }
+              }
+            }
+            """.trimIndent()
+        )
+        val installed = File(repoRoot, "node_modules/@zerobias-org/foo")
+        installed.mkdirs()
+        File(installed, "package.json").writeText("""{"name":"@zerobias-org/foo","version":"1.2.3"}""")
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        assertTrue(service.needsApply(repoRoot))
+    }
+
+    @Test
+    fun `needsApply skips packages that are not in the lockfile at all`(@TempDir tmp: Path) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/unused", "1.0.0")
+        // Package isn't a dep of this workspace — should be skipped silently.
+        File(repoRoot, "package-lock.json").writeText("""{"lockfileVersion": 3, "packages": {}}""")
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        assertFalse(service.needsApply(repoRoot))
+    }
+
+    // ── forcePublic ──────────────────────────────────────────────
+
+    @Test
+    fun `forcePublic suppresses apply even with active trigger`(@TempDir tmp: Path) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+        File(repoRoot, "package-lock.json").writeText("""{"lockfileVersion": 3, "packages": {}}""")
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        service.forcePublic = true
+
+        val overrides = service.apply()
+        // forcePublic short-circuits — no env vars, no taint, no tarballs.
+        assertEquals(emptyMap<String, String>(), overrides)
+        assertFalse(File(repoRoot, ".zbb-local-deps").exists())
     }
 }

@@ -108,6 +108,11 @@ dependencies {
     // JSON serialization for monorepo gate stamp (matches JS JSON.stringify byte-for-byte)
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
 
+    // npm-flavored semver matching for RegistryInjectionService — used to
+    // decide whether a locally-published version satisfies a workspace's
+    // package.json constraint before tainting node_modules + lockfile.
+    implementation("org.semver4j:semver4j:5.4.0")
+
     // Vanniktech Maven Central publishing — consumed by the precompiled
     // `zb.maven-central-publish` script plugin.
     implementation("com.vanniktech:gradle-maven-publish-plugin:0.30.0")

@@ -84,15 +84,12 @@ val prepublishLock = gradle.sharedServices.registerIfAbsent(
     PrepublishLockService::class.java
 ) {}
 
-// ── RegistryInjectionService — Verdaccio-aware npm install handling ──
+// ── RegistryInjectionService — look up the existing shared registration ──
 //
-// Detects whether the active zbb slot has a healthy local Verdaccio registry
-// stack with locally-published packages. If so, applies registry injection
-// (lockfile move, scoped registry env vars, taint, tarball download) before
-// workspaceInstall and restores in a finalizedBy task.
-//
-// Fixes 3 bugs from the legacy Stack.ts injectRegistryNpmrc — see the
-// RegistryInjectionService.kt class doc for details.
+// The service is registered at the base level (zb.base / zb.monorepo-base
+// inherit through zb.base on subprojects). `registerIfAbsent` here is
+// idempotent — if the base plugin already registered it, this returns the
+// existing provider. Same name + class guarantees we get the same instance.
 
 val registryInjection = gradle.sharedServices.registerIfAbsent(
     "registryInjection",
@@ -142,7 +139,7 @@ val workspaceInstall = tasks.register<Exec>("workspaceInstall") {
 
     doFirst {
         val service = registryInjection.get()
-        if (service.isActive) {
+        if (service.isActive && service.needsApply(rootProject.rootDir) { msg -> logger.lifecycle(msg) }) {
             val overrides = service.apply { msg -> logger.lifecycle(msg) }
             // Set scoped registry env vars on this Exec spec so npm sees them.
             // doFirst runs BEFORE the actual exec, and Exec.environment is read
