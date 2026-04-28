@@ -3,7 +3,7 @@
  */
 import { expect } from 'chai';
 import * as path from 'path';
-import { Schema, Property, Type } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
+import { Schema, Property, Type } from '@zerobias-org/module-interface-dataproducer';
 import {
   OpenAPISchemaBuilder,
   TypeScriptSchemaBuilder,

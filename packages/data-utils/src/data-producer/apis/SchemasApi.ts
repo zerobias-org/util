@@ -6,7 +6,7 @@
  * and collections.
  */
 
-import { Schema as ExternalSchema } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
+import { Schema as ExternalSchema } from '@zerobias-org/module-interface-dataproducer';
 import { Schema, SchemaField, SchemaRegistryEntry } from '../types/schemas.types';
 import { validateDefined } from '../../validation';
 

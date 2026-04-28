@@ -11,7 +11,7 @@
  * - JSON Schema types (string, number, boolean, etc.)
  * - HTML input types (text, email, url, date, etc.)
  */
-import { Type } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
+import { Type } from '@zerobias-org/module-interface-dataproducer';
 import { CoreType } from '@zerobias-org/types-core-js';
 
 /**
