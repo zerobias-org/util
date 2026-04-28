@@ -78,19 +78,21 @@ val npmInstallContent by tasks.registering(NpmTask::class) {
     group = "lifecycle"
     description = "Install npm dependencies"
     npmCommand.set(listOf("install"))
+    // --no-workspaces: install ONLY this package, don't walk up to the
+    //   workspace root and resolve sibling packages. zbb still uses the
+    //   root `workspaces` declaration for content-package discovery, but
+    //   we don't want each per-vendor install to rewrite root
+    //   package-lock.json — that left the working tree dirty and broke
+    //   zb.base.pushVersion's rebase fallback when the matrix raced.
+    //   See zerobias-org/vendor run 25018847869.
+    // --no-package-lock: don't write a per-package package-lock.json
+    //   either. Content packages have at most one external dep that
+    //   lockfile-pins to "latest", so the lockfile carries no real
+    //   determinism — it would just be more dirty-tree noise.
+    args.set(listOf("--no-workspaces", "--no-package-lock"))
     workingDir.set(project.projectDir)
     inputs.file("package.json")
     outputs.dir("node_modules")
-    doFirst {
-        // gradle-node-plugin expects a lockfile; stub only if missing, and
-        // only at task-execution time (doing it at config time would mutate
-        // every subproject's working tree when the plugin is applied to 400+
-        // subprojects during `./gradlew tasks`).
-        val lock = project.file("package-lock.json")
-        if (!lock.exists()) {
-            lock.writeText("{}")
-        }
-    }
 }
 
 // ════════════════════════════════════════════════════════════
