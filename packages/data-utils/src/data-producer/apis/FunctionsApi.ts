@@ -10,7 +10,7 @@
  * - Handling function results and errors
  */
 
-import { FunctionDef, FunctionResult } from '../types/functions.types';
+import { FunctionDef, FunctionResult } from '../types/functions.types.js';
 
 /**
  * FunctionsApi implementation (PLACEHOLDER)
@@ -21,7 +21,7 @@ import { FunctionDef, FunctionResult } from '../types/functions.types';
  * @placeholder
  */
 export class FunctionsApi {
-  private client: import('../DataProducerClient').DataProducerClient;
+  private client: import('../DataProducerClient.js').DataProducerClient;
 
   /**
    * Create a new FunctionsApi instance
@@ -29,7 +29,7 @@ export class FunctionsApi {
    * @param client - DataProducerClient instance
    * @internal
    */
-  constructor(client: import('../DataProducerClient').DataProducerClient) {
+  constructor(client: import('../DataProducerClient.js').DataProducerClient) {
     this.client = client;
   }
 

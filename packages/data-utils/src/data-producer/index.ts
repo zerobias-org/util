@@ -27,10 +27,10 @@
  */
 
 // Core client
-export * from './DataProducerClient';
+export * from './DataProducerClient.js';
 
 // API modules
-export * from './apis';
+export * from './apis/index.js';
 
 // Type definitions
-export * from './types';
+export * from './types/index.js';

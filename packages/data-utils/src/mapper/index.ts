@@ -15,7 +15,7 @@
  */
 
 // Core mapper class
-export { DataMapper } from './DataMapper';
+export { DataMapper } from './DataMapper.js';
 
 // Export all types
-export * from './types';
+export * from './types/index.js';

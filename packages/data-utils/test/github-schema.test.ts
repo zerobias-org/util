@@ -10,7 +10,7 @@ import {
   OpenAPILoader,
   TypeMapper,
   buildSchema,
-} from '../src';
+} from '../src/index.js';
 
 // Import GitHub generated models for TypeScript builder tests
 // The published package exports models from dist/generated/model/index.js

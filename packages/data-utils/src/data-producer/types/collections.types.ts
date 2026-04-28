@@ -3,7 +3,7 @@
  */
 
 import { PagedResults } from '@zerobias-org/types-core-js';
-import { SortDirection } from './common.types';
+import { SortDirection } from './common.types.js';
 
 /**
  * Collection metadata

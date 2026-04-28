@@ -2,7 +2,7 @@
  * Tests for Modifier utilities
  */
 import { expect } from 'chai';
-import { StringModifiers, NumberModifiers, DateModifiers, ArrayModifiers } from '../src';
+import { StringModifiers, NumberModifiers, DateModifiers, ArrayModifiers } from '../src/index.js';
 
 describe('StringModifiers', () => {
   describe('uppercase', () => {

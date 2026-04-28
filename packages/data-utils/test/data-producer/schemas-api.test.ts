@@ -2,7 +2,7 @@
  * Tests for SchemasApi
  */
 import { expect } from 'chai';
-import { DataProducerClient } from '../../src';
+import { DataProducerClient } from '../../src/index.js';
 
 describe('SchemasApi', () => {
   let client: DataProducerClient;

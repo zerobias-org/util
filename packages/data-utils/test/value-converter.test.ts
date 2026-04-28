@@ -2,7 +2,7 @@
  * Tests for ValueConverter utility
  */
 import { expect } from 'chai';
-import { ValueConverter } from '../src';
+import { ValueConverter } from '../src/index.js';
 
 describe('ValueConverter', () => {
   describe('toBoolean', () => {

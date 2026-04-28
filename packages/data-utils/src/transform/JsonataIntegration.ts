@@ -7,9 +7,9 @@
  * @packageDocumentation
  */
 
-import { StringModifiers, NumberModifiers, DateModifiers, ArrayModifiers } from './Modifiers';
-import { PathUtils } from './PathUtils';
-import { ValueConverter } from './ValueConverter';
+import { StringModifiers, NumberModifiers, DateModifiers, ArrayModifiers } from './Modifiers.js';
+import { PathUtils } from './PathUtils.js';
+import { ValueConverter } from './ValueConverter.js';
 
 /**
  * JSONata integration utilities
