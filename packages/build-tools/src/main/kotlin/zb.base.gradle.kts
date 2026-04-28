@@ -300,6 +300,20 @@ val isDryRun: Boolean = project.findProperty("dryRun") == "true"
 extra["isDryRun"] = isDryRun
 
 // ────────────────────────────────────────────────────────────
+// noFinalize flag — when true, `publish` runs the registry-side work
+// only (gate, npm publish, promoteAll, releaseAnnouncement) and skips
+// commitVersion/tagVersion/pushVersion. CI uses this so a downstream
+// `finalizePublish` task can batch-commit + single-push for the whole
+// matrix run, eliminating the per-vendor pushVersion race.
+//
+// Default false → local laptop publishes are end-to-end as before.
+// CI sets `-PnoFinalize=true` and pairs with the new finalizePublish
+// task that drains the .zbb-monorepo/release-pending/ markers.
+// ────────────────────────────────────────────────────────────
+val noFinalize: Boolean = project.findProperty("noFinalize") == "true"
+extra["noFinalize"] = noFinalize
+
+// ────────────────────────────────────────────────────────────
 // Changed-since detection — publish tasks skip unchanged modules
 // On main: compares against last version tag (what changed since last release)
 // On branches: always publish (dev versions are cheap, skip detection adds friction)
@@ -1487,10 +1501,143 @@ val pushVersion by tasks.registering {
 }
 
 // Top-level publish: bump → commit → stage (publish) → promote → tag → push → release event
+//
+// When `noFinalize=true`:
+//   - publishAll, promoteAll, publishReleaseEvent still run (registry side, race-free)
+//   - commitVersion, tagVersion, pushVersion are SKIPPED
+//   - emitReleaseMarker (declared in zb.content / zb.typescript-*) drops a
+//     pending-release marker for `finalizePublish` to consume in a tail job
+//
+// When `noFinalize=false` (default, local dev):
+//   - end-to-end publish exactly as before — backward-compatible
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
-    dependsOn(publishAll, promoteAll, commitVersion, tagVersion, pushVersion, publishReleaseEvent)
+    dependsOn(publishAll, promoteAll, publishReleaseEvent)
+    if (!noFinalize) {
+        dependsOn(commitVersion, tagVersion, pushVersion)
+    }
+}
+
+// ────────────────────────────────────────────────────────────
+// finalizePublish — batch git side for ALL pending releases
+//
+// Designed to be invoked once at the end of a CI publish workflow that
+// ran the matrix with `-PnoFinalize=true`. Each matrix entry's
+// emitReleaseMarker dropped a JSON file under
+// `.zbb-monorepo/release-pending/`. This task reads them in lexical
+// order, applies one commit + one tag per release, then does a SINGLE
+// `git push --follow-tags` for the whole batch.
+//
+// Race-free by construction (one pusher), tolerates dirty trees via
+// stash + pop, drains markers on success.
+// ────────────────────────────────────────────────────────────
+val finalizePublish by tasks.registering {
+    group = "publish"
+    description = "Batch-commit + tag + single-push for every pending release marker (CI tail job)"
+    doLast {
+        val repoRoot = project.rootDir
+        val markerDir = repoRoot.resolve(".zbb-monorepo/release-pending")
+        if (!markerDir.isDirectory) {
+            logger.lifecycle("[finalize] no .zbb-monorepo/release-pending directory — nothing to commit")
+            return@doLast
+        }
+        val markers = markerDir.listFiles { f -> f.name.endsWith(".json") }
+            ?.sortedBy { it.name }
+            ?: emptyList()
+        if (markers.isEmpty()) {
+            logger.lifecycle("[finalize] no pending markers — nothing to commit")
+            return@doLast
+        }
+
+        val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+        val targetBranch = (project.findProperty("branch") as? String) ?: "main"
+
+        // One commit + one tag per pending release. We deliberately do NOT
+        // squash into a single commit — per-package release commits are the
+        // existing audit trail that downstream tooling expects.
+        for (marker in markers) {
+            @Suppress("UNCHECKED_CAST")
+            val pending = mapper.readValue(marker, Map::class.java) as Map<String, String>
+            val pkgName = pending["name"] ?: error("[finalize] marker $marker missing 'name'")
+            val ver = pending["version"] ?: error("[finalize] marker $marker missing 'version'")
+            val pkgPath = pending["path"] ?: error("[finalize] marker $marker missing 'path'")
+            val tagName = pending["tag"] ?: "${pkgPath.replace('/', '-')}-v$ver"
+
+            // Stage the bumped package.json and refreshed gate-stamp.json.
+            // Other tracked files modified by the publish (rare) are intentionally
+            // NOT staged here — finalize is scoped to the release artifacts.
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "add", "$pkgPath/package.json", "$pkgPath/gate-stamp.json"),
+                workingDir = repoRoot,
+                throwOnError = true
+            )
+            val staged = com.zerobias.buildtools.util.ExecUtils.execCapture(
+                command = listOf("git", "diff", "--cached", "--name-only"),
+                workingDir = repoRoot,
+                throwOnError = false
+            ).trim()
+            if (staged.isEmpty()) {
+                logger.lifecycle("[finalize] $pkgName@$ver: no diff vs HEAD — skipping commit")
+                continue
+            }
+
+            val commitMsg = "chore(release): ${pkgPath.replace('/', '-')} v$ver"
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "commit", "-m", commitMsg),
+                workingDir = repoRoot,
+                throwOnError = true
+            )
+            // -fa: force-overwrite local tag if it exists (handles rerun case
+            // where a previous failed attempt left the tag pointing at an
+            // orphan SHA). Annotated so `git push --follow-tags` carries it.
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "tag", "-fa", tagName, "-m", "Release $tagName"),
+                workingDir = repoRoot,
+                throwOnError = true
+            )
+            logger.lifecycle("[finalize] committed + tagged: $tagName")
+        }
+
+        // Stash any stray working-tree state before rebasing — defends against
+        // npm-pkg-fix auto-corrects, dataloader scratch files, etc.
+        val stashOut = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf("git", "stash", "push", "--include-untracked", "-m", "finalize-rebase"),
+            workingDir = repoRoot,
+            throwOnError = false
+        )
+        val stashed = stashOut.contains("Saved working")
+        try {
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "fetch", "origin", targetBranch),
+                workingDir = repoRoot,
+                throwOnError = true
+            )
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "rebase", "origin/$targetBranch"),
+                workingDir = repoRoot,
+                throwOnError = true
+            )
+        } finally {
+            if (stashed) {
+                com.zerobias.buildtools.util.ExecUtils.exec(
+                    command = listOf("git", "stash", "pop"),
+                    workingDir = repoRoot,
+                    throwOnError = false
+                )
+            }
+        }
+
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("git", "push", "--follow-tags"),
+            workingDir = repoRoot,
+            throwOnError = true
+        )
+
+        // Success: drain markers so a re-run doesn't re-commit the same set.
+        markers.forEach { it.delete() }
+        logger.lifecycle("[finalize] pushed ${markers.size} release(s) to origin/$targetBranch and drained markers")
+    }
 }
 
 // Ordering:

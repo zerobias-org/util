@@ -301,3 +301,48 @@ val promoteNpm by tasks.registering {
 tasks.named("promoteAll") {
     dependsOn(promoteNpm)
 }
+
+// ════════════════════════════════════════════════════════════
+// RELEASE MARKER — drop a pending-release record for the
+// downstream `finalizePublish` task to consume.
+//
+// Only fires when running with `-PnoFinalize=true` (CI matrix mode).
+// In local dev (default) this task is a no-op because zb.base.publish
+// still does end-to-end commit/tag/push itself.
+// ════════════════════════════════════════════════════════════
+
+val emitReleaseMarker by tasks.registering {
+    group = "publish"
+    description = "Drop a release-pending marker so the finalize tail job can batch the commit + tag + push"
+    onlyIf { (project.findProperty("noFinalize") as? String) == "true" }
+    mustRunAfter(promoteNpm)
+    doLast {
+        val rootDir = project.rootDir
+        val markerDir = rootDir.resolve(".zbb-monorepo/release-pending")
+        markerDir.mkdirs()
+        val (name, _) = readPackageNameVersion()
+        val ver = project.version.toString()
+        val pkgPath = project.projectDir.relativeTo(rootDir).path
+        // Sanitize the npm name into a filesystem-safe identifier:
+        //   @zerobias-org/vendor-github → zerobias-org_vendor-github
+        val safeName = name.removePrefix("@").replace('/', '_')
+        val tagName = "${pkgPath.replace('/', '-')}-v$ver"
+
+        // JSON shape consumed by zb.base.finalizePublish:
+        //   { "name": "@scope/pkg", "version": "X.Y.Z", "path": "package/dir", "tag": "package-dir-vX.Y.Z" }
+        val marker = markerDir.resolve("$safeName.json")
+        marker.writeText(
+            """{"name":"$name","version":"$ver","path":"$pkgPath","tag":"$tagName"}"""
+        )
+        logger.lifecycle("[release-marker] dropped ${marker.relativeTo(rootDir)}")
+    }
+}
+
+// Wire as a finalizer on the npm publish step so the marker is only
+// dropped when the npm artifact actually lands. If publishNpmExec
+// short-circuits via `isAlreadyPublished`, the marker still drops —
+// that's the correct behavior on rerun (finalize will see the marker,
+// see no pending diff against HEAD, and skip the commit).
+tasks.named("publishNpmExec") {
+    finalizedBy(emitReleaseMarker)
+}
