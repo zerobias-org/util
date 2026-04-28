@@ -6,7 +6,7 @@
  * similar to database tables or spreadsheet data.
  */
 
-import { SortDirection as ExternalSortDirection } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
+import { SortDirection as ExternalSortDirection } from '@zerobias-org/module-interface-dataproducer';
 import { PagedResults } from '@zerobias-org/types-core-js';
 import {
   Collection,
@@ -127,7 +127,6 @@ export class CollectionsApi {
       // Call the underlying API
       const result = await collectionsApi.getCollectionElements(
         collectionId,
-        undefined,
         pageNumber,
         pageSize,
         sortBy,
@@ -191,7 +190,6 @@ export class CollectionsApi {
       // Call the underlying API
       const result = await collectionsApi.searchCollectionElements(
         collectionId,
-        undefined,
         pageNumber,
         pageSize,
         filter,
