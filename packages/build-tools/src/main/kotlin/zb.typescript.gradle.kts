@@ -191,6 +191,16 @@ val npmInstallModule by tasks.registering(NpmTask::class) {
 
     doFirst {
         val service = registryInjection.get()
+
+        // Stale-localhost cleanup — runs regardless of isActive.
+        // After `zbb registry clear`, the lockfile may still carry localhost
+        // entries for packages no longer in the registry. Detect and clean
+        // them so the next `npm install` re-resolves from the public registry.
+        val stale = service.findStaleLocalhostEntries(rootProject.rootDir) { msg -> logger.lifecycle(msg) }
+        if (stale.isNotEmpty()) {
+            service.cleanupStale(rootProject.rootDir, stale) { msg -> logger.lifecycle(msg) }
+        }
+
         if (service.isActive && service.needsApply(rootProject.rootDir) { msg -> logger.lifecycle(msg) }) {
             val overrides = service.apply { msg -> logger.lifecycle(msg) }
             for ((k, v) in overrides) {
@@ -198,6 +208,12 @@ val npmInstallModule by tasks.registering(NpmTask::class) {
             }
         }
     }
+}
+
+// When --clean (gate) wipes stale localhost entries, npm install must run
+// AFTER the cleanup so it re-resolves from the public registry.
+npmInstallModule.configure {
+    mustRunAfter(tasks.named("verifyNoLocalRegistry"))
 }
 
 // Restore task: cleans up tarball cache after npmInstallModule finishes

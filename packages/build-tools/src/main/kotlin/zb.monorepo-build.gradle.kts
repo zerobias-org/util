@@ -139,6 +139,16 @@ val workspaceInstall = tasks.register<Exec>("workspaceInstall") {
 
     doFirst {
         val service = registryInjection.get()
+
+        // Stale-localhost cleanup — runs regardless of isActive.
+        // After `zbb registry clear`, the lockfile may still carry localhost
+        // entries for packages no longer in the registry. Detect and clean
+        // them so the next `npm install` re-resolves from the public registry.
+        val stale = service.findStaleLocalhostEntries(rootProject.rootDir) { msg -> logger.lifecycle(msg) }
+        if (stale.isNotEmpty()) {
+            service.cleanupStale(rootProject.rootDir, stale) { msg -> logger.lifecycle(msg) }
+        }
+
         if (service.isActive && service.needsApply(rootProject.rootDir) { msg -> logger.lifecycle(msg) }) {
             val overrides = service.apply { msg -> logger.lifecycle(msg) }
             // Set scoped registry env vars on this Exec spec so npm sees them.

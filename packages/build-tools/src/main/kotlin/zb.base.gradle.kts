@@ -142,13 +142,19 @@ val verifyNoLocalRegistry by tasks.registering {
 
         val cleaned = com.zerobias.buildtools.monorepo.LocalRegistryScanner
             .cleanOffendingNodeModules(repoRoot, offenders)
+        val removedEntries = com.zerobias.buildtools.monorepo.LocalRegistryScanner
+            .cleanOffendingLockfileEntries(repoRoot, offenders)
         registryInjection.get().forcePublic = true
         if (cleaned.isNotEmpty()) {
-            logger.lifecycle("verifyNoLocalRegistry: -Pcleanlocalregistry set — wiped ${cleaned.size} node_modules entries:")
+            logger.lifecycle("verifyNoLocalRegistry: --clean — wiped ${cleaned.size} node_modules entries:")
             for (entry in cleaned.take(10)) logger.lifecycle("  - $entry")
             if (cleaned.size > 10) logger.lifecycle("  ...and ${cleaned.size - 10} more")
-        } else {
-            logger.lifecycle("verifyNoLocalRegistry: -Pcleanlocalregistry set — nothing to wipe in node_modules; forcing public registry on next install.")
+        }
+        if (removedEntries > 0) {
+            logger.lifecycle("verifyNoLocalRegistry: --clean — removed $removedEntries lockfile entries")
+        }
+        if (cleaned.isEmpty() && removedEntries == 0) {
+            logger.lifecycle("verifyNoLocalRegistry: --clean — nothing to wipe; forcing public registry on next install.")
         }
         logger.lifecycle("verifyNoLocalRegistry: forcing public registry for the rest of this build (forcePublic=true).")
     }

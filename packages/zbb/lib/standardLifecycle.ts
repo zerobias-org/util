@@ -62,6 +62,7 @@ export async function spawnStandardLifecycleAndExit(
   const passthrough: string[] = [];
   if (parsed.dryRun) passthrough.push('-PdryRun=true');
   if (parsed.force) passthrough.push('-Pforce=true');
+  if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
 
   // Resolve the command to a specific subproject if cwd is one.
   //

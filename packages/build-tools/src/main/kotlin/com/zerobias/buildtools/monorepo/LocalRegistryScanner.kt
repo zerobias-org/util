@@ -75,10 +75,9 @@ object LocalRegistryScanner {
             if (more.isNotBlank()) appendLine(more.trimStart())
             appendLine()
             appendLine("Two ways to fix:")
-            appendLine("  1. Auto-fix: rerun your gate task with -Pcleanlocalregistry,")
-            appendLine("     e.g. `./gradlew gate -Pcleanlocalregistry`. The build will wipe the")
-            appendLine("     offending node_modules entries and reinstall against the public")
-            appendLine("     registry, rewriting the lockfile.")
+            appendLine("  1. Auto-fix: `zbb gate --clean`. The build will wipe the offending")
+            appendLine("     node_modules entries and reinstall against the public registry,")
+            appendLine("     rewriting the lockfile.")
             appendLine("  2. Manual: `rm package-lock.json node_modules -rf && npm install` with")
             appendLine("     no zbb slot loaded (or `unset ZB_SLOT`), then commit the refreshed")
             appendLine("     lockfile.")
@@ -101,5 +100,46 @@ object LocalRegistryScanner {
             }
         }
         return cleaned.sorted()
+    }
+
+    /**
+     * Remove offending entries from the lockfile's `packages` block entirely.
+     * The pinned `version` is a local-only publish that doesn't exist on the
+     * public registry, so clearing just `resolved`/`integrity` isn't enough —
+     * npm would try to fetch the exact local version and fail with ETARGET.
+     * Removing the whole entry lets `npm install` re-resolve from package.json's
+     * version range.
+     *
+     * Processes both `package-lock.json` and `node_modules/.package-lock.json`.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun cleanOffendingLockfileEntries(repoRoot: File, offenders: List<Offender>): Int {
+        // Group offender keys by source file
+        val bySource = offenders.groupBy { it.source }
+        var totalRemoved = 0
+
+        for ((source, entries) in bySource) {
+            val lockfile = File(repoRoot, if (source == ".package-lock.json") "node_modules/.package-lock.json" else source)
+            if (!lockfile.exists()) continue
+
+            val lockJson: MutableMap<String, Any?> = try {
+                mapper.readValue(lockfile, Map::class.java) as MutableMap<String, Any?>
+            } catch (_: Exception) { continue }
+
+            val packages = lockJson["packages"] as? MutableMap<String, Any?> ?: continue
+            var mutated = false
+            for (entry in entries) {
+                if (packages.remove(entry.key) != null) {
+                    mutated = true
+                    totalRemoved++
+                }
+            }
+            if (mutated) {
+                lockfile.writeText(
+                    mapper.writerWithDefaultPrettyPrinter().writeValueAsString(lockJson)
+                )
+            }
+        }
+        return totalRemoved
     }
 }

@@ -45,6 +45,7 @@ export function isLifecycleCommand(command: string): boolean {
 export interface ParsedLifecycleArgs {
   all: boolean;
   base?: string;
+  clean: boolean;
   dryRun: boolean;
   force: boolean;
   verbose: boolean;
@@ -56,6 +57,7 @@ export interface ParsedLifecycleArgs {
 export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
   const result: ParsedLifecycleArgs = {
     all: false,
+    clean: false,
     dryRun: false,
     force: false,
     verbose: false,
@@ -84,6 +86,9 @@ export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
         break;
       case '--check':
         result.check = true;
+        break;
+      case '--clean':
+        result.clean = true;
         break;
       case '--skipDocker':
       case '--skip-docker':
@@ -151,6 +156,7 @@ export async function spawnLifecycleAndExit(
   if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
   if (parsed.dryRun) passthrough.push('-PdryRun=true');
   if (parsed.force) passthrough.push('-Pforce=true');
+  if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
   if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
 
   if (parsed.verbose) {

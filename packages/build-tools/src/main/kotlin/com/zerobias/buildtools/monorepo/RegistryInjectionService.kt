@@ -607,11 +607,14 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
         }
         var mutated = false
         for (entry in stale) {
-            val pkgEntry = packages[entry.lockKey] as? MutableMap<String, Any?> ?: continue
-            pkgEntry.remove("resolved")
-            pkgEntry.remove("integrity")
-            mutated = true
-            logger?.invoke("[registry] cleared stale lockfile entry ${entry.lockKey}")
+            // Remove the entire entry — not just resolved/integrity — because
+            // the pinned `version` (e.g. "3.0.9") is a local-only publish that
+            // doesn't exist on the public registry. Removing the entry lets npm
+            // re-resolve from scratch using the range in package.json.
+            if (packages.remove(entry.lockKey) != null) {
+                mutated = true
+                logger?.invoke("[registry] removed stale lockfile entry ${entry.lockKey}")
+            }
         }
         if (mutated) {
             lockfile.writeText(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(lockJson))

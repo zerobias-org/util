@@ -259,6 +259,124 @@ class RegistryInjectionServiceTest {
         assertFalse(service.needsApply(repoRoot))
     }
 
+    // ── Stale-localhost cleanup ────────────────────────────────────
+
+    @Test
+    fun `findStaleLocalhostEntries detects localhost entries not in publishes`(@TempDir tmp: Path) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        // Lockfile with a localhost-resolved entry (simulates post-clear state)
+        File(repoRoot, "package-lock.json").writeText("""
+        {
+            "lockfileVersion": 3,
+            "packages": {
+                "node_modules/@zerobias-org/logger": {
+                    "version": "3.0.9",
+                    "resolved": "http://localhost:15016/@zerobias-org/logger/-/logger-3.0.9.tgz",
+                    "integrity": "sha512-abc123"
+                },
+                "node_modules/lodash": {
+                    "version": "4.17.21",
+                    "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz",
+                    "integrity": "sha512-xyz789"
+                }
+            }
+        }
+        """.trimIndent())
+
+        val service = newService(repoRoot)
+        // ZB_SLOT is unset, so publishedNames is empty → the localhost entry is stale
+        val stale = service.findStaleLocalhostEntries(repoRoot)
+        assertEquals(1, stale.size)
+        assertEquals("@zerobias-org/logger", stale[0].pkgName)
+        assertEquals("node_modules/@zerobias-org/logger", stale[0].lockKey)
+        assertTrue(stale[0].resolved.contains("localhost"))
+    }
+
+    @Test
+    fun `findStaleLocalhostEntries returns empty when no localhost entries`(@TempDir tmp: Path) {
+        val repoRoot = tmp.toFile()
+        File(repoRoot, "package-lock.json").writeText("""
+        {
+            "lockfileVersion": 3,
+            "packages": {
+                "node_modules/lodash": {
+                    "version": "4.17.21",
+                    "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz",
+                    "integrity": "sha512-xyz789"
+                }
+            }
+        }
+        """.trimIndent())
+
+        val service = newService(repoRoot)
+        val stale = service.findStaleLocalhostEntries(repoRoot)
+        assertTrue(stale.isEmpty())
+    }
+
+    @Test
+    fun `findStaleLocalhostEntries returns empty when no lockfile`(@TempDir tmp: Path) {
+        val service = newService(tmp.toFile())
+        val stale = service.findStaleLocalhostEntries(tmp.toFile())
+        assertTrue(stale.isEmpty())
+    }
+
+    @Test
+    fun `cleanupStale removes node_modules and clears lockfile entries`(@TempDir tmp: Path) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+
+        // Create a stale node_modules dir
+        val staleModDir = File(repoRoot, "node_modules/@zerobias-org/logger")
+        staleModDir.mkdirs()
+        File(staleModDir, "index.js").writeText("module.exports = {}")
+
+        // Lockfile with localhost entry
+        File(repoRoot, "package-lock.json").writeText("""
+        {
+            "lockfileVersion": 3,
+            "packages": {
+                "node_modules/@zerobias-org/logger": {
+                    "version": "3.0.9",
+                    "resolved": "http://localhost:15016/@zerobias-org/logger/-/logger-3.0.9.tgz",
+                    "integrity": "sha512-abc123"
+                }
+            }
+        }
+        """.trimIndent())
+
+        val service = newService(repoRoot)
+        val stale = service.findStaleLocalhostEntries(repoRoot)
+        assertEquals(1, stale.size)
+
+        val logs = mutableListOf<String>()
+        service.cleanupStale(repoRoot, stale) { logs.add(it) }
+
+        // node_modules entry should be deleted
+        assertFalse(staleModDir.exists(), "stale node_modules dir should be removed")
+
+        // Lockfile entry should be entirely removed (not just resolved/integrity)
+        // because the pinned version is local-only and doesn't exist on the
+        // public registry — npm needs to re-resolve from package.json's range.
+        val lockJson = com.fasterxml.jackson.databind.ObjectMapper()
+            .readValue(File(repoRoot, "package-lock.json"), Map::class.java) as Map<String, Any?>
+        val packages = lockJson["packages"] as Map<String, Any?>
+        assertNull(packages["node_modules/@zerobias-org/logger"], "stale entry should be removed entirely")
+
+        assertTrue(logs.any { it.contains("tainted") }, "should log tainting")
+        assertTrue(logs.any { it.contains("removed stale lockfile") }, "should log lockfile removal")
+    }
+
+    @Test
+    fun `cleanupStale is a no-op for empty list`(@TempDir tmp: Path) {
+        val service = newService(tmp.toFile())
+        assertFalse(service.cleanupStale(tmp.toFile(), emptyList()))
+    }
+
     // ── forcePublic ──────────────────────────────────────────────
 
     @Test
