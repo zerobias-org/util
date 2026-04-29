@@ -433,9 +433,16 @@ val publishJavaPackages = tasks.register("publishJavaPackages") {
                 continue
             }
 
-            logger.lifecycle("[java-publish] $name → $version (publishing to Maven Central)")
+            logger.lifecycle("[java-publish] $name → $version (publishing)")
 
-            val publishProc = ProcessBuilder("./gradlew", "publishAndReleaseToMavenCentral")
+            // `publish` is the aggregator from zb.maven-central-publish that runs
+            // publishToMavenLocal + publishToMavenCentral + publishToGithub. Using
+            // it (not `publishAndReleaseToMavenCentral`) ensures the artifact also
+            // lands on GitHub Packages, which is what `1.+` resolution actually
+            // reads from in CI — Maven Central propagation has historically been
+            // lossy for these artifacts and downstream consumers all hit the
+            // GitHub Packages mirror anyway.
+            val publishProc = ProcessBuilder("./gradlew", "publish")
                 .directory(pkgDir)
                 .inheritIO()
                 .start()
