@@ -1,21 +1,36 @@
 @file:OptIn(ExperimentalStdlibApi::class)
 
 import com.github.gradle.node.npm.task.NpmTask
-import com.zerobias.buildtools.content.ContentValidator
 import com.zerobias.buildtools.tasks.NeonDataloaderTask
 
 /**
  * zb.content — leaf plugin for content-catalog NPM packages that ship
- * YAML artifacts (vendor, suite, product) rather than TypeScript code.
+ * YAML / metadata artifacts rather than TypeScript code (vendor, tag,
+ * suite, product, framework, standard, crosswalk, benchmark, etc.).
  *
  * No generate/compile/Docker phases. Wires:
- *   validate        → ContentValidator (schema check of index.yml + package.json)
- *   testIntegration → DataloaderTask (loads artifact into active slot's Postgres)
+ *   validate        → repo-supplied via rootProject.extra["contentValidator"]
+ *                      (no default; missing slot is a build-time error —
+ *                       compose your validator from SchemaPrimitives)
+ *   testIntegration → NeonDataloaderTask (loads artifact into ephemeral
+ *                      Neon Postgres branch — this is the universal
+ *                      "is this loadable?" contract across content types)
  *   publishNpm      → npm publish --tag next + shrinkwrap staging
  *   promoteAll      → dist-tag promotion (next → dev/qa/uat/latest)
  *
  * Per-package build.gradle.kts is one line:
  *   plugins { id("zb.content") }
+ *
+ * Per-repo validator (root build.gradle.kts) — composed from
+ * com.zerobias.buildtools.content.SchemaPrimitives:
+ *
+ *   import com.zerobias.buildtools.content.SchemaPrimitives
+ *   extra["contentValidator"] = { proj: org.gradle.api.Project ->
+ *       require(proj.file("index.yml").isFile) { ... }
+ *       val doc = SchemaPrimitives.parseYaml(proj.file("index.yml"))
+ *       SchemaPrimitives.requireUuid(doc["id"], "id")
+ *       // ... rest of repo-specific rules ...
+ *   }
  */
 
 plugins {
@@ -51,49 +66,47 @@ if (nvmNodeBinDir != null) {
 }
 
 // ════════════════════════════════════════════════════════════
-// VALIDATE phase — repo-supplied content check.
+// VALIDATE phase — repo-supplied content check (strict slot).
 //
-// Each content repo declares what "valid" means for its artifact type
-// by setting `extra["contentValidator"]` on the root project. Signature:
+// Each content repo MUST declare what "valid" means for its artifact
+// type by setting `extra["contentValidator"]` on the root project.
+// Signature:
 //
 //     extra["contentValidator"] = { proj: org.gradle.api.Project ->
 //         // throw on invalid; return normally on valid
 //     }
 //
-// Util provides the lifecycle (gate / validate / publish / promote /
-// marker emit). Repos provide what counts as valid for their artifact
-// type. Aligns with the principle that util should stay generic across
-// content types — vendor / suite / product / framework / standard /
-// crosswalk / benchmark / tag all share the same plugin shape; only
-// their validators differ.
+// Util ships SchemaPrimitives (UUID/enum/string/yaml-json parse/etc.)
+// in com.zerobias.buildtools.content. Repos compose their validator
+// from those primitives + repo-specific rules.
 //
-// Backward-compatible default: when the extra is absent, falls back to
-// the original vendor-shaped check (index.yml schema + UUID + required
-// fields). Existing vendor / suite / product / framework / standard /
-// crosswalk repos keep working without any change.
+// No default — missing slot is a build-time error. The earlier
+// vendor-shaped fallback was content-type-specific and pretended to
+// cover types it actually didn't (suite/product/framework/etc. with
+// different npm-name formulas, deeper layouts, missing index.yml on
+// tag, …). Forcing each repo to declare its own validator avoids the
+// silent "wrong rules pass for the wrong type" failure mode.
 // ════════════════════════════════════════════════════════════
 
 val validateContent by tasks.registering {
     group = "lifecycle"
-    description = "Validate content package — repo-supplied via rootProject.extra[\"contentValidator\"], else default vendor-shaped check"
+    description = "Validate content package — repo-supplied via rootProject.extra[\"contentValidator\"]"
     inputs.file("package.json")
     doLast {
         @Suppress("UNCHECKED_CAST")
-        val customValidator: ((org.gradle.api.Project) -> Unit)? =
+        val validator: ((org.gradle.api.Project) -> Unit) =
             if (rootProject.extra.has("contentValidator")) {
-                rootProject.extra.get("contentValidator") as? (org.gradle.api.Project) -> Unit
-            } else null
+                rootProject.extra.get("contentValidator") as (org.gradle.api.Project) -> Unit
+            } else throw GradleException(
+                "[zb.content] No contentValidator declared on root project. " +
+                "Set rootProject.extra[\"contentValidator\"] in your root " +
+                "build.gradle.kts. Compose from " +
+                "com.zerobias.buildtools.content.SchemaPrimitives — see the " +
+                "zb.content header comment for an example."
+            )
 
-        if (customValidator != null) {
-            customValidator(project)
-            logger.lifecycle("[validate] passed (repo-supplied validator) for ${project.path}")
-        } else {
-            // Default: vendor-shaped (index.yml schema check). Same logic
-            // as before this slot was added — preserves existing behavior
-            // for every repo that doesn't override.
-            val result = ContentValidator.validate(project.projectDir)
-            logger.lifecycle("[validate] passed (default ContentValidator: ${result.code})")
-        }
+        validator(project)
+        logger.lifecycle("[validate] passed for ${project.path}")
     }
 }
 

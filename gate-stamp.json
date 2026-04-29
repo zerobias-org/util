@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "branch": "main",
-  "timestamp": "2026-04-29T17:30:32.713908027Z",
+  "branch": "feat/schema-primitives",
+  "timestamp": "2026-04-29T17:50:24.752925965Z",
   "packages": {
     "@zerobias-org/data-utils": {
-      "version": "2.1.0",
-      "sourceHash": "0372a294b5cc8ac7ddc2de5643f2f7d2ce4b5ec92760f3d1227dfdfb60a44a78",
+      "version": "2.1.1",
+      "sourceHash": "7b2aadb35e3d62bf81e32da330e0077af28db6efe45e096ae49b1e927e020c01",
       "testHash": "31bcf4a9cc35001de836df01a9297b53c1d3833ff425abe7b6c3142f6b4001d4",
       "tasks": {
         "lint": "passed",
@@ -45,8 +45,8 @@
       }
     },
     "@zerobias-org/eslint-config": {
-      "version": "1.0.37",
-      "sourceHash": "7d0a72169487813f3e1832dd361e652979f676eb2161877e25c720993427c477",
+      "version": "1.0.38",
+      "sourceHash": "6444bc91008c2c2847388af57c3b47c86e3b2ea3c7685cf7e4075dcc5b603dc4",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -86,8 +86,8 @@
       }
     },
     "@zerobias-org/logger": {
-      "version": "3.0.8",
-      "sourceHash": "1318ba7b98ccc4a820cfd7b4f7833e6f536f7eeb6a3a3738fe843f172b0ca980",
+      "version": "3.0.9",
+      "sourceHash": "19ab5f89c5a15777df95189b64884dc8e7224a9fadf8368ba334c94036eed550",
       "testHash": "b4e1f0819581aef73a80fd63c6e169141acb70170cc4adc6a1e9a377dd13c970",
       "tasks": {
         "lint": "passed",
@@ -127,15 +127,15 @@
       }
     },
     "@zerobias-org/module-test-client": {
-      "version": "1.0.4",
-      "sourceHash": "b90c288ade4368976363a736f038dc448202f3e168e29f72ed312be7d02a6174",
+      "version": "1.0.5",
+      "sourceHash": "777d1144e5617c34801916aff8178be018cf86457cd70642cb94ab195c393c61",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
         "test": "skipped"
       },
       "tests": {
@@ -166,27 +166,27 @@
       }
     },
     "@zerobias-org/module-tester": {
-      "version": "1.0.11",
-      "sourceHash": "9e06698c9d5a12be3f19127c692fb4d5419255527fe41d982a720f7fc0641332",
+      "version": "1.0.12",
+      "sourceHash": "6e3f2b4c50535e93f065f1cc1087a29d5e8d06a1a8cb8863a65b32971fdee07e",
       "testHash": "cde5b931c178ea511af07afca046a323dd387db237e7b7eff2eb3bb64a1f1c9c",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 55,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 55,
+          "status": "passed"
         },
         "integration": {
           "expected": 10,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 10,
+          "status": "passed"
         },
         "e2e": {
           "expected": 0,
@@ -207,8 +207,8 @@
       }
     },
     "@zerobias-org/util-api-client-base": {
-      "version": "1.0.43",
-      "sourceHash": "d5989a95363fd4d5192fb5fec31e58fdcd605cad97b09e912ca02e503f86e0ac",
+      "version": "1.0.44",
+      "sourceHash": "9c5e83f0677e4a554f7aee0f98b7f694167ebed8f900feda89e0136f9eae9a0e",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -247,8 +247,8 @@
       }
     },
     "@zerobias-org/util-api-invoker-api": {
-      "version": "1.0.36",
-      "sourceHash": "9f280f920b56a23633a088280003116926b44d379052bef3845d2e6d79ce4263",
+      "version": "1.0.37",
+      "sourceHash": "fbcd12c8432bc437edb1705d1478a3783a1ca885a59cfd1ae899707fb2cd1ebb",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -286,8 +286,8 @@
       }
     },
     "@zerobias-org/util-api-invoker-isomorphic": {
-      "version": "1.0.37",
-      "sourceHash": "cb1714c2db10e909322b115d3859467df7e7c64dc06429fdf07a0d32814510b4",
+      "version": "1.0.38",
+      "sourceHash": "a8ca966cf11960442f409e69b6c10607bd8d2c14de4f3a8a2adf170eedb2bae5",
       "testHash": "d87ecf960dfafe908b8ab2ddade655c07c893d1ec7e162ab30c1509967501fd5",
       "tasks": {
         "lint": "passed",
@@ -327,8 +327,8 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "2.0.53",
-      "sourceHash": "8afe31271f1b61285d46d69ac36145ca110fc40d21f16d185e4403ce5b9b6ffc",
+      "version": "2.0.54",
+      "sourceHash": "6dd927f10a1fa9fd49e24c4cd0d2511affb33836c8886373030385a2ef307995",
       "testHash": "ffd2c3654748679b3983df3bcc14c6ac63b37a636dac4fa65ebd6144805353db",
       "tasks": {
         "lint": "skipped",
@@ -365,8 +365,8 @@
       }
     },
     "@zerobias-org/util-collector": {
-      "version": "1.0.39",
-      "sourceHash": "1439475540d95091ac2a699ceaf6333f21e2254ddd2b2299e2f47ef2f726e4ad",
+      "version": "1.0.40",
+      "sourceHash": "b4d6890b6568f10e50cd663ddb12507f46910f0c516cd036a4e6405d6d84b612",
       "testHash": "538007cc6c8a0c66415559ba2d3c2c8059f58b3476939056f98460ba5ca91647",
       "tasks": {
         "lint": "passed",
@@ -406,8 +406,8 @@
       }
     },
     "@zerobias-org/util-connector": {
-      "version": "1.0.39",
-      "sourceHash": "210c1ad1af69b7dbcb0ff3a67fdf1f978c4a31599d4665f2e6647e336d77f1c8",
+      "version": "1.0.40",
+      "sourceHash": "b00ef37919ef55cb801012f0b61c7234512351b857ad807fb1bb044167224ab4",
       "testHash": "2bb646e7472ba501356498be2c59c152821649ad5150cf4ec3dbfe38df0167d6",
       "tasks": {
         "lint": "passed",
@@ -445,8 +445,8 @@
       }
     },
     "@zerobias-org/util-content-dev-schema": {
-      "version": "0.0.10",
-      "sourceHash": "401486b535c853218e82395ddb0143ce26056ec84fd3400d4c679f081a41f02d",
+      "version": "0.0.11",
+      "sourceHash": "fdada875c1a52df85f12c605bf3ded21fdc6b2ceb1eb27873021437a7cbabf46",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -483,8 +483,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "2.0.48",
-      "sourceHash": "dd4bd7bae43a2746fd3b9410f8a644fd5f85cb268ab879c46abdcc71c0447cef",
+      "version": "2.0.49",
+      "sourceHash": "6c18d3d8f365dc0b6f1886cff77cac523dd84db7f1bb0fd125ab12c2497b2b68",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
         "lint": "passed",
@@ -528,8 +528,8 @@
       }
     },
     "@zerobias-org/util-spectral-config": {
-      "version": "1.0.34",
-      "sourceHash": "d3eb18fd844c8a7202232e1da424de51e919b2c8961a03f304970ba47329e542",
+      "version": "1.0.35",
+      "sourceHash": "ba26ea57ac830cf9fc532fea928a83cf694bf51d0d7742738602cabc10007c89",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -568,15 +568,15 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.61",
-      "sourceHash": "0f713d200710850950ff446a37d6ba7332948265579515c2fd057db07ac7df12",
+      "version": "0.3.62",
+      "sourceHash": "a88f14b0b58f1f132675a93e55ea6775b93745b8a65e286d37336b3b38514f9a",
       "testHash": "93a81d95953db8ee815d4b2b87022214719ee7149334522cb1e4ef6a06f2fa0d",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
         "test": "skipped"
       },
       "tests": {
