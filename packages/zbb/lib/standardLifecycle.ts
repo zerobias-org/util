@@ -68,6 +68,11 @@ export async function spawnStandardLifecycleAndExit(
   // noPush: keeps the version commit local — used by tests / dry-runs.
   if (parsed.modules) passthrough.push(`-PmodulesToVersion=${parsed.modules}`);
   if (parsed.noPush) passthrough.push('-Ppush=false');
+  // Anything zbb didn't recognize (gradle -P/-D project/system properties,
+  // bare task names, `--`-style flags) — forward to gradle verbatim. Without
+  // this, `zbb publish -PfooBar=true` silently drops the property and the
+  // gradle script never sees the override.
+  passthrough.push(...parsed.remaining);
 
   // Resolve the command to a specific subproject if cwd is one.
   //

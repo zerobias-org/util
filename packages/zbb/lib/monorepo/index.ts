@@ -90,6 +90,10 @@ export async function spawnLifecycleAndExit(
   if (parsed.force) passthrough.push('-Pforce=true');
   if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
   if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
+  // Anything zbb didn't recognize — forward to gradle verbatim so callers
+  // can pass through `-PfooBar=true` etc. without zbb needing to know each
+  // property name.
+  passthrough.push(...parsed.remaining);
 
   if (parsed.verbose) {
     const args = passthrough.length > 0 ? ` ${passthrough.join(' ')}` : '';
