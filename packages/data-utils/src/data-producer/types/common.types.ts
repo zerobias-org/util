@@ -20,6 +20,11 @@ export interface DataProducerConfig {
   targetId: UUID | string;
 
   /**
+   * Session ID
+   */
+  session?: UUID | string;
+
+  /**
    * Optional timeout in milliseconds
    */
   timeout?: number;

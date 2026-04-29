@@ -7,8 +7,7 @@
  */
 
 import { DynamicDataProducerHubImpl } from '@zerobias-org/hub-sdk-interface-dataproducer';
-import { ConnectionProfile } from '@zerobias-org/module-interface-dataproducer';
-import { UUID } from '@zerobias-org/types-core-js';
+import { HubConnectionProfile, UUID } from '@zerobias-org/types-core-js';
 import { DataProducerConfig, ConnectionResult, DataProducerError, DataProducerErrorType } from './types/common.types.js';
 import { ObjectsApi } from './apis/ObjectsApi.js';
 import { CollectionsApi } from './apis/CollectionsApi.js';
@@ -118,9 +117,10 @@ export class DataProducerClient {
         ? new UUID(connectionConfig.targetId)
         : connectionConfig.targetId;
 
-      const connectionProfile: ConnectionProfile = {
+      const connectionProfile: HubConnectionProfile = {
         server: connectionConfig.server,
         targetId: targetId,
+        session: config && config.session ? new UUID(config.session.toString()) : undefined,
         ...(connectionConfig.headers && { headers: connectionConfig.headers }),
         ...(connectionConfig.timeout && { timeout: connectionConfig.timeout })
       };

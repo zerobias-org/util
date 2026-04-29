@@ -870,14 +870,9 @@ export class StackEnvironment extends EventEmitter {
             source: 'ci-env',
             mask: decl.mask,
           });
-        } else if (decl.required && decl.source === 'env') {
-          // Same required-enforcement as local mode. CI mode trusts
-          // process.env as the source of truth (vault-action already
-          // injected everything), so a missing required `source: env`
-          // var means the CI config is incomplete — fail fast instead
-          // of letting it surface as a cryptic downstream error.
-          throw new Error(`Required env var '${name}' not found in environment`);
         }
+        // Missing `source: env` vars are not fatal at add time — they
+        // are gated by `lifecycle.<cmd>.env` when the command runs.
       }
     } else {
       // Local mode: only inherit vars explicitly declared `source: env`
@@ -890,9 +885,9 @@ export class StackEnvironment extends EventEmitter {
               value,
               source: 'env',
             });
-          } else if (decl.required) {
-            throw new Error(`Required env var '${name}' not found in environment`);
           }
+          // Missing vars are not fatal at add time — lifecycle env
+          // gates enforce presence when the command actually runs.
         }
       }
     }
@@ -929,9 +924,9 @@ export class StackEnvironment extends EventEmitter {
             value,
             source: `file:${decl.file}`,
           });
-        } else if (decl.required) {
-          throw new Error(`Required var '${name}' not found in file '${decl.file}' or environment`);
         }
+        // Missing file-sourced vars are not fatal at add time —
+        // lifecycle env gates enforce presence at command time.
       }
     }
 

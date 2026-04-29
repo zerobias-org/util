@@ -42,7 +42,9 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
     const base = profile.server.relative
       ? profile.server.path
       : `${profile.server.protocol}://${profile.server.host}${profile.server.path}`;
-    if (profile.apiKey) {
+    if (profile.session) {
+      this._headers.Authorization = `session ${profile.session}`;
+    } else if (profile.apiKey) {
       this._headers.Authorization = `APIKey ${profile.apiKey}`;
     }
     if (profile.orgId) {

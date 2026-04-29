@@ -78,7 +78,7 @@ describe('StackEnvironment.initialize', () => {
     }
   });
 
-  it('throws on required env var missing', async () => {
+  it('skips missing source:env var at add time (lifecycle gates enforce later)', async () => {
     const stackDir = join(tmpDir, 'mystack');
     await mkdir(stackDir, { recursive: true });
 
@@ -87,10 +87,11 @@ describe('StackEnvironment.initialize', () => {
       _ZBB_MISSING_VAR: { type: 'string', source: 'env', required: true },
     };
 
-    await assert.rejects(
-      () => StackEnvironment.initialize(stackDir, 'mystack', schema, new Map(), new Map(), [], slotVars, tmpDir),
-      /Required env var '_ZBB_MISSING_VAR' not found/,
+    const env = await StackEnvironment.initialize(
+      stackDir, 'mystack', schema, new Map(), new Map(), [], slotVars, tmpDir,
     );
+    // Var is declared but unresolved — no error at add time
+    assert.equal(env.get('_ZBB_MISSING_VAR'), undefined);
   });
 
   it('resolves imports from dependency stack .env', async () => {
