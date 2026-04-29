@@ -9,4 +9,4 @@ export {
   validateNonEmptyString,
   validateNumber,
   validateDefined,
-} from './ValidationUtils';
+} from './ValidationUtils.js';

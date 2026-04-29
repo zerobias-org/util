@@ -9,13 +9,13 @@
 import { DynamicDataProducerHubImpl } from '@zerobias-org/hub-sdk-interface-dataproducer';
 import { ConnectionProfile } from '@zerobias-org/module-interface-dataproducer';
 import { UUID } from '@zerobias-org/types-core-js';
-import { DataProducerConfig, ConnectionResult, DataProducerError, DataProducerErrorType } from './types/common.types';
-import { ObjectsApi } from './apis/ObjectsApi';
-import { CollectionsApi } from './apis/CollectionsApi';
-import { SchemasApi } from './apis/SchemasApi';
-import { DocumentsApi } from './apis/DocumentsApi';
-import { FunctionsApi } from './apis/FunctionsApi';
-import { BinaryApi } from './apis/BinaryApi';
+import { DataProducerConfig, ConnectionResult, DataProducerError, DataProducerErrorType } from './types/common.types.js';
+import { ObjectsApi } from './apis/ObjectsApi.js';
+import { CollectionsApi } from './apis/CollectionsApi.js';
+import { SchemasApi } from './apis/SchemasApi.js';
+import { DocumentsApi } from './apis/DocumentsApi.js';
+import { FunctionsApi } from './apis/FunctionsApi.js';
+import { BinaryApi } from './apis/BinaryApi.js';
 
 /**
  * DataProducerClient - Main client class for DataProducer interactions

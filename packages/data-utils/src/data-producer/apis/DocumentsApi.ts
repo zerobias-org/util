@@ -10,7 +10,7 @@
  * - Handling document versions
  */
 
-import { Document, DocumentListOptions } from '../types/documents.types';
+import { Document, DocumentListOptions } from '../types/documents.types.js';
 
 /**
  * DocumentsApi implementation (PLACEHOLDER)
@@ -21,7 +21,7 @@ import { Document, DocumentListOptions } from '../types/documents.types';
  * @placeholder
  */
 export class DocumentsApi {
-  private client: import('../DataProducerClient').DataProducerClient;
+  private client: import('../DataProducerClient.js').DataProducerClient;
 
   /**
    * Create a new DocumentsApi instance
@@ -29,7 +29,7 @@ export class DocumentsApi {
    * @param client - DataProducerClient instance
    * @internal
    */
-  constructor(client: import('../DataProducerClient').DataProducerClient) {
+  constructor(client: import('../DataProducerClient.js').DataProducerClient) {
     this.client = client;
   }
 

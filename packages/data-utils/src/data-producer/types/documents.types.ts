@@ -4,7 +4,7 @@
  * TODO: Implement document types when DocumentsApi is fully implemented
  */
 
-import { ListOptions } from './common.types';
+import { ListOptions } from './common.types.js';
 
 /**
  * Document metadata

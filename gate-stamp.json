@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "branch": "chore/data-utils-dataproducer-2.1.1",
-  "timestamp": "2026-04-28T23:28:29.201581567Z",
+  "branch": "chore/data-utils-esm",
+  "timestamp": "2026-04-29T00:01:37.155777905Z",
   "packages": {
     "@zerobias-org/data-utils": {
-      "version": "2.0.0",
-      "sourceHash": "170464dd9b42c0b294aab3c6778347cbcbcb50ae1160a5f8103662ae206fa640",
-      "testHash": "9d1da0b0ac655d0b2679cd7bf3ab9a2e91d70a7bf05b01d5f010d12b5c330a25",
+      "version": "2.0.1",
+      "sourceHash": "3c5a488e3a9185411a74387e154fdc5de28f542ba8f377b34efab0be8747024d",
+      "testHash": "31bcf4a9cc35001de836df01a9297b53c1d3833ff425abe7b6c3142f6b4001d4",
       "tasks": {
         "lint": "passed",
         "compile": "passed",

@@ -5,22 +5,22 @@
  */
 
 // Common types
-export * from './common.types';
+export * from './common.types.js';
 
 // Objects API types
-export * from './objects.types';
+export * from './objects.types.js';
 
 // Collections API types
-export * from './collections.types';
+export * from './collections.types.js';
 
 // Schemas API types
-export * from './schemas.types';
+export * from './schemas.types.js';
 
 // Documents API types (placeholder)
-export * from './documents.types';
+export * from './documents.types.js';
 
 // Functions API types (placeholder)
-export * from './functions.types';
+export * from './functions.types.js';
 
 // Binary API types (placeholder)
-export * from './binary.types';
+export * from './binary.types.js';

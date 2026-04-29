@@ -10,7 +10,7 @@
  * - Managing binary metadata
  */
 
-import { BinaryMetadata, BinaryDownloadOptions, BinaryData } from '../types/binary.types';
+import { BinaryMetadata, BinaryDownloadOptions, BinaryData } from '../types/binary.types.js';
 
 /**
  * BinaryApi implementation (PLACEHOLDER)
@@ -21,7 +21,7 @@ import { BinaryMetadata, BinaryDownloadOptions, BinaryData } from '../types/bina
  * @placeholder
  */
 export class BinaryApi {
-  private client: import('../DataProducerClient').DataProducerClient;
+  private client: import('../DataProducerClient.js').DataProducerClient;
 
   /**
    * Create a new BinaryApi instance
@@ -29,7 +29,7 @@ export class BinaryApi {
    * @param client - DataProducerClient instance
    * @internal
    */
-  constructor(client: import('../DataProducerClient').DataProducerClient) {
+  constructor(client: import('../DataProducerClient.js').DataProducerClient) {
     this.client = client;
   }
 

@@ -2,7 +2,7 @@
  * Tests for PathUtils utility
  */
 import { expect } from 'chai';
-import { PathUtils } from '../src';
+import { PathUtils } from '../src/index.js';
 
 describe('PathUtils', () => {
   describe('getNestedValue', () => {
