@@ -153,3 +153,6 @@ build/
 .zbb-build-cache.json
 .zbb-monorepo
 .zbb-publish-tmp/
+
+#OS
+.DS_Store
