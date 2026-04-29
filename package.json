@@ -56,7 +56,7 @@
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "@zerobias-com/platform-sdk": "^1.1.5",
-    "@zerobias-org/module-interface-dataproducer-hub-sdk": "^1.2.32",
+    "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.1",
     "@zerobias-org/types-amazon-js": "^1.0.35",
     "@zerobias-org/types-core": "^1.0.22",
     "@zerobias-org/types-core-js": "^1.2.17",
