@@ -51,17 +51,49 @@ if (nvmNodeBinDir != null) {
 }
 
 // ════════════════════════════════════════════════════════════
-// VALIDATE phase — schema check ported from scripts/validate.ts
+// VALIDATE phase — repo-supplied content check.
+//
+// Each content repo declares what "valid" means for its artifact type
+// by setting `extra["contentValidator"]` on the root project. Signature:
+//
+//     extra["contentValidator"] = { proj: org.gradle.api.Project ->
+//         // throw on invalid; return normally on valid
+//     }
+//
+// Util provides the lifecycle (gate / validate / publish / promote /
+// marker emit). Repos provide what counts as valid for their artifact
+// type. Aligns with the principle that util should stay generic across
+// content types — vendor / suite / product / framework / standard /
+// crosswalk / benchmark / tag all share the same plugin shape; only
+// their validators differ.
+//
+// Backward-compatible default: when the extra is absent, falls back to
+// the original vendor-shaped check (index.yml schema + UUID + required
+// fields). Existing vendor / suite / product / framework / standard /
+// crosswalk repos keep working without any change.
 // ════════════════════════════════════════════════════════════
 
 val validateContent by tasks.registering {
     group = "lifecycle"
-    description = "Validate content package schema (index.yml + package.json)"
-    inputs.file("index.yml")
+    description = "Validate content package — repo-supplied via rootProject.extra[\"contentValidator\"], else default vendor-shaped check"
     inputs.file("package.json")
     doLast {
-        val result = ContentValidator.validate(project.projectDir)
-        logger.lifecycle("Validated content package: ${result.code}")
+        @Suppress("UNCHECKED_CAST")
+        val customValidator: ((org.gradle.api.Project) -> Unit)? =
+            if (rootProject.extra.has("contentValidator")) {
+                rootProject.extra.get("contentValidator") as? (org.gradle.api.Project) -> Unit
+            } else null
+
+        if (customValidator != null) {
+            customValidator(project)
+            logger.lifecycle("[validate] passed (repo-supplied validator) for ${project.path}")
+        } else {
+            // Default: vendor-shaped (index.yml schema check). Same logic
+            // as before this slot was added — preserves existing behavior
+            // for every repo that doesn't override.
+            val result = ContentValidator.validate(project.projectDir)
+            logger.lifecycle("[validate] passed (default ContentValidator: ${result.code})")
+        }
     }
 }
 
