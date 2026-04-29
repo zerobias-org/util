@@ -1,7 +1,7 @@
 @file:OptIn(ExperimentalStdlibApi::class)
 
 import com.github.gradle.node.npm.task.NpmTask
-import com.zerobias.buildtools.content.ContentValidator
+import com.zerobias.buildtools.content.validators.VendorValidator
 import com.zerobias.buildtools.tasks.NeonDataloaderTask
 
 /**
@@ -88,11 +88,13 @@ val validateContent by tasks.registering {
             customValidator(project)
             logger.lifecycle("[validate] passed (repo-supplied validator) for ${project.path}")
         } else {
-            // Default: vendor-shaped (index.yml schema check). Same logic
-            // as before this slot was added — preserves existing behavior
-            // for every repo that doesn't override.
-            val result = ContentValidator.validate(project.projectDir)
-            logger.lifecycle("[validate] passed (default ContentValidator: ${result.code})")
+            // Default: VendorValidator (index.yml + package.json schema check).
+            // Backward-compat for repos migrated before the slot existed —
+            // vendor / suite / product / framework / standard / crosswalk /
+            // benchmark fit this shape. Other artifact types (tag, etc.)
+            // override via `extra["contentValidator"]` at root build.gradle.kts.
+            // See com/zerobias/buildtools/content/validators/README.md.
+            VendorValidator.validate(project)
         }
     }
 }
