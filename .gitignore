@@ -144,3 +144,6 @@ build/
 
 # Nx cache
 .nx/
+
+
+.DS_Store
