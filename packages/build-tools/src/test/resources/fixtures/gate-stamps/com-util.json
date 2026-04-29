@@ -1,7 +1,6 @@
 {
   "version": 1,
   "branch": "feature/zbb-monorepo-support",
-  "timestamp": "2026-04-08T08:28:22.888Z",
   "packages": {
     "@zerobias-com/aws-common": {
       "version": "3.0.18",

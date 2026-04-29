@@ -36,7 +36,7 @@ import {
   buildProjectCache,
   detectProject,
 } from './gradle.js';
-import type { ParsedLifecycleArgs } from './monorepo/index.js';
+import type { ParsedLifecycleArgs } from './lifecycle.js';
 
 // Sync `require` for use in ESM — lazy-load Display.js without making the
 // whole call chain async. Same pattern used by the monorepo dispatcher.
@@ -62,10 +62,17 @@ export async function spawnStandardLifecycleAndExit(
   const passthrough: string[] = [];
   if (parsed.dryRun) passthrough.push('-PdryRun=true');
   if (parsed.force) passthrough.push('-Pforce=true');
+  // version-specific flags. modules: comma-separated list of relative
+  // paths under package/ (matches the github workflow's `detect` output).
+  // noPush: keeps the version commit local — used by tests / dry-runs.
+  if (parsed.modules) passthrough.push(`-PmodulesToVersion=${parsed.modules}`);
+  if (parsed.noPush) passthrough.push('-Ppush=false');
 
   // Resolve the command to a specific subproject if cwd is one.
   //
   // Rules:
+  //   - If command is `version` → always root-level (versionStandardPackages
+  //     is an aggregator on the root project; cwd-scoping makes no sense)
   //   - If cwd == repoRoot → run the lifecycle entry verbatim (root task)
   //   - If cwd has build.gradle.kts and is a registered subproject →
   //     prefix the task name with `:subproject:path:`
@@ -74,7 +81,9 @@ export async function spawnStandardLifecycleAndExit(
   //     is that a package must have build.gradle.kts to be publishable.
   //   - If cwd can't resolve at all → run the raw command (whatever the
   //     user has in their zbb.yaml), let gradle report its own error
-  const cmdToRun = resolveCommandForCwd(repoRoot, baseCommand);
+  const cmdToRun = command === 'version'
+    ? baseCommand
+    : resolveCommandForCwd(repoRoot, baseCommand);
 
   if (parsed.verbose) {
     const dbg = passthrough.length > 0

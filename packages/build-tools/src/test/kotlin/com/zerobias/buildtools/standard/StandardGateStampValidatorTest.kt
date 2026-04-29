@@ -27,7 +27,6 @@ class StandardGateStampValidatorTest {
             {
               "version": "1.0.0",
               "branch": "main",
-              "timestamp": "2026-04-13T00:00:00Z",
               "sourceHash": "$srcHash",
               "testHash": "$tstHash",
               "tasks": {

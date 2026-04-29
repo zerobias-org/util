@@ -295,7 +295,6 @@ val monorepoGate = tasks.register("monorepoGate") {
         val stamp = GateStamp(
             version = 1,
             branch = branch,
-            timestamp = java.time.Instant.now().toString(),
             packages = sortedEntries,
         )
 

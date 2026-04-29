@@ -40,9 +40,8 @@ import {
 } from './config.js';
 import { derivePackageScope, type PackageScope } from './monorepo/scope.js';
 import { spawn } from 'node:child_process';
+import { isLifecycleCommand, parseLifecycleArgs } from './lifecycle.js';
 import {
-  isLifecycleCommand,
-  parseLifecycleArgs,
   spawnLifecycleAndExit,
   spawnGradleFallbackAndExit,
 } from './monorepo/index.js';

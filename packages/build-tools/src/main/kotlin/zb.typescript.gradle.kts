@@ -844,8 +844,61 @@ val buildHubSdkExec by tasks.registering(NpxTask::class) {
     outputs.dir("hub-sdk/generated")
 }
 
+// A1b: Hub SDK — compile generated TypeScript so the published package ships
+// .js + .d.ts instead of raw .ts. Without this, every consumer recompiles the
+// source against their own axios + tsconfig, producing version drift (axios v0
+// vs v1 AxiosInstance, missing @types/node for stream/Buffer, etc.).
+val compileHubSdkExec by tasks.registering(NpxTask::class) {
+    group = "lifecycle"
+    description = "Compile hub-sdk/generated TypeScript -> hub-sdk/dist (.js + .d.ts)"
+    dependsOn(buildHubSdkExec, npmInstallModule)
+    onlyIf { project.file("hub-sdk/package.json").exists() }
+    workingDir.set(project.projectDir)
+    command.set("tsc")
+    args.set(listOf("-p", "hub-sdk/tsconfig.json"))
+    inputs.dir("hub-sdk/generated")
+    outputs.dir("hub-sdk/dist")
+    doFirst {
+        // Generated tsconfig — kept in sync centrally so individual modules don't
+        // drift. include only "generated/**/*"; rootDir keeps dist layout flat
+        // (dist/api/*, dist/model/*) so package.json main can be "dist/api/index.js".
+        // types: ["node"] pulls @types/node in for stream/Buffer references.
+        val tsconfigJson = """
+            |{
+            |  "compilerOptions": {
+            |    "module": "NodeNext",
+            |    "moduleResolution": "NodeNext",
+            |    "target": "ES2022",
+            |    "lib": ["ES2022"],
+            |    "rootDir": "generated",
+            |    "outDir": "dist",
+            |    "declaration": true,
+            |    "declarationMap": false,
+            |    "sourceMap": true,
+            |    "esModuleInterop": true,
+            |    "skipLibCheck": true,
+            |    "strict": true,
+            |    "noImplicitAny": false,
+            |    "useUnknownInCatchVariables": false,
+            |    "types": ["node"]
+            |  },
+            |  "include": ["generated/**/*"],
+            |  "exclude": ["dist", "node_modules"]
+            |}
+            |""".trimMargin()
+        project.file("hub-sdk/tsconfig.json").writeText(tsconfigJson)
+        // Copy manifest.json so the published package can reference it at runtime.
+        val srcManifest = project.file("hub-sdk/generated/api/manifest.json")
+        if (srcManifest.exists()) {
+            val destManifest = project.file("hub-sdk/dist/api/manifest.json")
+            destManifest.parentFile.mkdirs()
+            srcManifest.copyTo(destManifest, overwrite = true)
+        }
+    }
+}
+
 tasks.named("buildHubSdk") {
-    dependsOn(buildHubSdkExec)
+    dependsOn(buildHubSdkExec, compileHubSdkExec)
 }
 
 val buildImageExec by tasks.registering(Exec::class) {
