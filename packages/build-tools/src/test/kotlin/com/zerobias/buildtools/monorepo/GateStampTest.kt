@@ -13,7 +13,6 @@ class GateStampTest {
     private fun sampleStamp(): GateStamp = GateStamp(
         version = 1,
         branch = "main",
-        timestamp = "2026-04-08T12:00:00.000Z",
         packages = linkedMapOf(
             "@scope/foo" to PackageStampEntry(
                 version = "1.0.0",
@@ -62,7 +61,6 @@ class GateStampTest {
         assertNotNull(loaded)
         assertEquals(original.version, loaded!!.version)
         assertEquals(original.branch, loaded.branch)
-        assertEquals(original.timestamp, loaded.timestamp)
         assertEquals(original.packages.size, loaded.packages.size)
 
         val foo = loaded.packages["@scope/foo"]

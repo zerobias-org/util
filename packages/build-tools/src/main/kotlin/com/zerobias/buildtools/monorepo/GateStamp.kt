@@ -1,5 +1,6 @@
 package com.zerobias.buildtools.monorepo
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonPropertyOrder
 import com.fasterxml.jackson.core.util.DefaultIndenter
@@ -80,11 +81,13 @@ data class PackageStampEntry(
     val rootDeps: Map<String, String>? = null,
 )
 
-@JsonPropertyOrder("version", "branch", "timestamp", "packages")
+// ignoreUnknown=true so older stamps that still have a "timestamp" field
+// continue to parse during the rollout.
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonPropertyOrder("version", "branch", "packages")
 data class GateStamp(
     val version: Int = 1,
     val branch: String,
-    val timestamp: String,
     val packages: Map<String, PackageStampEntry>,
 )
 

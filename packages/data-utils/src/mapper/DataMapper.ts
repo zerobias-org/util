@@ -1,19 +1,19 @@
 import jsonata from 'jsonata';
-import { JsonataIntegration } from '../transform/JsonataIntegration';
-import { SourceField, DestinationField } from './types/field.types';
+import { JsonataIntegration } from '../transform/JsonataIntegration.js';
+import { SourceField, DestinationField } from './types/field.types.js';
 import {
   MappingRule,
   MappingResult,
   ErrorHandlingStrategy
-} from './types/mapping.types';
+} from './types/mapping.types.js';
 import {
   TransformConfig,
   ModifierType,
   DataType,
   ParameterizedModifier,
   ConditionalLogic
-} from './types/transform.types';
-import { ValidationRule } from './types/validation.types';
+} from './types/transform.types.js';
+import { ValidationRule } from './types/validation.types.js';
 
 /**
  * Normalizes a field name for comparison

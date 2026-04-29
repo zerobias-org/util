@@ -138,62 +138,68 @@ export class StackManager {
     // Create directory tree
     await Stack.createDirectories(stackPath);
 
-    // Create substack directories for substacks with state declarations
-    await Stack.createSubstackDirectories(stackPath, manifest);
+    try {
+      // Create substack directories for substacks with state declarations
+      await Stack.createSubstackDirectories(stackPath, manifest);
 
-    // Allocate ports (reuses cached values from previous add if available)
-    const ports = await this.allocatePortsCached(manifest, stackName);
+      // Allocate ports (reuses cached values from previous add if available)
+      const ports = await this.allocatePortsCached(manifest, stackName);
 
-    // Generate secrets (reuses cached values from previous add if available)
-    const secrets = await this.generateSecrets(manifest, stackName);
+      // Generate secrets (reuses cached values from previous add if available)
+      const secrets = await this.generateSecrets(manifest, stackName);
 
-    // Slot identity vars passed into initialize. Path vars come from
-    // the slot (ZB_SLOT, ZB_SLOT_DIR, …) and are registered as inherited
-    // with source:slot. Stack identity (ZB_STACK) is passed separately
-    // and registered with source:zbb — it's set by the orchestrator at
-    // stack-add time, scoped to this stack, not inherited from the slot.
-    const slotVars = this.slot.getSlotEnvVars();
+      // Slot identity vars passed into initialize. Path vars come from
+      // the slot (ZB_SLOT, ZB_SLOT_DIR, …) and are registered as inherited
+      // with source:slot. Stack identity (ZB_STACK) is passed separately
+      // and registered with source:zbb — it's set by the orchestrator at
+      // stack-add time, scoped to this stack, not inherited from the slot.
+      const slotVars = this.slot.getSlotEnvVars();
 
-    // In dev mode, *_IMAGE vars that default to a ghcr.io tag are omitted
-    // from the schema so they never land in .env. Compose files reference
-    // these as `${FOO_IMAGE:-foo:dev}` — leaving the var unset lets the
-    // fallback resolve to the locally-built image name (which can differ
-    // from the published GHCR name; the fallback is the source of truth
-    // for the local tag).
-    const envSchema = mode === 'dev' && manifest.env
-      ? Object.fromEntries(
-        Object.entries(manifest.env).filter(([key, decl]) =>
-          !(key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')),
-        ),
-      )
-      : manifest.env ?? {};
+      // In dev mode, *_IMAGE vars that default to a ghcr.io tag are omitted
+      // from the schema so they never land in .env. Compose files reference
+      // these as `${FOO_IMAGE:-foo:dev}` — leaving the var unset lets the
+      // fallback resolve to the locally-built image name (which can differ
+      // from the published GHCR name; the fallback is the source of truth
+      // for the local tag).
+      const envSchema = mode === 'dev' && manifest.env
+        ? Object.fromEntries(
+          Object.entries(manifest.env).filter(([key, decl]) =>
+            !(key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')),
+          ),
+        )
+        : manifest.env ?? {};
 
-    // Initialize env (builds manifest + .env)
-    await StackEnvironment.initialize(
-      stackPath,
-      stackName,
-      envSchema,
-      ports,
-      secrets,
-      imports,
-      slotVars,
-      this.stacksDir,
-      sourcePath,
-    );
+      // Initialize env (builds manifest + .env)
+      await StackEnvironment.initialize(
+        stackPath,
+        stackName,
+        envSchema,
+        ports,
+        secrets,
+        imports,
+        slotVars,
+        this.stacksDir,
+        sourcePath,
+      );
 
-    // Write stack identity
-    const identity: StackIdentity = {
-      name: manifest.name,
-      version: manifest.version,
-      mode,
-      source: sourcePath,
-      added: new Date().toISOString(),
-      alias: options?.as,
-    };
-    await saveYaml(join(stackPath, 'stack.yaml'), identity);
+      // Write stack identity
+      const identity: StackIdentity = {
+        name: manifest.name,
+        version: manifest.version,
+        mode,
+        source: sourcePath,
+        added: new Date().toISOString(),
+        alias: options?.as,
+      };
+      await saveYaml(join(stackPath, 'stack.yaml'), identity);
 
-    // Initialize state
-    await saveYaml(join(stackPath, 'state.yaml'), { status: 'stopped' });
+      // Initialize state
+      await saveYaml(join(stackPath, 'state.yaml'), { status: 'stopped' });
+    } catch (err) {
+      // Clean up partially-created stack directory so the user can retry
+      await rm(stackPath, { recursive: true, force: true });
+      throw err;
+    }
 
     // Load and return
     const stack = new Stack(stackName, this.stacksDir);

@@ -314,21 +314,6 @@ val bumpVersion by tasks.registering {
     // be published but would confuse downstream promote/tag tasks.
     onlyIf { branch == "main" && changedSinceTag }
     doLast {
-        val pkgJson = project.file("package.json")
-        val currentVersion = readBaseVersion()
-        val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1)
-            ?: throw GradleException("Cannot find 'name' in package.json")
-
-        // Check if current version is already published
-        val published = try {
-            val output = com.zerobias.buildtools.util.ExecUtils.execCapture(
-                command = listOf("npm", "view", "${name}@${currentVersion}", "version"),
-                workingDir = project.projectDir,
-                throwOnError = false
-            ).trim()
-            output == currentVersion
-        } catch (_: Exception) { false }
-
         // CRITICAL: do NOT write to package.json here. Keep the computed version
         // in memory only via `project.version`. Writing here used to leave the
         // working tree dirty on any downstream failure (preflight, publish,
@@ -336,15 +321,13 @@ val bumpVersion by tasks.registering {
         // single authoritative writer + committer for main-branch publishes,
         // and patchPackageJson handles the transient write-for-npm-publish
         // dance (with restorePackageJson as its finalizer).
-        if (published) {
-            // Bump patch: 6.11.1 → 6.11.2
-            val parts = currentVersion.split(".")
-            val newVersion = "${parts[0]}.${parts[1]}.${parts[2].toInt() + 1}"
-            project.version = newVersion
-            logger.lifecycle("Version bumped: $currentVersion → $newVersion (previous version already published)")
+        val decision = com.zerobias.buildtools.util.VersionBumper.decide(project.projectDir)
+            ?: throw GradleException("Cannot read name/version from package.json in ${project.projectDir}")
+        project.version = decision.newVersion
+        if (decision.bumped) {
+            logger.lifecycle("Version bumped: ${decision.currentVersion} → ${decision.newVersion} (previous version already published)")
         } else {
-            project.version = currentVersion
-            logger.lifecycle("Version $currentVersion not yet published — using as-is")
+            logger.lifecycle("Version ${decision.currentVersion} not yet published — using as-is")
         }
     }
 }
@@ -375,6 +358,15 @@ val tagVersion by tasks.registering {
 // ────────────────────────────────────────────────────────────
 val isDryRun: Boolean = project.findProperty("dryRun") == "true"
 extra["isDryRun"] = isDryRun
+
+// ────────────────────────────────────────────────────────────
+// versionAlreadyCommitted — set by CI workflows that ran the
+// versionStandardPackages task on a single runner before fanning out the
+// publish matrix. When true, per-package commit/push are no-ops; tagging +
+// tag-push still happen per-matrix because tags are unique refs and don't race.
+// Usage: ./gradlew publish -PversionAlreadyCommitted=true
+// ────────────────────────────────────────────────────────────
+val versionAlreadyCommitted: Boolean = project.findProperty("versionAlreadyCommitted") == "true"
 
 // ────────────────────────────────────────────────────────────
 // Changed-since detection — publish tasks skip unchanged modules
@@ -966,7 +958,7 @@ val writeGateStamp by tasks.registering {
     group = "lifecycle"
     description = "Write gate stamp after successful gate pass"
     mustRunAfter(gate)
-    outputs.upToDateWhen { false } // Always rewrite — stamp includes timestamp and task states
+    outputs.upToDateWhen { false } // Always rewrite — stamp captures task-state for the just-completed run
     doLast {
         val sourceHash = computeSourceHash()
         val testHash = computeTestHash()
@@ -1017,7 +1009,6 @@ val writeGateStamp by tasks.registering {
         val stamp = """{
   "version": "${project.version}",
   "branch": "$branch",
-  "timestamp": "${java.time.Instant.now()}",
   "sourceHash": "$sourceHash",
   "testHash": "$testHash",
   "tasks": {
@@ -1367,7 +1358,10 @@ val commitVersion by tasks.registering {
     mustRunAfter(bumpVersion, resolvePublishVersion)
     // No changes since last tag ⇒ bumpVersion skipped, project.version still
     // matches the committed package.json — nothing to write, nothing to commit.
-    onlyIf { branch == "main" && !isDryRun && changedSinceTag }
+    // -PversionAlreadyCommitted=true ⇒ a pre-matrix `versionStandardPackages`
+    // run already wrote and pushed the bump; this task would create a duplicate
+    // commit on top.
+    onlyIf { branch == "main" && !isDryRun && changedSinceTag && !versionAlreadyCommitted }
     doLast {
         val ver = project.version.toString()
         val pkgFile = project.file("package.json")
@@ -1400,11 +1394,14 @@ val commitVersion by tasks.registering {
             val stampContent = stampFile.readText()
             val newSourceHash = computeSourceHash()
             val newTestHash = computeTestHash()
+            // Strip any pre-existing "timestamp" line (older stamps had one) so
+            // we don't carry it forward. The line + trailing comma + newline are
+            // removed in one pass; if no match, this is a no-op.
             val updatedStamp = stampContent
+                .replace(Regex("""\s*"timestamp"\s*:\s*"[^"]+",?\n"""), "\n")
                 .replace(Regex(""""sourceHash"\s*:\s*"[^"]+""""), """"sourceHash": "$newSourceHash"""")
                 .replace(Regex(""""testHash"\s*:\s*"[^"]+""""), """"testHash": "$newTestHash"""")
                 .replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
-                .replace(Regex(""""timestamp"\s*:\s*"[^"]+""""), """"timestamp": "${java.time.Instant.now()}"""")
             stampFile.writeText(updatedStamp)
             logger.lifecycle("Updated gate-stamp.json for v${ver}")
         }
@@ -1464,7 +1461,9 @@ val pushVersion by tasks.registering {
     group = "publish"
     description = "Push version commit and tags to remote (retries with rebase on fast-forward rejection)"
     mustRunAfter(tagVersion)
-    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag }
+    // -PversionAlreadyCommitted=true: pushTag handles the per-matrix tag push;
+    // there is no commit on the local branch to push.
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag && !versionAlreadyCommitted }
     doLast {
         // Concurrent publish jobs from sibling modules can race on the same main
         // branch — when two jobs build in parallel and both produce a release
@@ -1563,11 +1562,40 @@ val pushVersion by tasks.registering {
     }
 }
 
+// pushTag — push only this module's annotated tag (no commits).
+// Used in CI when -PversionAlreadyCommitted=true: a pre-matrix
+// versionStandardPackages run already pushed the version-bump commit, so
+// the matrix only needs to publish each tag. Tags are unique refs, so
+// concurrent matrix jobs pushing different tags don't race.
+val pushTag by tasks.registering {
+    group = "publish"
+    description = "Push this module's release tag (used when version commit was made by a pre-matrix step)"
+    mustRunAfter(tagVersion)
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag && versionAlreadyCommitted }
+    doLast {
+        val ver = readBaseVersion()
+        val tag = "${tagPrefix}${ver}"
+        try {
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "push", "origin", tag),
+                workingDir = project.rootDir,
+                throwOnError = true,
+            )
+            logger.lifecycle("Pushed tag: $tag")
+        } catch (e: Exception) {
+            // If the tag already exists upstream (e.g. a re-run), don't fail
+            // the publish — npm publish has been the authoritative success
+            // gate, and a matching tag is already on the remote.
+            logger.warn("pushTag: $tag — ${e.message}")
+        }
+    }
+}
+
 // Top-level publish: bump → commit → stage (publish) → promote → tag → push → release event
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
-    dependsOn(verifyNoLocalRegistry, publishAll, promoteAll, commitVersion, tagVersion, pushVersion, publishReleaseEvent)
+    dependsOn(verifyNoLocalRegistry, publishAll, promoteAll, commitVersion, tagVersion, pushVersion, pushTag, publishReleaseEvent)
 }
 
 // Ordering:
@@ -1579,7 +1607,8 @@ listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { ta
 }
 tagVersion.configure { mustRunAfter(commitVersion) }
 pushVersion.configure { mustRunAfter(tagVersion) }
-publishReleaseEvent.configure { mustRunAfter(pushVersion) }
+pushTag.configure { mustRunAfter(tagVersion) }
+publishReleaseEvent.configure { mustRunAfter(pushVersion, pushTag) }
 
 // ────────────────────────────────────────────────────────────
 // Metadata sync — utility task (not in default build chain)

@@ -4,10 +4,10 @@
  * This builder reads schema definitions directly from OpenAPI specs and transforms
  * them into DataProducer Schema objects without needing generated TypeScript classes.
  */
-import { Schema, Property } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
-import { OpenAPILoader, OpenAPIProperty } from './OpenAPILoader';
-import { TypeMapper } from './TypeMapper';
-import { OpenAPISchemaConfig, SchemaReference, UrlLoadOptions } from '../types';
+import { Schema, Property } from '@zerobias-org/module-interface-dataproducer';
+import { OpenAPILoader, OpenAPIProperty } from './OpenAPILoader.js';
+import { TypeMapper } from './TypeMapper.js';
+import { OpenAPISchemaConfig, SchemaReference, UrlLoadOptions } from '../types/index.js';
 
 /**
  * Builder for creating DataProducer Schema objects from OpenAPI specifications

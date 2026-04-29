@@ -20,87 +20,19 @@ import { createRequire } from 'node:module';
 // the whole call chain async.
 const requireCJS = createRequire(import.meta.url);
 
-// ── Lifecycle commands ───────────────────────────────────────────────
+// ── Lifecycle dispatch surface ───────────────────────────────────────
 //
-// These are the commands that route through the lifecycle dispatch in
-// cli.ts. Anything else (slot/stack/registry/secret/env/logs/etc.) has
-// its own subcommand handler. Anything not in this set and not a
-// recognized subcommand falls through to the gradle wrapper.
-
-const LIFECYCLE_COMMANDS = new Set([
-  'clean',
-  'build',
-  'test',
-  'gate',
-  'publish',
-  'dockerBuild',
-]);
-
-export function isLifecycleCommand(command: string): boolean {
-  return LIFECYCLE_COMMANDS.has(command);
-}
-
-// ── Argument parsing ─────────────────────────────────────────────────
-
-export interface ParsedLifecycleArgs {
-  all: boolean;
-  base?: string;
-  clean: boolean;
-  dryRun: boolean;
-  force: boolean;
-  verbose: boolean;
-  check: boolean;
-  skipDocker: boolean;
-  remaining: string[];
-}
-
-export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
-  const result: ParsedLifecycleArgs = {
-    all: false,
-    clean: false,
-    dryRun: false,
-    force: false,
-    verbose: false,
-    check: false,
-    skipDocker: false,
-    remaining: [],
-  };
-
-  for (let i = 0; i < args.length; i++) {
-    switch (args[i]) {
-      case '--all':
-        result.all = true;
-        break;
-      case '--base':
-        result.base = args[i += 1];
-        break;
-      case '--dry-run':
-        result.dryRun = true;
-        break;
-      case '--force':
-        result.force = true;
-        break;
-      case '--verbose':
-      case '-v':
-        result.verbose = true;
-        break;
-      case '--check':
-        result.check = true;
-        break;
-      case '--clean':
-        result.clean = true;
-        break;
-      case '--skipDocker':
-      case '--skip-docker':
-        result.skipDocker = true;
-        break;
-      default:
-        result.remaining.push(args[i]);
-    }
-  }
-
-  return result;
-}
+// LIFECYCLE_COMMANDS / isLifecycleCommand / ParsedLifecycleArgs /
+// parseLifecycleArgs moved to ../lifecycle.ts (shared between standard
+// and monorepo modes). Re-exported here so downstream importers that
+// still pull from ./monorepo/index.js keep working.
+export {
+  LIFECYCLE_COMMANDS,
+  isLifecycleCommand,
+  parseLifecycleArgs,
+} from '../lifecycle.js';
+export type { ParsedLifecycleArgs } from '../lifecycle.js';
+import type { ParsedLifecycleArgs } from '../lifecycle.js';
 
 // ── Lifecycle lookup ─────────────────────────────────────────────────
 

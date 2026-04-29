@@ -6,19 +6,15 @@
  * and provides strongly-typed, validated access to all API modules.
  */
 
-import {
-  DataproducerHubImpl,
-  newDataproducerHub,
-  ConnectionProfile
-} from '@zerobias-org/module-interface-dataproducer-hub-sdk';
-import { UUID } from '@zerobias-org/types-core-js';
-import { DataProducerConfig, ConnectionResult, DataProducerError, DataProducerErrorType } from './types/common.types';
-import { ObjectsApi } from './apis/ObjectsApi';
-import { CollectionsApi } from './apis/CollectionsApi';
-import { SchemasApi } from './apis/SchemasApi';
-import { DocumentsApi } from './apis/DocumentsApi';
-import { FunctionsApi } from './apis/FunctionsApi';
-import { BinaryApi } from './apis/BinaryApi';
+import { DynamicDataProducerHubImpl } from '@zerobias-org/hub-sdk-interface-dataproducer';
+import { HubConnectionProfile, UUID } from '@zerobias-org/types-core-js';
+import { DataProducerConfig, ConnectionResult, DataProducerError, DataProducerErrorType } from './types/common.types.js';
+import { ObjectsApi } from './apis/ObjectsApi.js';
+import { CollectionsApi } from './apis/CollectionsApi.js';
+import { SchemasApi } from './apis/SchemasApi.js';
+import { DocumentsApi } from './apis/DocumentsApi.js';
+import { FunctionsApi } from './apis/FunctionsApi.js';
+import { BinaryApi } from './apis/BinaryApi.js';
 
 /**
  * DataProducerClient - Main client class for DataProducer interactions
@@ -38,7 +34,7 @@ import { BinaryApi } from './apis/BinaryApi';
  * ```
  */
 export class DataProducerClient {
-  private _dataProducer: DataproducerHubImpl;
+  private _dataProducer: DynamicDataProducerHubImpl;
   private _config?: DataProducerConfig;
   private _connected: boolean = false;
 
@@ -56,7 +52,7 @@ export class DataProducerClient {
    * @param config - Optional initial configuration
    */
   constructor(config?: DataProducerConfig) {
-    this._dataProducer = newDataproducerHub();
+    this._dataProducer = new DynamicDataProducerHubImpl();
     if (config) {
       this._config = config;
     }
@@ -76,7 +72,7 @@ export class DataProducerClient {
    *
    * @internal
    */
-  public getDataProducer(): DataproducerHubImpl {
+  public getDataProducer(): DynamicDataProducerHubImpl {
     return this._dataProducer;
   }
 
@@ -121,9 +117,10 @@ export class DataProducerClient {
         ? new UUID(connectionConfig.targetId)
         : connectionConfig.targetId;
 
-      const connectionProfile: ConnectionProfile = {
+      const connectionProfile: HubConnectionProfile = {
         server: connectionConfig.server,
         targetId: targetId,
+        session: config && config.session ? new UUID(config.session.toString()) : undefined,
         ...(connectionConfig.headers && { headers: connectionConfig.headers }),
         ...(connectionConfig.timeout && { timeout: connectionConfig.timeout })
       };

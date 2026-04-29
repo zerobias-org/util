@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-export { ValueConverter, DataType } from './ValueConverter';
-export { StringModifiers, NumberModifiers, DateModifiers, ArrayModifiers } from './Modifiers';
-export { PathUtils } from './PathUtils';
-export { JsonataIntegration } from './JsonataIntegration';
+export { ValueConverter, DataType } from './ValueConverter.js';
+export { StringModifiers, NumberModifiers, DateModifiers, ArrayModifiers } from './Modifiers.js';
+export { PathUtils } from './PathUtils.js';
+export { JsonataIntegration } from './JsonataIntegration.js';

@@ -6,8 +6,8 @@
  * or nested data structures.
  */
 
-import { ObjectNode, ObjectData } from '../types/objects.types';
-import { validateDefined } from '../../validation';
+import { ObjectNode, ObjectData } from '../types/objects.types.js';
+import { validateDefined } from '../../validation/index.js';
 
 /**
  * ObjectsApi implementation
@@ -16,7 +16,7 @@ import { validateDefined } from '../../validation';
  * Objects are organized in a tree structure with parent-child relationships.
  */
 export class ObjectsApi {
-  private client: import('../DataProducerClient').DataProducerClient;
+  private client: import('../DataProducerClient.js').DataProducerClient;
 
   /**
    * Create a new ObjectsApi instance
@@ -24,7 +24,7 @@ export class ObjectsApi {
    * @param client - DataProducerClient instance
    * @internal
    */
-  constructor(client: import('../DataProducerClient').DataProducerClient) {
+  constructor(client: import('../DataProducerClient.js').DataProducerClient) {
     this.client = client;
   }
 

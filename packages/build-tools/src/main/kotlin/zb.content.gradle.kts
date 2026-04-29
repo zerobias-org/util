@@ -1,21 +1,36 @@
 @file:OptIn(ExperimentalStdlibApi::class)
 
 import com.github.gradle.node.npm.task.NpmTask
-import com.zerobias.buildtools.content.ContentValidator
 import com.zerobias.buildtools.tasks.NeonDataloaderTask
 
 /**
  * zb.content — leaf plugin for content-catalog NPM packages that ship
- * YAML artifacts (vendor, suite, product) rather than TypeScript code.
+ * YAML / metadata artifacts rather than TypeScript code (vendor, tag,
+ * suite, product, framework, standard, crosswalk, benchmark, etc.).
  *
  * No generate/compile/Docker phases. Wires:
- *   validate        → ContentValidator (schema check of index.yml + package.json)
- *   testIntegration → DataloaderTask (loads artifact into active slot's Postgres)
+ *   validate        → repo-supplied via rootProject.extra["contentValidator"]
+ *                      (no default; missing slot is a build-time error —
+ *                       compose your validator from SchemaPrimitives)
+ *   testIntegration → NeonDataloaderTask (loads artifact into ephemeral
+ *                      Neon Postgres branch — this is the universal
+ *                      "is this loadable?" contract across content types)
  *   publishNpm      → npm publish --tag next + shrinkwrap staging
  *   promoteAll      → dist-tag promotion (next → dev/qa/uat/latest)
  *
  * Per-package build.gradle.kts is one line:
  *   plugins { id("zb.content") }
+ *
+ * Per-repo validator (root build.gradle.kts) — composed from
+ * com.zerobias.buildtools.content.SchemaPrimitives:
+ *
+ *   import com.zerobias.buildtools.content.SchemaPrimitives
+ *   extra["contentValidator"] = { proj: org.gradle.api.Project ->
+ *       require(proj.file("index.yml").isFile) { ... }
+ *       val doc = SchemaPrimitives.parseYaml(proj.file("index.yml"))
+ *       SchemaPrimitives.requireUuid(doc["id"], "id")
+ *       // ... rest of repo-specific rules ...
+ *   }
  */
 
 plugins {
@@ -51,17 +66,47 @@ if (nvmNodeBinDir != null) {
 }
 
 // ════════════════════════════════════════════════════════════
-// VALIDATE phase — schema check ported from scripts/validate.ts
+// VALIDATE phase — repo-supplied content check (strict slot).
+//
+// Each content repo MUST declare what "valid" means for its artifact
+// type by setting `extra["contentValidator"]` on the root project.
+// Signature:
+//
+//     extra["contentValidator"] = { proj: org.gradle.api.Project ->
+//         // throw on invalid; return normally on valid
+//     }
+//
+// Util ships SchemaPrimitives (UUID/enum/string/yaml-json parse/etc.)
+// in com.zerobias.buildtools.content. Repos compose their validator
+// from those primitives + repo-specific rules.
+//
+// No default — missing slot is a build-time error. The earlier
+// vendor-shaped fallback was content-type-specific and pretended to
+// cover types it actually didn't (suite/product/framework/etc. with
+// different npm-name formulas, deeper layouts, missing index.yml on
+// tag, …). Forcing each repo to declare its own validator avoids the
+// silent "wrong rules pass for the wrong type" failure mode.
 // ════════════════════════════════════════════════════════════
 
 val validateContent by tasks.registering {
     group = "lifecycle"
-    description = "Validate content package schema (index.yml + package.json)"
-    inputs.file("index.yml")
+    description = "Validate content package — repo-supplied via rootProject.extra[\"contentValidator\"]"
     inputs.file("package.json")
     doLast {
-        val result = ContentValidator.validate(project.projectDir)
-        logger.lifecycle("Validated content package: ${result.code}")
+        @Suppress("UNCHECKED_CAST")
+        val validator: ((org.gradle.api.Project) -> Unit) =
+            if (rootProject.extra.has("contentValidator")) {
+                rootProject.extra.get("contentValidator") as (org.gradle.api.Project) -> Unit
+            } else throw GradleException(
+                "[zb.content] No contentValidator declared on root project. " +
+                "Set rootProject.extra[\"contentValidator\"] in your root " +
+                "build.gradle.kts. Compose from " +
+                "com.zerobias.buildtools.content.SchemaPrimitives — see the " +
+                "zb.content header comment for an example."
+            )
+
+        validator(project)
+        logger.lifecycle("[validate] passed for ${project.path}")
     }
 }
 
@@ -76,20 +121,47 @@ tasks.named("validate") {
 
 val npmInstallContent by tasks.registering(NpmTask::class) {
     group = "lifecycle"
-    description = "Install npm dependencies"
+    description = "Install npm dependencies (skipped when package.json declares none)"
     npmCommand.set(listOf("install"))
+    // --no-workspaces: install ONLY this package, don't walk up to the
+    //   workspace root and resolve sibling packages. zbb still uses the
+    //   root `workspaces` declaration for content-package discovery, but
+    //   we don't want each per-vendor install to rewrite root
+    //   package-lock.json — that left the working tree dirty and broke
+    //   zb.base.pushVersion's rebase fallback when the matrix raced.
+    //   See zerobias-org/vendor run 25018847869.
+    // --no-package-lock: don't write a per-package package-lock.json
+    //   either. Content packages have at most one external dep that
+    //   lockfile-pins to "latest", so the lockfile carries no real
+    //   determinism — it would just be more dirty-tree noise.
+    args.set(listOf("--no-workspaces", "--no-package-lock"))
     workingDir.set(project.projectDir)
     inputs.file("package.json")
     outputs.dir("node_modules")
-    doFirst {
-        // gradle-node-plugin expects a lockfile; stub only if missing, and
-        // only at task-execution time (doing it at config time would mutate
-        // every subproject's working tree when the plugin is applied to 400+
-        // subprojects during `./gradlew tasks`).
-        val lock = project.file("package-lock.json")
-        if (!lock.exists()) {
-            lock.writeText("{}")
+
+    // Skip when the package has no dependencies. Running `npm install`
+    // on a no-deps content package creates an empty node_modules/
+    // containing an internal `.package-lock` cache file that the
+    // dataloader recursively walks for some artifact types (e.g.
+    // tag's TagArtifactLoader) and chokes on:
+    //
+    //   error: Unable to handle tag '.package-lock', id is missing
+    //
+    // Reproduced on zerobias-com/tag run 25090064467. Vendor doesn't
+    // hit this only because its dataloader processor reads index.yml
+    // directly rather than walking the directory tree.
+    onlyIf {
+        val pkgFile = project.file("package.json")
+        if (!pkgFile.isFile) return@onlyIf false
+        val pkgJson = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+            .readTree(pkgFile)
+        val hasDeps = pkgJson["dependencies"]?.let { it.isObject && it.size() > 0 } == true
+        val hasDevDeps = pkgJson["devDependencies"]?.let { it.isObject && it.size() > 0 } == true
+        val needsInstall = hasDeps || hasDevDeps
+        if (!needsInstall) {
+            logger.lifecycle("[npmInstallContent] no deps declared — skipping")
         }
+        needsInstall
     }
 }
 

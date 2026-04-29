@@ -2,7 +2,7 @@
  * Tests for ObjectsApi
  */
 import { expect } from 'chai';
-import { DataProducerClient } from '../../src';
+import { DataProducerClient } from '../../src/index.js';
 
 describe('ObjectsApi', () => {
   let client: DataProducerClient;
