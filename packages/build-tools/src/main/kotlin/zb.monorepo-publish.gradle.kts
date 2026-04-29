@@ -409,8 +409,18 @@ val publishJavaPackages = tasks.register("publishJavaPackages") {
             if (latestTag == null) {
                 logger.lifecycle("[java-publish] $name: no prior $name-v* tag — forcing publish to bootstrap")
             } else {
+                // Exclude files that change for npm-side reasons (package.json
+                // version bump in chore(release), CHANGELOG generation, lockfile
+                // updates) but don't affect the published Java artifact. Without
+                // these exclusions, every npm publish in the same dir
+                // re-publishes the Java jar at a new version even though the
+                // bytecode is byte-identical to the prior tag.
                 val (diffExit, diffOut) = runGit(
-                    repoRoot, "diff", "--name-only", latestTag, "HEAD", "--", "packages/$name/"
+                    repoRoot, "diff", "--name-only", latestTag, "HEAD", "--",
+                    "packages/$name/",
+                    ":(exclude)packages/$name/package.json",
+                    ":(exclude)packages/$name/package-lock.json",
+                    ":(exclude)packages/$name/CHANGELOG.md",
                 )
                 if (diffExit == 0 && diffOut.isBlank()) {
                     logger.lifecycle("[java-publish] $name unchanged since $latestTag — skipping")

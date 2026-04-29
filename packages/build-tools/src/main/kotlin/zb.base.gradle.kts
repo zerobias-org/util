@@ -312,7 +312,15 @@ val bumpVersion by tasks.registering {
     // Skip when no module files changed since the last release tag — avoids
     // computing a phantom next-version (e.g. 2.0.0 → 2.0.1) that will never
     // be published but would confuse downstream promote/tag tasks.
-    onlyIf { branch == "main" && changedSinceTag }
+    //
+    // -PversionAlreadyCommitted=true: a pre-matrix versionStandardPackages
+    // run is the authoritative version-bumper. The matrix must publish exactly
+    // what the version job decided — running bumpVersion again here would
+    // double-bump (e.g. version-job picks 2.1.2; matrix sees 2.1.2 already on
+    // npm from a flaky earlier run and bumps to 2.1.3). The result is that
+    // npm gets 2.1.3 while tagVersion (which reads from package.json on disk)
+    // tags 2.1.2 — a confusing version-vs-tag mismatch.
+    onlyIf { branch == "main" && changedSinceTag && !versionAlreadyCommitted }
     doLast {
         // CRITICAL: do NOT write to package.json here. Keep the computed version
         // in memory only via `project.version`. Writing here used to leave the
@@ -1443,15 +1451,31 @@ val publishReleaseEvent by tasks.registering {
     onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag }
     doLast {
         val ver = project.version.toString()
-        val pkgJson = project.file("package.json")
-        val name = if (pkgJson.exists()) {
-            Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1) ?: "unknown"
-        } else "unknown"
-        // location is relative path from repo root to this project
-        val location = project.projectDir.relativeTo(project.rootDir).path
-        val pkg = com.zerobias.buildtools.util.ReleaseAnnouncement.PublishedPackage(name, ver, location)
+
+        // Build the announcement list from `stagedPackages` — the same list
+        // that publishNpmExec, publishHubSdkExec, publishSdkExec push into as
+        // they successfully publish. This guarantees every npm artifact that
+        // actually shipped (module package + hub-sdk + any SDK) gets a Slack
+        // notification + Lambda event, not just the main module.
+        //
+        // Falling back to the project's own package.json keeps the legacy
+        // behavior when stagedPackages is empty (older flows / dry-runs).
+        val pkgs = mutableListOf<com.zerobias.buildtools.util.ReleaseAnnouncement.PublishedPackage>()
+        if (stagedPackages.isNotEmpty()) {
+            for ((pkgName, pkgDir) in stagedPackages) {
+                val location = pkgDir.relativeTo(project.rootDir).path
+                pkgs.add(com.zerobias.buildtools.util.ReleaseAnnouncement.PublishedPackage(pkgName, ver, location))
+            }
+        } else {
+            val pkgJson = project.file("package.json")
+            val name = if (pkgJson.exists()) {
+                Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1) ?: "unknown"
+            } else "unknown"
+            val location = project.projectDir.relativeTo(project.rootDir).path
+            pkgs.add(com.zerobias.buildtools.util.ReleaseAnnouncement.PublishedPackage(name, ver, location))
+        }
         val githubRepo = com.zerobias.buildtools.util.ReleaseAnnouncement.detectGithubRepo(project.rootDir)
-        com.zerobias.buildtools.util.ReleaseAnnouncement.announce(listOf(pkg), project.rootDir, branch, githubRepo, logger)
+        com.zerobias.buildtools.util.ReleaseAnnouncement.announce(pkgs, project.rootDir, branch, githubRepo, logger)
     }
 }
 
