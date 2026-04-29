@@ -182,15 +182,15 @@ object ZbbSlotProvider {
     }
 
     /**
-     * Compute the compose project name: ${ZB_SLOT}-${STACK_NAME}
-     * Reads STACK_NAME from the stack's .env on disk, not from shell.
+     * Compute the compose project name: ${ZB_SLOT}-${ZB_STACK}
+     * Reads ZB_STACK from the stack's .env on disk, not from shell.
      * Unique per slot+stack combination — prevents container collisions.
      */
     fun composeProjectName(): String {
         val slot = requireActiveSlot()
         val stackEnv = getStackEnv()
-        val stackName = stackEnv["STACK_NAME"]
-            ?: throw GradleException("STACK_NAME not found in stack .env. Re-add the stack: zbb stack add .")
+        val stackName = stackEnv["ZB_STACK"]
+            ?: throw GradleException("ZB_STACK not found in stack .env. Re-add the stack: zbb stack add .")
         return "$slot-$stackName"
     }
 
@@ -200,15 +200,66 @@ object ZbbSlotProvider {
         return File(System.getProperty("user.home"), ".zbb/slots")
     }
 
-    private fun readEnvFile(file: File): Map<String, String> {
-        return file.readLines()
-            .filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
-            .mapNotNull { line ->
-                val idx = line.indexOf('=')
-                if (idx > 0) line.substring(0, idx).trim() to line.substring(idx + 1).trim()
-                else null
+    /**
+     * Parse a .env file. Supports multi-line values: zbb writes ASCII-armored
+     * PGP keys, certs, and similar multi-line secrets as a `KEY=<first-line>`
+     * header followed by the body as continuation lines (no quoting, no
+     * escaping). A line is treated as a new key iff it matches
+     * `^[A-Za-z_][A-Za-z0-9_]*=`; anything else is appended to the current
+     * value. Comments and blank lines BEFORE any key are skipped.
+     */
+    private fun unescapeEnvValue(raw: String): String {
+        val sb = StringBuilder(raw.length)
+        var i = 0
+        while (i < raw.length) {
+            if (raw[i] == '\\' && i + 1 < raw.length) {
+                when (raw[i + 1]) {
+                    'n'  -> { sb.append('\n'); i += 2 }
+                    'r'  -> { sb.append('\r'); i += 2 }
+                    '\\' -> { sb.append('\\'); i += 2 }
+                    else -> { sb.append(raw[i]); i++ }
+                }
+            } else {
+                sb.append(raw[i]); i++
             }
-            .toMap()
+        }
+        return sb.toString()
+    }
+
+    private fun readEnvFile(file: File): Map<String, String> {
+        val envKeyPattern = Regex("^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+        val result = mutableMapOf<String, String>()
+        var currentKey: String? = null
+        val currentParts = mutableListOf<String>()
+
+        fun flush() {
+            currentKey?.let { key ->
+                val value = if (currentParts.size == 1) {
+                    // New format: single line with \n escapes
+                    unescapeEnvValue(currentParts[0]).trim()
+                } else {
+                    // Old format: multi-line continuation — join as-is
+                    currentParts.joinToString("\n").trim()
+                }
+                result[key] = value
+            }
+            currentKey = null
+            currentParts.clear()
+        }
+
+        for (line in file.readLines()) {
+            val match = envKeyPattern.matchEntire(line)
+            if (match != null) {
+                flush()
+                currentKey = match.groupValues[1]
+                currentParts.add(match.groupValues[2])
+            } else if (currentKey != null) {
+                currentParts.add(line)
+            }
+            // else: comment / blank line before any key — ignore
+        }
+        flush()
+        return result
     }
 
     private fun execZbb(command: List<String>): String {

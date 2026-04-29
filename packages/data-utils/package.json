@@ -1,7 +1,8 @@
 {
   "name": "@zerobias-org/data-utils",
-  "version": "1.0.29",
+  "version": "2.1.0",
   "description": "Utility library for DataProducer implementations and data mapping - schema generation, validation, type mapping, field transformations, and DataProducer client",
+  "type": "module",
   "keywords": [
     "DataProducer",
     "Data Mapping",
@@ -26,7 +27,6 @@
     "clean": "rimraf dist/ .docs/",
     "transpile": "tsc -b",
     "build": "npm run lint && npm run transpile",
-    "nx:build": "npm run lint && npm run transpile",
     "test": "npm run test:unit",
     "test:unit": "node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:watch": "npm run test -- --watch --reporter=min",
@@ -40,13 +40,45 @@
   },
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./schema": {
+      "types": "./dist/src/schema/index.d.ts",
+      "import": "./dist/src/schema/index.js"
+    },
+    "./validation": {
+      "types": "./dist/src/validation/index.d.ts",
+      "import": "./dist/src/validation/index.js"
+    },
+    "./transform": {
+      "types": "./dist/src/transform/index.d.ts",
+      "import": "./dist/src/transform/index.js"
+    },
+    "./mapper": {
+      "types": "./dist/src/mapper/DataMapper.d.ts",
+      "import": "./dist/src/mapper/DataMapper.js"
+    },
+    "./data-producer": {
+      "types": "./dist/src/data-producer/index.d.ts",
+      "import": "./dist/src/data-producer/index.js"
+    },
+    "./types": {
+      "types": "./dist/src/types/index.d.ts",
+      "import": "./dist/src/types/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "./dist/**/*",
     "package.json",
     "README.md"
   ],
   "dependencies": {
-    "@zerobias-org/util-connector": "^1.0.35",
-    "yaml": "^2.8.2"
+    "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.1",
+    "@zerobias-org/module-interface-dataproducer": "^2.1.1",
+    "@zerobias-org/util-connector": "^1.0.39"
   }
 }

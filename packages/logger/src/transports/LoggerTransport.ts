@@ -89,8 +89,8 @@ export abstract class LoggerTransport extends Transport {
 
     if (options.maxLineLength !== undefined) {
       this.maxLineLength = options.maxLineLength;
-    } else if (!this.maxLineLength) {
-      this.maxLineLength = 100;
+    } else if (this.maxLineLength === undefined) {
+      this.maxLineLength = 0;
     }
 
     if (options.template !== undefined) {

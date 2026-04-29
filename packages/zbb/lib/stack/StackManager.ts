@@ -16,6 +16,7 @@ import { runPreflightChecks, formatPreflightResults } from '../preflight.js';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
 import { Stack } from './Stack.js';
 import { StackEnvironment } from './StackEnvironment.js';
+import { SlotEnvironment } from '../slot/SlotEnvironment.js';
 import type { StackManifest, StackIdentity, DependencySpec } from '../config.js';
 import type { ImportSpec, StackStatus } from './types.js';
 import type { Slot } from '../slot/Slot.js';
@@ -75,6 +76,19 @@ export class StackManager {
       );
     }
 
+    // Refuse overlay-marked zbb.yamls. Authors use `overlay: true` to
+    // declare that a zbb.yaml is ONLY a lifecycle/env override layer
+    // for its path — never a standalone stack. Adding such a file would
+    // subvert the author's intent; surface a clear error instead.
+    if ((manifest as { overlay?: boolean }).overlay === true) {
+      throw new Error(
+        `${sourcePath}/zbb.yaml is marked as an overlay (overlay: true) — ` +
+        `it provides lifecycle overrides only, not a stack. It cannot be added.\n` +
+        `To add a stack, run \`zbb stack add\` against the stack manifest ` +
+        `zbb.yaml (typically at the monorepo root).`,
+      );
+    }
+
     const stackName = options?.as ?? this.extractShortName(manifest.name);
 
     // Check for existing stack with same name
@@ -83,15 +97,12 @@ export class StackManager {
       throw new Error(`Stack '${stackName}' already exists in slot '${this.slot.name}'`);
     }
 
-    // Run preflight checks if stack declares tool requirements
-    if (manifest.require && manifest.require.length > 0) {
-      const results = runPreflightChecks(manifest.require);
-      const failed = results.filter(r => !r.ok);
-      if (failed.length > 0) {
-        console.log(formatPreflightResults(results));
-        throw new Error(`Stack '${stackName}' has unmet tool requirements`);
-      }
-    }
+    // Preflight checks are NOT run during stack add — it's pure metadata
+    // setup (env resolution, port allocation, import wiring). Runtime tool
+    // requirements (java, docker, sem, etc.) are validated at lifecycle-
+    // command time by cli.ts, which filters `require:` entries by the
+    // `commands:` field (e.g. java is only needed for build/test/gate, not
+    // for stack add).
 
     // Resolve dependencies — auto-pull packaged deps if missing
     await this.resolveDeps(manifest);
@@ -112,19 +123,32 @@ export class StackManager {
     // Generate secrets (reuses cached values from previous add if available)
     const secrets = await this.generateSecrets(manifest, stackName);
 
-    // Get slot env vars + stack-level vars
-    // STACK_NAME = slot name so all stacks share the same Docker compose project/network.
-    // ZB_STACK = individual stack name for stack-level identity.
-    const slotVars = {
-      ...this.slot.getSlotEnvVars(),
-      ZB_STACK: stackName,
-      STACK_NAME: this.slot.name,
-    };
+    // Slot identity vars passed into initialize. Path vars come from
+    // the slot (ZB_SLOT, ZB_SLOT_DIR, …) and are registered as inherited
+    // with source:slot. Stack identity (ZB_STACK) is passed separately
+    // and registered with source:zbb — it's set by the orchestrator at
+    // stack-add time, scoped to this stack, not inherited from the slot.
+    const slotVars = this.slot.getSlotEnvVars();
+
+    // In dev mode, *_IMAGE vars that default to a ghcr.io tag are omitted
+    // from the schema so they never land in .env. Compose files reference
+    // these as `${FOO_IMAGE:-foo:dev}` — leaving the var unset lets the
+    // fallback resolve to the locally-built image name (which can differ
+    // from the published GHCR name; the fallback is the source of truth
+    // for the local tag).
+    const envSchema = mode === 'dev' && manifest.env
+      ? Object.fromEntries(
+        Object.entries(manifest.env).filter(([key, decl]) =>
+          !(key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')),
+        ),
+      )
+      : manifest.env ?? {};
 
     // Initialize env (builds manifest + .env)
     await StackEnvironment.initialize(
       stackPath,
-      manifest.env ?? {},
+      stackName,
+      envSchema,
       ports,
       secrets,
       imports,
@@ -132,22 +156,6 @@ export class StackManager {
       this.stacksDir,
       sourcePath,
     );
-
-    // For dev mode, override *_IMAGE env vars to use local dev tags.
-    // Packaged stacks default to ghcr.io images; dev stacks use locally-built images.
-    if (mode === 'dev' && manifest.env) {
-      const stack = new Stack(stackName, this.stacksDir);
-      await stack.load();
-      for (const [key, decl] of Object.entries(manifest.env)) {
-        if (key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')) {
-          // Extract the local image name from the ghcr.io path: ghcr.io/org/name:tag → name:dev
-          const imageName = decl.default.split('/').pop()?.replace(/:.*$/, '') ?? key;
-          const localTag = `${imageName}:dev`;
-          stack.env.set(key, localTag);
-          console.log(`  [dev] ${key} = ${localTag}`);
-        }
-      }
-    }
 
     // Write stack identity
     const identity: StackIdentity = {
@@ -166,9 +174,6 @@ export class StackManager {
     // Load and return
     const stack = new Stack(stackName, this.stacksDir);
     await stack.load();
-
-    // Sync merged slot-level .env (all stack exports combined)
-    await this.syncSlotEnv();
 
     return stack;
   }
@@ -221,9 +226,96 @@ export class StackManager {
     // Remove stack directory from slot
     await rm(stack.path, { recursive: true, force: true });
     console.log(`Removed stack '${name}'`);
+  }
 
-    // Sync merged slot-level .env (removed stack's vars purged)
-    await this.syncSlotEnv();
+  // ── Refresh ─────────────────────────────────────────────────
+
+  /**
+   * Fully refresh env for every stack in this slot.
+   *
+   * Two passes:
+   *   1. Re-read external sources (file / env / vault). Per-stack
+   *      file/env vars via `stack.env.refreshSourcedVars()`; vault vars
+   *      declared at the repo-root zbb.yaml via `refreshStackEnv` which
+   *      fetches + writes through the stack's env. Each stack's `.env`
+   *      is recomputed with fresh external values at the end of this
+   *      pass (computeEnv runs inside both paths).
+   *
+   *   2. Re-evaluate cross-stack imports. `stack.env.resolve()` re-reads
+   *      every dep stack's fresh `.env` and updates local manifest
+   *      entries whose resolution is `imported`. Without this pass, a
+   *      stack that imports a newly-rotated Vault secret from a dep
+   *      would still carry the stale imported value in its own `.env`.
+   *
+   * Pass 2 runs in `this.list()` order — any order works because pass 1
+   * already wrote every stack's fresh `.env` to disk, so dep-stack
+   * values are up-to-date by the time pass 2 reads them.
+   *
+   * Extracted from the former `slot.resolve(repoRoot, stack?)`. Slot
+   * now handles only DNS; this method handles every per-stack concern.
+   *
+   * @param opts.repoRoot - Path used to scan zbb.yaml for vault-declared
+   *                        vars. Without it, vault scanning is skipped
+   *                        (per-stack file/env refresh still runs).
+   * @param opts.stack    - Write target for vault-sourced vars. Without
+   *                        it, vault scanning is silently skipped —
+   *                        those vars refresh when a command dispatches
+   *                        with the owning stack in scope.
+   */
+  async refreshAll(opts: {
+    repoRoot?: string;
+    stack?: Stack | null;
+  } = {}): Promise<import('./refresh.js').RefreshResult> {
+    // ── Pass 1: external re-fetch ──
+    let result: import('./refresh.js').RefreshResult;
+    if (!opts.repoRoot) {
+      // Without a repoRoot we can only do per-stack file/env refresh.
+      const refreshed: string[] = [];
+      const errors: Array<{ name: string; error: string }> = [];
+      try {
+        for (const s of await this.list()) {
+          try {
+            const r = await s.env.refreshSourcedVars();
+            for (const n of r.refreshed) refreshed.push(`${s.name}.${n}`);
+            for (const e of r.errors) errors.push({ name: `${s.name}.${e.name}`, error: e.error });
+          } catch (e: unknown) {
+            errors.push({ name: s.name, error: e instanceof Error ? e.message : String(e) });
+          }
+        }
+      } catch (e: unknown) {
+        errors.push({ name: 'stacks-list', error: e instanceof Error ? e.message : String(e) });
+      }
+      result = { refreshed, errors };
+    } else {
+      const { refreshStackEnv } = await import('./refresh.js');
+      result = await refreshStackEnv(this.slot, opts.repoRoot, opts.stack ?? null);
+    }
+
+    // ── Pass 2: import re-eval across stacks ──
+    //
+    // Re-walks each stack's manifest.imports against its dep stacks'
+    // freshly-written .env files (pass 1 already updated those). Import
+    // failures (e.g. source stack not added, `optional: false`) surface
+    // here rather than blowing up later on the next lifecycle command.
+    try {
+      for (const s of await this.list()) {
+        try {
+          await s.env.resolve();
+        } catch (e: unknown) {
+          result.errors.push({
+            name: `${s.name} (imports)`,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    } catch (e: unknown) {
+      result.errors.push({
+        name: 'stacks-list-imports',
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
+    return result;
   }
 
   // ── List / Load / Info ──────────────────────────────────────
@@ -350,8 +442,6 @@ export class StackManager {
       }
     }
 
-    // Sync merged slot-level .env after full start sequence
-    await this.syncSlotEnv();
   }
 
   /**
@@ -407,7 +497,7 @@ export class StackManager {
 
     // Stop the substack's specific containers
     if (substackConfig.services?.length) {
-      const stackEnvName = stack.env.get('STACK_NAME') ?? this.slot.name;
+      const stackEnvName = this.slot.name;
       const containers = substackConfig.services
         .map(s => `${stackEnvName}-${s}`)
         .join(' ');
@@ -479,27 +569,8 @@ export class StackManager {
    * Parse import declarations from manifest into ImportSpec[].
    */
   resolveImports(manifest: StackManifest): ImportSpec[] {
-    const imports: ImportSpec[] = [];
-    if (!manifest.imports) return imports;
-
-    for (const [depName, vars] of Object.entries(manifest.imports)) {
-      for (const v of vars) {
-        if (typeof v === 'string') {
-          // Check for "VAR as ALIAS" syntax
-          const match = v.match(/^(\S+)\s+as\s+(\S+)$/);
-          if (match) {
-            imports.push({ varName: match[1], alias: match[2], fromStack: depName });
-          } else {
-            imports.push({ varName: v, fromStack: depName });
-          }
-        } else {
-          // ImportAlias object
-          imports.push({ varName: v.from, alias: v.as, fromStack: depName });
-        }
-      }
-    }
-
-    return imports;
+    if (!manifest.imports) return [];
+    return StackEnvironment.parseImports(manifest.imports);
   }
 
   // ── Private Helpers ─────────────────────────────────────────
@@ -551,7 +622,7 @@ export class StackManager {
     }
 
     // Start each substack in order
-    const stackEnvName = stack.env.get('STACK_NAME') ?? this.slot.name;
+    const stackEnvName = this.slot.name;
     const envFile = join(this.stacksDir, stack.name, '.env');
 
     for (const sub of sorted) {
@@ -805,7 +876,7 @@ export class StackManager {
       const manifestPath = join(this.stacksDir, entry.name, 'manifest.yaml');
       const manifest = await loadYamlOrDefault<Record<string, Record<string, unknown>>>(manifestPath, {});
       for (const [_, meta] of Object.entries(manifest)) {
-        if (meta?.type === 'port' && meta?.value) {
+        if (meta?.resolution === 'allocated' && meta?.value) {
           used.add(parseInt(String(meta.value), 10));
         }
       }
@@ -867,68 +938,6 @@ export class StackManager {
 
     // Fresh allocation (with host port availability checks)
     return this.allocatePorts(manifest);
-  }
-
-  /**
-   * Rebuild the slot-level .env as a merged projection of all stacks.
-   * This keeps legacy consumers (node-lib Slot, hub-cli) working — they read
-   * the flat slot .env, not per-stack .env files.
-   *
-   * Merge order: slot vars first, then each stack's EXPORTED vars (topo-sorted).
-   * Later stacks override earlier ones (so hub's SERVER_URL overrides dana's if both export it).
-   */
-  async syncSlotEnv(): Promise<void> {
-    const { writeFile } = await import('node:fs/promises');
-
-    const merged = new Map<string, string>();
-
-    // 1. Slot-level vars always present
-    const slotVars = this.slot.getSlotEnvVars();
-    for (const [k, v] of Object.entries(slotVars)) {
-      merged.set(k, v);
-    }
-
-    // 2. Load all stacks in topo-sorted order (deps first)
-    const stacks = await this.list();
-    if (stacks.length === 0) {
-      // No stacks — write just slot vars
-      await this.writeSlotEnv(merged);
-      return;
-    }
-
-    // Topo-sort stacks by dependencies
-    interface DepNode { name: string; deps: string[] }
-    const nodes: DepNode[] = stacks.map(s => ({
-      name: s.name,
-      deps: s.manifest.depends ? Object.keys(s.manifest.depends) : [],
-    }));
-    const { sorted } = toposort(nodes, n => n.name, n => n.deps);
-
-    // 3. Merge each stack's vars (all vars from .env, not just exports)
-    //    Exports control what consumers can IMPORT, but the merged .env
-    //    needs all vars for tools like hub-cli that read SERVER_URL etc.
-    for (const node of sorted) {
-      const stack = stacks.find(s => s.name === node.name);
-      if (!stack) continue;
-
-      const envAll = stack.env.getAll();
-      for (const [k, v] of Object.entries(envAll)) {
-        // Skip slot-level vars (already set, don't override with stack copies)
-        if (k.startsWith('ZB_SLOT') || k === 'ZB_STACKS_DIR' || k === 'STACK_NAME') continue;
-        merged.set(k, v);
-      }
-    }
-
-    await this.writeSlotEnv(merged);
-  }
-
-  private async writeSlotEnv(env: Map<string, string>): Promise<void> {
-    const { writeFile } = await import('node:fs/promises');
-    const lines: string[] = [];
-    for (const key of [...env.keys()].sort()) {
-      lines.push(`${key}=${env.get(key)}`);
-    }
-    await writeFile(join(this.slot.path, '.env'), lines.join('\n') + '\n', 'utf-8');
   }
 
   /**

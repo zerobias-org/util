@@ -2,12 +2,15 @@
 # zbb shell hook — sourced in the slot subshell.
 # Provides:
 #   - cd hook: scopes env to the current stack on directory change
+#   - prompt update: PS1 shows [zb:slot:scope:name] when in an added stack
 #   - zbb() wrapper: syncs env after stack/env mutations
 
 # ── State ────────────────────────────────────────────────────────────
 
 _ZBB_CURRENT_STACK=""
 _ZBB_CURRENT_STACK_VARS=()
+# Full npm package name of the active stack (e.g. "@zerobias-org/util")
+_ZBB_CURRENT_STACK_FULL=""
 
 # ── Load a stack's .env into the current shell ───────────────────────
 
@@ -22,7 +25,7 @@ _zbb_load_stack_env() {
     for var in "${_ZBB_CURRENT_STACK_VARS[@]}"; do
       # Never unset slot-level vars — they must persist across stack changes
       case "$var" in
-        ZB_SLOT|ZB_SLOT_DIR|ZB_SLOT_CONFIG|ZB_SLOT_LOGS|ZB_SLOT_STATE|ZB_SLOT_TMP|ZB_STACKS_DIR|STACK_NAME) ;;
+        ZB_SLOT|ZB_SLOT_DIR|ZB_SLOT_CONFIG|ZB_SLOT_LOGS|ZB_SLOT_STATE|ZB_SLOT_TMP|ZB_STACKS_DIR) ;;
         *) unset "$var" 2>/dev/null ;;
       esac
     done
@@ -41,6 +44,10 @@ _zbb_load_stack_env() {
       [ -z "$key" ] && continue
       [[ "$key" =~ ^[[:space:]]*# ]] && continue
       key=$(echo "$key" | xargs)
+      # Unescape \n and \r written by serializeEnv (new single-line format)
+      value="${value//\\n/$'\n'}"
+      value="${value//\\r/$'\r'}"
+      value="${value//\\\\/\\}"
       export "$key=$value"
       _ZBB_CURRENT_STACK_VARS+=("$key")
     done < "$env_file"
@@ -59,29 +66,53 @@ _zbb_scope_env() {
   # Walk up from cwd looking for a zbb.yaml with a 'name:' field
   local dir="$PWD"
   local stack_name=""
+  local stack_full=""
 
+  # Walk up looking for the nearest zbb.yaml whose stack is actually added
+  # to the slot. Nested packages (e.g. appliance/zbb.yaml inside
+  # com/hub/zbb.yaml) may declare their own identity without being
+  # standalone stacks in the slot — in that case the hub stack from the
+  # parent dir is the right scope. Don't stop at the first zbb.yaml;
+  # stop at the first one that matches an added stack.
   while [ "$dir" != "/" ]; do
     if [ -f "$dir/zbb.yaml" ]; then
       local name
       name=$(grep -m1 '^name:' "$dir/zbb.yaml" 2>/dev/null | sed 's/^name:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
       if [ -n "$name" ]; then
         local candidate="${name##*/}"
-        # Only activate if this stack has been added to the slot
         if [ -d "$stacks_dir/$candidate" ]; then
           stack_name="$candidate"
+          stack_full="$name"
+          break
         fi
-        break
       fi
     fi
     dir=$(dirname "$dir")
   done
 
-  # If same stack and not a forced reload, skip
+  # Refresh PS1 every prompt redraw (cheap, idempotent). The format is:
+  #   [zb:<slot>]                — no active stack
+  #   [zb:<slot>:<scope>:<name>] — in an added stack, where <scope> is the
+  #                                trailing piece of the npm scope after
+  #                                "zerobias-" (e.g. "org" or "com") and
+  #                                <name> is the package short name.
+  if [ -n "$stack_full" ]; then
+    local scope="${stack_full%%/*}"           # "@zerobias-org"
+    scope="${scope#@}"                          # "zerobias-org"
+    scope="${scope#zerobias-}"                  # "org" (or unchanged if no zerobias- prefix)
+    PS1="\[\033[01;36m\][zb:${ZB_SLOT}:${scope}:${stack_name}]\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
+  else
+    PS1="\[\033[01;36m\][zb:${ZB_SLOT}]\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
+  fi
+
+  # If same stack and not a forced reload, skip the env reload (we only
+  # rebuild PS1 above — the env scope didn't change).
   [ "$stack_name" = "$_ZBB_CURRENT_STACK" ] && [ "${_ZBB_FORCE_RELOAD:-}" != "1" ] && return
 
   local prev="$_ZBB_CURRENT_STACK"
   _ZBB_FORCE_RELOAD=""
 
+  _ZBB_CURRENT_STACK_FULL="$stack_full"
   _zbb_load_stack_env "$stack_name"
 
   # Log the transition
@@ -121,7 +152,7 @@ zbb() {
   case "$1" in
     env)
       case "$2" in
-        set|unset|reset)
+        set|unset|reset|resolve|refresh)
           _ZBB_FORCE_RELOAD=1
           _zbb_scope_env
           ;;

@@ -3,7 +3,7 @@
  */
 import { expect } from 'chai';
 import jsonata from 'jsonata';
-import { JsonataIntegration } from '../src';
+import { JsonataIntegration } from '../src/index.js';
 
 describe('JsonataIntegration', () => {
   describe('registerFunctions', () => {

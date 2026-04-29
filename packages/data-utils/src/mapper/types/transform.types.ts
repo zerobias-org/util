@@ -1,4 +1,4 @@
-import { ValidationRule, ValidationTiming } from './validation.types';
+import { ValidationRule, ValidationTiming } from './validation.types.js';
 
 /**
  * Transform types available for mapping

@@ -5,13 +5,13 @@
  */
 
 // Field types
-export * from './field.types';
+export * from './field.types.js';
 
 // Transform types
-export * from './transform.types';
+export * from './transform.types.js';
 
 // Validation types
-export * from './validation.types';
+export * from './validation.types.js';
 
 // Mapping types
-export * from './mapping.types';
+export * from './mapping.types.js';

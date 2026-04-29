@@ -116,10 +116,24 @@ export async function handleStack(args: string[], slot: Slot): Promise<void> {
     }
 
     case 'remove': {
-      const stackName = args[1];
+      let stackName = args[1];
       if (!stackName) {
-        console.error('Usage: zbb stack remove <name>');
+        console.error('Usage: zbb stack remove <name|path>');
         process.exit(1);
+      }
+      // If the argument looks like a path (., ./, /, ~), resolve the
+      // stack name from the manifest — same logic as `stack add .`.
+      if (stackName === '.' || stackName.startsWith('./') || stackName.startsWith('/') || stackName.startsWith('~')) {
+        const { resolve: resolvePath } = await import('node:path');
+        const { existsSync } = await import('node:fs');
+        const sourcePath = resolvePath(stackName);
+        const manifest = await loadStackManifest(sourcePath);
+        if (!manifest) {
+          console.error(`No stack manifest found at ${sourcePath}/zbb.yaml`);
+          process.exit(1);
+        }
+        // Extract short name (same as StackManager.extractShortName)
+        stackName = manifest.name.split('/').pop() ?? manifest.name;
       }
       await slot.stacks.remove(stackName);
       break;
@@ -165,6 +179,42 @@ export async function handleLifecycle(
         console.error('Usage: zbb start <stack[:substack]>');
         process.exit(1);
       }
+
+      // Run preflight checks for tools required during stack operations.
+      // New model: require: is stack-level — always runs. Entries can be
+      // string name refs (resolved against the manifest's tools:
+      // registry) or inline ToolRequirement objects. Legacy inline
+      // entries with a `commands:` filter still honor 'stack' for
+      // back-compat during migration.
+      const stackName = target.split(':')[0];
+      const stack = await slot.stacks.load(stackName);
+      if (stack.manifest.require && stack.manifest.require.length > 0) {
+        const { runPreflightChecks, formatPreflightResults } = await import('../preflight.js');
+        const { resolveRequireEntries } = await import('../config.js');
+        const { requirements, unresolved } = resolveRequireEntries(
+          stack.manifest.require,
+          stack.manifest.tools,
+        );
+        if (unresolved.length > 0) {
+          console.error(
+            `zbb stack: require: names not defined in tools: registry: ` +
+            `${unresolved.join(', ')}. Add them to the stack manifest's tools: block.`,
+          );
+          process.exit(1);
+        }
+        const applicable = requirements.filter(
+          r => !r.commands || r.commands.includes('stack'),
+        );
+        if (applicable.length > 0) {
+          const results = runPreflightChecks(applicable);
+          const failed = results.filter(r => !r.ok);
+          if (failed.length > 0) {
+            console.log(formatPreflightResults(results));
+            process.exit(1);
+          }
+        }
+      }
+
       console.log(`Starting ${target}...`);
       await slot.stacks.start(target);
       console.log(`Started ${target}`);
@@ -251,19 +301,11 @@ export async function handleLifecycle(
 }
 
 /**
- * Detect stack context from cwd — walk up looking for zbb.yaml with a name field,
- * then match against stacks in the slot.
+ * Resolve a default stack target from cwd — walk up looking for zbb.yaml
+ * with a name field, then match against stacks added to this slot. Used
+ * by subcommands (stop/restart/build/test/gate) that accept an optional
+ * target arg and want to default to "the stack I'm standing in."
  */
-export async function detectStackContext(slot: Slot): Promise<Stack | null> {
-  const name = await detectStackName(slot);
-  if (!name) return null;
-  try {
-    return await slot.stacks.load(name);
-  } catch {
-    return null;
-  }
-}
-
 async function detectStackName(slot: Slot): Promise<string | null> {
   const repoRoot = findRepoRoot(process.cwd());
   if (!repoRoot) return null;

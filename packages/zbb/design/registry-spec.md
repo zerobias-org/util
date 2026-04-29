@@ -29,7 +29,7 @@ A **Verdaccio-based local npm registry** that ships as a built-in zbb stack. It 
 │                    │                                     │
 │              ┌─────┴─────┐                               │
 │              │ Verdaccio │  ◄── shared Docker network    │
-│              │ :4873     │      ${STACK_NAME}_default    │
+│              │ :4873     │      ${ZB_SLOT}_default    │
 │              └─────┬─────┘                               │
 │        ┌───────────┼───────────┐                         │
 │        ▼           ▼           ▼                         │
@@ -39,7 +39,7 @@ A **Verdaccio-based local npm registry** that ships as a built-in zbb stack. It 
 └──────────────────────────────────────────────────────────┘
 
 Host access:      http://localhost:${REGISTRY_PORT}
-Container access: http://${STACK_NAME}-registry:4873
+Container access: http://${ZB_SLOT}-registry:4873
 ```
 
 ### Dependency Chain
@@ -55,11 +55,11 @@ platform → dana
 
 ### Docker Network
 
-All stacks in a slot share the `${STACK_NAME}_default` Docker network via compose project naming (`-p ${STACK_NAME}`). The registry container is `${STACK_NAME}-registry` and is reachable by container name from any other stack's containers. No extra network configuration needed — this is the same pattern postgres and minio already use.
+All stacks in a slot share the `${ZB_SLOT}_default` Docker network via compose project naming (`-p ${ZB_SLOT}`). The registry container is `${ZB_SLOT}-registry` and is reachable by container name from any other stack's containers. No extra network configuration needed — this is the same pattern postgres and minio already use.
 
 Two env vars expose the registry URL:
 - `REGISTRY_URL` = `http://localhost:${REGISTRY_PORT}` — for host-side operations (`zbb registry publish`, `npm install` from terminal)
-- `REGISTRY_INTERNAL_URL` = `http://${STACK_NAME}-registry:4873` — for container-side operations (`npm install` inside Docker build stages)
+- `REGISTRY_INTERNAL_URL` = `http://${ZB_SLOT}-registry:4873` — for container-side operations (`npm install` inside Docker build stages)
 
 ---
 
@@ -87,7 +87,7 @@ env:
 
   REGISTRY_INTERNAL_URL:
     type: string
-    value: "http://${STACK_NAME}-registry:4873"
+    value: "http://${ZB_SLOT}-registry:4873"
     description: Local npm registry URL (container-side, via Docker network)
 
   GITHUB_TOKEN:
@@ -113,19 +113,19 @@ state:
 lifecycle:
   start: >-
     bash setup.sh &&
-    docker compose -f compose.yml -p ${STACK_NAME} up -d
-  stop: docker stop ${STACK_NAME}-registry 2>/dev/null; docker rm ${STACK_NAME}-registry 2>/dev/null; true
+    docker compose -f compose.yml -p ${ZB_SLOT} up -d
+  stop: docker stop ${ZB_SLOT}-registry 2>/dev/null; docker rm ${ZB_SLOT}-registry 2>/dev/null; true
   health:
     command: "curl -sf http://localhost:${REGISTRY_PORT}/-/ping >/dev/null"
     interval: 2
     timeout: 30
   cleanup:
-    - "docker stop ${STACK_NAME}-registry 2>/dev/null; docker rm ${STACK_NAME}-registry 2>/dev/null; true"
-    - "docker volume rm ${STACK_NAME}_verdaccio-storage 2>/dev/null; true"
+    - "docker stop ${ZB_SLOT}-registry 2>/dev/null; docker rm ${ZB_SLOT}-registry 2>/dev/null; true"
+    - "docker volume rm ${ZB_SLOT}_verdaccio-storage 2>/dev/null; true"
 
 logs:
   source: docker
-  container: "${STACK_NAME}-registry"
+  container: "${ZB_SLOT}-registry"
 ```
 
 ### Compose (`compose.yml`)
@@ -134,7 +134,7 @@ logs:
 services:
   registry:
     image: verdaccio/verdaccio:6
-    container_name: ${STACK_NAME}-registry
+    container_name: ${ZB_SLOT}-registry
     ports:
       - "${REGISTRY_PORT}:4873"
     environment:
@@ -147,7 +147,7 @@ services:
       - ./config.yaml:/verdaccio/conf/config.yaml:ro
       - ./htpasswd:/verdaccio/conf/htpasswd:ro
     labels:
-      zerobias.slot: ${STACK_NAME}
+      zerobias.slot: ${ZB_SLOT}
 
 volumes:
   verdaccio-storage:
@@ -512,7 +512,7 @@ open http://localhost:${REGISTRY_PORT}
 
 ### Storage Location
 
-Verdaccio data lives in a Docker volume: `${STACK_NAME}_verdaccio-storage`.
+Verdaccio data lives in a Docker volume: `${ZB_SLOT}_verdaccio-storage`.
 
 - Survives `zbb stack stop registry` (just stops the container)
 - Destroyed by `zbb stack remove registry` or `zbb registry clear --all`

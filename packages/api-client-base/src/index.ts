@@ -12,7 +12,7 @@ export { BaseApiClient } from './BaseApiClient.js';
 export { BaseConnector } from './BaseConnector.js';
 
 // Utilities
-export { jwt, apiKey } from './AuthUtils.js';
+export { jwt, apiKey, session } from './AuthUtils.js';
 export { ensureRequestPrototype } from './PipelineUtil.js';
 
 // Observability

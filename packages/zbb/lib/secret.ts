@@ -14,7 +14,7 @@ import { parse as yamlParse, stringify } from 'yaml';
 import type { Slot } from './slot/Slot.js';
 
 const SUPPORTED_EXTENSIONS = ['yml', 'yaml', 'json'];
-const METADATA_KEYS = ['_module', '_schema', '_id'];
+const METADATA_KEYS = ['_module', '_schema', '_id', '_extends'];
 
 /**
  * Get secrets directory for a slot
@@ -57,13 +57,31 @@ function readSecret(filePath: string): Record<string, unknown> {
 }
 
 /**
- * Resolve {{env.VAR}} and {{file.name.key}} refs in secret values
+ * Resolve {{env.VAR}} and {{file.name.key}} refs in secret values.
+ * If the secret has `_extends: <name>`, the parent secret is resolved first
+ * and used as a base — local keys override inherited ones.
  */
 function resolveRefs(
   obj: Record<string, unknown>,
-  dir: string
+  dir: string,
+  _seen: Set<string> = new Set()
 ): Record<string, unknown> {
-  const resolved: Record<string, unknown> = {};
+  let resolved: Record<string, unknown> = {};
+
+  // Chain: if _extends is set, resolve parent first and use as base
+  if (obj._extends) {
+    const parentName = obj._extends as string;
+    if (_seen.has(parentName)) {
+      throw new Error(`Cyclic _extends chain detected via '${parentName}'`);
+    }
+    const parentPath = findSecretFile(dir, parentName);
+    if (!parentPath) {
+      throw new Error(`Parent secret not found: ${parentName}`);
+    }
+    const parentRaw = readSecret(parentPath);
+    resolved = { ...resolveRefs(parentRaw, dir, new Set([..._seen, parentName])) };
+  }
+
   for (const [key, value] of Object.entries(obj)) {
     if (METADATA_KEYS.includes(key)) continue; // strip metadata
     if (typeof value === 'string') {
@@ -221,8 +239,20 @@ async function secretCreate(args: string[], slot: Slot): Promise<void> {
     if (moduleKey) data._module = moduleKey;
   }
 
-  if (Object.keys(data).filter(k => !METADATA_KEYS.includes(k)).length === 0) {
-    console.error('No secret data provided. Use key=value pairs, @file.yml, or --type @schema.yml');
+  // --extends <name>: inherit from another secret
+  const extendsIdx = remaining.indexOf('--extends');
+  if (extendsIdx !== -1 && remaining[extendsIdx + 1]) {
+    const parentName = remaining[extendsIdx + 1];
+    const parentPath = findSecretFile(dir, parentName);
+    if (!parentPath) {
+      console.error(`Parent secret not found: ${parentName}`);
+      process.exit(1);
+    }
+    data._extends = parentName;
+  }
+
+  if (Object.keys(data).filter(k => !METADATA_KEYS.includes(k)).length === 0 && !data._extends) {
+    console.error('No secret data provided. Use key=value pairs, @file.yml, --type @schema.yml, or --extends <name>');
     process.exit(1);
   }
 

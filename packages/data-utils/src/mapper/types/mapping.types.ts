@@ -1,5 +1,5 @@
-import { SourceField, DestinationField } from './field.types';
-import { TransformConfig } from './transform.types';
+import { SourceField, DestinationField } from './field.types.js';
+import { TransformConfig } from './transform.types.js';
 
 /**
  * Error handling strategy for mapping failures

@@ -1,0 +1,219 @@
+{
+  "version": 1,
+  "branch": "feature/zbb-monorepo-support",
+  "timestamp": "2026-04-08T08:28:22.888Z",
+  "packages": {
+    "@zerobias-com/aws-common": {
+      "version": "3.0.18",
+      "sourceHash": "22ec5b79d5fc5487923e1428ac5828aba99b3d7bf5c7e5c6b320e908f64b3901",
+      "testHash": "4fe808281f438edd8fd93fb193e880aa3a9861ecde9aff6f359024a9c4384512",
+      "tasks": {
+        "lint": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      },
+      "rootDeps": {
+        "@aws-sdk/client-organizations": "^3.970.0",
+        "@aws-sdk/client-sts": "^3.970.0",
+        "@aws-sdk/credential-providers": "^3.970.0",
+        "@aws-sdk/types": "^3.969.0",
+        "@smithy/smithy-client": "^4.10.8",
+        "@zerobias-org/logger": "\"^3.0.6\"",
+        "@zerobias-org/types-amazon-js": "^1.0.36",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "@zerobias-org/util-connector": "^1.0.31",
+        "@zerobias-org/util-hub-module-utils": "^2.0.32",
+        "safe-stable-stringify": "^2.5.0",
+        "diff": "\"^8.0.4\"",
+        "fast-xml-parser": "\"^5.5.7\"",
+        "file-type": "\"^22.0.0\"",
+        "glob": "\">=13.0.0\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"^2.8.3\""
+      }
+    },
+    "@zerobias-com/util-core": {
+      "version": "1.0.27",
+      "sourceHash": "42cdf03dedf743c818f1ebab0674cf7f7242db2575f323c1ad33ecba56bc875d",
+      "testHash": "039d1f162ccc96762a9f9e2954bfe36e1604edec31a8196f0aaad2bfc15b9a49",
+      "tasks": {
+        "lint": "passed",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 60,
+          "ran": 60,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "ajv": "^8.18.0",
+        "ajv-formats": "^3.0.1",
+        "@zerobias-org/logger": "\"^3.0.6\"",
+        "diff": "\"^8.0.4\"",
+        "fast-xml-parser": "\"^5.5.7\"",
+        "file-type": "\"^22.0.0\"",
+        "glob": "\">=13.0.0\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"^2.8.3\""
+      }
+    },
+    "@zerobias-com/util-dynamodb": {
+      "version": "1.0.31",
+      "sourceHash": "691265052617d0e69ece633febded058b8154b7b7b1ae0ee9dec179d1a95359d",
+      "testHash": "0bf1c7ab115faa665e5d193d3446fe2342934607a664ba8665ff9629e8e2331e",
+      "tasks": {
+        "lint": "passed",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 18,
+          "ran": 18,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 34,
+          "ran": 34,
+          "status": "passed"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      },
+      "rootDeps": {
+        "@aws-sdk/client-dynamodb": "^3.943.0",
+        "@aws-sdk/util-dynamodb": "^3.943.0",
+        "@smithy/smithy-client": "^4.10.8",
+        "@supercharge/promise-pool": "^3.2.0",
+        "@zerobias-org/logger": "\"^3.0.6\"",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "diff": "\"^8.0.4\"",
+        "fast-xml-parser": "\"^5.5.7\"",
+        "file-type": "\"^22.0.0\"",
+        "glob": "\">=13.0.0\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"^2.8.3\""
+      }
+    },
+    "@zerobias-com/util-events": {
+      "version": "2.0.19",
+      "sourceHash": "a46fd9e1740e8a084960be04a246f6d0258c25ae991f94f9126dc15f8336066f",
+      "testHash": "3ebd478e791e9e50c272b6f3a201f4e934b87448fef2c73bd4acf7f823b9bf35",
+      "tasks": {
+        "lint": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 11,
+          "ran": 11,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      },
+      "rootDeps": {
+        "@aws-sdk/client-cloudwatch-events": "^3.943.0",
+        "@aws-sdk/client-scheduler": "^3.943.0",
+        "@aws-sdk/client-sqs": "^3.943.0",
+        "@zerobias-org/logger": "\"^3.0.6\"",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "sqs-consumer": "^14.1.0",
+        "diff": "\"^8.0.4\"",
+        "fast-xml-parser": "\"^5.5.7\"",
+        "file-type": "\"^22.0.0\"",
+        "glob": "\">=13.0.0\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"^2.8.3\""
+      }
+    },
+    "@zerobias-com/util-pg": {
+      "version": "1.0.36",
+      "sourceHash": "fb750b81e8cb682126b62fa04361939f586ecfa4bdec506eb3ce02d6b298a9a3",
+      "testHash": "6f794c0e9c5865683fd6843b43ed3591b19e13003b5f637e219c21357a168ffe",
+      "tasks": {
+        "lint": "passed",
+        "generate": "skipped",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 8,
+          "ran": 8,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      },
+      "rootDeps": {
+        "@zerobias-org/logger": "\"^3.0.6\"",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "pg-promise": "^12.3.0",
+        "postgres-interval": "^4.0.2",
+        "stack-trace": "^0.0.10",
+        "diff": "\"^8.0.4\"",
+        "fast-xml-parser": "\"^5.5.7\"",
+        "file-type": "\"^22.0.0\"",
+        "glob": "\">=13.0.0\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "yaml": "\"^2.8.3\""
+      }
+    }
+  }
+}

@@ -10,9 +10,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
+import jsonata from 'jsonata';
 import { extractRefs, interpolate } from '../env/Resolver.js';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
-import type { EnvVarDeclaration, StackManifest } from '../config.js';
+import type { EnvVarDeclaration, StackManifest, ImportAlias, OptionalImport } from '../config.js';
 import type { StackManifestEntry, Resolution, ExplainResult, ImportSpec } from './types.js';
 
 const SENSITIVE_PATTERNS = [
@@ -26,6 +27,7 @@ const SENSITIVE_PATTERNS = [
 export class StackEnvironment extends EventEmitter {
   private manifest = new Map<string, StackManifestEntry>();
   private schema = new Map<string, EnvVarDeclaration>();
+  private imports: ImportSpec[] = [];
   private env = new Map<string, string>();
   readonly stackDir: string;
 
@@ -61,17 +63,31 @@ export class StackEnvironment extends EventEmitter {
     if (!existsSync(stackYamlPath)) {
       throw new Error(`stack.yaml not found at ${stackYamlPath} — StackEnvironment requires a stack context`);
     }
-    const identity = await loadYamlOrDefault<{ source?: string }>(stackYamlPath, {});
+    const identity = await loadYamlOrDefault<{ source?: string; mode?: 'dev' | 'packaged' }>(stackYamlPath, {});
     const schemaDir = identity.source ?? this.stackDir;
     const zbbYamlPath = join(schemaDir, 'zbb.yaml');
     if (!existsSync(zbbYamlPath)) {
       throw new Error(`zbb.yaml not found at ${zbbYamlPath} (source: ${schemaDir}) — Layer 1 schema is required`);
     }
-    const config = await loadYamlOrDefault<{ env?: Record<string, EnvVarDeclaration> }>(zbbYamlPath, {});
-    if (!config.env) {
-      throw new Error(`zbb.yaml at ${zbbYamlPath} has no env declarations`);
+    const config = await loadYamlOrDefault<Partial<StackManifest>>(zbbYamlPath, {});
+    // A stack is allowed to have zero declared env vars (e.g. a library
+    // monorepo like com/util that just needs lifecycle delegation and has
+    // no ports/secrets/imports). Empty schema is valid.
+    let entries = Object.entries(config.env ?? {});
+    if (identity.mode === 'dev') {
+      // *_IMAGE vars defaulting to a ghcr.io tag describe the published
+      // production image. In dev mode the locally-built image is used
+      // instead via the compose-file fallback (`${FOO_IMAGE:-foo:dev}`),
+      // and the published name can differ from the local tag, so we drop
+      // these declarations from the schema entirely. This prevents the
+      // resolve() reconcile loop and computeEnv default-fill from writing
+      // the GHCR tag into .env and shadowing the compose fallback.
+      entries = entries.filter(([key, decl]) =>
+        !(key.endsWith('_IMAGE') && decl.default?.includes('ghcr.io')),
+      );
     }
-    this.schema = new Map(Object.entries(config.env));
+    this.schema = new Map(entries);
+    this.imports = config.imports ? StackEnvironment.parseImports(config.imports) : [];
   }
 
   /**
@@ -123,33 +139,46 @@ export class StackEnvironment extends EventEmitter {
   }
 
   shouldMask(key: string): boolean {
-    const entry = this.manifest.get(key);
-    if (entry?.mask) return true;
-    if (entry?.type === 'secret') return true;
+    const decl = this.schema.get(key);
+    if (decl?.mask !== undefined) return decl.mask;
+    // Compat fallback for vars not in schema
     return SENSITIVE_PATTERNS.some(p => p.test(key));
   }
 
   getManifestEntry(key: string): StackManifestEntry | undefined {
     const entry = this.manifest.get(key);
-    if (!entry) return undefined;
-    // Enrich with schema data — schema is authoritative for type, values, description
     const decl = this.schema.get(key);
-    if (decl) {
-      return {
-        ...entry,
-        type: decl.type ?? entry.type,
-        values: decl.values ?? entry.values,
-        description: decl.description ?? entry.description,
-        hidden: decl.hidden ?? entry.hidden,
-      };
-    }
-    return entry;
+    if (!entry && !decl) return undefined;
+    // Join: manifest owns provenance (resolution, value, source), schema owns contract (type, mask, hidden, description, values)
+    return {
+      // Manifest owns provenance
+      resolution: entry?.resolution ?? 'unset',
+      value: entry?.value,
+      formula: entry?.formula,
+      source: entry?.source,
+      inputs: entry?.inputs,
+      set_by: entry?.set_by,
+      set_at: entry?.set_at,
+      default_formula: entry?.default_formula,
+      from: entry?.from,
+      original_name: entry?.original_name,
+      generator: entry?.generator,
+      // Schema owns contract
+      type: decl?.type,
+      values: decl?.values,
+      description: decl?.description,
+      hidden: decl?.hidden,
+      mask: decl?.mask,
+    };
   }
 
   getManifest(showHidden = false): Record<string, StackManifestEntry> {
     const result: Record<string, StackManifestEntry> = {};
-    for (const key of this.manifest.keys()) {
-      const entry = this.getManifestEntry(key)!;
+    // Union of all known keys — schema (declared), manifest (provenance), env (runtime)
+    const keys = new Set([...this.manifest.keys(), ...this.schema.keys(), ...this.env.keys()]);
+    for (const key of keys) {
+      const entry = this.getManifestEntry(key);
+      if (!entry) continue;
       if (!showHidden && entry.hidden) continue;
       result[key] = entry;
     }
@@ -173,10 +202,56 @@ export class StackEnvironment extends EventEmitter {
     this.emit('change', { key, value });
   }
 
+  /**
+   * Record a value fetched from an external source (vault/file/env) with
+   * the correct provenance. Unlike set() — which marks `resolution:
+   * 'override'` + `set_by: 'user'` — this preserves the declared source
+   * so `zbb env list` shows where the value came from, and a future
+   * `zbb env refresh` knows to re-fetch instead of treating the value
+   * as a sticky user override.
+   *
+   * Used by refresh.ts' vault loop; the file/env refresh in
+   * refreshSourcedVars() uses the same manifest shape inline.
+   */
+  async setFromSource(key: string, value: string, source: string): Promise<void> {
+    const existing = this.manifest.get(key);
+    this.manifest.set(key, {
+      ...existing,
+      resolution: 'inherited',
+      value,
+      source,
+      set_by: 'refresh',
+      set_at: new Date().toISOString(),
+    } as StackManifestEntry);
+    await this.saveManifest();
+    await this.computeEnv();
+    this.emit('change', { key, value });
+  }
+
+  /**
+   * Clear a user override, reverting the var to whatever its schema decides
+   * (derived formula, file-sourced value, etc). Only user-set overrides are
+   * unsettable — calling `unset` on an inherited/dns/allocated/generated/etc
+   * entry throws, since those values come from an external source and cannot
+   * be "cleared" without redefining the schema. Use `zbb env refresh` to
+   * re-read file/env/vault-sourced values from their source of truth.
+   */
   async unset(key: string): Promise<void> {
     const entry = this.manifest.get(key);
-    if (!entry) return;
-    if (entry.resolution === 'override' && entry.default_formula) {
+    if (!entry) {
+      throw new Error(
+        `Cannot unset '${key}' — not set in this stack. Nothing to clear.`,
+      );
+    }
+    if (entry.resolution !== 'override') {
+      throw new Error(
+        `Cannot unset '${key}' — its resolution is '${entry.resolution}', ` +
+        `not a user override. To change the value, either:\n` +
+        `  - 'zbb env refresh' to re-read from its declared source (file/env/vault), or\n` +
+        `  - 'zbb env set ${key} <value>' to override it explicitly.`,
+      );
+    }
+    if (entry.default_formula) {
       // Revert to derived
       this.manifest.set(key, {
         ...entry,
@@ -186,12 +261,108 @@ export class StackEnvironment extends EventEmitter {
         set_by: undefined,
         set_at: undefined,
       } as StackManifestEntry);
-    } else if (entry.resolution === 'override') {
+    } else {
       this.manifest.delete(key);
     }
     await this.saveManifest();
     await this.computeEnv();
     this.emit('change', { key, value: undefined });
+  }
+
+  /**
+   * Re-read schema-declared vars from their live source and update the
+   * matching inherited manifest entries in place. Covers `source: file` and
+   * `source: env`. Vault-sourced vars are handled separately by
+   * `refreshStackEnv` in stack/refresh.ts.
+   *
+   * User overrides (resolution === 'override') are always preserved — if a
+   * user explicitly set a value, a refresh must never clobber it. `cwd`-
+   * sourced vars are skipped: their value is the stack's source path, which
+   * only changes on re-add.
+   *
+   * Called by `zbb env refresh`. Writes manifest + .env once at the end if
+   * any value changed, to keep watcher storms down.
+   */
+  async refreshSourcedVars(): Promise<{
+    refreshed: string[];
+    unchanged: string[];
+    skipped: Array<{ name: string; reason: string }>;
+    errors: Array<{ name: string; error: string }>;
+  }> {
+    if (this.schema.size === 0) await this.loadSchema();
+    if (this.manifest.size === 0) await this.loadManifest();
+
+    const refreshed: string[] = [];
+    const unchanged: string[] = [];
+    const skipped: Array<{ name: string; reason: string }> = [];
+    const errors: Array<{ name: string; error: string }> = [];
+    let manifestChanged = false;
+
+    for (const [name, decl] of this.schema) {
+      const src = decl.source;
+      if (src !== 'file' && src !== 'env') continue;
+
+      const current = this.manifest.get(name);
+      if (current?.resolution === 'override') {
+        skipped.push({ name, reason: 'overridden' });
+        continue;
+      }
+
+      let value: string | undefined;
+      let sourceLabel: string;
+      try {
+        if (src === 'file' && decl.file) {
+          const { homedir } = await import('node:os');
+          const filePath = decl.file.replace(/^~/, homedir());
+          try {
+            value = (await readFile(filePath, 'utf-8')).trim();
+          } catch {
+            // File not found — fall back to env var (matches initialize())
+            value = process.env[name];
+          }
+          sourceLabel = `file:${decl.file}`;
+        } else if (src === 'env') {
+          value = process.env[name];
+          sourceLabel = 'env';
+        } else {
+          continue;
+        }
+      } catch (e: unknown) {
+        errors.push({ name, error: e instanceof Error ? e.message : String(e) });
+        continue;
+      }
+
+      if (!value) {
+        if (decl.required && !current) {
+          errors.push({ name, error: `required var not found in ${src} source` });
+        } else {
+          skipped.push({ name, reason: `no-value-from-${src}` });
+        }
+        continue;
+      }
+
+      if (current?.value === value) {
+        unchanged.push(name);
+        continue;
+      }
+
+      this.manifest.set(name, {
+        ...current,
+        resolution: 'inherited',
+        value,
+        source: sourceLabel,
+      });
+      manifestChanged = true;
+      refreshed.push(name);
+      this.emit('change', { key: name, value });
+    }
+
+    if (manifestChanged) {
+      await this.saveManifest();
+      await this.computeEnv();
+    }
+
+    return { refreshed, unchanged, skipped, errors };
   }
 
   /**
@@ -201,6 +372,7 @@ export class StackEnvironment extends EventEmitter {
   private async computeEnv(): Promise<void> {
     const preResolved = new Map<string, string>();
     const derivedVars = new Map<string, string>();
+    const expressionVars = new Map<string, string>(); // jsonata expressions
 
     for (const [key, entry] of this.manifest) {
       switch (entry.resolution) {
@@ -238,6 +410,12 @@ export class StackEnvironment extends EventEmitter {
           }
           break;
 
+        case 'expression':
+          if (entry.formula) {
+            expressionVars.set(key, entry.formula);
+          }
+          break;
+
         case 'default':
           if (entry.value !== undefined) preResolved.set(key, entry.value);
           break;
@@ -246,7 +424,12 @@ export class StackEnvironment extends EventEmitter {
 
     // Schema defaults (Layer 1) — lowest priority, only for vars not in manifest
     for (const [key, decl] of this.schema) {
-      if (preResolved.has(key) || derivedVars.has(key)) continue;
+      if (preResolved.has(key) || derivedVars.has(key) || expressionVars.has(key)) continue;
+      // Expression vars from schema (not yet in manifest — e.g. fresh resolve without stack add)
+      if (decl.source === 'expression:jsonata' && decl.expr) {
+        expressionVars.set(key, decl.expr);
+        continue;
+      }
       if (decl.value !== undefined) {
         // Live formula
         const refs = extractRefs(decl.value);
@@ -280,7 +463,7 @@ export class StackEnvironment extends EventEmitter {
           lookup.set(key, value);
         }
       }
-      const resolved = resolveAll(derivedVars, lookup);
+      const resolved = resolveAll(derivedVars, lookup, { lenient: true });
       for (const r of resolved) {
         preResolved.set(r.name, r.value);
         // Update manifest inputs
@@ -292,6 +475,25 @@ export class StackEnvironment extends EventEmitter {
             if (preResolved.has(ref)) inputs[ref] = preResolved.get(ref)!;
           }
           entry.inputs = inputs;
+        }
+      }
+    }
+
+    // Evaluate jsonata expressions — all inputs should be resolved by now
+    if (expressionVars.size > 0) {
+      const bindings = Object.fromEntries(preResolved);
+      for (const [key, expr] of expressionVars) {
+        try {
+          const compiled = jsonata(expr);
+          const result = await compiled.evaluate(bindings);
+          if (result !== undefined) {
+            const value = String(result);
+            preResolved.set(key, value);
+            bindings[key] = value; // available to subsequent expressions
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`expression:jsonata error for ${key}: ${msg}`);
         }
       }
     }
@@ -314,12 +516,48 @@ export class StackEnvironment extends EventEmitter {
       }
     }
 
-    // Write .env
+    // Write .env only if changed — avoids inotify storms from heartbeat/resolve cycles
     this.env = preResolved;
-    await writeFile(this.envPath, serializeEnv(this.env), 'utf-8');
+    const newContent = serializeEnv(this.env);
+    let changed = true;
+    if (existsSync(this.envPath)) {
+      const existing = await readFile(this.envPath, 'utf-8');
+      if (existing === newContent) changed = false;
+    }
+    if (changed) {
+      await writeFile(this.envPath, newContent, 'utf-8');
+    }
   }
 
   // ── Resolve ─────────────────────────────────────────────────
+
+  /**
+   * Parse imports block from zbb.yaml into ImportSpec[].
+   * Handles both array form (required) and object form (optional).
+   */
+  static parseImports(imports: Record<string, (string | ImportAlias)[] | OptionalImport>): ImportSpec[] {
+    const result: ImportSpec[] = [];
+    for (const [depName, entry] of Object.entries(imports)) {
+      const isOptional = !Array.isArray(entry) && entry && 'optional' in entry;
+      const vars = isOptional
+        ? (entry as OptionalImport).vars
+        : entry as (string | ImportAlias)[];
+
+      for (const v of vars) {
+        if (typeof v === 'string') {
+          const match = v.match(/^(\S+)\s+as\s+(\S+)$/);
+          if (match) {
+            result.push({ varName: match[1], alias: match[2], fromStack: depName, optional: isOptional || undefined });
+          } else {
+            result.push({ varName: v, fromStack: depName, optional: isOptional || undefined });
+          }
+        } else {
+          result.push({ varName: v.from, alias: v.as, fromStack: depName, optional: isOptional || undefined });
+        }
+      }
+    }
+    return result;
+  }
 
   /**
    * THE entry point for environment resolution.
@@ -331,7 +569,142 @@ export class StackEnvironment extends EventEmitter {
     if (this.schema.size === 0) await this.loadSchema();
     await this.loadManifest();
 
-    // 2. DNS provisioning
+    // 2. Re-evaluate imports from zbb.yaml — imports are live, not frozen at add-time.
+    //
+    // Non-optional imports that fail (source stack missing, or the
+    // source stack doesn't export the named var) throw a clear error
+    // listing EVERY failed import at once, instead of one-by-one.
+    // Catching all of them at once means the user fixes them in a
+    // single zbb.yaml edit pass rather than one-error-per-gate-run.
+    if (this.imports.length > 0) {
+      const slotStacksDir = join(this.stackDir, '..');
+      const missing: Array<{ imp: ImportSpec; reason: string }> = [];
+
+      for (const imp of this.imports) {
+        const depEnvPath = join(slotStacksDir, imp.fromStack, '.env');
+        const localName = imp.alias ?? imp.varName;
+
+        // Don't overwrite user overrides — this is the stack-scoped
+        // override path. If the user set FOO in this stack's scope,
+        // imports shouldn't clobber it regardless of the source stack's
+        // value.
+        const existing = this.manifest.get(localName);
+        if (existing?.resolution === 'override') continue;
+
+        if (!existsSync(depEnvPath)) {
+          if (!imp.optional) {
+            missing.push({ imp, reason: `source stack '${imp.fromStack}' is not added to the slot (no ${imp.fromStack}/.env found)` });
+          }
+          continue;
+        }
+
+        const depEnv = parseEnvFile(await readFile(depEnvPath, 'utf-8'));
+        const value = depEnv.get(imp.varName);
+
+        if (value === undefined) {
+          if (!imp.optional) {
+            missing.push({ imp, reason: `source stack '${imp.fromStack}' does not export '${imp.varName}'` });
+          }
+          continue;
+        }
+
+        this.manifest.set(localName, {
+          ...existing,
+          resolution: 'imported',
+          value,
+          from: imp.fromStack,
+          original_name: imp.alias ? imp.varName : undefined,
+        });
+      }
+
+      if (missing.length > 0) {
+        const lines = missing.map(({ imp, reason }) => {
+          const asLocal = imp.alias ? ` as ${imp.alias}` : '';
+          return `  - imports.${imp.fromStack}.${imp.varName}${asLocal}: ${reason}`;
+        });
+        throw new Error(
+          `Stack '${this.stackDir.split('/').pop()}' has unresolved imports:\n${lines.join('\n')}\n` +
+          `\nFix your zbb.yaml — either add the missing source stack to the slot, ` +
+          `correct the variable name, or mark the import as optional: true.`,
+        );
+      }
+
+      await this.saveManifest();
+    }
+
+    // 3. Reconcile schema with manifest — add entries for new schema vars
+    let manifestChanged = false;
+    // Read existing .env to recover values set outside manifest tracking
+    const existingEnv = existsSync(this.envPath)
+      ? parseEnvFile(await readFile(this.envPath, 'utf-8'))
+      : new Map<string, string>();
+
+    // Map a schema declaration with an external source to the manifest
+    // shape used for inherited-from-source values. Returns null for
+    // declarations without a recognized external source.
+    const sourceLabel = (decl: EnvVarDeclaration): string | null => {
+      if (decl.source === 'vault' && decl.vault) return `vault:${decl.vault}`;
+      if (decl.source === 'file' && decl.file) return `file:${decl.file}`;
+      if (decl.source === 'env') return 'env';
+      return null;
+    };
+
+    // 3a. Auto-heal: any existing entry mislabeled as `override` by a
+    // prior recovery pass (set_by === 'recovered') whose schema declares
+    // an external source gets reclassified as `inherited` with the
+    // proper source label. Before this fix, vault/file/env-sourced vars
+    // whose value existed in .env but not in the manifest were blindly
+    // recovered as user overrides — which caused `zbb env refresh` to
+    // treat them as sticky and never re-pull from the declared source.
+    for (const [name, entry] of this.manifest) {
+      if (entry.resolution !== 'override') continue;
+      if (entry.set_by !== 'recovered') continue;
+      const decl = this.schema.get(name);
+      if (!decl) continue;
+      const source = sourceLabel(decl);
+      if (!source) continue;
+      this.manifest.set(name, {
+        ...entry,
+        resolution: 'inherited',
+        source,
+      });
+      manifestChanged = true;
+    }
+
+    for (const [name, decl] of this.schema) {
+      if (this.manifest.has(name)) continue;
+      if (decl.source === 'expression:jsonata' && decl.expr) {
+        this.manifest.set(name, { resolution: 'expression', formula: decl.expr, source: 'expression:jsonata' });
+        manifestChanged = true;
+      } else if (decl.value) {
+        this.manifest.set(name, { resolution: 'derived', formula: decl.value, source: 'schema' });
+        manifestChanged = true;
+      } else if (decl.default !== undefined) {
+        const refs = extractRefs(decl.default);
+        if (refs.length === 0) {
+          this.manifest.set(name, { resolution: 'default', value: decl.default, source: 'schema' });
+        } else {
+          this.manifest.set(name, { resolution: 'derived', formula: decl.default, source: 'schema' });
+        }
+        manifestChanged = true;
+      } else if (existingEnv.has(name)) {
+        // Value exists in .env but not in manifest. If the schema
+        // declares an external source, record it as `inherited` with
+        // the source label so refresh can re-fetch later. Otherwise
+        // fall back to the old override-recovery behavior.
+        const value = existingEnv.get(name)!;
+        const source = sourceLabel(decl);
+        if (source) {
+          this.manifest.set(name, { resolution: 'inherited', value, source, set_by: 'recovered' });
+        } else {
+          this.manifest.set(name, { resolution: 'override', value, set_by: 'recovered' });
+        }
+        manifestChanged = true;
+      }
+    }
+    if (manifestChanged) await this.saveManifest();
+
+    // 4. DNS provisioning
     // DNS provisioning — lookup TXT records and write to manifest
     const resolveHost = this.get('SLOT_RESOLVE_HOST')
       ?? this.schema.get('SLOT_RESOLVE_HOST')?.default;
@@ -428,11 +801,13 @@ export class StackEnvironment extends EventEmitter {
    * @param ports - Allocated ports (name → port number)
    * @param secrets - Generated secrets (name → value)
    * @param imports - Resolved import specs
-   * @param slotVars - Slot-level vars (ZB_SLOT, etc.)
+   * @param stackName - Short name for this stack (becomes ZB_STACK)
+   * @param slotVars - Slot-level vars inherited from the enclosing slot
    * @param slotStacksDir - Path to slot's stacks/ dir
    */
   static async initialize(
     stackDir: string,
+    stackName: string,
     schema: Record<string, EnvVarDeclaration>,
     ports: Map<string, number>,
     secrets: Map<string, string>,
@@ -443,15 +818,21 @@ export class StackEnvironment extends EventEmitter {
   ): Promise<StackEnvironment> {
     const manifest = new Map<string, StackManifestEntry>();
 
-    // Slot vars as inherited
+    // Slot-inherited path vars (ZB_SLOT, ZB_SLOT_DIR, …).
     for (const [key, value] of Object.entries(slotVars)) {
       manifest.set(key, {
         resolution: 'inherited',
         value,
         source: 'slot',
-        type: 'string',
       });
     }
+
+    // Stack identity — set by zbb at stack-add time, scoped to this stack.
+    manifest.set('ZB_STACK', {
+      resolution: 'allocated',
+      value: stackName,
+      source: 'zbb',
+    });
 
     // Ports
     for (const [name, port] of ports) {
@@ -459,8 +840,6 @@ export class StackEnvironment extends EventEmitter {
         resolution: 'allocated',
         value: String(port),
         source: schema[name] ? 'schema' : 'allocated',
-        type: 'port',
-        description: schema[name]?.description,
       });
     }
 
@@ -471,29 +850,49 @@ export class StackEnvironment extends EventEmitter {
         value,
         generator: schema[name]?.generate,
         source: 'schema',
-        type: 'secret',
-        mask: true,
-        description: schema[name]?.description,
       });
     }
 
-    // Inherited from parent env
-    for (const [name, decl] of Object.entries(schema)) {
-      if (decl.source === 'env') {
+    // Inherited from parent env.
+    // In CI mode (CI=true), ANY declared var that's already in process.env
+    // is used directly — this picks up vault-action secrets, GitHub Actions
+    // env, and anything else the CI runner exported. This avoids re-fetching
+    // from Vault during `prepareSlot()`.
+    const ciMode = process.env.CI === 'true';
+    if (ciMode) {
+      for (const [name, decl] of Object.entries(schema)) {
+        if (manifest.has(name)) continue; // already handled (ports, secrets, etc.)
         const value = process.env[name];
         if (value !== undefined) {
           manifest.set(name, {
             resolution: 'inherited',
             value,
-            source: 'env',
-            type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
+            source: 'ci-env',
             mask: decl.mask,
-            description: decl.description,
           });
-        } else if (decl.required) {
+        } else if (decl.required && decl.source === 'env') {
+          // Same required-enforcement as local mode. CI mode trusts
+          // process.env as the source of truth (vault-action already
+          // injected everything), so a missing required `source: env`
+          // var means the CI config is incomplete — fail fast instead
+          // of letting it surface as a cryptic downstream error.
           throw new Error(`Required env var '${name}' not found in environment`);
+        }
+      }
+    } else {
+      // Local mode: only inherit vars explicitly declared `source: env`
+      for (const [name, decl] of Object.entries(schema)) {
+        if (decl.source === 'env') {
+          const value = process.env[name];
+          if (value !== undefined) {
+            manifest.set(name, {
+              resolution: 'inherited',
+              value,
+              source: 'env',
+            });
+          } else if (decl.required) {
+            throw new Error(`Required env var '${name}' not found in environment`);
+          }
         }
       }
     }
@@ -507,9 +906,6 @@ export class StackEnvironment extends EventEmitter {
           resolution: 'inherited',
           value,
           source: 'cwd',
-          type: decl.type,
-          values: decl.values,
-          description: decl.description,
         });
       }
     }
@@ -532,11 +928,6 @@ export class StackEnvironment extends EventEmitter {
             resolution: 'inherited',
             value,
             source: `file:${decl.file}`,
-            type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-            mask: decl.mask,
-            description: decl.description,
           });
         } else if (decl.required) {
           throw new Error(`Required var '${name}' not found in file '${decl.file}' or environment`);
@@ -547,6 +938,10 @@ export class StackEnvironment extends EventEmitter {
     // Imports from dependency stacks
     for (const imp of imports) {
       const depEnvPath = join(slotStacksDir, imp.fromStack, '.env');
+      if (!existsSync(depEnvPath)) {
+        if (imp.optional) continue; // optional dep not present — skip, fall through to default
+        // Required import but no .env — still set manifest entry (value will be undefined)
+      }
       let value: string | undefined;
       if (existsSync(depEnvPath)) {
         const depEnv = parseEnvFile(await readFile(depEnvPath, 'utf-8'));
@@ -558,7 +953,6 @@ export class StackEnvironment extends EventEmitter {
         value,
         from: imp.fromStack,
         original_name: imp.alias ? imp.varName : undefined,
-        type: 'string',
       });
     }
 
@@ -573,15 +967,9 @@ export class StackEnvironment extends EventEmitter {
             resolution: 'default',
             value: decl.default,
             source: 'schema',
-            type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-            description: decl.description,
-            mask: decl.mask,
           });
         } else {
           // Default with refs — compute once now, freeze the result
-          // Collect all currently known values for interpolation
           const knownValues = new Map<string, string>();
           for (const [k, entry] of manifest) {
             if (entry.value !== undefined) knownValues.set(k, entry.value);
@@ -593,24 +981,13 @@ export class StackEnvironment extends EventEmitter {
               value: frozen,
               default_formula: decl.default,
               source: 'schema',
-              type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-              description: decl.description,
-              mask: decl.mask,
             });
           } catch {
             // If interpolation fails (ref not yet available), store as derived instead
-            // so recalculate() can resolve it
             manifest.set(name, {
               resolution: 'derived',
               formula: decl.default,
               source: 'schema',
-              type: decl.type,
-            values: decl.values,
-            hidden: decl.hidden,
-              description: decl.description,
-              mask: decl.mask,
             });
           }
         }
@@ -625,10 +1002,18 @@ export class StackEnvironment extends EventEmitter {
           resolution: 'derived',
           formula: decl.value,
           source: 'schema',
-          type: decl.type,
-          values: decl.values,
-          description: decl.description,
-          mask: decl.mask,
+        });
+      }
+    }
+
+    // Expression vars (source: expression:jsonata)
+    for (const [name, decl] of Object.entries(schema)) {
+      if (manifest.has(name)) continue;
+      if (decl.source === 'expression:jsonata' && decl.expr) {
+        manifest.set(name, {
+          resolution: 'expression',
+          formula: decl.expr,
+          source: 'expression:jsonata',
         });
       }
     }
@@ -636,9 +1021,10 @@ export class StackEnvironment extends EventEmitter {
     // Write manifest
     await saveYaml(join(stackDir, 'manifest.yaml'), Object.fromEntries(manifest));
 
-    // Create env instance, set manifest, compute .env
+    // Create env instance, set manifest + schema, compute .env
     const env = new StackEnvironment(stackDir);
     env.manifest = manifest;
+    env.schema = new Map(Object.entries(schema));
     await env.computeEnv();
 
     return env;
@@ -647,28 +1033,68 @@ export class StackEnvironment extends EventEmitter {
   // ── Private helpers ─────────────────────────────────────────
 
   private async saveManifest(): Promise<void> {
-    await saveYaml(this.manifestPath, Object.fromEntries(this.manifest));
+    const data = Object.fromEntries(this.manifest);
+    const { stringifyYaml } = await import('../yaml.js');
+    const newContent = stringifyYaml(data);
+    if (existsSync(this.manifestPath)) {
+      const existing = await readFile(this.manifestPath, 'utf-8');
+      if (existing === newContent) return;
+    }
+    await saveYaml(this.manifestPath, data);
   }
 }
 
 // ── Env file parsing (same format as SlotEnvironment) ───────
 
+function unescapeEnvValue(raw: string): string {
+  return raw.replace(/\\(\\|n|r)/g, (_, c: string) => {
+    if (c === 'n') return '\n';
+    if (c === 'r') return '\r';
+    return '\\';
+  });
+}
+
 function parseEnvFile(content: string): Map<string, string> {
   const env = new Map<string, string>();
+  const keyPattern = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)/;
+  let currentKey: string | null = null;
+  const currentParts: string[] = [];
+
+  const flush = () => {
+    if (currentKey !== null) {
+      if (currentParts.length === 1) {
+        // New format: single line with \n escapes — unescape
+        env.set(currentKey, unescapeEnvValue(currentParts[0]).trim());
+      } else {
+        // Old format: multi-line continuation — join as-is
+        env.set(currentKey, currentParts.join('\n').trim());
+      }
+    }
+    currentKey = null;
+    currentParts.length = 0;
+  };
+
   for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const idx = trimmed.indexOf('=');
-    if (idx === -1) continue;
-    env.set(trimmed.slice(0, idx).trim(), trimmed.slice(idx + 1).trim());
+    const match = keyPattern.exec(line);
+    if (match) {
+      flush();
+      currentKey = match[1];
+      currentParts.push(match[2]);
+    } else if (currentKey !== null) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('#')) currentParts.push(trimmed);
+    }
   }
+  flush();
   return env;
 }
 
 function serializeEnv(env: Map<string, string>): string {
   const lines: string[] = [];
   for (const key of [...env.keys()].sort()) {
-    lines.push(`${key}=${env.get(key)}`);
+    const raw = env.get(key) ?? '';
+    const value = raw.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    lines.push(`${key}=${value}`);
   }
   return lines.join('\n') + '\n';
 }

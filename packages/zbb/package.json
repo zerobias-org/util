@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/zbb",
-  "description": "ZeroBias Build — Gradle wrapper + slot-based environment management",
-  "version": "0.3.17",
+  "description": "ZeroBias Build — Gradle wrapper + slot-based environment management.",
+  "version": "0.3.61",
   "type": "module",
   "bin": {
     "zbb": "bin/zbb.mjs"
@@ -28,10 +28,9 @@
   "scripts": {
     "transpile": "tsc -b",
     "build": "npm run lint && npm run transpile",
-    "nx:build": "npm run lint && npm run transpile",
-    "lint": "eslint 'lib/**/*.ts'",
-    "lint:fix": "eslint --fix 'lib/**/*.ts'",
-    "test": "node --import tsx/esm --test lib/**/*.test.ts"
+    "lint": "eslint 'lib/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "eslint --fix 'lib/**/*.ts' 'test/**/*.ts'",
+    "test": "node --import tsx/esm --test test/*.test.ts test/**/*.test.ts"
   },
   "repository": {
     "type": "git",
@@ -51,5 +50,6 @@
   ],
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "dependencies": {}
 }

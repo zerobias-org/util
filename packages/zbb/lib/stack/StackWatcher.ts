@@ -172,6 +172,8 @@ export class StackWatcher extends EventEmitter {
                 } else {
                   watchers.push(narrowWatcher);
                 }
+                // Dispatch immediately for the creation event
+                this.getDebouncedDispatch('state.yaml')('state.yaml');
               }
             });
             stateBootstrap.on('error', (err) => this.emit('error', err));
@@ -184,6 +186,8 @@ export class StackWatcher extends EventEmitter {
           });
           narrowWatcher.on('error', (err) => this.emit('error', err));
           watchers.push(narrowWatcher);
+          // Dispatch immediately for the creation event
+          this.getDebouncedDispatch('state.yaml')('state.yaml');
         }
       });
       bootstrapWatcher.on('error', (err) => this.emit('error', err));
@@ -213,6 +217,9 @@ export class StackWatcher extends EventEmitter {
           } else {
             watchers.push(narrowWatcher);
           }
+          // Dispatch immediately for the creation event — the narrow watcher
+          // only fires on subsequent writes, not the initial one.
+          this.getDebouncedDispatch('state.yaml')('state.yaml');
         }
       });
       stateBootstrap.on('error', (err) => this.emit('error', err));
@@ -274,6 +281,8 @@ export class StackWatcher extends EventEmitter {
           if (idx !== -1) {
             watchers[idx] = narrow;
           }
+          // Dispatch immediately for the creation event
+          debouncedEmit();
         }
       });
       bootstrap.on('error', (err) => this.emit('error', err));

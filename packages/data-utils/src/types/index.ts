@@ -9,4 +9,4 @@ export type {
   ModelClass,
   AttributeTypeMap,
   UrlLoadOptions,
-} from './SchemaConfig';
+} from './SchemaConfig.js';

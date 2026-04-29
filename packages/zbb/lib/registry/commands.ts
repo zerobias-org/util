@@ -410,7 +410,7 @@ async function handleClear(args: string[], slot: Slot): Promise<void> {
   const clearAll = args.includes('--all');
 
   if (clearAll) {
-    const stackName = slot.env.get('STACK_NAME') ?? slot.name;
+    const stackName = slot.name;
     console.log('Clearing all registry data (including upstream cache)...');
 
     // Taint node_modules and invalidate Gradle stamps before clearing manifest

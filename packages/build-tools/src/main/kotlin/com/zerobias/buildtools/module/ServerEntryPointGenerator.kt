@@ -57,7 +57,6 @@ object ServerEntryPointGenerator {
      * @return TypeScript source code for the server entry point
      */
     fun generate(pascal: String): String {
-        val lower = pascal.lowercase()
         return """
 import express from 'express';
 import 'express-async-errors';
@@ -110,18 +109,49 @@ async function main() {
     nonsensitiveProfileFields
   }));
 
-  // Connection management
+  // Error responder shared by the connection-management routes below. Mirrors
+  // the format used by the operation-dispatch route so hub-node's CoreError
+  // deserializer can round-trip the payload.
+  const sendError = (res: express.Response, e: any) => {
+    const status = e.statusCode || 500;
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    try {
+      res.end(e.toString());
+    } catch {
+      res.end(JSON.stringify({
+        key: e.key || 'err.unknown',
+        timestamp: new Date().toISOString(),
+        message: e.message || 'Unknown Error',
+        args: e.args || {},
+        statusCode: status,
+      }));
+    }
+  };
+
+  // Connection management.
+  //
+  // Note on the `as any` casts below: connector module impls vary in shape
+  // depending on whether the OpenAPI spec declares connectionState (OAuth /
+  // token-bearing modules like msgraph) or not (stateless modules like
+  // amazon/aws/iam). The codegen base class only emits `oauthDetails` and
+  // `refresh?` for stateful connectors — see api-all.mustache:103-122. The
+  // server-entry routes are uniform across both shapes, so we cast at the
+  // specific call sites where the impl signatures differ. Runtime guards
+  // (typeof / property checks) handle the polymorphism correctly.
   app.post('/connections', async (req: express.Request, res: express.Response) => {
-    const { connectionId, connectionProfile } = req.body;
+    const { connectionId, connectionProfile, oauthDetails } = req.body;
     const id = connectionId || 'default';
     const impl = new ${pascal}Impl();
     connections[id] = impl;
     try {
-      const state = await impl.connect(connectionProfile);
+      // Stateless connectors declare connect(profile) — the extra oauthDetails
+      // arg is harmless at runtime (ignored) but a type error against the
+      // narrower base-class signature.
+      const state = await (impl as any).connect(connectionProfile, oauthDetails);
       res.send(state);
     } catch (e: any) {
       delete connections[id];
-      res.status(500).send({ error: e.message });
+      sendError(res, e);
     }
   });
 
@@ -132,6 +162,63 @@ async function main() {
       delete connections[req.params.connectionId];
     }
     res.send('Disconnected');
+  });
+
+  app.put('/connections/:connectionId/refresh', async (req: express.Request, res: express.Response) => {
+    const impl = connections[req.params.connectionId];
+    if (!impl) {
+      res.status(404).send({ error: 'No active connection' });
+      return;
+    }
+    // Stateless connectors don't declare `refresh` at all (the base class
+    // omits the property entirely when hasState=false). The cast lets us
+    // probe for it at runtime; the typeof guard short-circuits to 501 when
+    // it's absent.
+    const refreshable = impl as any;
+    if (typeof refreshable.refresh !== 'function') {
+      res.status(501).send({ error: 'refresh not implemented' });
+      return;
+    }
+    try {
+      const { connectionProfile, connectionState, oauthDetails } = req.body;
+      const state = await refreshable.refresh(connectionProfile, connectionState, oauthDetails);
+      res.send(state);
+    } catch (e: any) {
+      sendError(res, e);
+    }
+  });
+
+  app.get('/connections/:connectionId/metadata', async (req: express.Request, res: express.Response) => {
+    const impl = connections[req.params.connectionId];
+    if (!impl) {
+      res.status(404).send({ error: 'No active connection' });
+      return;
+    }
+    try {
+      const md = await impl.metadata();
+      res.send(md);
+    } catch (e: any) {
+      sendError(res, e);
+    }
+  });
+
+  app.get('/connections/:connectionId/isSupported/:operationId', async (req: express.Request, res: express.Response) => {
+    const impl = connections[req.params.connectionId];
+    if (!impl) {
+      res.status(404).send({ error: 'No active connection' });
+      return;
+    }
+    try {
+      // Cast: until @zerobias-org/util-codegen republishes with the updated
+      // api-all.mustache (now declaring `isSupported(_operationId: string)`),
+      // every connector's regenerated base class still declares isSupported()
+      // with zero args. Drop this cast in a follow-up once codegen is released
+      // and modules have regenerated against the new template.
+      const status = await (impl as any).isSupported(req.params.operationId);
+      res.send(status);
+    } catch (e: any) {
+      sendError(res, e);
+    }
   });
 
   // Wire protocol: POST /connections/:connectionId/:method with { argMap }
@@ -199,8 +286,9 @@ async function main() {
     }
   });
 
-  // Mount REST API routes from generated server controllers (OpenAPI paths)
-  await install(factory, app, 'full.yml', '');
+  // Spec path is 'generated/full.yml' (not 'full.yml'): the bundled spec lands
+  // under generated/ and the Docker image copies that dir into /opt/module/.
+  await install(factory, app, 'generated/full.yml', '');
   const port = process.env.PORT || 8888;
   app.listen(port, () => logger.info('REST server listening on port ' + port));
 }

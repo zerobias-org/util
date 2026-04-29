@@ -1,35 +1,81 @@
+import com.vanniktech.maven.publish.GradlePlugin
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     `kotlin-dsl`
     `maven-publish`
+    id("com.vanniktech.maven.publish") version "0.30.0"
 }
 
 group = "com.zerobias"
 
-// Auto-bump patch version: check what's published, use next available
+// Env var → Gradle property mapping lives in util's root settings.gradle.kts
+
+// Auto-bump patch: query Maven Central, GitHub Packages, and mavenLocal,
+// take max+1. mavenLocal is included so a local `publishToMavenLocal`
+// always ratchets above whatever was last published anywhere — without
+// it, an offline build (no GITHUB_TOKEN) falls through to "$baseVersion.0"
+// every run, can't beat the latest GitHub version, and root builds
+// resolve `com.zerobias:build-tools:1.+` to the stale GitHub jar instead
+// of the freshly-published local one.
+//
+// Downstream consumers (codegen, lite-filter) call the same logic via
+// com.zerobias.buildtools.util.VersionResolver — build-tools can't
+// import its own not-yet-compiled helper, so the logic is duplicated
+// inline here. Keep the two in sync.
 val baseVersion = "1.0"
 version = run {
-    val token = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
-    if (token.isEmpty()) return@run "$baseVersion.0"
+    val groupPath = "com/zerobias"
+    val artifact = "build-tools"
 
-    val repoUrl = "https://maven.pkg.github.com/zerobias-com/util"
-    val metadataUrl = "$repoUrl/com/zerobias/build-tools/maven-metadata.xml"
-    try {
-        val url = uri(metadataUrl).toURL()
-        val conn = url.openConnection()
-        conn.setRequestProperty("Authorization", "Bearer $token")
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-
-        val xml = conn.getInputStream().bufferedReader().readText()
-        // Find all versions matching baseVersion.N
+    fun parseMaxPatch(xml: String): Int {
         val pattern = Regex("""\Q$baseVersion\E\.(\d+)""")
-        val maxPatch = pattern.findAll(xml)
+        return pattern.findAll(xml)
             .mapNotNull { it.groupValues[1].toIntOrNull() }
             .maxOrNull() ?: -1
-        "$baseVersion.${maxPatch + 1}"
-    } catch (_: Exception) {
-        "$baseVersion.0"
     }
+
+    fun queryMetadata(url: String, authHeader: String?): Int = try {
+        val conn = uri(url).toURL().openConnection() as java.net.HttpURLConnection
+        if (authHeader != null) conn.setRequestProperty("Authorization", authHeader)
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        conn.connect()
+        if (conn.responseCode != 200) {
+            conn.disconnect()
+            -1
+        } else {
+            val xml = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            parseMaxPatch(xml)
+        }
+    } catch (_: Exception) { -1 }
+
+    fun queryMavenLocal(): Int {
+        val home = System.getProperty("user.home") ?: return -1
+        val metadata = file("$home/.m2/repository/$groupPath/$artifact/maven-metadata-local.xml")
+        return if (metadata.exists()) parseMaxPatch(metadata.readText()) else -1
+    }
+
+    val centralMax = queryMetadata(
+        "https://repo1.maven.org/maven2/$groupPath/$artifact/maven-metadata.xml",
+        null,
+    )
+    // Match settings.gradle.kts's github maven repo credential chain so the
+    // auto-bump succeeds in any env where the resolution side already works
+    // (zbb populates NPM_TOKEN, CI provides GITHUB_TOKEN, etc.).
+    val token = sequenceOf("READ_TOKEN", "NPM_TOKEN", "GITHUB_TOKEN")
+        .mapNotNull { System.getenv(it)?.takeIf { v -> v.isNotEmpty() } }
+        .firstOrNull()
+    val githubMax = if (token != null) queryMetadata(
+        "https://maven.pkg.github.com/zerobias-org/util/$groupPath/$artifact/maven-metadata.xml",
+        "Bearer $token",
+    ) else -1
+    val localMax = queryMavenLocal()
+
+    val max = maxOf(centralMax, githubMax, localMax)
+    if (max < 0) "$baseVersion.0" else "$baseVersion.${max + 1}"
 }
 
 java {
@@ -58,17 +104,93 @@ dependencies {
 
     // YAML manipulation (replaces yq CLI dependency)
     implementation("org.yaml:snakeyaml:2.2")
+
+    // JSON serialization for monorepo gate stamp (matches JS JSON.stringify byte-for-byte)
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
+
+    // Vanniktech Maven Central publishing — consumed by the precompiled
+    // `zb.maven-central-publish` script plugin.
+    implementation("com.vanniktech:gradle-maven-publish-plugin:0.30.0")
+
+    // Kotlin test runner
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+}
+
+// ── Maven Central publishing (Vanniktech, GradlePlugin config) ──────
+// Gradle plugin projects publish both the main jar and a plugin marker
+// per plugin id; Vanniktech's GradlePlugin handles both.
+mavenPublishing {
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = false)
+    signAllPublications()
+    configure(GradlePlugin(javadocJar = JavadocJar.Javadoc(), sourcesJar = true))
+
+    coordinates("com.zerobias", "build-tools", project.version.toString())
+
+    pom {
+        name.set("build-tools")
+        description.set("ZeroBias Gradle convention plugins for Hub module + monorepo builds")
+        url.set("https://github.com/zerobias-org/util")
+        licenses {
+            license {
+                name.set("Apache License, Version 2.0")
+                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                distribution.set("repo")
+            }
+        }
+        developers {
+            developer {
+                id.set("kmccarthy")
+                name.set("Kevin McCarthy")
+                email.set("kmccarthy@zerobias.com")
+                organization.set("Zerobias")
+                organizationUrl.set("https://github.com/zerobias-org")
+            }
+        }
+        scm {
+            url.set("https://github.com/zerobias-org/util/tree/main")
+            connection.set("scm:git:git://github.com/zerobias-org/util.git")
+            developerConnection.set("scm:git:ssh://github.com:zerobias-org/util.git")
+        }
+    }
+}
+
+// ── GitHub Packages (second publish target) ──────────────────────────
 publishing {
     repositories {
         maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/zerobias-com/util")
+            name = "github"
+            url = uri("https://maven.pkg.github.com/zerobias-org/util")
             credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: "zerobias-com"
-                password = System.getenv("GITHUB_TOKEN") ?: System.getenv("NPM_TOKEN") ?: ""
+                username = System.getenv("GITHUB_ACTOR") ?: "zerobias-org"
+                password = System.getenv("GITHUB_TOKEN") ?: ""
             }
         }
+    }
+}
+
+tasks.register("publishToGithub") {
+    group = "publishing"
+    description = "Publish to GitHub Packages Maven repository"
+    dependsOn("publishAllPublicationsToGithubRepository")
+}
+
+tasks.named("publish") {
+    dependsOn("publishToMavenLocal", "publishToMavenCentral", "publishToGithub")
+}
+
+// Same escape hatch as zb.maven-central-publish: skip Sign tasks when
+// no signing creds are configured. Lets local `publishToMavenLocal`
+// work without needing a PGP key; in CI the vault step provides creds
+// and signing runs normally.
+tasks.withType<Sign>().configureEach {
+    onlyIf("signing creds present") {
+        val key = providers.gradleProperty("signingInMemoryKey").orNull
+        val pw = providers.gradleProperty("signingInMemoryKeyPassword").orNull
+        !key.isNullOrBlank() && !pw.isNullOrBlank()
     }
 }

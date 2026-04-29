@@ -6,9 +6,9 @@
  * and collections.
  */
 
-import { Schema as ExternalSchema } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
-import { Schema, SchemaField, SchemaRegistryEntry } from '../types/schemas.types';
-import { validateDefined } from '../../validation';
+import { Schema as ExternalSchema } from '@zerobias-org/module-interface-dataproducer';
+import { Schema, SchemaField, SchemaRegistryEntry } from '../types/schemas.types.js';
+import { validateDefined } from '../../validation/index.js';
 
 /**
  * SchemasApi implementation
@@ -17,7 +17,7 @@ import { validateDefined } from '../../validation';
  * the structure of objects and collections in the DataProducer.
  */
 export class SchemasApi {
-  private client: import('../DataProducerClient').DataProducerClient;
+  private client: import('../DataProducerClient.js').DataProducerClient;
 
   /**
    * Create a new SchemasApi instance
@@ -25,7 +25,7 @@ export class SchemasApi {
    * @param client - DataProducerClient instance
    * @internal
    */
-  constructor(client: import('../DataProducerClient').DataProducerClient) {
+  constructor(client: import('../DataProducerClient.js').DataProducerClient) {
     this.client = client;
   }
 

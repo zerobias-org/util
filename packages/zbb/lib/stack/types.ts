@@ -28,6 +28,7 @@ export type Resolution =
   | 'imported'
   | 'default'
   | 'dns'
+  | 'expression'
   | 'unset';
 
 export interface StackManifestEntry {
@@ -57,6 +58,7 @@ export interface ImportSpec {
   varName: string;
   alias?: string;
   fromStack: string;
+  optional?: boolean;
 }
 
 // ── Env Explain ─────────────────────────────────────────────────────

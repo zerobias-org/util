@@ -13,20 +13,138 @@ permissions:
 
 env:
   ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
-  NPM_TOKEN: ${{ secrets.READ_TOKEN }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  READ_TOKEN: ${{ secrets.READ_TOKEN }}
-  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
   SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+  CI: true
 
 jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
+    env:
+      # Phase 3: ephemeral slot for this CI publish run.
+      ZB_SLOT: ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
-      - name: Publish Hoisted
-        uses: zerobias-org/devops/nx-actions/publish-hoisted@main
+      - name: Acquire cache
+        uses: actions/cache@v4
         with:
-          publishToken: ${{ secrets.GITHUB_TOKEN }}
+          path: .git
+          key: repo-git-folder
+
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci@neverfail.com"
+          git config --global user.name "@$GITHUB_ACTOR"
+
+      - name: Authenticate to Vault
+        id: vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: jwt
+          role: publishing-role
+          path: gh-actions
+          jwtGithubAudience: "https://github.com/zerobias-org"
+          secrets: |
+            operations-kv/data/ci/github writePackagesToken | NPM_TOKEN ;
+            operations-kv/data/ci/github readPackagesToken | READ_TOKEN ;
+            operations-kv/data/ci/sonatype/mavencentral/publish username | SONATYPE_USERNAME ;
+            operations-kv/data/ci/sonatype/mavencentral/publish password | SONATYPE_PASSWORD ;
+            operations-kv/data/ci/sonatype/mavencentral/publish gpg_key | GPG_SIGNING_KEY ;
+            operations-kv/data/ci/sonatype/mavencentral/publish gpg_key_password | GPG_SIGNING_KEY_PASSWORD ;
+
+      - name: Install dependencies
+        run: |
+          cp .npmrc $HOME/.npmrc
+          npm ci
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      # publishToMavenLocal (not just `jar`) so util's root buildscript
+      # — which resolves `com.zerobias:build-tools:1.+` with mavenLocal
+      # listed FIRST — picks up the freshly-compiled plugin classes
+      # including the `mavenCentralPublish` extension that codegen +
+      # lite-filter now apply. Without the install, the root build
+      # resolves against GitHub Packages' last-published version and
+      # evaluation fails with `Could not find method mavenCentralPublish()`.
+      - name: Build + install build-tools to mavenLocal
+        run: cd packages/build-tools && ./gradlew publishToMavenLocal
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+
+      - name: Build local zbb
+        run: npm run transpile --workspace=packages/zbb
+
+      # Bootstrap an ephemeral slot for this CI publish run. CI mode
+      # (auto-detected from CI=true) snapshots process.env as slot
+      # overrides — vault secrets exported above are picked up directly.
+      # IMPORTANT: do NOT override NPM_TOKEN here — the vault step above
+      # exported the WRITE token as NPM_TOKEN.
+      #
+      # org/util uses `npx zbb` (not bare `zbb`) because zbb is a LOCAL
+      # workspace package built from source, not globally installed.
+      - name: Bootstrap zbb slot
+        run: |
+          npx zbb slot create $ZB_SLOT --ephemeral
+          npx zbb stack add .
+        env:
+          CI: 'true'
+
+      - name: Publish
+        run: npx zbb publish
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+
+      # Java publish to Maven Central is handled inside `zbb publish` above
+      # via the `publishJavaPackages` task in zb.monorepo-publish.gradle.kts.
+      # That task auto-discovers every package applying `zb.maven-central-publish`,
+      # runs tag-based change detection (`<name>-v*`), and calls
+      # `./gradlew publishAndReleaseToMavenCentral` per changed package.
+      # Annotated tags are created at HEAD; `git push --follow-tags` in
+      # monorepoPublish.doLast pushes them alongside the npm tags.
+
+      # Release Slack + Lambda events are emitted inside `zbb publish`
+      # itself — monorepoPublish.doLast calls ReleaseAnnouncement.announce()
+      # for every published npm package. No separate workflow step needed.
+
+      - name: Slack Notification on failure
+        uses: slackapi/slack-github-action@v2.0.0
+        if: failure()
+        with:
+          webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":fire: util publish failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "text": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+                }
+              ]
+            }

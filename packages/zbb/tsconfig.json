@@ -7,8 +7,8 @@
     "outDir": "dist",
     "rootDir": "lib",
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node"]
   },
-  "include": ["lib/**/*.ts"],
-  "exclude": ["lib/**/*.test.ts"]
+  "include": ["lib/**/*.ts"]
 }

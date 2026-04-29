@@ -34,22 +34,19 @@ abstract class DestroySlotTask @Inject constructor(
             return
         }
 
-        // Stop and remove all containers labeled with this slot
-        val stackName = try {
-            SlotUtils.loadSlotEnv(slotName)["STACK_NAME"] ?: slotName
-        } catch (e: Exception) {
-            slotName
-        }
+        // Stop and remove all containers labeled with this slot.
+        // The compose project name equals the slot name.
+        val composeProject = slotName
 
         val containers = ExecUtils.execCapture(
             command = listOf(
                 "docker", "ps", "-aq",
-                "--filter", "label=zerobias.slot=$stackName"
+                "--filter", "label=zerobias.slot=$composeProject"
             ),
             throwOnError = false
         ).trim()
         if (containers.isNotEmpty()) {
-            println("Removing containers for slot: $stackName")
+            println("Removing containers for slot: $composeProject")
             ExecUtils.execIgnoreErrors(
                 command = listOf("docker", "rm", "-f") + containers.split("\n")
             )
@@ -59,12 +56,12 @@ abstract class DestroySlotTask @Inject constructor(
         val volumes = ExecUtils.execCapture(
             command = listOf(
                 "docker", "volume", "ls", "-q",
-                "--filter", "label=com.docker.compose.project=$stackName"
+                "--filter", "label=com.docker.compose.project=$composeProject"
             ),
             throwOnError = false
         ).trim()
         if (volumes.isNotEmpty()) {
-            println("Removing volumes for slot: $stackName")
+            println("Removing volumes for slot: $composeProject")
             ExecUtils.execIgnoreErrors(
                 command = listOf("docker", "volume", "rm") + volumes.split("\n")
             )

@@ -10,7 +10,7 @@
 import * as fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { parse as parseYaml } from 'yaml';
-import { UrlLoadOptions } from '../types/SchemaConfig';
+import { UrlLoadOptions } from '../types/SchemaConfig.js';
 
 /**
  * OpenAPI property definition

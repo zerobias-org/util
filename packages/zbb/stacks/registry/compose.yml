@@ -1,7 +1,7 @@
 services:
   registry:
     image: verdaccio/verdaccio:6
-    container_name: ${STACK_NAME}-registry
+    container_name: ${ZB_SLOT}-registry
     ports:
       - "${REGISTRY_PORT}:4873"
     environment:
@@ -14,7 +14,7 @@ services:
       - ./config.yaml:/verdaccio/conf/config.yaml:ro
       - ./htpasswd:/verdaccio/conf/htpasswd:ro
     labels:
-      zerobias.slot: ${STACK_NAME}
+      zerobias.slot: ${ZB_SLOT}
 
 volumes:
   verdaccio-storage:

@@ -1,6 +1,11 @@
 import com.zerobias.buildtools.module.ZbExtension
 import com.zerobias.buildtools.core.PropertyResolver
 import com.zerobias.buildtools.core.VaultSecretsService
+import com.zerobias.buildtools.util.SourceHasher
+import com.zerobias.buildtools.standard.StandardGateStampValidator
+import com.zerobias.buildtools.lifecycle.EventEmitter
+import org.gradle.build.event.BuildEventsListenerRegistry
+import org.gradle.kotlin.dsl.support.serviceOf
 
 // ────────────────────────────────────────────────────────────
 // Extension: project-level configuration
@@ -33,6 +38,38 @@ val zb = extensions.create<ZbExtension>("zb").apply {
     })
     includeConnectionProfileInDist.convention(false)
     generatorArgs.convention(emptyList())
+}
+
+// ────────────────────────────────────────────────────────────
+// Event emitter — feeds the zbb TTY display via .zbb-monorepo/events.jsonl
+//
+// Shared across monorepo mode (zb.monorepo-base registers this exact same
+// service) and standard mode (every zb.base subproject registers it too).
+// `registerIfAbsent` deduplicates — the first caller wins, subsequent
+// callers get the same instance. The BuildEventsListener subscription is
+// gated by an extra property on rootProject so we don't double-subscribe
+// if BOTH zb.monorepo-base AND zb.base register listeners in the same
+// build. The first to run wins.
+// ────────────────────────────────────────────────────────────
+val zbbBaseEventFile = System.getenv("ZBB_MONOREPO_EVENT_FILE")
+    ?: rootProject.file(".zbb-monorepo/events.jsonl").absolutePath
+val zbbBaseLogsDir = rootProject.file(".zbb-monorepo/logs")
+
+val zbbBaseEventEmitter = gradle.sharedServices.registerIfAbsent(
+    "monorepoEventEmitter",
+    EventEmitter::class.java,
+) {
+    parameters.eventFilePath.set(zbbBaseEventFile)
+}
+
+run {
+    val listenerRegisteredKey = "zbbMonorepoEventListenerRegistered"
+    val rootExtra = rootProject.extensions.extraProperties
+    if (!rootExtra.has(listenerRegisteredKey)) {
+        val registry = project.serviceOf<BuildEventsListenerRegistry>()
+        registry.onTaskCompletion(zbbBaseEventEmitter)
+        rootExtra.set(listenerRegisteredKey, true)
+    }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -187,8 +224,18 @@ val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
 
 val bumpVersion by tasks.registering {
     group = "publish"
-    description = "Bump package.json version on main branch"
-    onlyIf { branch == "main" }
+    description = "Bump package.json version on main branch (in-memory only)"
+    // Run as late as possible in the publish chain: only after the full build
+    // phase has produced artifacts. If an earlier build/install/generate task
+    // fails we must not have bumped the version. Using `buildArtifacts` as the
+    // barrier (vs. `gate`) because gate can be skipped when its stamp is valid,
+    // which breaks the mustRunAfter ordering for anything gate transitively
+    // depends on — whereas buildArtifacts aggregates all the real build work.
+    mustRunAfter(buildArtifacts)
+    // Skip when no module files changed since the last release tag — avoids
+    // computing a phantom next-version (e.g. 2.0.0 → 2.0.1) that will never
+    // be published but would confuse downstream promote/tag tasks.
+    onlyIf { branch == "main" && changedSinceTag }
     doLast {
         val pkgJson = project.file("package.json")
         val currentVersion = readBaseVersion()
@@ -205,16 +252,17 @@ val bumpVersion by tasks.registering {
             output == currentVersion
         } catch (_: Exception) { false }
 
+        // CRITICAL: do NOT write to package.json here. Keep the computed version
+        // in memory only via `project.version`. Writing here used to leave the
+        // working tree dirty on any downstream failure (preflight, publish,
+        // flatten, anything between bump and commit). commitVersion is the
+        // single authoritative writer + committer for main-branch publishes,
+        // and patchPackageJson handles the transient write-for-npm-publish
+        // dance (with restorePackageJson as its finalizer).
         if (published) {
             // Bump patch: 6.11.1 → 6.11.2
             val parts = currentVersion.split(".")
             val newVersion = "${parts[0]}.${parts[1]}.${parts[2].toInt() + 1}"
-            val content = pkgJson.readText()
-            val updated = content.replace(
-                Regex(""""version"\s*:\s*"[^"]+""""),
-                """"version": "$newVersion""""
-            )
-            pkgJson.writeText(updated)
             project.version = newVersion
             logger.lifecycle("Version bumped: $currentVersion → $newVersion (previous version already published)")
         } else {
@@ -228,7 +276,10 @@ val bumpVersion by tasks.registering {
 val tagVersion by tasks.registering {
     group = "publish"
     description = "Create git tag for published version"
-    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded }
+    // changedSinceTag: if no module files changed since the previous release
+    // tag, the current package.json version matches that tag — re-creating
+    // it with `git tag -a` would fail "tag already exists".
+    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded && changedSinceTag }
     doLast {
         val ver = readBaseVersion()
         val tag = "${tagPrefix}${ver}"
@@ -322,6 +373,11 @@ val preflightChecks by tasks.registering {
     group = "publish"
     description = "Validate publish readiness: registry auth, version, Docker, working tree"
     dependsOn(gate)
+    // Preflight is a publish-readiness gate: NPM_TOKEN, multi-arch buildx, AWS
+    // identity, ECR creds. None of that is relevant in dry-run — dry-run
+    // rehearses the task graph without publishing anything, so failing on env
+    // validation for a publish that will never happen is pure noise.
+    onlyIf { !isDryRun }
     doLast {
         val ver = project.version.toString()
         val (pkgName, _) = if (project.file("package.json").exists()) {
@@ -734,142 +790,93 @@ val gate by tasks.registering {
 }
 
 // ── Gate stamp — written after gate passes, verified before publish ──
-// Two hashes:
-//   sourceHash — committed source files (src/, package.json, api.yml, etc.)
-//                Used by CI to verify the stamp matches the source code.
-//   distHash   — includes dist/ (build output, not committed)
-//                Used locally to skip gate entirely when nothing changed.
-
-fun hashFiles(dirs: List<String>, files: List<String>): String {
-    val digest = java.security.MessageDigest.getInstance("SHA-256")
-    for (name in files) {
-        val f = project.file(name)
-        if (f.exists()) {
-            digest.update(name.toByteArray())
-            digest.update(f.readBytes())
-        }
-    }
-    for (dirName in dirs) {
-        val dir = project.file(dirName)
-        if (dir.exists()) {
-            dir.walkTopDown()
-                .filter { it.isFile }
-                .sortedBy { it.relativeTo(project.projectDir).path }
-                .forEach { f ->
-                    val relPath = f.relativeTo(project.projectDir).path
-                    digest.update(relPath.toByteArray())
-                    digest.update(f.readBytes())
-                }
-        }
-    }
-    return digest.digest().joinToString("") { "%02x".format(it) }
-}
-
-// package.json excluded — version field gets patched during publish, which would invalidate the hash.
-// package-lock.json excluded — npm ci may regenerate it slightly differently across environments.
+//
+// Two hashes, BOTH computed over files tracked by git (via `git ls-files`):
+//
+//   sourceHash — committed source files that define the module's behavior
+//                (src/, api.yml, tsconfig.json). If this changes, gate must
+//                re-run. Validated by CI before publish to ensure the
+//                committed stamp matches the committed source.
+//
+//   testHash   — committed test files (test/**). If ONLY this changes, we
+//                can skip everything except test tasks on the next run.
+//
+// Git-only enumeration is critical: filesystem walks picked up untracked
+// local artifacts (.DS_Store, coverage output, build output, temp files)
+// which produce different hashes between local and CI and cause the
+// committed stamp to fail CI validation. This is the SAME bug we fixed
+// for monorepo SourceHasher.hashTests, now unified here via the shared
+// SourceHasher implementation.
+//
+// package.json excluded — version field gets patched during publish, which
+// would invalidate the hash.
+// package-lock.json excluded — npm ci may regenerate it slightly differently
+// across environments.
 val sourceFiles = listOf("api.yml", "tsconfig.json")
 val sourceDirs = listOf("src")
+val testDirs = listOf("test")
 
-fun computeSourceHash(): String = hashFiles(sourceDirs, sourceFiles)
-fun computeDistHash(): String = hashFiles(sourceDirs + "dist", sourceFiles)
+fun computeSourceHash(): String =
+    SourceHasher.hashSources(project.projectDir, sourceFiles, sourceDirs)
+
+fun computeTestHash(): String =
+    SourceHasher.hashTests(project.projectDir, testDirs)
 
 val gateStampFile = project.layout.projectDirectory.file("gate-stamp.json")
 
-// Collect test results from each test task's output.
-// Each test exec task writes a small JSON file to build/test-results-{suite}.json.
-// The gate stamp aggregates these.
-/**
- * Count expected test cases by scanning for it( / it.only( / test( in test files.
- */
-fun countExpectedTests(testDir: java.io.File): Int {
-    if (!testDir.exists()) return 0
-    val pattern = Regex("""(?:^|\s)(?:it|it\.only|test)\s*\(""")
-    return testDir.walkTopDown()
-        .filter { it.isFile && (it.name.endsWith(".ts") || it.name.endsWith(".js")) }
-        .sumOf { file ->
-            file.readLines().count { line -> pattern.containsMatchIn(line) }
-        }
-}
+// Count expected test cases — delegated to the shared SourceHasher so both
+// the standard gate path and the monorepo gate path use identical counting
+// logic.
+fun countExpectedTests(testDir: java.io.File): Int =
+    SourceHasher.countExpectedTests(testDir)
 
 /**
- * Verify the gate stamp file: exists, valid JSON, hash matches current artifacts.
- * Returns true if publish can skip gate.
- */
-/**
  * Check gate stamp validity. Returns a result indicating what can be skipped:
- *   - FULL: distHash + test counts match — skip all gate tasks (local, nothing changed)
- *   - SOURCE: sourceHash + test counts match, dist missing — skip tests, rebuild (CI path)
- *   - TESTS_CHANGED: source/dist ok but test count mismatch — need to re-run tests
- *   - INVALID: stamp stale or missing — re-run full gate
+ *
+ *   - VALID:         sourceHash AND testHash match, all recorded task
+ *                    results were successful — gate + all child tasks can
+ *                    skip. Rebuild is still required if dist/ is missing;
+ *                    that's handled by each task's own up-to-date check.
+ *   - TESTS_CHANGED: sourceHash matches, testHash differs — rerun tests
+ *                    only, skip validate/lint/compile/buildArtifacts.
+ *   - INVALID:       sourceHash mismatch, stamp missing, or a recorded
+ *                    task result was "failed"/"not-run" — rerun everything.
+ *
+ * All hashing goes through SourceHasher (git ls-files based) so local and
+ * CI compute byte-identical values regardless of untracked files.
  */
-enum class GateStampResult { FULL, SOURCE, TESTS_CHANGED, INVALID }
+// Type alias kept for backward-compatibility with the rest of this script
+// plugin, which references `GateStampResult.VALID`/`TESTS_CHANGED`/`INVALID`
+// in the publish-aware task graph configuration below.
+typealias GateStampResult = StandardGateStampValidator.Result
 
 fun checkGateStamp(): GateStampResult {
     val stampFile = gateStampFile.asFile
-    if (!stampFile.exists()) return GateStampResult.INVALID
-
     return try {
-        val content = stampFile.readText()
-
-        // 1. Verify sourceHash — source code hasn't changed
-        val stampSourceHash = Regex(""""sourceHash"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-            ?: return GateStampResult.INVALID
-        val currentSourceHash = computeSourceHash()
-        if (stampSourceHash != currentSourceHash) {
-            logger.lifecycle("Gate stamp invalid — source changed since last gate")
-            return GateStampResult.INVALID
-        }
-
-        // 2. Verify all tasks passed
-        val requiredTasks = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "testDataloader", "buildArtifacts")
-        for (taskName in requiredTasks) {
-            val taskStatus = Regex(""""$taskName":\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-            if (taskStatus != "passed" && taskStatus != "skipped" && taskStatus != "up-to-date") {
-                return GateStampResult.INVALID
-            }
-        }
-
-        // 3. Verify test counts — separate from source hash since tests are in test/, not src/
-        var testsMatch = true
-        val testSuites = mapOf(
+        val content = if (stampFile.exists()) stampFile.readText() else null
+        val testSuiteDirs = listOf(
             "unit" to project.file("test/unit"),
             "integration" to project.file("test/integration"),
-            "e2e" to project.file("test/e2e")
+            "e2e" to project.file("test/e2e"),
         )
-        for ((suite, dir) in testSuites) {
-            val currentExpected = countExpectedTests(dir)
-            if (currentExpected == 0) continue
-
-            val stampExpected = Regex(""""$suite":\s*\{[^}]*"expected":\s*(\d+)""")
-                .find(content)?.groupValues?.get(1)?.toIntOrNull()
-            val stampRan = Regex(""""$suite":\s*\{[^}]*"ran":\s*(\d+)""")
-                .find(content)?.groupValues?.get(1)?.toIntOrNull()
-            val stampStatus = Regex(""""$suite":\s*\{[^}]*"status":\s*"([^"]+)"""")
-                .find(content)?.groupValues?.get(1)
-
-            if (stampExpected == null || stampRan == null || stampStatus == null) { testsMatch = false; break }
-            if (stampStatus != "passed" && stampStatus != "skipped") { testsMatch = false; break }
-            if (currentExpected != stampExpected) {
-                logger.lifecycle("Gate stamp: $suite test count changed ($stampExpected → $currentExpected)")
-                testsMatch = false; break
-            }
-            if (stampRan != stampExpected) { testsMatch = false; break }
+        val suiteCounts = testSuiteDirs.map { (name, dir) ->
+            StandardGateStampValidator.SuiteCount(name, countExpectedTests(dir))
         }
-
-        if (!testsMatch) {
-            return GateStampResult.TESTS_CHANGED
+        val outcome = StandardGateStampValidator.validate(
+            stampContent = content,
+            currentSourceHash = computeSourceHash(),
+            currentTestHash = computeTestHash(),
+            currentTestCounts = suiteCounts,
+        )
+        when (outcome.result) {
+            StandardGateStampValidator.Result.INVALID ->
+                logger.lifecycle("Gate stamp invalid — ${outcome.reason}")
+            StandardGateStampValidator.Result.TESTS_CHANGED ->
+                logger.lifecycle("Gate stamp: ${outcome.reason} — rerunning tests")
+            StandardGateStampValidator.Result.VALID ->
+                logger.lifecycle("Gate stamp valid — skipping gate tasks")
         }
-
-        // 4. Check distHash — if dist/ matches too, skip everything (local)
-        val stampDistHash = Regex(""""distHash"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-        val currentDistHash = try { computeDistHash() } catch (_: Exception) { "" }
-        if (stampDistHash != null && stampDistHash == currentDistHash) {
-            logger.lifecycle("Gate stamp valid (distHash match) — skipping all gate tasks")
-            return GateStampResult.FULL
-        }
-
-        logger.lifecycle("Gate stamp valid (sourceHash match) — skipping tests, rebuild required")
-        GateStampResult.SOURCE
+        outcome.result
     } catch (e: Exception) {
         logger.warn("Gate stamp unreadable: ${e.message}")
         GateStampResult.INVALID
@@ -885,8 +892,12 @@ val writeGateStamp by tasks.registering {
     outputs.upToDateWhen { false } // Always rewrite — stamp includes timestamp and task states
     doLast {
         val sourceHash = computeSourceHash()
-        val distHash = computeDistHash()
-        val taskNames = listOf("validate", "lint", "compile", "test", "testDirect", "testDocker", "testDataloader", "buildArtifacts")
+        val testHash = computeTestHash()
+        val taskNames = listOf(
+            "validate", "lint", "compile",
+            "test", "testDirect", "testDocker", "testDataloader",
+            "buildArtifacts",
+        )
         val taskResults = taskNames.map { taskName ->
             val task = project.tasks.findByName(taskName)
             val state = task?.state
@@ -931,7 +942,7 @@ val writeGateStamp by tasks.registering {
   "branch": "$branch",
   "timestamp": "${java.time.Instant.now()}",
   "sourceHash": "$sourceHash",
-  "distHash": "$distHash",
+  "testHash": "$testHash",
   "tasks": {
     ${taskResults.joinToString(",\n    ")}
   },
@@ -951,6 +962,13 @@ ${testEntries.joinToString(",\n")}
                 logger.lifecycle("  $suite: $expected/$expected passed")
             }
         }
+
+        // Emit the gate_stamp_written event so the TUI display can render
+        // the stamp footer line, identical to the monorepo path.
+        zbbBaseEventEmitter.get().emitGateStampWritten(
+            stampFile.relativeTo(rootProject.projectDir).path,
+            1,  // standard mode writes one stamp per gate (this package)
+        )
     }
 }
 
@@ -958,16 +976,75 @@ gate.configure {
     finalizedBy(writeGateStamp)
 }
 
+// ── gateCheck — cheap CI preflight ──────────────────────────────
+//
+// Analogous to monorepoGateCheck in the monorepo plugin. Runs only the
+// validation logic (reads the committed gate-stamp.json, re-hashes via
+// SourceHasher, checks recorded task results) and exits 0/1 WITHOUT
+// running any gate child tasks. Used by CI matrix cells to skip the
+// full gate when the committed stamp is still valid.
+//
+// Writes `.zbb-module/gate-check.marker` so CI can distinguish:
+//   - marker present, valid=true  → stamp is current, skip full gate
+//   - marker present, valid=false → stamp is stale, run full gate
+//   - marker absent               → validation crashed (plugin error,
+//                                    JVM crash, missing build-tools) →
+//                                    infrastructure failure
+val gateCheck by tasks.registering {
+    group = "lifecycle"
+    description = "Validate gate-stamp.json against current source. Exit 0 if valid, 1 otherwise. Cheap — no build/test/vault required."
+
+    doLast {
+        val markerDir = project.layout.buildDirectory.dir(".zbb-module").get().asFile
+        val markerFile = java.io.File(markerDir, "gate-check.marker")
+        markerDir.mkdirs()
+        markerFile.delete()
+
+        fun writeMarker(valid: Boolean, reason: String) {
+            markerFile.writeText("valid=$valid\nreason=$reason\nts=${java.time.Instant.now()}\n")
+        }
+
+        val stampFile = gateStampFile.asFile
+        if (!stampFile.exists()) {
+            writeMarker(valid = false, reason = "stamp-missing")
+            logger.error("✗ no gate-stamp.json found at ${stampFile.absolutePath}")
+            logger.error("  Run `zbb gate` locally and commit the stamp before pushing.")
+            throw GradleException("gate-stamp.json missing or unreadable")
+        }
+
+        when (val result = checkGateStamp()) {
+            GateStampResult.VALID -> {
+                writeMarker(valid = true, reason = "stamp-valid")
+                logger.lifecycle("✓ gate stamp valid — source/test hashes match, all recorded task results OK")
+            }
+            GateStampResult.TESTS_CHANGED -> {
+                writeMarker(valid = false, reason = "tests-changed")
+                logger.error("✗ gate stamp: test files changed since last gate")
+                logger.error("  Run `zbb gate` to re-run tests and update the stamp.")
+                throw GradleException("gate-stamp.json invalid — tests changed")
+            }
+            GateStampResult.INVALID -> {
+                writeMarker(valid = false, reason = "stamp-invalid")
+                logger.error("✗ gate stamp: source changed or task result missing/failed since last gate")
+                logger.error("  Run `zbb gate` to refresh the stamp.")
+                throw GradleException("gate-stamp.json invalid — source/task drift")
+            }
+        }
+    }
+}
+
 // When publish is in the task graph, decide what to skip based on gate stamp.
 //
 // LOCAL scenarios:
 //   1. No stamp or sourceHash mismatch (INVALID) → gate runs fully, writes new stamp
-//   2. sourceHash matches, distHash mismatch (SOURCE) → skip tests, rebuild
-//   3. distHash matches (FULL) → skip all gate tasks
+//   2. sourceHash matches, testHash mismatch (TESTS_CHANGED) → rerun tests only,
+//      keep build/validation skipped since source is unchanged
+//   3. sourceHash AND testHash match (VALID) → skip gate + all child tasks;
+//      gradle's own inputs/outputs handle any missing dist/ rebuild on demand
 //
 // CI scenarios:
-//   4. No stamp or sourceHash mismatch → preflight hard-fails (handled in preflight check)
-//   5. sourceHash matches → skip tests, run npm ci + build (always SOURCE in CI since no dist/)
+//   4. INVALID or TESTS_CHANGED → preflight hard-fails (handled in preflight check)
+//   5. VALID → skip gate entirely
 gradle.taskGraph.whenReady {
     val publishInGraph = try {
         hasTask(tasks.named("publish").get()) ||
@@ -1000,18 +1077,11 @@ gradle.taskGraph.whenReady {
     val isCI = System.getenv("CI") == "true"
 
     when (gateStampResult) {
-        GateStampResult.FULL -> {
-            // Local: distHash + test counts match — skip everything
-            for (task in project.tasks) {
-                if (task.name in testAndValidationTasks || task.name in buildTasks) {
-                    task.enabled = false
-                }
-            }
-            project.tasks.findByName("gate")?.enabled = false
-            project.tasks.findByName("writeGateStamp")?.enabled = false
-        }
-        GateStampResult.SOURCE -> {
-            // sourceHash + test counts match, dist missing — skip tests, rebuild
+        GateStampResult.VALID -> {
+            // sourceHash + testHash + recorded task results all match.
+            // Skip every test/validation/build task — each task's own
+            // inputs/outputs declaration will still handle rebuilding dist/
+            // on demand if it's missing (no more distHash shortcut needed).
             for (task in project.tasks) {
                 if (task.name in testAndValidationTasks) {
                     task.enabled = false
@@ -1022,16 +1092,17 @@ gradle.taskGraph.whenReady {
         }
         GateStampResult.TESTS_CHANGED -> {
             if (isCI) {
-                throw GradleException("gate-stamp.json test counts don't match current test files — run zbb gate locally and commit the stamp")
+                throw GradleException("gate-stamp.json test hash/counts don't match current test files — run zbb gate locally and commit the stamp")
             } else {
-                // Local: source is fine but tests changed — re-run tests, skip validation/build
-                // Let gate run which includes tests, then writeGateStamp updates the stamp
+                // Local: source + build are clean, but tests changed. Let
+                // the test tasks run (they'll be cheap since nothing else
+                // needs to rebuild), then writeGateStamp updates the stamp.
                 for (task in project.tasks) {
                     if (task.name in buildTasks) {
                         task.enabled = false
                     }
                 }
-                logger.lifecycle("Gate stamp: test count changed — re-running tests")
+                logger.lifecycle("Gate stamp: tests changed — re-running tests")
             }
         }
         GateStampResult.INVALID -> {
@@ -1076,6 +1147,10 @@ val publishHubSdk by tasks.registering {
 val resolvePublishVersion by tasks.registering {
     group = "publish"
     description = "Resolve a non-conflicting version for branch publish"
+    // Same reasoning as bumpVersion: hold version resolution until the full
+    // build phase is done, so a build failure never leaves us with a partially-
+    // bumped or partially-computed version.
+    mustRunAfter(buildArtifacts)
     onlyIf { branch != "main" && branchSuffix != null }
     doLast {
         val resolved = resolvePreReleaseVersion(baseVersion, branchSuffix!!, gitCounter)
@@ -1114,8 +1189,9 @@ listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { ta
 }
 
 // Shared success flags for publish pipeline coordination.
-// publishAllSucceeded: gates promoteAll, commitVersion, tagVersion
-// promoteAllSucceeded: gates commitVersion, tagVersion (only commit if fully promoted)
+// publishAllSucceeded: gates promoteAll
+// promoteAllSucceeded: gates tagVersion, pushVersion, publishReleaseEvent
+// (commitVersion now runs BEFORE publish; gated only on branch==main && !isDryRun)
 var publishAllSucceeded = false
 var promoteAllSucceeded = false
 
@@ -1125,6 +1201,14 @@ extra["stagedPackages"] = stagedPackages
 
 publishAll.configure {
     doLast {
+        // publishAll's dependents (publishNpm, publishImage, publishSdk,
+        // publishHubSdk) skip when changedSinceTag is false, but Gradle still
+        // runs publishAll's own doLast. Guard the success flag so downstream
+        // tasks gated on `publishAllSucceeded` correctly see "nothing to do".
+        if (!changedSinceTag) {
+            logger.lifecycle("[publishAll] No changes since last tag -- nothing staged to promote")
+            return@doLast
+        }
         publishAllSucceeded = true
         logger.lifecycle("All staging publishes succeeded -- ready to promote")
     }
@@ -1150,14 +1234,20 @@ gradle.buildFinished {
             }
         }
 
-        // Revert package.json bump
+        // Revert package.json bump. Since commitVersion now runs BEFORE publish,
+        // the bump may already be in a local commit — `checkout --` only restores
+        // if the working-tree copy differs from HEAD (i.e. bumpVersion ran but
+        // commitVersion was skipped or failed). If the bump was committed and
+        // then publish failed, the commit stays on the ephemeral CI runner and
+        // is discarded with the job; on dev, the committed bump will no-op on
+        // the next run (git diff will be empty so commitVersion skips).
         try {
             com.zerobias.buildtools.util.ExecUtils.exec(
                 command = listOf("git", "checkout", "--", "package.json"),
                 workingDir = project.projectDir,
                 throwOnError = false
             )
-            logger.warn("  Reverted package.json version bump")
+            logger.warn("  Reverted working-tree package.json (if not already committed)")
         } catch (e: Exception) {
             logger.warn("  Failed to revert package.json: ${e.message}")
         }
@@ -1175,75 +1265,119 @@ val promoteAll by tasks.registering {
         publishAllSucceeded
     }
     doLast {
+        // Individual promote tasks skip when changedSinceTag is false (see
+        // zb.typescript.gradle.kts), so promoteAll's doLast should only
+        // declare success when there was actually work to do. Without this
+        // guard, tagVersion / pushVersion / publishReleaseEvent would run
+        // with promoteAllSucceeded=true even though nothing was promoted.
+        if (!changedSinceTag) {
+            logger.lifecycle("[promoteAll] No changes since last tag -- nothing promoted")
+            return@doLast
+        }
         promoteAllSucceeded = true
         logger.lifecycle("All promotions succeeded")
     }
 }
 
 // Commit published version after successful promote
+// Commit the bumped package.json + refreshed gate-stamp BEFORE the actual
+// publish runs — so the npm tarball's git HEAD matches the version it
+// claims. Mirrors the zb.monorepo-publish.commitVersionBumps ordering.
+// Gated to main only; branches publish pre-release versions without a commit.
 val commitVersion by tasks.registering {
     group = "publish"
-    description = "Commit bumped package.json version + updated gate stamp"
-    mustRunAfter(promoteAll)
-    onlyIf { !isDryRun && promoteAllSucceeded }
+    description = "Commit bumped package.json version + updated gate stamp (main branch, pre-publish)"
+    mustRunAfter(bumpVersion, resolvePublishVersion)
+    // No changes since last tag ⇒ bumpVersion skipped, project.version still
+    // matches the committed package.json — nothing to write, nothing to commit.
+    onlyIf { branch == "main" && !isDryRun && changedSinceTag }
     doLast {
         val ver = project.version.toString()
         val pkgFile = project.file("package.json")
         val moduleDir = project.projectDir.relativeTo(project.rootDir).path
         val pkgPath = "${moduleDir}/package.json"
+        val stampPath = "${moduleDir}/gate-stamp.json"
 
-        // Write the published version into package.json (restorePackageJson may have reverted it)
-        val content = pkgFile.readText()
-        val updated = content.replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
-        pkgFile.writeText(updated)
+        // commitVersion is the single authoritative writer for the committed
+        // package.json version on main. bumpVersion only updates project.version
+        // in memory (so a failure between bump and commit leaves the tree clean);
+        // this task writes the bumped version to disk now, stages it, and commits.
+        // If the version didn't change, the `git diff --cached` check below
+        // makes the commit a no-op.
+        run {
+            val content = pkgFile.readText()
+            val updated = content.replace(
+                Regex(""""version"\s*:\s*"[^"]+""""),
+                """"version": "$ver""""
+            )
+            if (content != updated) {
+                pkgFile.writeText(updated)
+            }
+        }
 
-        // Regenerate gate stamp with the new source hash (post version bump)
+        // Refresh gate-stamp.json so the committed stamp matches the version
+        // being published. sourceHash/testHash are recomputed in case earlier
+        // tasks touched tracked files during the build phase.
         val stampFile = gateStampFile.asFile
         if (stampFile.exists()) {
             val stampContent = stampFile.readText()
             val newSourceHash = computeSourceHash()
-            val newDistHash = try { computeDistHash() } catch (_: Exception) { "" }
+            val newTestHash = computeTestHash()
             val updatedStamp = stampContent
                 .replace(Regex(""""sourceHash"\s*:\s*"[^"]+""""), """"sourceHash": "$newSourceHash"""")
-                .replace(Regex(""""distHash"\s*:\s*"[^"]+""""), """"distHash": "$newDistHash"""")
+                .replace(Regex(""""testHash"\s*:\s*"[^"]+""""), """"testHash": "$newTestHash"""")
                 .replace(Regex(""""version"\s*:\s*"[^"]+""""), """"version": "$ver"""")
                 .replace(Regex(""""timestamp"\s*:\s*"[^"]+""""), """"timestamp": "${java.time.Instant.now()}"""")
             stampFile.writeText(updatedStamp)
-            logger.lifecycle("Updated gate-stamp.json with post-publish hashes")
+            logger.lifecycle("Updated gate-stamp.json for v${ver}")
         }
 
-        // Stage both package.json and gate-stamp.json
-        val stampPath = "${moduleDir}/gate-stamp.json"
         com.zerobias.buildtools.util.ExecUtils.exec(
             command = listOf("git", "add", pkgPath, stampPath),
             workingDir = project.rootDir,
             throwOnError = true
         )
 
+        // Skip the commit if nothing is staged — happens when bumpVersion
+        // decided not to bump and the stamp was already up to date.
+        val staged = com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf("git", "diff", "--cached", "--name-only"),
+            workingDir = project.rootDir,
+            throwOnError = false
+        ).trim()
+        if (staged.isEmpty()) {
+            logger.lifecycle("No staged changes — skipping commit for v${ver}")
+            return@doLast
+        }
+
         com.zerobias.buildtools.util.ExecUtils.exec(
             command = listOf("git", "commit", "-m", "chore(release): ${zb.vendor.get()}-${zb.product.get()} v${ver}"),
             workingDir = project.rootDir,
             throwOnError = true
         )
-        logger.lifecycle("Committed version bump + gate stamp: v${ver}")
+        logger.lifecycle("Committed version bump: v${ver}")
     }
 }
 
-// Release event — handled by CI workflow (release-announcement action)
-// which sends Slack notification + Lambda event with full metadata.
-// This task is a no-op placeholder to keep the publish chain intact.
+// Release announcement: Slack webhook + Lambda event for each published package.
+// Gated on env vars — silently skips Slack when SLACK_RELEASES_WEBHOOK is absent,
+// skips Lambda when AWS_REGION / aws CLI is absent (i.e. local runs).
 val publishReleaseEvent by tasks.registering {
     group = "publish"
-    description = "Release announcement (handled by CI workflow)"
+    description = "Send release announcement (Slack + Lambda event)"
     mustRunAfter(tagVersion)
-    onlyIf { !isDryRun && promoteAllSucceeded }
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag }
     doLast {
         val ver = project.version.toString()
         val pkgJson = project.file("package.json")
         val name = if (pkgJson.exists()) {
             Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1) ?: "unknown"
         } else "unknown"
-        logger.lifecycle("Published ${name}@${ver} — release announcement handled by CI workflow")
+        // location is relative path from repo root to this project
+        val location = project.projectDir.relativeTo(project.rootDir).path
+        val pkg = com.zerobias.buildtools.util.ReleaseAnnouncement.PublishedPackage(name, ver, location)
+        val githubRepo = com.zerobias.buildtools.util.ReleaseAnnouncement.detectGithubRepo(project.rootDir)
+        com.zerobias.buildtools.util.ReleaseAnnouncement.announce(listOf(pkg), project.rootDir, branch, githubRepo, logger)
     }
 }
 
@@ -1251,34 +1385,122 @@ val publishReleaseEvent by tasks.registering {
 // Push version commit and tags to remote
 val pushVersion by tasks.registering {
     group = "publish"
-    description = "Push version commit and tags to remote"
+    description = "Push version commit and tags to remote (retries with rebase on fast-forward rejection)"
     mustRunAfter(tagVersion)
-    onlyIf { !isDryRun && promoteAllSucceeded }
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag }
     doLast {
-        try {
-            com.zerobias.buildtools.util.ExecUtils.exec(
-                command = listOf("git", "push", "--follow-tags"),
-                workingDir = project.rootDir,
-                throwOnError = true
-            )
-            logger.lifecycle("Pushed version commit and tags to remote")
-        } catch (e: Exception) {
-            logger.warn("Failed to push: ${e.message}")
-            // Non-fatal — don't fail the publish for a push issue
+        // Concurrent publish jobs from sibling modules can race on the same main
+        // branch — when two jobs build in parallel and both produce a release
+        // commit, whichever pushes first wins and the loser hits a fast-forward
+        // rejection. Retry by rebasing our local commit on top of whatever
+        // landed and pushing again. The release commit only touches this
+        // module's package.json + gate-stamp.json (+ optional CHANGELOG), so
+        // rebase conflicts against another module's release commit are
+        // structurally impossible — different files entirely.
+        //
+        // Tag handling: tagVersion creates an annotated tag at HEAD before this
+        // task runs. A rebase rewrites HEAD to a new SHA, orphaning the tag
+        // (it still points at the pre-rebase commit, which is no longer an
+        // ancestor of HEAD). `git push --follow-tags` only pushes tags reachable
+        // from the pushed commits, so the orphaned tag would silently fail to
+        // upload. After each rebase we force-move the tag to the new HEAD so
+        // it stays reachable.
+        //
+        // Failing loudly on final exhaustion is intentional. Previous behavior
+        // swallowed the push error as "non-fatal", which left main's bookkeeping
+        // silently out of sync with the npm registry whenever the race fired.
+        // A loud failure here forces a human to reconcile (npm has the artifact;
+        // git just needs to catch up).
+
+        // Compute tag identity the same way tagVersion does, so we can re-point
+        // it after a rebase if needed.
+        val ver = readBaseVersion()
+        val tag = "${tagPrefix}${ver}"
+        val tagMessage = "Release ${zb.vendor.get()}-${zb.product.get()} v${ver}"
+
+        val maxAttempts = 5
+        var lastError: Exception? = null
+        for (attempt in 1..maxAttempts) {
+            try {
+                com.zerobias.buildtools.util.ExecUtils.exec(
+                    command = listOf("git", "push", "--follow-tags"),
+                    workingDir = project.rootDir,
+                    throwOnError = true
+                )
+                logger.lifecycle("Pushed version commit and tags to remote (attempt $attempt)")
+                return@doLast
+            } catch (e: Exception) {
+                lastError = e
+                logger.warn("Push attempt $attempt/$maxAttempts failed: ${e.message}")
+                if (attempt == maxAttempts) break
+
+                // Rebase our local commit onto the current remote main. If the
+                // rebase itself conflicts (extraordinarily rare for a release
+                // commit), abort cleanly and bail — pushing in a half-rebased
+                // state would corrupt main.
+                try {
+                    com.zerobias.buildtools.util.ExecUtils.exec(
+                        command = listOf("git", "pull", "--rebase", "origin", "main"),
+                        workingDir = project.rootDir,
+                        throwOnError = true
+                    )
+                    logger.lifecycle("Rebased onto remote main; retrying push")
+                } catch (rebaseErr: Exception) {
+                    com.zerobias.buildtools.util.ExecUtils.exec(
+                        command = listOf("git", "rebase", "--abort"),
+                        workingDir = project.rootDir,
+                        throwOnError = false
+                    )
+                    throw GradleException(
+                        "pushVersion: rebase failed after push rejection — manual reconciliation required (npm artifact already published, git state diverged): ${rebaseErr.message}",
+                        rebaseErr
+                    )
+                }
+
+                // The rebase moved HEAD to a new SHA, orphaning any tag that
+                // tagVersion created earlier. Force-move the tag back onto HEAD
+                // so `git push --follow-tags` sees it as reachable.
+                try {
+                    com.zerobias.buildtools.util.ExecUtils.exec(
+                        command = listOf("git", "tag", "-f", "-a", tag, "-m", tagMessage),
+                        workingDir = project.rootDir,
+                        throwOnError = true
+                    )
+                    logger.lifecycle("Re-pointed tag $tag to rebased HEAD")
+                } catch (tagErr: Exception) {
+                    // Non-fatal: the commit will still push on the next retry,
+                    // but the tag won't. Log and continue — a missing tag is
+                    // less bad than a missing commit.
+                    logger.warn("Failed to re-point tag $tag after rebase: ${tagErr.message}")
+                }
+
+                // Brief jittered backoff to thin out a thundering herd if many
+                // sibling jobs are racing the same remote.
+                Thread.sleep(500L * attempt + (Math.random() * 250).toLong())
+            }
         }
+        throw GradleException(
+            "pushVersion: failed after $maxAttempts attempts (npm artifact already published, git state diverged — manual reconciliation required): ${lastError?.message}",
+            lastError
+        )
     }
 }
 
-// Top-level publish: bump → stage → promote → commit → tag → push → release event
+// Top-level publish: bump → commit → stage (publish) → promote → tag → push → release event
 val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
     dependsOn(publishAll, promoteAll, commitVersion, tagVersion, pushVersion, publishReleaseEvent)
 }
 
-// Ordering: promote → commit → tag → push → release event
+// Ordering:
+//   bump → commit → publish (stage) → promote → tag → push → release event
+// commit runs BEFORE the actual publish so the npm tarball's git HEAD
+// matches the version it claims. Matches the zb.monorepo-publish ordering.
+listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { taskName ->
+    tasks.named(taskName) { mustRunAfter(commitVersion) }
+}
 tagVersion.configure { mustRunAfter(commitVersion) }
-commitVersion.configure { mustRunAfter(promoteAll) }
 pushVersion.configure { mustRunAfter(tagVersion) }
 publishReleaseEvent.configure { mustRunAfter(pushVersion) }
 
@@ -1334,6 +1556,86 @@ tasks.withType<JavaExec>().configureEach {
             if (value != null) {
                 environment(envVar, propertyResolver.resolve(value))
             }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────
+// TTY display event wiring
+//
+// Hook doFirst on every zb.base / zb.typescript task that should appear
+// in the display. Each hook calls emitStart(projectPath, taskName) which
+// writes a task_start event to .zbb-monorepo/events.jsonl. Task finish
+// events are automatically emitted by the BuildEventsListener subscribed
+// above.
+//
+// The same per-task stdout/stderr log capture used in zb.monorepo-base
+// is applied here too, so per-task logs live at .zbb-monorepo/logs/
+// regardless of which plugin wired the task.
+// ────────────────────────────────────────────────────────────
+val zbbBasePhaseTaskNames = setOf(
+    // Validation + build phase
+    "validate", "validateSpec", "validateConnector",
+    "lint", "lintExec",
+    "generate", "generateApi", "generateServerApi", "generateServerEntry",
+    "assembleSpec", "bundleSpec", "dereferenceSpec", "generateCode",
+    "compile", "compileExec", "compileServer",
+    "transpile", "transpileExec",
+    "buildHubSdk", "buildHubSdkExec",
+    "buildOpenApiSdk",
+    "buildImage", "buildImageExec",
+    "buildArtifacts",
+    // Test phase
+    "test", "testUnit", "testUnitExec",
+    "testIntegration", "testIntegrationExec",
+    "testDirect", "testDirectExec",
+    "testDocker", "testDockerExec",
+    "testHub", "testHubExec",
+    "testDataloader", "testDataloaderExec",
+    // Gate + stamp
+    "gate", "gateCheck", "writeGateStamp",
+)
+
+gradle.taskGraph.whenReady {
+    val subprojectPath = if (project.path == ":") ":" else project.path
+    val emitterProvider = zbbBaseEventEmitter
+    zbbBaseLogsDir.mkdirs()
+
+    for (taskName in zbbBasePhaseTaskNames) {
+        val task = project.tasks.findByName(taskName) ?: continue
+        val capturedProjectPath = subprojectPath
+        val capturedTaskName = taskName
+
+        task.usesService(emitterProvider)
+
+        // Per-task log file path
+        val safeName = subprojectPath.removePrefix(":").replace(":", "-")
+            .ifEmpty { project.name }
+        val logFile = zbbBaseLogsDir.resolve("$safeName-$taskName.log")
+
+        // Exec/NpxTask: redirect stdout/stderr to the per-task log file so
+        // the live TTY display doesn't get polluted by child process output.
+        if (task is Exec) {
+            val execTask: Exec = task
+            var logStream: java.io.OutputStream? = null
+            execTask.doFirst {
+                logFile.parentFile.mkdirs()
+                val out = logFile.outputStream()
+                logStream = out
+                @Suppress("DEPRECATION")
+                (execTask as org.gradle.process.BaseExecSpec).standardOutput = out
+                @Suppress("DEPRECATION")
+                (execTask as org.gradle.process.BaseExecSpec).errorOutput = out
+            }
+            execTask.doLast {
+                try { logStream?.flush(); logStream?.close() } catch (_: Exception) {}
+            }
+        }
+
+        // Emit task_start via doFirst. doFirst PREPENDS the action so it
+        // runs BEFORE any other doFirst hooks that were registered earlier.
+        task.doFirst {
+            emitterProvider.get().emitStart(capturedProjectPath, capturedTaskName)
         }
     }
 }

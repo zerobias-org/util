@@ -3,14 +3,14 @@
  */
 import { expect } from 'chai';
 import * as path from 'path';
-import { Schema, Property, Type } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
+import { Schema, Property, Type } from '@zerobias-org/module-interface-dataproducer';
 import {
   OpenAPISchemaBuilder,
   TypeScriptSchemaBuilder,
   OpenAPILoader,
   TypeMapper,
   buildSchema,
-} from '../src';
+} from '../src/index.js';
 
 // Import GitHub generated models for TypeScript builder tests
 // The published package exports models from dist/generated/model/index.js

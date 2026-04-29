@@ -2,7 +2,7 @@
  * Tests for DataProducerClient
  */
 import { expect } from 'chai';
-import { DataProducerClient } from '../../src';
+import { DataProducerClient } from '../../src/index.js';
 
 describe('DataProducerClient', () => {
   let client: DataProducerClient;

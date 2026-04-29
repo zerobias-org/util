@@ -82,7 +82,7 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+dist/
 
 # Gatsby files
 .cache/
@@ -123,6 +123,13 @@ dist
 docs
 generated
 
+# build-tools authored docs (override the unanchored "docs" rule above)
+!packages/build-tools/docs
+!packages/build-tools/docs/**
+
+# Kotlin compiler cache (build-tools)
+.kotlin/
+
 # codegen test outputs
 codegen/test/regression/output/
 
@@ -142,8 +149,10 @@ build/
 *.war
 *.ear
 
-# Nx cache
-.nx/
+# zbb
+.zbb-build-cache.json
+.zbb-monorepo
+.zbb-publish-tmp/
 
-
+# OS
 .DS_Store

@@ -6,16 +6,16 @@
  * similar to database tables or spreadsheet data.
  */
 
-import { SortDirection as ExternalSortDirection } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
+import { SortDirection as ExternalSortDirection } from '@zerobias-org/module-interface-dataproducer';
 import { PagedResults } from '@zerobias-org/types-core-js';
 import {
   Collection,
   CollectionData,
   CollectionQueryParams,
   CollectionElement
-} from '../types/collections.types';
-import { QueryOptions, SortDirection } from '../types/common.types';
-import { validatePagedResult, validateDefined } from '../../validation';
+} from '../types/collections.types.js';
+import { QueryOptions, SortDirection } from '../types/common.types.js';
+import { validatePagedResult, validateDefined } from '../../validation/index.js';
 
 /**
  * CollectionsApi implementation
@@ -27,7 +27,7 @@ import { validatePagedResult, validateDefined } from '../../validation';
  * - Schema-based validation
  */
 export class CollectionsApi {
-  private client: import('../DataProducerClient').DataProducerClient;
+  private client: import('../DataProducerClient.js').DataProducerClient;
 
   /**
    * Create a new CollectionsApi instance
@@ -35,7 +35,7 @@ export class CollectionsApi {
    * @param client - DataProducerClient instance
    * @internal
    */
-  constructor(client: import('../DataProducerClient').DataProducerClient) {
+  constructor(client: import('../DataProducerClient.js').DataProducerClient) {
     this.client = client;
   }
 
@@ -127,7 +127,6 @@ export class CollectionsApi {
       // Call the underlying API
       const result = await collectionsApi.getCollectionElements(
         collectionId,
-        undefined,
         pageNumber,
         pageSize,
         sortBy,
@@ -191,7 +190,6 @@ export class CollectionsApi {
       // Call the underlying API
       const result = await collectionsApi.searchCollectionElements(
         collectionId,
-        undefined,
         pageNumber,
         pageSize,
         filter,

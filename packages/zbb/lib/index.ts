@@ -27,7 +27,7 @@ export {
 export { runPreflightChecks, formatPreflightResults, type CheckResult } from './preflight.js';
 
 // Gradle
-export { findGradleRoot, resolveStackAlias } from './gradle.js';
+export { findGradleRoot, checkDeprecatedAlias } from './gradle.js';
 
 // Stack
 export { Stack } from './stack/Stack.js';

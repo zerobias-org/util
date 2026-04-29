@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/logger",
-  "version": "3.0.4",
+  "version": "3.0.8",
   "description": "ZeroBias Logger - standard logging for all services.",
   "type": "module",
   "main": "dist/src/index.js",
@@ -12,7 +12,6 @@
     "clean": "rm -rf dist/",
     "transpile": "tsc -b",
     "build": "npm run lint && npm run transpile",
-    "nx:build": "npm run lint && npm run transpile",
     "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
     "test": "npm run test:unit",
@@ -41,6 +40,6 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
-    "@zerobias-org/util-api-client-base": "^1.0.40"
+    "@zerobias-org/util-api-client-base": "^1.0.43"
   }
 }

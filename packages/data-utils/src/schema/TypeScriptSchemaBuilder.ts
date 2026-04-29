@@ -5,15 +5,15 @@
  * `attributeTypeMap` static property (produced by OpenAPI codegen) and transforms
  * them into DataProducer Schema objects.
  */
-import { Schema, Property, Type } from '@zerobias-org/module-interface-dataproducer-hub-sdk';
-import { OpenAPILoader } from './OpenAPILoader';
-import { TypeMapper } from './TypeMapper';
+import { Schema, Property, Type } from '@zerobias-org/module-interface-dataproducer';
+import { OpenAPILoader } from './OpenAPILoader.js';
+import { TypeMapper } from './TypeMapper.js';
 import {
   TypeScriptSchemaConfig,
   ModelClass,
   AttributeTypeMap,
   SchemaReference,
-} from '../types';
+} from '../types/index.js';
 
 /**
  * Builder for creating DataProducer Schema objects from TypeScript interfaces
@@ -232,7 +232,7 @@ export class TypeScriptSchemaBuilder {
  *
  * @example
  * ```typescript
- * import { Repository } from '../generated/model';
+ * import { Repository } from '../generated/model.js';
  * import { buildSchema } from '@zerobias-org/data-utils';
  *
  * const schema = buildSchema(Repository, {
