@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/data-utils",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Utility library for DataProducer implementations and data mapping - schema generation, validation, type mapping, field transformations, and DataProducer client",
   "type": "module",
   "keywords": [
@@ -79,6 +79,6 @@
   "dependencies": {
     "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.1",
     "@zerobias-org/module-interface-dataproducer": "^2.1.1",
-    "@zerobias-org/util-connector": "^1.0.39"
+    "@zerobias-org/util-connector": "^1.0.40"
   }
 }
