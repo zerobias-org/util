@@ -1,7 +1,6 @@
 {
   "version": 1,
-  "branch": "main",
-  "timestamp": "2026-04-29T21:43:42.402463127Z",
+  "branch": "chore/update-packages-2.1.3",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "2.1.1",
@@ -33,8 +32,8 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.1",
-        "@zerobias-org/module-interface-dataproducer": "^2.1.1",
+        "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.3",
+        "@zerobias-org/module-interface-dataproducer": "^2.1.3",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
         "jsonata": "^2.0.0",
         "yaml": "\"2.8.3\"",
@@ -568,15 +567,15 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.64",
-      "sourceHash": "d14b9678d392cb2c70519292d178b70b0b424d29ac8ae6cbd2c2d78f51ee02f6",
+      "version": "0.3.65",
+      "sourceHash": "0386bc1fc0188c5a22079204a4e4c3df400c1240378d4185438f77ed58ea2941",
       "testHash": "93a81d95953db8ee815d4b2b87022214719ee7149334522cb1e4ef6a06f2fa0d",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
         "test": "skipped"
       },
       "tests": {
