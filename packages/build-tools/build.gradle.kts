@@ -1,6 +1,7 @@
 import com.vanniktech.maven.publish.GradlePlugin
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.SonatypeHost
+import java.util.concurrent.TimeUnit
 
 plugins {
     `kotlin-dsl`
@@ -58,6 +59,27 @@ version = run {
         return if (metadata.exists()) parseMaxPatch(metadata.readText()) else -1
     }
 
+    // Tags are the fast-path registry-equivalent source: a successful publish
+    // creates `<artifact>-v<base>.<patch>` in the same run, well before
+    // Sonatype Central indexing catches up (~10–30 min). Without this, two
+    // publish runs back-to-back can both compute the same "next" patch.
+    fun queryGitTags(): Int = try {
+        val proc = ProcessBuilder("git", "tag", "-l", "$artifact-v$baseVersion.*")
+            .directory(rootDir)
+            .redirectErrorStream(false)
+            .start()
+        val finished = proc.waitFor(5, TimeUnit.SECONDS)
+        if (!finished) { proc.destroyForcibly(); -1 }
+        else if (proc.exitValue() != 0) -1
+        else {
+            val out = proc.inputStream.bufferedReader().readText()
+            val pattern = Regex("""\Q$artifact-v$baseVersion\E\.(\d+)""")
+            pattern.findAll(out)
+                .mapNotNull { it.groupValues[1].toIntOrNull() }
+                .maxOrNull() ?: -1
+        }
+    } catch (_: Exception) { -1 }
+
     val centralMax = queryMetadata(
         "https://repo1.maven.org/maven2/$groupPath/$artifact/maven-metadata.xml",
         null,
@@ -73,8 +95,9 @@ version = run {
         "Bearer $token",
     ) else -1
     val localMax = queryMavenLocal()
+    val gitTagMax = queryGitTags()
 
-    val max = maxOf(centralMax, githubMax, localMax)
+    val max = maxOf(centralMax, githubMax, localMax, gitTagMax)
     if (max < 0) "$baseVersion.0" else "$baseVersion.${max + 1}"
 }
 
@@ -130,7 +153,10 @@ tasks.withType<Test>().configureEach {
 // Gradle plugin projects publish both the main jar and a plugin marker
 // per plugin id; Vanniktech's GradlePlugin handles both.
 mavenPublishing {
-    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = false)
+    // automaticRelease=true: Sonatype Central promotes from VALIDATED to
+    // RELEASED as soon as validation passes, so artifacts hit
+    // repo1.maven.org without a manual click in the Central Portal.
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
     signAllPublications()
     configure(GradlePlugin(javadocJar = JavadocJar.Javadoc(), sourcesJar = true))
 

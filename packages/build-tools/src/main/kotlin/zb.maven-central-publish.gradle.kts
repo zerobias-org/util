@@ -3,9 +3,9 @@
  * Packages Maven, and local ~/.m2/ in one `./gradlew publish`.
  *
  * Applies Vanniktech's com.vanniktech.maven.publish with SonatypeHost
- * CENTRAL_PORTAL (stages the deployment; release is manual at
- * central.sonatype.com, or pass automaticRelease=true to Vanniktech
- * for full automation).
+ * CENTRAL_PORTAL and automaticRelease=true — once validation passes the
+ * deployment is auto-promoted to the public release index; no manual
+ * click required at central.sonatype.com.
  *
  * Coordinates are auto-derived by Vanniktech from project metadata:
  *   groupId    = project.group
@@ -33,7 +33,7 @@
  *
  * `publish` runs all three targets:
  *   publishToMavenLocal
- *   publishToMavenCentral   (stages only; manual release)
+ *   publishToMavenCentral   (uploads + auto-promotes to public release)
  *   publishToGithub         (alias for publishMavenPublicationToGithubRepository)
  */
 
@@ -107,7 +107,10 @@ listOf(
 
 // ── Vanniktech Maven Central config ─────────────────────────────────
 mavenPublishing {
-    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = false)
+    // automaticRelease=true: Sonatype Central promotes from VALIDATED to
+    // RELEASED as soon as validation passes, so artifacts hit
+    // repo1.maven.org without a manual click in the Central Portal.
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
     signAllPublications()
     configure(JavaLibrary(javadocJar = JavadocJar.Javadoc(), sourcesJar = true))
     // No coordinates() call — Vanniktech auto-derives from project.
