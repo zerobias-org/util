@@ -62,6 +62,7 @@ export async function spawnStandardLifecycleAndExit(
   const passthrough: string[] = [];
   if (parsed.dryRun) passthrough.push('-PdryRun=true');
   if (parsed.force) passthrough.push('-Pforce=true');
+  if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
   // version-specific flags. modules: comma-separated list of relative
   // paths under package/ (matches the github workflow's `detect` output).
   // noPush: keeps the version commit local — used by tests / dry-runs.

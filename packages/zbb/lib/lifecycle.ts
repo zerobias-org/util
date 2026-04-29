@@ -36,6 +36,8 @@ export function isLifecycleCommand(command: string): boolean {
 export interface ParsedLifecycleArgs {
   all: boolean;
   base?: string;
+  /** `--clean` — wired to gradle's -Pcleanlocalregistry flag (verifyNoLocalRegistry guard). */
+  clean: boolean;
   dryRun: boolean;
   force: boolean;
   verbose: boolean;
@@ -51,6 +53,7 @@ export interface ParsedLifecycleArgs {
 export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
   const result: ParsedLifecycleArgs = {
     all: false,
+    clean: false,
     dryRun: false,
     force: false,
     verbose: false,
@@ -81,6 +84,9 @@ export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
         break;
       case '--check':
         result.check = true;
+        break;
+      case '--clean':
+        result.clean = true;
         break;
       case '--skipDocker':
       case '--skip-docker':

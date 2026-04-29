@@ -23,9 +23,11 @@
 import com.zerobias.buildtools.monorepo.GateStamp
 import com.zerobias.buildtools.monorepo.GateStampIO
 import com.zerobias.buildtools.monorepo.GateStampResult
+import com.zerobias.buildtools.monorepo.LocalRegistryScanner
 import com.zerobias.buildtools.monorepo.MonorepoGraphService
 import com.zerobias.buildtools.monorepo.PackageStampEntry
 import com.zerobias.buildtools.monorepo.Prepublish
+import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.monorepo.StampValidator
 import com.zerobias.buildtools.monorepo.TestSuiteEntry
 import com.zerobias.buildtools.util.SourceHasher
@@ -39,6 +41,57 @@ val graphService = (project.extensions.extraProperties["monorepoGraphService"]
     as org.gradle.api.provider.Provider<MonorepoGraphService>)
 
 val rootStampFile = rootProject.file("gate-stamp.json")
+
+// ── RegistryInjectionService — shared with subproject plugins ──
+//
+// Root-level monorepo gate also needs the service so it can flip
+// forcePublic=true under `-Pcleanlocalregistry`. registerIfAbsent is
+// idempotent — same name + class returns the existing instance.
+val registryInjection = gradle.sharedServices.registerIfAbsent(
+    "registryInjection",
+    RegistryInjectionService::class.java
+) {
+    parameters.repoRoot.set(rootProject.layout.projectDirectory)
+}
+
+// ── verifyNoLocalRegistry — root-level guard for monorepo gate ──
+//
+// Same behavior as zb.base's verifyNoLocalRegistry: scan
+// package-lock.json for localhost-resolved entries; either fail with
+// guidance, or under -Pcleanlocalregistry wipe offenders + force
+// public-registry routing.
+val verifyNoLocalRegistry = tasks.register("verifyNoLocalRegistry") {
+    group = "monorepo"
+    description = "Fail fast if package-lock.json carries localhost registry URLs (zbb local dev state)"
+    usesService(registryInjection)
+
+    doLast {
+        val repoRoot = rootProject.rootDir
+        val offenders = LocalRegistryScanner.scan(repoRoot)
+        if (offenders.isEmpty()) return@doLast
+
+        val cleanFlag = project.hasProperty("cleanlocalregistry")
+        if (!cleanFlag) {
+            throw GradleException(LocalRegistryScanner.buildFailureMessage(offenders))
+        }
+
+        val cleaned = LocalRegistryScanner.cleanOffendingNodeModules(repoRoot, offenders)
+        val removedEntries = LocalRegistryScanner.cleanOffendingLockfileEntries(repoRoot, offenders)
+        registryInjection.get().forcePublic = true
+        if (cleaned.isNotEmpty()) {
+            logger.lifecycle("verifyNoLocalRegistry: --clean — wiped ${cleaned.size} node_modules entries:")
+            for (entry in cleaned.take(10)) logger.lifecycle("  - $entry")
+            if (cleaned.size > 10) logger.lifecycle("  ...and ${cleaned.size - 10} more")
+        }
+        if (removedEntries > 0) {
+            logger.lifecycle("verifyNoLocalRegistry: --clean — removed $removedEntries lockfile entries")
+        }
+        if (cleaned.isEmpty() && removedEntries == 0) {
+            logger.lifecycle("verifyNoLocalRegistry: --clean — nothing to wipe; forcing public registry on next install.")
+        }
+        logger.lifecycle("verifyNoLocalRegistry: forcing public registry for the rest of this build (forcePublic=true).")
+    }
+}
 
 // ── monorepoGateCheck — cheap pre-flight for CI ─────────────────────
 
@@ -135,6 +188,7 @@ tasks.register("monorepoGateCheck") {
 val monorepoGate = tasks.register("monorepoGate") {
     group = "monorepo"
     description = "Run gate for all affected packages and write the root gate-stamp.json"
+    dependsOn(verifyNoLocalRegistry)
     // monorepoBuild + monorepoTest + monorepoDockerBuild are added in
     // zb.monorepo-build (when applied). Wire conditionally so this plugin
     // works even if -build isn't applied.
@@ -379,4 +433,14 @@ gradle.projectsEvaluated {
         rootProject.tasks.findByName("monorepoBuild")?.let { dependsOn(it) }
         rootProject.tasks.findByName("monorepoTest")?.let { dependsOn(it) }
     }
+
+    // When --clean is active, verifyNoLocalRegistry wipes stale node_modules
+    // entries and lockfile entries. workspaceInstall must run AFTER that so
+    // npm install re-resolves the cleaned packages from the public registry.
+    rootProject.tasks.findByName("workspaceInstall")?.mustRunAfter(verifyNoLocalRegistry)
+
+    // monorepoPublishDryRun lives in zb.monorepo-publish (sibling plugin).
+    // When applied, it must also run the lockfile guard so direct invocation
+    // doesn't bypass the gate's localhost-URL check.
+    rootProject.tasks.findByName("monorepoPublishDryRun")?.dependsOn(verifyNoLocalRegistry)
 }

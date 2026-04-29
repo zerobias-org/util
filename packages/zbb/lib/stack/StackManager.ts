@@ -29,6 +29,21 @@ export interface AddOptions {
 }
 
 /**
+ * Walk up from `start` to find the nearest ancestor directory whose
+ * `zbb.yaml` is a valid stack manifest (has a `name:` field).
+ * Returns the directory path, or null if none found before the FS root.
+ */
+async function findStackManifestUpward(start: string): Promise<string | null> {
+  let dir = start;
+  while (true) {
+    if (await loadStackManifest(dir)) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
  * Manages stacks within a single slot.
  */
 export class StackManager {
@@ -62,7 +77,16 @@ export class StackManager {
       sourcePath = await this.fetchPackagedStack(source);
       mode = 'packaged';
     } else {
-      sourcePath = resolvePath(source);
+      // Walk up from the given path to the nearest ancestor whose
+      // zbb.yaml has a 'name' field. Lets `zbb stack add .` work from
+      // any subdirectory of a stack-rooted repo (matches how `zbb build`
+      // walks up to find gradlew).
+      const startPath = resolvePath(source);
+      const found = await findStackManifestUpward(startPath);
+      if (found && found !== startPath) {
+        console.log(`Resolved stack manifest at ${found} (walked up from ${startPath}).`);
+      }
+      sourcePath = found ?? startPath;
       mode = 'dev';
     }
 
@@ -72,7 +96,7 @@ export class StackManager {
       throw new Error(
         mode === 'packaged'
           ? `Package '${source}' does not contain a stack manifest (zbb.yaml with 'name' field)`
-          : `No stack manifest found at ${sourcePath}/zbb.yaml (missing 'name' field)`,
+          : `No stack manifest found at ${sourcePath}/zbb.yaml or any ancestor (missing 'name' field)`,
       );
     }
 

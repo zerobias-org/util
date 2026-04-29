@@ -8,6 +8,7 @@ import com.zerobias.buildtools.module.ProductInfoDereferencer
 import com.zerobias.buildtools.module.ConnectionProfileFlattener
 import com.zerobias.buildtools.module.ServerEntryPointGenerator
 import com.zerobias.buildtools.module.DockerRunner
+import com.zerobias.buildtools.monorepo.RegistryInjectionService
 
 plugins {
     id("zb.base")
@@ -169,6 +170,16 @@ if (!project.file("package-lock.json").exists()) {
     project.file("package-lock.json").writeText("{}")
 }
 
+// Look up the RegistryInjectionService registered by zb.base. Same name +
+// class makes registerIfAbsent return the existing instance — idempotent
+// across plugin applications.
+val registryInjection = gradle.sharedServices.registerIfAbsent(
+    "registryInjection",
+    RegistryInjectionService::class.java
+) {
+    parameters.repoRoot.set(rootProject.layout.projectDirectory)
+}
+
 val npmInstallModule by tasks.registering(NpmTask::class) {
     group = "lifecycle"
     description = "Install npm dependencies"
@@ -176,7 +187,47 @@ val npmInstallModule by tasks.registering(NpmTask::class) {
     workingDir.set(project.projectDir)
     inputs.file("package.json")
     outputs.dir("node_modules")
+    usesService(registryInjection)
+
+    doFirst {
+        val service = registryInjection.get()
+
+        // Stale-localhost cleanup — runs regardless of isActive.
+        // After `zbb registry clear`, the lockfile may still carry localhost
+        // entries for packages no longer in the registry. Detect and clean
+        // them so the next `npm install` re-resolves from the public registry.
+        val stale = service.findStaleLocalhostEntries(rootProject.rootDir) { msg -> logger.lifecycle(msg) }
+        if (stale.isNotEmpty()) {
+            service.cleanupStale(rootProject.rootDir, stale) { msg -> logger.lifecycle(msg) }
+        }
+
+        if (service.isActive && service.needsApply(rootProject.rootDir) { msg -> logger.lifecycle(msg) }) {
+            val overrides = service.apply { msg -> logger.lifecycle(msg) }
+            for ((k, v) in overrides) {
+                environment.put(k, v)
+            }
+        }
+    }
 }
+
+// When --clean (gate) wipes stale localhost entries, npm install must run
+// AFTER the cleanup so it re-resolves from the public registry.
+npmInstallModule.configure {
+    mustRunAfter(tasks.named("verifyNoLocalRegistry"))
+}
+
+// Restore task: cleans up tarball cache after npmInstallModule finishes
+// (success OR failure). Mirrors workspaceInstallRestore in zb.monorepo-build.
+val npmInstallModuleRestore = tasks.register("npmInstallModuleRestore") {
+    group = "lifecycle"
+    description = "Clean up registry-injected tarballs after npmInstallModule"
+    usesService(registryInjection)
+    onlyIf { registryInjection.get().isActive }
+    doLast {
+        registryInjection.get().restore { msg -> logger.lifecycle(msg) }
+    }
+}
+npmInstallModule.configure { finalizedBy(npmInstallModuleRestore) }
 
 // G4: bundleSpec — inline all $ref entries via Redocly CLI
 val bundleSpec by tasks.registering(NpxTask::class) {
@@ -1678,6 +1729,16 @@ val testDataloaderExec by tasks.registering {
             }
 
             val dlExit = dlProcess.waitFor()
+
+            // Write captured output to .zbb-monorepo/logs/ so the failure
+            // reporter in zbb's Display.ts finds the log it advertises.
+            // Other Exec tasks (lint, transpile, test, dockerBuild) follow
+            // this same convention via zb.monorepo-build's displayLog.
+            val safeName = project.path.removePrefix(":").replace(":", "-")
+            val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-testDataloader.log")
+            displayLog.parentFile.mkdirs()
+            displayLog.writeText(output.toString())
+
             if (dlExit != 0) {
                 throw GradleException("testDataloader: dataloader exited with code $dlExit\n${output}")
             }

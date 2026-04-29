@@ -88,6 +88,7 @@ export async function spawnLifecycleAndExit(
   if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
   if (parsed.dryRun) passthrough.push('-PdryRun=true');
   if (parsed.force) passthrough.push('-Pforce=true');
+  if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
   if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
 
   if (parsed.verbose) {
