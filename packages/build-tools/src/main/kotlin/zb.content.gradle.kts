@@ -6,16 +6,25 @@ import com.zerobias.buildtools.tasks.NeonDataloaderTask
 
 /**
  * zb.content — leaf plugin for content-catalog NPM packages that ship
- * YAML artifacts (vendor, suite, product) rather than TypeScript code.
+ * YAML / metadata artifacts rather than TypeScript code (vendor, tag,
+ * suite, product, framework, standard, crosswalk, benchmark).
  *
  * No generate/compile/Docker phases. Wires:
- *   validate        → ContentValidator (schema check of index.yml + package.json)
- *   testIntegration → DataloaderTask (loads artifact into active slot's Postgres)
+ *   validate        → repo-supplied via extra["contentValidator"]
+ *                      (defaults to VendorValidator from the catalog)
+ *   testIntegration → NeonDataloaderTask (loads artifact into ephemeral
+ *                      Neon Postgres branch — the universal contract
+ *                      that defines whether an artifact is loadable)
  *   publishNpm      → npm publish --tag next + shrinkwrap staging
  *   promoteAll      → dist-tag promotion (next → dev/qa/uat/latest)
  *
  * Per-package build.gradle.kts is one line:
  *   plugins { id("zb.content") }
+ *
+ * Per-repo override slot (root build.gradle.kts) — pick the matching
+ * validator from com/zerobias/buildtools/content/validators/:
+ *   import com.zerobias.buildtools.content.validators.TagValidator
+ *   extra["contentValidator"] = TagValidator::validate
  */
 
 plugins {

@@ -7,22 +7,27 @@ import org.yaml.snakeyaml.Yaml
 import java.io.File
 
 /**
- * Vendor-shaped content validator — opt in from the consumer repo:
+ * Validator for vendor packages (`zerobias-org/vendor`). Opt in from the
+ * consumer repo:
  *
  *     extra["contentValidator"] = VendorValidator::validate
  *
- * Applies to repos that ship single-package metadata under
- * `package/<code>/index.yml` plus a logo: vendor, suite, product,
- * framework, standard, crosswalk, benchmark, etc.
- *
- * Checks:
+ * Verifies the vendor-specific shape:
  *   - Required files: index.yml, package.json, .npmrc
  *   - index.yml schema: id (UUID), code, name, description, url,
  *                       status (enum), aliases[]
- *   - package.json: name == @zerobias-org/{import-artifact}-{code-w-dashes},
- *                   description not the {name} placeholder,
- *                   zerobias metadata block has import-artifact / package /
- *                   dataloader-version (also accepts legacy auditmation key)
+ *   - package.json:
+ *       name == "@zerobias-org/{import-artifact}-{code-w-dashes}"
+ *       description is set (not the "{name}" placeholder)
+ *       zerobias.import-artifact / package / dataloader-version are set
+ *       (also accepts legacy `auditmation` block key for transitional packages)
+ *
+ * NOT a generic content validator: the npm-name formula assumes a single-
+ * level `package/<code>/` layout and the `@zerobias-org/` org prefix.
+ * Other artifact types (suite / product / framework / standard / crosswalk /
+ * benchmark / tag) need their own validator in this package — pick the
+ * matching one or write a new one. Don't import `VendorValidator` for
+ * non-vendor repos and hope it works.
  */
 object VendorValidator {
 
@@ -40,10 +45,9 @@ object VendorValidator {
         project.logger.lifecycle("[VendorValidator] ${project.path}: code=$code")
     }
 
-    /** Project-less entry point. Used by the deprecated `ContentValidator`
-     *  shim and by any tooling that wants to validate without a gradle
-     *  Project handle. Returns the index.yml `code` for callers that
-     *  need it. */
+    /** Project-less entry point — for tooling that validates without a
+     *  gradle Project handle (e.g. CLI / one-off scripts). Returns the
+     *  index.yml `code` for callers that need it. */
     @JvmStatic
     fun validateProjectDir(projectDir: File): String {
         val indexYml = projectDir.resolve("index.yml")
