@@ -108,7 +108,7 @@ tasks.named("validate") {
 
 val npmInstallContent by tasks.registering(NpmTask::class) {
     group = "lifecycle"
-    description = "Install npm dependencies"
+    description = "Install npm dependencies (skipped when package.json declares none)"
     npmCommand.set(listOf("install"))
     // --no-workspaces: install ONLY this package, don't walk up to the
     //   workspace root and resolve sibling packages. zbb still uses the
@@ -125,6 +125,31 @@ val npmInstallContent by tasks.registering(NpmTask::class) {
     workingDir.set(project.projectDir)
     inputs.file("package.json")
     outputs.dir("node_modules")
+
+    // Skip when the package has no dependencies. Running `npm install`
+    // on a no-deps content package creates an empty node_modules/
+    // containing an internal `.package-lock` cache file that the
+    // dataloader recursively walks for some artifact types (e.g.
+    // tag's TagArtifactLoader) and chokes on:
+    //
+    //   error: Unable to handle tag '.package-lock', id is missing
+    //
+    // Reproduced on zerobias-com/tag run 25090064467. Vendor doesn't
+    // hit this only because its dataloader processor reads index.yml
+    // directly rather than walking the directory tree.
+    onlyIf {
+        val pkgFile = project.file("package.json")
+        if (!pkgFile.isFile) return@onlyIf false
+        val pkgJson = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+            .readTree(pkgFile)
+        val hasDeps = pkgJson["dependencies"]?.let { it.isObject && it.size() > 0 } == true
+        val hasDevDeps = pkgJson["devDependencies"]?.let { it.isObject && it.size() > 0 } == true
+        val needsInstall = hasDeps || hasDevDeps
+        if (!needsInstall) {
+            logger.lifecycle("[npmInstallContent] no deps declared — skipping")
+        }
+        needsInstall
+    }
 }
 
 // ════════════════════════════════════════════════════════════
