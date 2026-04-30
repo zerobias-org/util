@@ -475,6 +475,13 @@ export class MonorepoDisplay {
     // 5. Phase-level failure blocks. These come from gradle's
     //    TaskFailureResult extraction (e.g. monorepoPublishDryRun's
     //    GradleException string with the dry-run validation errors).
+    //
+    //    For root-level tasks (workspaceInstall, etc.) gradle's exception
+    //    is just a wrapper like "Process 'command 'npm'' finished with
+    //    non-zero exit value 1" — useless without the upstream tool's
+    //    stderr. Pull the matching `> Task :phase` section out of
+    //    gradle.log and append it so the user can see the real cause
+    //    inline instead of having to open the log file.
     const failedPhases = this.phases.filter(p => p.status === 'failed' && p.error);
     if (failedPhases.length > 0) {
       process.stdout.write('\n');
@@ -486,14 +493,37 @@ export class MonorepoDisplay {
         // Errors can be multi-line. Indent each line for readability and
         // color the whole block red so it stands out from the success
         // summaries above.
-        const lines = (phase.error ?? '').split('\n');
-        for (const line of lines) {
+        const errorLines = (phase.error ?? '').split('\n');
+        for (const line of errorLines) {
           if (line.length === 0) {
             process.stdout.write('\n');
           } else {
             process.stdout.write(`  ${COLOR.red}${line}${COLOR.reset}\n`);
           }
         }
+
+        // Append the matching gradle.log section for the root task. Skip
+        // if a per-project step already failed under this phase — those
+        // steps print their own log tails in block 6 below, and we don't
+        // want to double-print the same content.
+        const hasMatchingProjectFailure = [...this.projects.values()]
+          .some(proj => proj.steps.some(s => s.status === 'failed' && s.name === phase.name));
+        if (!hasMatchingProjectFailure) {
+          const sectionLines = this.extractGradleLogSection(`:${phase.name}`);
+          if (sectionLines.length > 0) {
+            process.stdout.write('\n');
+            const tail = sectionLines.slice(-40);
+            for (const line of tail) {
+              process.stdout.write(`  ${COLOR.red}${line}${COLOR.reset}\n`);
+            }
+            if (sectionLines.length > 40) {
+              process.stdout.write(
+                `${COLOR.dim}  … (${sectionLines.length - 40} more lines in log file)${COLOR.reset}\n`,
+              );
+            }
+          }
+        }
+
         process.stdout.write('\n');
       }
     }
@@ -531,21 +561,7 @@ export class MonorepoDisplay {
 
           // Fallback: if per-task log is empty, extract from gradle.log
           if (lines.length === 0) {
-            const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
-            if (existsSync(gradleLogPath)) {
-              const gradleContent = readFileSync(gradleLogPath, 'utf-8');
-              const taskMarker = `> Task ${project.fullPath}:${step.name}`;
-              const markerIdx = gradleContent.lastIndexOf(taskMarker);
-              if (markerIdx !== -1) {
-                // Extract from task marker to the next "> Task" line or end
-                const afterMarker = gradleContent.slice(markerIdx);
-                const nextTask = afterMarker.indexOf('\n> Task ', taskMarker.length);
-                const section = nextTask !== -1
-                  ? afterMarker.slice(0, nextTask)
-                  : afterMarker.slice(0, 2000);
-                lines = section.split('\n').filter(l => l.length > 0);
-              }
-            }
+            lines = this.extractGradleLogSection(`${project.fullPath}:${step.name}`);
             if (lines.length === 0) {
               lines = ['(no output captured — check gradle.log)'];
             }
@@ -613,6 +629,33 @@ export class MonorepoDisplay {
         proj.steps.some(s => s.name === 'gate'),
       );
     return wasGateAttempted;
+  }
+
+  /**
+   * Pull the lines emitted under a specific gradle task from gradle.log.
+   *
+   * Given a fully-qualified task path like ":workspaceInstall" or
+   * ":api:transpile", finds the matching `> Task <path>` marker (the last
+   * occurrence — there may be repeats from configuration phases) and
+   * returns every line between it and the next `> Task` marker (or the
+   * end of the file). Used by both phase-level and per-project failure
+   * blocks to surface the actual tool stderr inline.
+   *
+   * Returns an empty array if the log file or the marker isn't found.
+   */
+  private extractGradleLogSection(taskPath: string): string[] {
+    const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
+    if (!existsSync(gradleLogPath)) return [];
+    const gradleContent = readFileSync(gradleLogPath, 'utf-8');
+    const taskMarker = `> Task ${taskPath}`;
+    const markerIdx = gradleContent.lastIndexOf(taskMarker);
+    if (markerIdx === -1) return [];
+    const afterMarker = gradleContent.slice(markerIdx);
+    const nextTask = afterMarker.indexOf('\n> Task ', taskMarker.length);
+    const section = nextTask !== -1
+      ? afterMarker.slice(0, nextTask)
+      : afterMarker.slice(0, 4000);
+    return section.split('\n').filter(l => l.length > 0);
   }
 
   /**

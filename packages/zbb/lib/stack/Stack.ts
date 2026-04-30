@@ -9,6 +9,7 @@ import { mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { loadYamlOrDefault, saveYaml } from '../yaml.js';
+import { normalizeLifecycleEntry } from '../config.js';
 import type { StackManifest, StackIdentity, HealthCheckConfig } from '../config.js';
 import { StackEnvironment } from './StackEnvironment.js';
 import type { StackStatus } from './types.js';
@@ -213,7 +214,13 @@ export class Stack extends EventEmitter {
       // Handle array commands (cleanup, clean, destroy, etc.)
       if (Array.isArray(command)) {
         for (const cmd of command) {
-          const code = await this.execCommand(String(cmd));
+          const entry = normalizeLifecycleEntry(cmd);
+          const cmdStr = entry?.command ?? (typeof cmd === 'string' ? cmd : null);
+          if (!cmdStr) {
+            console.error(`  Stack '${this.name}' has malformed '${phase}' command (expected string or {command: ...})`);
+            return 1;
+          }
+          const code = await this.execCommand(cmdStr);
           if (code !== 0) return code;
         }
         return 0;
@@ -231,8 +238,15 @@ export class Stack extends EventEmitter {
         return code;
       }
 
-      const code = await this.execCommand(String(command));
-      return code;
+      // Structured lifecycle entry: { command: string, tools?: [], env?: [] }
+      const entry = normalizeLifecycleEntry(command);
+      if (entry) {
+        const code = await this.execCommand(entry.command);
+        return code;
+      }
+
+      console.error(`  Stack '${this.name}' has malformed '${phase}' command (expected string or {command: ...})`);
+      return 1;
     } finally {
       // After build: prune dangling images left by docker build tag reassignment
       if (phase === 'build') {
@@ -265,7 +279,12 @@ export class Stack extends EventEmitter {
       return this.execCommandQuiet(command);
     }
 
-    return this.execCommandQuiet(String(command));
+    const entry = normalizeLifecycleEntry(command);
+    if (entry) {
+      return this.execCommandQuiet(entry.command);
+    }
+
+    return 1;
   }
 
   /**

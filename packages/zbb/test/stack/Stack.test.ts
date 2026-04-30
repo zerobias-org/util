@@ -177,6 +177,59 @@ describe('Stack.runLifecycle', () => {
     const code = await stack.runLifecycle('test');
     assert.ok(code !== 0);
   });
+
+  it('runs a structured lifecycle entry (command + tools + env) without stringifying the object', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    const sourceDir = join(tmpDir, 'source');
+
+    await createMockStackSource(sourceDir, {
+      name: '@zerobias-com/myapp',
+      version: '1.0.0',
+      lifecycle: {
+        start: { command: 'echo started', tools: ['docker'], env: ['NPM_TOKEN'] },
+      },
+    });
+
+    await createAddedStack(stacksDir, 'myapp', {
+      identity: {
+        name: '@zerobias-com/myapp', version: '1.0.0',
+        mode: 'dev', source: sourceDir, added: new Date().toISOString(),
+      },
+      sourceDir,
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+
+    // Without the fix, the object gets String()-coerced to "[object Object]"
+    // which bash can't execute (exit 127). With the fix, it runs `echo started`.
+    const code = await stack.runLifecycle('start');
+    assert.equal(code, 0);
+  });
+
+  it('returns 1 (not bash 127) when a lifecycle command is malformed', async () => {
+    const stacksDir = join(tmpDir, 'stacks');
+    const sourceDir = join(tmpDir, 'source');
+
+    await createMockStackSource(sourceDir, {
+      name: '@zerobias-com/myapp',
+      version: '1.0.0',
+      lifecycle: { build: { tools: ['docker'] } as any }, // missing command
+    });
+
+    await createAddedStack(stacksDir, 'myapp', {
+      identity: {
+        name: '@zerobias-com/myapp', version: '1.0.0',
+        mode: 'dev', source: sourceDir, added: new Date().toISOString(),
+      },
+      sourceDir,
+    });
+
+    const stack = new Stack('myapp', stacksDir);
+    await stack.load();
+    const code = await stack.runLifecycle('build');
+    assert.equal(code, 1);
+  });
 });
 
 describe('Stack.getStatus', () => {

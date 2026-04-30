@@ -1,25 +1,24 @@
 {
   "version": 1,
   "branch": "main",
-  "timestamp": "2026-04-30T16:00:05.604801Z",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "2.1.2",
       "sourceHash": "648fc111bcd3a75f592119b482382f52db7fb2c8df4ff3147516450743ec5e2e",
       "testHash": "31bcf4a9cc35001de836df01a9297b53c1d3833ff425abe7b6c3142f6b4001d4",
       "tasks": {
-        "lint": "passed",
-        "compile": "passed",
-        "copyDeps": "passed",
-        "generate": "passed",
-        "transpile": "passed",
-        "test": "passed"
+        "lint": "skipped",
+        "compile": "skipped",
+        "copyDeps": "skipped",
+        "generate": "skipped",
+        "transpile": "skipped",
+        "test": "skipped"
       },
       "tests": {
         "unit": {
           "expected": 1,
-          "ran": 1,
-          "status": "passed"
+          "ran": 0,
+          "status": "skipped"
         },
         "integration": {
           "expected": 0,
@@ -569,14 +568,14 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.65",
-      "sourceHash": "0386bc1fc0188c5a22079204a4e4c3df400c1240378d4185438f77ed58ea2941",
-      "testHash": "93a81d95953db8ee815d4b2b87022214719ee7149334522cb1e4ef6a06f2fa0d",
+      "sourceHash": "346c3356a3d2ba9d9705122de61092a22f2a54144016e0f0bcd7307ac22d2807",
+      "testHash": "767d4eaa2c64ef46b33cb05bc621f2ee61a0bc64da6e5dd704e6b4bf0a3ff4e8",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
         "test": "skipped"
       },
       "tests": {
