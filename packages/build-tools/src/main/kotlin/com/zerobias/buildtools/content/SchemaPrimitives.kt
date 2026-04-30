@@ -154,4 +154,39 @@ object SchemaPrimitives {
             "$field='$code' must match leaf directory name '$dirName'"
         }
     }
+
+    /**
+     * Triangulate package.json against the directory layout: the npm
+     * `name` field and the `zerobias.package` (or legacy
+     * `auditmation.package`) field must each equal the values derived
+     * from the directory path.
+     *
+     * The dataloader reads `zerobias.package` but never the npm `name`
+     * field — a mismatched npm name publishes under the wrong package
+     * and only surfaces in production. The dataloader also has no view
+     * of the on-disk directory layout. Each content repo computes the
+     * expected values from its own naming formula:
+     *
+     *   vendor : dir = {code}        → name = vendor-{code},     pkg = {code}
+     *   suite  : dir = {v}/{s}       → name = suite-{v}-{s},     pkg = {v}.{s}
+     *   tag    : dir = {scope}/{n}   → name = tag-{scope}-{n},   pkg = {scope}.{n}.tag
+     *
+     * — and calls this primitive with the formula's output.
+     */
+    @JvmStatic
+    fun requirePackageIdentity(
+        pkgDoc: Map<String, Any?>,
+        expectedNpmName: String,
+        expectedZerobiasPackage: String,
+        field: String = "package.json",
+    ) {
+        require(pkgDoc["name"] == expectedNpmName) {
+            "$field name='${pkgDoc["name"]}' must equal '$expectedNpmName' (derived from directory path)"
+        }
+        val zbPackage = getPath(pkgDoc, "zerobias.package")
+            ?: getPath(pkgDoc, "auditmation.package")
+        require(zbPackage == expectedZerobiasPackage) {
+            "$field zerobias.package='$zbPackage' must equal '$expectedZerobiasPackage' (derived from directory path)"
+        }
+    }
 }
