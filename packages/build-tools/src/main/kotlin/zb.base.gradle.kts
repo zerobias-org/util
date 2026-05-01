@@ -37,7 +37,12 @@ val zb = extensions.create<ZbExtension>("zb").apply {
             "${vendor.get()}-${product.get()}"
         }
     })
-    includeConnectionProfileInDist.convention(false)
+    // Drives spec shape (whether dist/{module}.yml retains components.schemas.ConnectionProfile).
+    // Same disk fact as hasConnectionProfile — keep them in sync. Spec shape is a property of the
+    // module, not its implementation language, so language plugins must not override this.
+    includeConnectionProfileInDist.convention(
+        project.file("connectionProfile.yml").exists()
+    )
     generatorArgs.convention(emptyList())
 }
 
