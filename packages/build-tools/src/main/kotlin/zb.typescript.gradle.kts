@@ -1110,6 +1110,66 @@ val patchPackageJson by tasks.registering {
     }
 }
 
+// ── Prepublish: flatten connectionProfile.yml (any connector module) ──
+// Ports the legacy npm `prepublishOnly` / `resolve:connectionProfile` chain
+// (swagger-cli bundle + scripts/fixAllOfs/fixAllOfs.js). The platform
+// dataloader (com/platform/dataloader ModuleFileHandler.ts) reads
+// {package}/connectionProfile.yml and pulls `description` and
+// `x-oauth-providers` from the schema root — so the shipped file must be
+// flattened, not a raw allOf composition.
+//
+// Lives in zb.typescript (not zb.typescript-connector) so any module that
+// declares connectionProfile.yml — TS or Java — gets the same prepublish
+// behavior. Spec shape is a property of the module, not its impl language.
+val cpBackupFile = project.layout.buildDirectory.file("prepublish-backup/connectionProfile.yml")
+
+val restoreConnectionProfile by tasks.registering {
+    group = "publish"
+    description = "Restore original connectionProfile.yml after npm publish"
+    onlyIf { zb.hasConnectionProfile.get() }
+    mustRunAfter(tasks.named("publishNpmExec"))
+    doLast {
+        val backup = cpBackupFile.get().asFile
+        if (!backup.exists()) return@doLast
+        val cp = project.file("connectionProfile.yml")
+        backup.copyTo(cp, overwrite = true)
+        backup.delete()
+        logger.lifecycle("[restoreConnectionProfile] restored connectionProfile.yml")
+    }
+}
+
+val flattenConnectionProfileForPublish by tasks.registering {
+    group = "publish"
+    description = "Flatten connectionProfile.yml allOf composition before npm publish"
+    onlyIf { zb.hasConnectionProfile.get() }
+    mustRunAfter(tasks.named("copyDistributionSpec"))
+    finalizedBy(restoreConnectionProfile)
+    doFirst {
+        val cp = project.file("connectionProfile.yml")
+        if (!cp.exists()) {
+            logger.lifecycle("[flattenConnectionProfileForPublish] no connectionProfile.yml — skipping")
+            return@doFirst
+        }
+        val moduleName = OpenApiSpecAssembler.resolveModuleName(project.projectDir)
+        val distYml = project.file("dist/${moduleName}.yml")
+        if (!distYml.exists()) {
+            throw GradleException(
+                "[flattenConnectionProfileForPublish] expected $distYml to exist — " +
+                    "copyDistributionSpec must run before this task"
+            )
+        }
+
+        val backup = cpBackupFile.get().asFile
+        backup.parentFile.mkdirs()
+        cp.copyTo(backup, overwrite = true)
+
+        ConnectionProfileFlattener.flattenToStandaloneFile(distYml, cp)
+        logger.lifecycle(
+            "[flattenConnectionProfileForPublish] flattened connectionProfile.yml from ${distYml.name}"
+        )
+    }
+}
+
 // -- NPM Publish (staging with --tag next) ------------------------
 
 val isDryRun: Boolean = extra["isDryRun"] as Boolean
@@ -1713,8 +1773,12 @@ val testDataloaderExec by tasks.registering {
                 "PGSSLMODE" to "require"
             )
 
-            // Run dataloader and capture all output
-            val dlProcess = ProcessBuilder(listOf("dataloader", "-d", "."))
+            // Run dataloader and capture all output.
+            // -f forces (re)installation: the Neon test branch is parented from
+            // a snapshot that may already contain this artifact at this version,
+            // so without -f the loader exits 0 after a no-op skip and the gate
+            // stamps green without ever validating the new bits.
+            val dlProcess = ProcessBuilder(listOf("dataloader", "-f", "-d", "."))
                 .directory(project.projectDir)
                 .redirectErrorStream(true)
                 .apply { environment().putAll(pgEnv) }
@@ -1767,6 +1831,10 @@ val testDataloaderExec by tasks.registering {
 
 tasks.named("testDataloader") {
     dependsOn(testDataloaderExec)
+}
+
+tasks.named("publishNpmExec") {
+    dependsOn(flattenConnectionProfileForPublish)
 }
 
 tasks.named("publishNpm") {
