@@ -16,6 +16,8 @@
 // fall back to `id("zb.typescript-base")` and call register* manually.
 // ────────────────────────────────────────────────────────────────────────
 
+import com.zerobias.buildtools.appliance.ApplianceDebExtension
+import com.zerobias.buildtools.appliance.registerBuildDeb
 import com.zerobias.buildtools.appliance.registerEslintLint
 import com.zerobias.buildtools.appliance.registerMochaTest
 import com.zerobias.buildtools.appliance.registerTscTranspile
@@ -27,3 +29,14 @@ plugins {
 project.registerEslintLint()
 project.registerTscTranspile()
 project.registerMochaTest()
+
+// Register `buildDeb` only when the module declared `applianceDeb { binPath = ... }`.
+// Lib (no binary, no binPath) leaves the extension empty and gets no buildDeb task.
+// The `afterEvaluate` is required because the module's `applianceDeb { ... }` block
+// runs after the plugin applies — we can't read `binPath` synchronously here.
+afterEvaluate {
+    val ext = extensions.getByType(ApplianceDebExtension::class.java)
+    if (ext.binPath.isPresent) {
+        project.registerBuildDeb()
+    }
+}

@@ -13,6 +13,8 @@
 //     plugins { id("zb.typescript-bundle") }
 // ────────────────────────────────────────────────────────────────────────
 
+import com.zerobias.buildtools.appliance.ApplianceDebExtension
+import com.zerobias.buildtools.appliance.registerBuildDeb
 import com.zerobias.buildtools.appliance.registerBunBundle
 import com.zerobias.buildtools.appliance.registerTscTranspile
 
@@ -22,3 +24,12 @@ plugins {
 
 project.registerTscTranspile()
 project.registerBunBundle()
+
+// Same `applianceDeb` opt-in semantics as zb.typescript-lib. Bundle modules
+// (today: ui) ship `dist/index.js` and a bin shim under /opt/node/bin/.
+afterEvaluate {
+    val ext = extensions.getByType(ApplianceDebExtension::class.java)
+    if (ext.binPath.isPresent) {
+        project.registerBuildDeb()
+    }
+}

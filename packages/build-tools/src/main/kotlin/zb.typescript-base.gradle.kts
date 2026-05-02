@@ -33,6 +33,7 @@
 
 import com.github.gradle.node.npm.task.NpmTask
 import com.github.gradle.node.npm.task.NpxTask
+import com.zerobias.buildtools.appliance.ApplianceDebExtension
 import com.zerobias.buildtools.appliance.ApplianceExtension
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
 
@@ -40,6 +41,12 @@ plugins {
     id("base")
     id("com.github.node-gradle.node")
 }
+
+// nebula.ospackage is NOT applied here. It auto-registers a `buildDeb`
+// task-rule that would surface on every module (including libraries that
+// don't ship a deb). registerBuildDeb() applies the plugin lazily, so only
+// modules that declare `applianceDeb { binPath = ... }` get the plugin
+// and the resulting buildDeb task. See BuildDeb.kt.
 
 // ────────────────────────────────────────────────────────────
 // nvm-managed Node — resolve from .nvmrc, inject into PATH so
@@ -74,6 +81,15 @@ if (nvmNodeBinDir != null) {
 // ApplianceExtension — `appliance { chmodBin = "src/bin/foo.js" }`
 // ────────────────────────────────────────────────────────────
 extensions.create("appliance", ApplianceExtension::class.java)
+
+// ────────────────────────────────────────────────────────────
+// ApplianceDebExtension — `applianceDeb { binPath, binName, ... }`
+//
+// Distinct from `appliance` (chmodBin). Modules that ship a binary deb
+// (cli, node, manager, ui in com/node) populate this; libraries leave it
+// unset and don't get a `:buildDeb` task. See BuildDeb.kt for semantics.
+// ────────────────────────────────────────────────────────────
+extensions.create("applianceDeb", ApplianceDebExtension::class.java)
 
 // ────────────────────────────────────────────────────────────
 // RegistryInjectionService — Verdaccio-aware npm install handling.
