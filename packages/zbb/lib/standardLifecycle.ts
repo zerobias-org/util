@@ -101,10 +101,17 @@ export async function spawnStandardLifecycleAndExit(
   // Use the project-centric TTY display for commands that produce per-task
   // events. Same logic as the monorepo dispatcher — clean/gateCheck have
   // no per-task events worth rendering, so they fall through to plain bash.
+  //
+  // Opt-out via ZBB_NO_DISPLAY=1: skips the display unconditionally, falls
+  // through to bash -c with inherited stdio. Operators who want raw gradle
+  // output (full task list, real-time stderr from tsc/mocha, no overlay)
+  // export this in their shell rc and never think about it again.
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
+  const noDisplay = process.env.ZBB_NO_DISPLAY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
+    !noDisplay &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
     (process.stdout.isTTY || forceDisplay);
