@@ -799,8 +799,27 @@ public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
             if (op.returnType != null && op.returnType.startsWith(PAGED_RESULTS)) {
                 op.vendorExtensions.put("x-returns-paged-results", true);
                 LOGGER.debug("{} returning PagedResults", op.operationId);
+
+                // Auto-inject a pageToken query param on every PagedResults op
+                // that didn't already declare one. Without this the generated
+                // controller never reads req.query['pageToken'] and the mapping
+                // never sets bag.pageToken, so cursor pagination breaks end to
+                // end (caller sends pageToken in body/query → wrapper drops it
+                // → producer's awsClient sees pageToken=undefined → AWS keeps
+                // returning page 1 → PagedResults' items.length === pageSize
+                // heuristic loops forever).
+                boolean hasPageToken = allActualParams.stream()
+                        .anyMatch(p -> p.baseName.equalsIgnoreCase(PAGE_TOKEN));
+                if (!hasPageToken) {
+                    CodegenParameter pageToken = synthesizePageTokenParam();
+                    op.allParams.add(pageToken);
+                    op.queryParams.add(pageToken);
+                    allActualParams.add(pageToken);
+                    LOGGER.info("{}: auto-injected pageToken param", op.operationId);
+                }
+
                 for (CodegenParameter param : allActualParams) {
-                    if (param.baseName.equalsIgnoreCase(PAGE_SIZE) 
+                    if (param.baseName.equalsIgnoreCase(PAGE_SIZE)
                             || param.baseName.equalsIgnoreCase(PAGE_NUMBER)
                             || param.baseName.equalsIgnoreCase(PAGE_TOKEN)) {
                         param.vendorExtensions.put("x-producer-omit", true);
@@ -1334,6 +1353,34 @@ public class HubModuleCodegenGenerator extends AbstractTypeScriptClientCodegen {
                    )
             .distinct()
             .count() == 2;
+    }
+
+    /**
+     * Build a CodegenParameter that mirrors what OpenAPI Generator would produce
+     * for a query param like {@code { name: pageToken, in: query, schema: { type: string } }}.
+     * Used to inject pageToken on PagedResults operations whose specs didn't
+     * declare it, so cursor pagination threads end-to-end without spec edits.
+     */
+    private CodegenParameter synthesizePageTokenParam() {
+        CodegenParameter param = new CodegenParameter();
+        param.baseName = PAGE_TOKEN;
+        param.paramName = PAGE_TOKEN;
+        param.nameInLowerCase = PAGE_TOKEN.toLowerCase();
+        param.dataType = "string";
+        param.datatypeWithEnum = "string";
+        param.baseType = "string";
+        param.isString = true;
+        param.isPrimitiveType = true;
+        param.isQueryParam = true;
+        param.required = false;
+        param.description = "Opaque cursor for cursor-based pagination. When provided, "
+                + "pageNumber is ignored. Use the token from the previous response's "
+                + "pageToken header to get the next page.";
+        param.unescapedDescription = param.description;
+        if (param.vendorExtensions == null) {
+            param.vendorExtensions = new HashMap<>();
+        }
+        return param;
     }
 
     private String getApiFilenameFromClassname(String classname) {
