@@ -14,6 +14,11 @@ import {
   ConditionalLogic
 } from './types/transform.types.js';
 import { ValidationRule } from './types/validation.types.js';
+import {
+  InvokeFunction,
+  QuerySourceConfig
+} from './types/query.types.js';
+import { extractRows } from './utils/query.js';
 
 /**
  * Normalizes a field name for comparison
@@ -923,5 +928,24 @@ export class DataMapper {
     }
 
     return { result, errors };
+  }
+
+  /**
+   * Run a producer query function and feed its rows into `applyAllMappings`.
+   *
+   * The caller passes their own `invoke` so this stays framework-agnostic
+   * (Angular UI passes `DataExplorerService.invokeFunctionRaw`; the
+   * server pipeline runner passes its own producer client). The producer
+   * response is normalised through `extractRows` so envelope shapes
+   * (`{ rows: [] }`, `{ items: [] }`, etc.) work without per-caller code.
+   */
+  async applyAllMappingsFromQuery(
+    invoke: InvokeFunction,
+    source: QuerySourceConfig,
+    rules: MappingRule[]
+  ): Promise<{ result: any; errors: string[] }> {
+    const raw = await invoke(source.objectId, { sql: source.sql });
+    const rows = extractRows(raw);
+    return this.applyAllMappings(rules, rows);
   }
 }
