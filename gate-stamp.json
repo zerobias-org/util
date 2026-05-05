@@ -1,11 +1,10 @@
 {
   "version": 1,
-  "branch": "main",
-  "timestamp": "2026-04-30T16:00:05.604801Z",
+  "branch": "feat/data-explorer-sql-query-enhancement",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "2.1.2",
-      "sourceHash": "648fc111bcd3a75f592119b482382f52db7fb2c8df4ff3147516450743ec5e2e",
+      "sourceHash": "9987b08579a235125f5a237f93dcf94ed3be1434b6a3d2fd0fd03ce920234cd8",
       "testHash": "31bcf4a9cc35001de836df01a9297b53c1d3833ff425abe7b6c3142f6b4001d4",
       "tasks": {
         "lint": "passed",

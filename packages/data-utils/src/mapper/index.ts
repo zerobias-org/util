@@ -17,5 +17,8 @@
 // Core mapper class
 export { DataMapper } from './DataMapper.js';
 
+// Query-source utilities (extractRows, inferSchemaFromRows, diffSchemas)
+export * from './utils/query.js';
+
 // Export all types
 export * from './types/index.js';
