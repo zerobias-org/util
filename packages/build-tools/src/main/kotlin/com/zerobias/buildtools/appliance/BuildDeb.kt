@@ -200,13 +200,13 @@ fun Project.registerBuildDeb() {
         |exec /opt/node/bun /opt/node/$modName/dist/$binPathRel "$@"
         |""".trimMargin()
 
-    // Stage the shim into a build/-relative location so up-to-date checks
-    // capture it as an input. Written at task configuration time — small,
-    // deterministic, no need for a separate generator task.
+    // Stage the shim into a build/-relative location. The actual write
+    // happens in a generator task below — writing at configuration time
+    // would race with `:clean`, which executes AFTER configuration and
+    // wipes build/ along with the staged shim before the Deb task can
+    // read it.
     val shimStageFile: File = layout.buildDirectory.dir("buildDeb/bin").get().asFile
         .resolve(binNameValue)
-    shimStageFile.parentFile.mkdirs()
-    shimStageFile.writeText(shimContents)
 
     // Postinst — written inline, matches os/ + hub-side pattern. Logs every
     // step via `logger -t postinst-<pkgName>` so failures surface in
@@ -269,13 +269,32 @@ fun Project.registerBuildDeb() {
         |exit 0
         |""".trimMargin()
 
-    // Write postinst into build/ so each invocation refreshes a clean copy
-    // (the file mode on disk doesn't matter — nebula.ospackage controls
-    // the in-deb mode separately).
+    // Postinst goes under build/buildDeb/. Same reason as shimStageFile
+    // above: write happens in the generator task below, NOT at config
+    // time. Otherwise `:clean` (which runs AFTER configuration) wipes
+    // build/ before the Deb task gets a chance to read it.
     val postInstFile: File = layout.buildDirectory.dir("buildDeb").get().asFile
         .resolve("postinst.sh")
-    postInstFile.parentFile.mkdirs()
-    postInstFile.writeText(postInstBody)
+
+    // Generator task — writes both the bin shim and the postinst at
+    // execution time. Inputs are the computed string contents; outputs
+    // are the two files. Gradle UP-TO-DATEs correctly when nothing
+    // changed, and the files are produced AFTER any clean dependency.
+    val genStageName = "stageDebFiles${modName.replaceFirstChar { it.uppercase() }}"
+    val genStage = tasks.register(genStageName) {
+        group = "distribution"
+        description = "Stage postinst.sh + bin shim for $pkgName under build/buildDeb/"
+        inputs.property("shimContents", shimContents)
+        inputs.property("postInstBody", postInstBody)
+        outputs.file(shimStageFile)
+        outputs.file(postInstFile)
+        doLast {
+            shimStageFile.parentFile.mkdirs()
+            shimStageFile.writeText(shimContents)
+            postInstFile.parentFile.mkdirs()
+            postInstFile.writeText(postInstBody)
+        }
+    }
 
     // Output dir — NOT module/dist (that's tsc/bun output). Use Gradle's
     // canonical distributions dir under build/.
@@ -301,6 +320,10 @@ fun Project.registerBuildDeb() {
         // Wire to the upstream compile lifecycle so :buildDeb implies
         // tsc/bun has run and dist/ is current.
         dependsOn("compile")
+        // The shim + postinst are generated under build/buildDeb/ — they
+        // must exist before this task reads them via from(shimStageFile)
+        // / postInstall(postInstFile).
+        dependsOn(genStage)
 
         packageName = pkgName
         version = debVer
