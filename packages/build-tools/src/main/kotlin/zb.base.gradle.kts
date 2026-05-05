@@ -744,8 +744,13 @@ val printVersion by tasks.registering {
 
 val clean by tasks.registering(Delete::class) {
     group = "lifecycle"
-    description = "Remove build outputs (dist/, generated/, build/)"
-    delete("dist", "generated", "build")
+    description = "Remove build outputs (dist/, generated/, build/, node_modules/)"
+    // node_modules is included so a stale dependency tree (e.g. from a
+    // half-relinked Verdaccio publish, or transitive type defs left from
+    // a prior version) doesn't poison the next build's tsc output. clean
+    // is the operator's "give me a sterile state" verb; node_modules is
+    // squarely a build output for that purpose.
+    delete("dist", "generated", "build", "node_modules")
 }
 
 // ────────────────────────────────────────────────────────────
