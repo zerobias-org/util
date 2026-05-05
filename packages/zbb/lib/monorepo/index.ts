@@ -83,17 +83,27 @@ export async function spawnLifecycleAndExit(
   parsed: ParsedLifecycleArgs,
   opts?: { scopePackage?: string },
 ): Promise<never> {
+  // Gradle flags (-P*) and the TUI display only apply when the lifecycle
+  // command is a gradle invocation. We detect that by literal `./gradlew`
+  // in the command — no heuristics, no assumptions about wrapper scripts.
+  // Anything else runs verbatim through bash (the default execution env)
+  // with no flag injection and no TUI display. If a user wants gradle-
+  // aware behavior, the command should say `./gradlew`.
+  const isGradleCommand = /(^|\s|&)\.\/gradlew(\s|$)/.test(baseCommand);
+
   const passthrough: string[] = [];
-  if (parsed.all) passthrough.push('-Pmonorepo.all=true');
-  if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
-  if (parsed.dryRun) passthrough.push('-PdryRun=true');
-  if (parsed.force) passthrough.push('-Pforce=true');
-  if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
-  if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
-  // Anything zbb didn't recognize — forward to gradle verbatim so callers
-  // can pass through `-PfooBar=true` etc. without zbb needing to know each
-  // property name.
-  passthrough.push(...parsed.remaining);
+  if (isGradleCommand) {
+    if (parsed.all) passthrough.push('-Pmonorepo.all=true');
+    if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
+    if (parsed.dryRun) passthrough.push('-PdryRun=true');
+    if (parsed.force) passthrough.push('-Pforce=true');
+    if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
+    if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
+    // Anything zbb didn't recognize — forward to gradle verbatim so callers
+    // can pass through `-PfooBar=true` etc. without zbb needing to know each
+    // property name.
+    passthrough.push(...parsed.remaining);
+  }
 
   if (parsed.verbose) {
     const args = passthrough.length > 0 ? ` ${passthrough.join(' ')}` : '';
@@ -103,16 +113,30 @@ export async function spawnLifecycleAndExit(
   // Use the project-centric display for commands that produce per-task events
   // (build, test, gate). Skip clean (single root task — no per-task events)
   // and gate --check (fast file read — no point spinning up the display).
+  // Display also requires the command to BE gradle — the event tailer parses
+  // gradle's per-task events, which arbitrary scripts don't emit.
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
+    isGradleCommand &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
     (process.stdout.isTTY || forceDisplay);
   if (useDisplay) {
     const parts = baseCommand.trim().split(/\s+/);
-    if (parts.length > 0 && !baseCommand.includes('|') && !baseCommand.includes('&&')) {
+    // Direct spawn skips shell parsing — a command with shell quoting,
+    // semicolons, pipes, multi-line bodies, or env-var prefixes needs
+    // bash to interpret it. Fall through to the bash -c path for those.
+    const safeForDirectSpawn = parts.length > 0
+      && !baseCommand.includes('|')
+      && !baseCommand.includes('&&')
+      && !baseCommand.includes(';')
+      && !baseCommand.includes('"')
+      && !baseCommand.includes("'")
+      && !baseCommand.includes('\n')
+      && !parts[0].includes('=');
+    if (safeForDirectSpawn) {
       const cmd = parts[0];
       const args = [...parts.slice(1), ...passthrough];
       const { runWithDisplay } = requireCJS('./Display.js');

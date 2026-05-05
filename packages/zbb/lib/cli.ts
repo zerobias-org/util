@@ -200,26 +200,6 @@ function monorepoScopeOpts(scope: PackageScope | null): { scopePackage?: string 
 }
 
 /**
- * Find the closest chain entry whose `lifecycle[command]` is a string
- * AND the command is NOT one of the six canonical lifecycle verbs. Used
- * by the custom-verb dispatcher so `zbb buildVm` from a nested dir
- * picks up its definition from the closest zbb.yaml in the chain.
- */
-function findCustomVerbOwner(
-  chain: ZbbChainEntry[],
-  command: string,
-): { dir: string; entry: string } | null {
-  for (const entry of chain) {
-    const lifecycle = entry.config.lifecycle as Record<string, unknown> | undefined;
-    const value = lifecycle?.[command];
-    if (typeof value === 'string') {
-      return { dir: entry.dir, entry: value };
-    }
-  }
-  return null;
-}
-
-/**
  * Require a loaded slot for the current invocation. Fails fast with
  * the standard "zbb slot load" hint if `ZB_SLOT` isn't set.
  */
@@ -489,37 +469,41 @@ async function _main(argv: string[]): Promise<void> {
 
   // ── Lifecycle dispatch ───────────────────────────────────────────────
   //
-  // Phase 3 single-tier dispatch. clean/build/test/gate/publish all route
-  // here. The flow:
+  // Single unified dispatch — purely zbb.yaml driven. The flow:
   //
-  //   1. Read zbb.yaml from repo root (if present).
-  //   2. gate --check fast path: skip slot/stack/preflight, just spawn the
-  //      lifecycle.gateCheck command (or ./gradlew monorepoGateCheck if no
-  //      lifecycle entry exists). Validates the stamp file only.
-  //   3. All other lifecycle commands require a loaded slot.
-  //   4. Match the repo's stack against added stacks in the slot.
-  //   5. Apply slot env (which already includes the stack's env via the
-  //      stack composition system), then apply repo cleanse, then run
-  //      preflight.
-  //   6. If lifecycle[command] exists → spawn it (with TTY display for
-  //      build/test/gate). Else → fall through to ./gradlew <command>.
+  //   1. Walk up from cwd collecting every zbb.yaml (`findZbbChain`).
+  //   2. Look up `lifecycle[command]` in the chain (closest first) via
+  //      `findLifecycleOwner`. If a real entry is found → run the full
+  //      dispatcher (cleanse, prepareSlot, preflight, gates, spawn).
+  //      If no entry is found AND the command isn't one of the canonical
+  //      7 verbs → drop through to the gradle wrapper at the bottom.
+  //   3. The `isLifecycleCommand` 7-verb whitelist now ONLY gates verb-
+  //      specific behavior (TUI/monorepo aggregation, gate --check
+  //      semantics, fallback-to-gradle-via-monorepo). It is NOT a
+  //      precondition for the dispatcher itself — any verb declared in
+  //      a chain zbb.yaml's `lifecycle:` block routes through here, with
+  //      the same gate enforcement.
+  //   4. gate --check fast path skips slot/stack/preflight and just
+  //      spawns lifecycle.gateCheck (only relevant when command='gate').
+  //   5. Apply repo cleanse, then slot+stack env, then preflight.
+  //   6. Apply per-command tool/env gates (object-form lifecycle entries).
+  //   7. Spawn: canonical verbs go through TUI/monorepo dispatchers;
+  //      custom verbs spawn via plain bash with the entry command.
   //
-  // No zbb.yaml → permissive fallback to runGradle (smart wrapper mode).
-  if (isLifecycleCommand(command) && chain.length > 0) {
+  // No zbb.yaml in chain → permissive fallback to runGradle (smart
+  // wrapper mode).
+  if (chain.length > 0) {
     const parsed = parseLifecycleArgs(args.slice(1));
 
     // Lifecycle owner = the closest chain entry whose zbb.yaml defines
-    // `lifecycle[command]`. Falls back to the outermost entry (which is
-    // the monorepo root when one exists) — preserving the old
-    // "./gradlew <cmd>" passthrough when no file in the chain declares
-    // the command. This is what lets `zbb build` from
-    // com/hub/node-stack/ pick up com/hub/zbb.yaml's lifecycle.build
-    // instead of erroring on the nested stack manifest.
+    // `lifecycle[command]`. For canonical verbs we accept the fallback
+    // (outermost chain entry, no real match) so they can still spawn
+    // gradle through the monorepo/standard dispatchers. For non-
+    // canonical verbs (e.g. testDataloader, buildVm), a fallback means
+    // "no zbb.yaml in this chain claims this command" → drop through
+    // to the gradle wrapper below.
     const owner = findLifecycleOwner(chain, command, parsed);
-    if (!owner) {
-      console.error('zbb: no zbb.yaml found in cwd or any ancestor directory.');
-      process.exit(1);
-    }
+    if (owner != null && (!owner.isFallback || isLifecycleCommand(command))) {
     const ownerDir = owner.entry.dir;
     const ownerConfig = owner.entry.config;
 
@@ -717,54 +701,43 @@ async function _main(argv: string[]): Promise<void> {
       if (gateFailed) process.exit(1);
     }
 
-    // Look up lifecycle entry → spawn, or fall through to ./gradlew <cmd>
-    if (isMonorepo) {
-      // When scope is {kind:'invalid'} AND we're not at root, refuse
-      // rather than running the aggregator across the whole monorepo.
-      // Refusal message comes straight from scope.reason.
-      if (scope && scope.kind === 'invalid') {
-        console.error(`zbb ${command}: ${scope.reason}`);
-        process.exit(1);
+    // Spawn — canonical verbs (clean/build/test/gate/version/publish/dockerBuild)
+    // go through the TUI/monorepo or standard-lifecycle dispatchers, which add
+    // monorepo flags, subproject prefixing, and the TUI display. Any other
+    // verb declared in lifecycle: (testDataloader, buildVm, etc.) spawns via
+    // plain bash from the owner's dir with the full slot+stack env.
+    if (isLifecycleCommand(command)) {
+      if (isMonorepo) {
+        // When scope is {kind:'invalid'} AND we're not at root, refuse
+        // rather than running the aggregator across the whole monorepo.
+        // Refusal message comes straight from scope.reason.
+        if (scope && scope.kind === 'invalid') {
+          console.error(`zbb ${command}: ${scope.reason}`);
+          process.exit(1);
+        }
+        const scopeOpts = monorepoScopeOpts(scope);
+        if (owner.lifecycleCmd) {
+          return spawnLifecycleAndExit(ownerDir, command, owner.lifecycleCmd, parsed, scopeOpts);
+        }
+        return spawnGradleFallbackAndExit(ownerDir, command, parsed, scopeOpts);
       }
-      const scopeOpts = monorepoScopeOpts(scope);
-      if (owner.lifecycleCmd) {
-        return spawnLifecycleAndExit(ownerDir, command, owner.lifecycleCmd, parsed, scopeOpts);
-      }
-      return spawnGradleFallbackAndExit(ownerDir, command, parsed, scopeOpts);
+      // Standard mode: use the plain-gradle dispatcher with cwd-aware
+      // subproject prefixing. No monorepo flags, no TUI display (yet).
+      const { spawnStandardLifecycleAndExit } = await import('./standardLifecycle.js');
+      const cmd = owner.lifecycleCmd ?? `./gradlew ${command}`;
+      return spawnStandardLifecycleAndExit(ownerDir, command, cmd, parsed);
     }
-    // Standard mode: use the plain-gradle dispatcher with cwd-aware
-    // subproject prefixing. No monorepo flags, no TUI display (yet).
+
+    // Custom (non-canonical) verb — route through the standard lifecycle
+    // dispatcher so cwd-aware subproject prefixing applies. Without this,
+    // `zbb testDataloader` from a subproject would run the root task across
+    // every module instead of just the cwd's. spawnStandardLifecycleAndExit
+    // does the prefix rewrite via resolveCommandForCwd, then falls through
+    // to bash for non-display-eligible commands (which all custom verbs are
+    // — the displayEligibleCommands set is canonical-only).
+    // lifecycleCmd is guaranteed non-null here because !owner.isFallback.
     const { spawnStandardLifecycleAndExit } = await import('./standardLifecycle.js');
-    const cmd = owner.lifecycleCmd ?? `./gradlew ${command}`;
-    return spawnStandardLifecycleAndExit(ownerDir, command, cmd, parsed);
-  }
-
-  // ── Custom lifecycle verb from local zbb.yaml ────────────────────────
-  // The standard lifecycle dispatcher above only handles the 6 canonical
-  // verbs (clean/build/test/gate/publish/dockerBuild). A package can
-  // declare additional verbs in its zbb.yaml lifecycle: block — e.g.
-  // appliance/zbb.yaml has `buildVm`. Walk the chain so a custom verb
-  // defined in an ancestor zbb.yaml is visible from nested subdirs.
-  // We scan every chain entry (closest first) — whichever defines the
-  // verb owns it. Execution still happens from that owner's dir with
-  // slot + stack env wrapped, same as `zbb run`.
-  if (chain.length > 0) {
-    const customOwner = findCustomVerbOwner(chain, command);
-    if (customOwner) {
-      const { slot, stack } = await requireLoadedSlotAndStack();
-      await prepareSlot(slot, { stack });
-
-      const extraArgs = args.slice(1);
-      const fullCmd = extraArgs.length > 0
-        ? `${customOwner.entry} ${extraArgs.join(' ')}`
-        : customOwner.entry;
-      const { spawnSync } = await import('node:child_process');
-      const result = spawnSync('bash', ['-c', fullCmd], {
-        stdio: 'inherit',
-        env: process.env,
-        cwd: customOwner.dir,
-      });
-      process.exit(result.status ?? 1);
+    return spawnStandardLifecycleAndExit(ownerDir, command, owner.lifecycleCmd!, parsed);
     }
   }
 

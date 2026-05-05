@@ -56,23 +56,33 @@ export async function spawnStandardLifecycleAndExit(
   baseCommand: string,
   parsed: ParsedLifecycleArgs,
 ): Promise<never> {
+  // Gradle flags (-P*) and the TUI display only apply when the lifecycle
+  // command is a gradle invocation. We detect that by literal `./gradlew`
+  // in the command — no heuristics, no assumptions about wrapper scripts.
+  // Anything else runs verbatim through bash (the default execution env)
+  // with no flag injection and no TUI display. If a user wants gradle-
+  // aware behavior, the command should say `./gradlew`.
+  const isGradleCommand = /(^|\s|&)\.\/gradlew(\s|$)/.test(baseCommand);
+
   // Flag passthrough — identical semantics to the monorepo dispatcher
   // for the flags that make sense here. Standard mode drops --all and
   // --base (they're monorepo-specific affected-set selectors).
   const passthrough: string[] = [];
-  if (parsed.dryRun) passthrough.push('-PdryRun=true');
-  if (parsed.force) passthrough.push('-Pforce=true');
-  if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
-  // version-specific flags. modules: comma-separated list of relative
-  // paths under package/ (matches the github workflow's `detect` output).
-  // noPush: keeps the version commit local — used by tests / dry-runs.
-  if (parsed.modules) passthrough.push(`-PmodulesToVersion=${parsed.modules}`);
-  if (parsed.noPush) passthrough.push('-Ppush=false');
-  // Anything zbb didn't recognize (gradle -P/-D project/system properties,
-  // bare task names, `--`-style flags) — forward to gradle verbatim. Without
-  // this, `zbb publish -PfooBar=true` silently drops the property and the
-  // gradle script never sees the override.
-  passthrough.push(...parsed.remaining);
+  if (isGradleCommand) {
+    if (parsed.dryRun) passthrough.push('-PdryRun=true');
+    if (parsed.force) passthrough.push('-Pforce=true');
+    if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
+    // version-specific flags. modules: comma-separated list of relative
+    // paths under package/ (matches the github workflow's `detect` output).
+    // noPush: keeps the version commit local — used by tests / dry-runs.
+    if (parsed.modules) passthrough.push(`-PmodulesToVersion=${parsed.modules}`);
+    if (parsed.noPush) passthrough.push('-Ppush=false');
+    // Anything zbb didn't recognize (gradle -P/-D project/system properties,
+    // bare task names, `--`-style flags) — forward to gradle verbatim. Without
+    // this, `zbb publish -PfooBar=true` silently drops the property and the
+    // gradle script never sees the override.
+    passthrough.push(...parsed.remaining);
+  }
 
   // Resolve the command to a specific subproject if cwd is one.
   //
@@ -105,6 +115,7 @@ export async function spawnStandardLifecycleAndExit(
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
+    isGradleCommand &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
     (process.stdout.isTTY || forceDisplay);
@@ -115,11 +126,18 @@ export async function spawnStandardLifecycleAndExit(
     // This only works for single-command lifecycle entries; chained
     // commands (`./gradlew a && ./gradlew b`) fall through to bash.
     const parts = cmdToRun.trim().split(/\s+/);
+    // Direct spawn skips shell parsing — a command with shell quoting,
+    // semicolons, pipes, multi-line bodies, or env-var prefixes needs
+    // bash to interpret it. Fall through to the bash -c path for those.
     const safe =
       parts.length > 0 &&
       !cmdToRun.includes('|') &&
       !cmdToRun.includes('&&') &&
-      !cmdToRun.includes(';');
+      !cmdToRun.includes(';') &&
+      !cmdToRun.includes('"') &&
+      !cmdToRun.includes("'") &&
+      !cmdToRun.includes('\n') &&
+      !parts[0].includes('=');
     if (safe) {
       const cmd = parts[0];
       const args = [...parts.slice(1), ...passthrough];
