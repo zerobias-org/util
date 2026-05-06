@@ -2,7 +2,7 @@
  * Project-centric TTY display for zbb monorepo lifecycle commands
  * (build/test/gate/clean/publish).
  *
- * Reads JSON-line events from `<repo>/.zbb-monorepo/events.jsonl` (written by
+ * Reads JSON-line events from `<repo>/.zbb-gradle/events.jsonl` (written by
  * the zb.monorepo-base Gradle plugin's MonorepoEventEmitter) and renders a
  * live table where each row is a workspace package. The row updates in place
  * to show:
@@ -30,7 +30,7 @@
  *     own progress output to the user's terminal.
  *   - Uses cursor-up positioning with the PREVIOUS rendered row count (not
  *     the current count), so newly-added rows don't desync the cursor math.
- *   - Per-task log files in .zbb-monorepo/logs/ are referenced in the
+ *   - Per-task log files in .zbb-gradle/logs/ are referenced in the
  *     final summary so users can `cat` them after the run.
  */
 
@@ -40,6 +40,7 @@ import {
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
+import { ZBB_GRADLE_DIR } from '../paths.js';
 
 // ── Event types (must match MonorepoEventEmitter.kt) ────────────────
 
@@ -54,6 +55,12 @@ interface TaskDoneEvent {
   event: 'task_done';
   project: string;
   step: string;
+  /** Raw gradle task name (e.g. 'lintExec') — distinct from `step`, which
+   *  is the collapsed display name (e.g. 'lint'). Per-task log files on
+   *  disk are named after the raw task name: `<safe>-<taskName>.log`.
+   *  Optional for back-compat with older EventEmitter versions; falls
+   *  back to `step` when absent. */
+  taskName?: string;
   status: 'passed' | 'failed' | 'skipped' | 'up-to-date' | 'from-cache';
   durationMs: number;
   /** Failure message extracted from gradle's TaskFailureResult.failures.
@@ -116,6 +123,10 @@ type StepStatus = 'running' | 'passed' | 'failed' | 'skipped' | 'cached';
 
 interface StepEntry {
   name: string;
+  /** Raw gradle task name (e.g. 'lintExec'). Used to find the per-task
+   *  log file on disk. Falls back to `name` when the event doesn't supply
+   *  it (older EventEmitter versions). */
+  taskName?: string;
   startedAt: number;
   durationMs?: number;
   status: StepStatus;
@@ -336,6 +347,7 @@ export class MonorepoDisplay {
         s.status = stepStatus;
         s.durationMs = ev.durationMs;
         if (ev.error) s.error = ev.error;
+        if (ev.taskName) s.taskName = ev.taskName;
         matched = true;
         break;
       }
@@ -344,6 +356,7 @@ export class MonorepoDisplay {
       // Push a new completed-step entry (cached/skipped path)
       state.steps.push({
         name: ev.step,
+        taskName: ev.taskName,
         startedAt: ev.ts - ev.durationMs,
         durationMs: ev.durationMs,
         status: stepStatus,
@@ -356,9 +369,14 @@ export class MonorepoDisplay {
 
     if (ev.status === 'failed') {
       state.status = 'failed';
+      // Per-task log files on disk are named after the RAW gradle task
+      // (e.g. lintExec.log, transpileExec.log) — `step` is the collapsed
+      // display name (lint, compile) and won't match. Fall back to step
+      // for older EventEmitter versions that don't emit taskName.
+      const fileStep = ev.taskName ?? ev.step;
       state.failedLogFile = join(
         this.logsDir,
-        `${ev.project.replace(/^:/, '').replace(/:/g, '-')}-${ev.step}.log`,
+        `${ev.project.replace(/^:/, '').replace(/:/g, '-')}-${fileStep}.log`,
       );
     }
   }
@@ -536,7 +554,12 @@ export class MonorepoDisplay {
       for (const step of project.steps) {
         if (step.status !== 'failed') continue;
         const safeName = project.fullPath.replace(/^:/, '').replace(/:/g, '-');
-        const logFile = join(this.logsDir, `${safeName}-${step.name}.log`);
+        // Use raw task name (e.g. lintExec) for the file path; step.name
+        // is the collapsed display name (lint) which doesn't match the
+        // file on disk. Falls back to step.name for older EventEmitter
+        // versions that don't emit taskName.
+        const fileStep = step.taskName ?? step.name;
+        const logFile = join(this.logsDir, `${safeName}-${fileStep}.log`);
         failedSteps.push({ project, step, logFile });
       }
     }
@@ -641,21 +664,52 @@ export class MonorepoDisplay {
    * end of the file). Used by both phase-level and per-project failure
    * blocks to surface the actual tool stderr inline.
    *
-   * Returns an empty array if the log file or the marker isn't found.
+   * If the named task has no usable output (e.g. it's a lifecycle alias
+   * like `compile` that depends on `transpile`, and gradle short-circuited
+   * the alias when its dependency failed), falls back to finding the
+   * most recent `> Task <project-prefix>:* FAILED` marker — that's the
+   * real failing task with the actual stderr. This is the standard-mode
+   * case where zb.base reports `compile` as the failed step but the npx
+   * exec died on `transpile`.
+   *
+   * Returns an empty array if neither lookup finds anything.
    */
   private extractGradleLogSection(taskPath: string): string[] {
     const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
     if (!existsSync(gradleLogPath)) return [];
     const gradleContent = readFileSync(gradleLogPath, 'utf-8');
-    const taskMarker = `> Task ${taskPath}`;
-    const markerIdx = gradleContent.lastIndexOf(taskMarker);
-    if (markerIdx === -1) return [];
-    const afterMarker = gradleContent.slice(markerIdx);
-    const nextTask = afterMarker.indexOf('\n> Task ', taskMarker.length);
-    const section = nextTask !== -1
-      ? afterMarker.slice(0, nextTask)
-      : afterMarker.slice(0, 4000);
-    return section.split('\n').filter(l => l.length > 0);
+
+    const sectionFor = (marker: string): string[] => {
+      const markerIdx = gradleContent.lastIndexOf(marker);
+      if (markerIdx === -1) return [];
+      const afterMarker = gradleContent.slice(markerIdx);
+      const nextTask = afterMarker.indexOf('\n> Task ', marker.length);
+      const section = nextTask !== -1
+        ? afterMarker.slice(0, nextTask)
+        : afterMarker.slice(0, 4000);
+      return section.split('\n').filter(l => l.length > 0);
+    };
+
+    // 1. Direct hit on the named task
+    const direct = sectionFor(`> Task ${taskPath}`);
+    if (direct.length > 1) return direct;
+
+    // 2. Fallback: find the most recent FAILED task in the same project
+    //    subtree. e.g. taskPath = ":zerobias:zerobias:dynamic:compile" →
+    //    project prefix = ":zerobias:zerobias:dynamic". Look for any
+    //    "> Task <prefix>:<sub> FAILED" line and dump that section.
+    const lastColon = taskPath.lastIndexOf(':');
+    if (lastColon <= 0) return direct;
+    const projectPrefix = taskPath.slice(0, lastColon);
+    const failedRe = new RegExp(
+      `> Task ${projectPrefix.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}:\\S+ FAILED`,
+      'g',
+    );
+    const matches = [...gradleContent.matchAll(failedRe)];
+    if (matches.length === 0) return direct;
+    const lastMatch = matches[matches.length - 1];
+    const failedMarker = lastMatch[0].replace(/ FAILED$/, '');
+    return sectionFor(failedMarker);
   }
 
   /**
@@ -1030,7 +1084,7 @@ function runWithDisplayBody(
   _options: { verbose?: boolean },
   resolve: (code: number) => void,
 ): void {
-  const eventDir = join(repoRoot, '.zbb-monorepo');
+  const eventDir = join(repoRoot, ZBB_GRADLE_DIR);
   const logsDir = join(eventDir, 'logs');
   const eventFile = join(eventDir, 'events.jsonl');
   const gradleLogFile = join(eventDir, 'gradle.log');

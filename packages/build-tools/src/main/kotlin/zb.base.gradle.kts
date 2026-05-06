@@ -5,6 +5,7 @@ import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.util.SourceHasher
 import com.zerobias.buildtools.standard.StandardGateStampValidator
 import com.zerobias.buildtools.lifecycle.EventEmitter
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import org.gradle.build.event.BuildEventsListenerRegistry
 import org.gradle.kotlin.dsl.support.serviceOf
 
@@ -47,7 +48,7 @@ val zb = extensions.create<ZbExtension>("zb").apply {
 }
 
 // ────────────────────────────────────────────────────────────
-// Event emitter — feeds the zbb TTY display via .zbb-monorepo/events.jsonl
+// Event emitter — feeds the zbb TTY display via .zbb-gradle/events.jsonl
 //
 // Shared across monorepo mode (zb.monorepo-base registers this exact same
 // service) and standard mode (every zb.base subproject registers it too).
@@ -58,8 +59,8 @@ val zb = extensions.create<ZbExtension>("zb").apply {
 // build. The first to run wins.
 // ────────────────────────────────────────────────────────────
 val zbbBaseEventFile = System.getenv("ZBB_MONOREPO_EVENT_FILE")
-    ?: rootProject.file(".zbb-monorepo/events.jsonl").absolutePath
-val zbbBaseLogsDir = rootProject.file(".zbb-monorepo/logs")
+    ?: rootProject.file("$ZBB_GRADLE_DIR/events.jsonl").absolutePath
+val zbbBaseLogsDir = rootProject.file("$ZBB_GRADLE_DIR/logs")
 
 val zbbBaseEventEmitter = gradle.sharedServices.registerIfAbsent(
     "monorepoEventEmitter",
@@ -533,6 +534,39 @@ val preflightChecks by tasks.registering {
                 throw e
             } catch (e: Exception) {
                 throw GradleException("Preflight FAILED: Docker buildx not available — ${e.message}")
+            }
+
+            // 5b. arm64 EXECUTION probe — `docker buildx ls` lists arm64 as
+            // an advertised platform even when no QEMU/binfmt handler is
+            // registered, so the prior check passes silently and the multi-
+            // arch publishImageEcr step then fails with "exec format error"
+            // at the first arm64 RUN. Probe by actually running a tiny arm64
+            // binary; without QEMU this returns non-zero immediately.
+            // CI runners get binfmt for free via docker/setup-buildx-action;
+            // local hosts need a one-time install.
+            try {
+                val arm64Probe = providers.exec {
+                    commandLine("docker", "run", "--rm", "--platform", "linux/arm64",
+                        "alpine:3", "/bin/true")
+                    isIgnoreExitValue = true
+                }
+                val probeExit = arm64Probe.result.get().exitValue
+                if (probeExit != 0) {
+                    val combined = (arm64Probe.standardOutput.asText.get() +
+                        arm64Probe.standardError.asText.get()).trim()
+                    throw GradleException(
+                        "Preflight FAILED: arm64 execution not supported — " +
+                        "multi-arch buildx will fail at the first arm64 RUN step.\n" +
+                        "  Fix (one-time, host-wide): " +
+                        "docker run --privileged --rm tonistiigi/binfmt --install all\n" +
+                        "  Probe output: $combined"
+                    )
+                }
+                logger.lifecycle("Preflight: arm64 execution verified")
+            } catch (e: GradleException) {
+                throw e
+            } catch (e: Exception) {
+                throw GradleException("Preflight FAILED: arm64 execution probe errored — ${e.message}")
             }
 
             // 6. ECR — validate env vars and actual login
@@ -1700,15 +1734,20 @@ tasks.withType<JavaExec>().configureEach {
 //
 // Hook doFirst on every zb.base / zb.typescript task that should appear
 // in the display. Each hook calls emitStart(projectPath, taskName) which
-// writes a task_start event to .zbb-monorepo/events.jsonl. Task finish
+// writes a task_start event to .zbb-gradle/events.jsonl. Task finish
 // events are automatically emitted by the BuildEventsListener subscribed
 // above.
 //
 // The same per-task stdout/stderr log capture used in zb.monorepo-base
-// is applied here too, so per-task logs live at .zbb-monorepo/logs/
+// is applied here too, so per-task logs live at .zbb-gradle/logs/
 // regardless of which plugin wired the task.
 // ────────────────────────────────────────────────────────────
 val zbbBasePhaseTaskNames = setOf(
+    // Install — surfaced as a step so users see "install running" instead
+    // of a silent pause while npm churns through 500+ packages on cold
+    // node_modules. NpmTask extends Exec, so the per-task log capture
+    // (below) also tees output to the file + terminal.
+    "npmInstallModule", "npmInstallCollectorbot",
     // Validation + build phase
     "validate", "validateSpec", "validateConnector",
     "lint", "lintExec",
@@ -1732,6 +1771,21 @@ val zbbBasePhaseTaskNames = setOf(
 )
 
 gradle.taskGraph.whenReady {
+    // Truncate gradle.log ONCE per build before any task writes.
+    //
+    // Skip when zbb is driving (ZBB_MONOREPO_EVENT_FILE set in env). zbb
+    // already opens gradle.log in 'w' mode via Node's createWriteStream;
+    // truncating here while Node has an open FD with non-zero position
+    // causes a sparse-file zero-fill (Node's next pipe write goes at its
+    // tracked position, leaving the gap as NULL bytes). See the matching
+    // hook in zb.monorepo-build.gradle.kts for the full byte-by-byte
+    // explanation.
+    if (System.getenv("ZBB_MONOREPO_EVENT_FILE") == null) {
+        val centralLog = rootProject.file("$ZBB_GRADLE_DIR/gradle.log")
+        centralLog.parentFile.mkdirs()
+        centralLog.writeText("")
+    }
+
     val subprojectPath = if (project.path == ":") ":" else project.path
     val emitterProvider = zbbBaseEventEmitter
     zbbBaseLogsDir.mkdirs()
@@ -1748,22 +1802,103 @@ gradle.taskGraph.whenReady {
             .ifEmpty { project.name }
         val logFile = zbbBaseLogsDir.resolve("$safeName-$taskName.log")
 
-        // Exec/NpxTask: redirect stdout/stderr to the per-task log file so
-        // the live TTY display doesn't get polluted by child process output.
-        if (task is Exec) {
-            val execTask: Exec = task
-            var logStream: java.io.OutputStream? = null
-            execTask.doFirst {
-                logFile.parentFile.mkdirs()
-                val out = logFile.outputStream()
-                logStream = out
-                @Suppress("DEPRECATION")
-                (execTask as org.gradle.process.BaseExecSpec).standardOutput = out
-                @Suppress("DEPRECATION")
-                (execTask as org.gradle.process.BaseExecSpec).errorOutput = out
+        // Tee stdout/stderr to the per-task log file AND the terminal
+        // (System.out / System.err). The per-task file is what the TTY
+        // display reads for inline failure replay; the terminal forwarding
+        // ensures non-TTY runs (`zbb lint` from a pipe, CI, IDE) still
+        // surface tool errors to the user. Without this, eslint/tsc errors
+        // went silently to the file and the user saw "BUILD FAILED" with
+        // no detail.
+        //
+        // Three task types need handling:
+        //   1. Exec      — set standardOutput/errorOutput via BaseExecSpec
+        //   2. NpxTask   — set execOverrides (gradle-node-plugin's ExecSpec
+        //                  customization hook). NpxTask extends DefaultTask,
+        //                  not Exec, so the BaseExecSpec cast doesn't apply.
+        //   3. NpmTask   — same as NpxTask. Used for npmInstall*.
+        //
+        // Without the NpxTask/NpmTask branches, transpile/generateApi/
+        // generateServerApi/etc. (all NpxTask) produced no per-task log
+        // files at all — only the actual Exec tasks (lintExec, buildImageExec)
+        // got captured.
+        val centralLog = rootProject.file("$ZBB_GRADLE_DIR/gradle.log")
+
+        fun openTeeStream(): Triple<java.io.OutputStream, java.io.OutputStream, java.io.OutputStream> {
+            logFile.parentFile.mkdirs()
+            centralLog.parentFile.mkdirs()
+            // SynchronizedOutputStream wrap is critical: gradle reads stdout
+            // and stderr from the spawned process on separate threads, both
+            // of which call write() on the same underlying BufferedOutputStream.
+            // Without synchronization, count++ races produce gaps of zero-
+            // filled bytes (NULL) at random offsets in the log files.
+            val perTask = com.zerobias.buildtools.util.SynchronizedOutputStream(
+                logFile.outputStream()
+            )
+            val central = com.zerobias.buildtools.util.SynchronizedOutputStream(
+                java.io.BufferedOutputStream(java.io.FileOutputStream(centralLog, /* append = */ true))
+            )
+            central.write("\n===== ${capturedProjectPath}:${capturedTaskName} =====\n".toByteArray())
+            central.flush()
+            val outTee = org.apache.tools.ant.util.TeeOutputStream(
+                org.apache.tools.ant.util.TeeOutputStream(perTask, central),
+                System.out,
+            )
+            val errTee = org.apache.tools.ant.util.TeeOutputStream(
+                org.apache.tools.ant.util.TeeOutputStream(perTask, central),
+                System.err,
+            )
+            // Return both tees AND the file/central streams so doLast can
+            // close them. (Tees wrap them but don't manage their lifecycle
+            // independently — closing the tee doesn't necessarily close
+            // System.out, which we want to leave open.)
+            return Triple(outTee, errTee, perTask)
+        }
+
+        when (task) {
+            is Exec -> {
+                val execTask: Exec = task
+                var perTaskStream: java.io.OutputStream? = null
+                execTask.doFirst {
+                    val (outTee, errTee, perTask) = openTeeStream()
+                    perTaskStream = perTask
+                    @Suppress("DEPRECATION")
+                    (execTask as org.gradle.process.BaseExecSpec).standardOutput = outTee
+                    @Suppress("DEPRECATION")
+                    (execTask as org.gradle.process.BaseExecSpec).errorOutput = errTee
+                }
+                execTask.doLast {
+                    try { perTaskStream?.flush(); perTaskStream?.close() } catch (_: Exception) {}
+                }
             }
-            execTask.doLast {
-                try { logStream?.flush(); logStream?.close() } catch (_: Exception) {}
+            is com.github.gradle.node.npm.task.NpxTask -> {
+                val npxTask: com.github.gradle.node.npm.task.NpxTask = task
+                var perTaskStream: java.io.OutputStream? = null
+                npxTask.doFirst {
+                    val (outTee, errTee, perTask) = openTeeStream()
+                    perTaskStream = perTask
+                    npxTask.execOverrides {
+                        standardOutput = outTee
+                        errorOutput = errTee
+                    }
+                }
+                npxTask.doLast {
+                    try { perTaskStream?.flush(); perTaskStream?.close() } catch (_: Exception) {}
+                }
+            }
+            is com.github.gradle.node.npm.task.NpmTask -> {
+                val npmTask: com.github.gradle.node.npm.task.NpmTask = task
+                var perTaskStream: java.io.OutputStream? = null
+                npmTask.doFirst {
+                    val (outTee, errTee, perTask) = openTeeStream()
+                    perTaskStream = perTask
+                    npmTask.execOverrides {
+                        standardOutput = outTee
+                        errorOutput = errTee
+                    }
+                }
+                npmTask.doLast {
+                    try { perTaskStream?.flush(); perTaskStream?.close() } catch (_: Exception) {}
+                }
             }
         }
 

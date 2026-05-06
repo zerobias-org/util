@@ -76,7 +76,11 @@ tasks.named("validate") {
 val lintExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Run eslint on source code using shared config from @zerobias-org/eslint-config"
-    dependsOn(tasks.named("compile"))
+    // Lint reads src/ only (not dist/), so it doesn't need transpile —
+    // just node_modules for the eslint binary. Running BEFORE compile
+    // means a lint failure fails fast; the user fixes the code, re-runs,
+    // and the (now-correct) compile happens once instead of twice.
+    dependsOn(npmInstallCollectorbot)
     workingDir(project.projectDir)
     doFirst {
         // Generate ephemeral eslint.config.js in the module directory
@@ -188,7 +192,12 @@ tasks.named("generate") {
 val transpile by tasks.registering(NpxTask::class) {
     group = "lifecycle"
     description = "Compile TypeScript (ESM)"
-    dependsOn(npmInstallCollectorbot, tasks.named("generate"))
+    // lint runs first so a lint failure short-circuits before tsc burns
+    // 10+ seconds compiling code that has style issues anyway. User
+    // fixes the lint error → re-runs → lint passes → transpile starts
+    // fresh. Without this, transpile completes first, lint fails, the
+    // fix invalidates transpile's output, and tsc has to redo the work.
+    dependsOn(npmInstallCollectorbot, tasks.named("generate"), tasks.named("lint"))
     workingDir.set(project.projectDir)
     command.set("tsc")
     inputs.dir("src")
@@ -630,7 +639,18 @@ tasks.named("publishImage") {
 
 val collectorbotChangedSinceTag: Boolean = extra["changedSinceTag"] as Boolean
 
+// Guard ALL publish/promote exec tasks. Without these, publishNpmExec
+// runs (and uploads with --tag next) even on no-change runs because its
+// parent publishNpm's onlyIf doesn't gate the exec — tasks resolve their
+// own onlyIf at execution time, after their deps have already run.
+// promoteNpm needs the same guard so it doesn't move the 'next' tag
+// off a package whose publish was a re-publish of an unchanged version.
+// Symptom without these: rollback fires on a successful no-op run because
+// stagedPackages is non-empty (publishNpmExec added) but promoteAll
+// skipped (publishAll said no-changes).
 listOf(
+    "publishNpmExec",
+    "promoteNpm",
     "publishImageEcr",
     "publishImageGhcr"
 ).forEach { taskName ->

@@ -147,10 +147,24 @@ export async function spawnStandardLifecycleAndExit(
     }
   }
 
+  // Resolve `./gradlew` against the actual gradle root if cwd lacks
+  // one. Mirrors the same fix in monorepo/index.ts — see comments
+  // there for the full rationale.
+  let resolvedCmdToRun = cmdToRun;
+  if (/(^|\s|&)\.\/gradlew(\s|$)/.test(cmdToRun) && !existsSync(join(repoRoot, 'gradlew'))) {
+    const repo = findGradleRoot(repoRoot);
+    if (repo) {
+      resolvedCmdToRun = cmdToRun.replace(/(^|\s|&)\.\/gradlew(\s|$)/g, `$1${repo.wrapper}$2`);
+      if (parsed.verbose) {
+        console.log(`[zbb] resolved ./gradlew → ${repo.wrapper}`);
+      }
+    }
+  }
+
   // Fallback path: bash -c "<full command>" with inherited stdio.
   const fullCommand = passthrough.length > 0
-    ? `${cmdToRun} ${passthrough.join(' ')}`
-    : cmdToRun;
+    ? `${resolvedCmdToRun} ${passthrough.join(' ')}`
+    : resolvedCmdToRun;
 
   // Use async spawn so JS signal handlers can run on Ctrl-C. spawnSync
   // blocks the event loop — the parent dies but its gradle daemon can

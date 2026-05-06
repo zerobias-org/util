@@ -9,6 +9,7 @@ import com.zerobias.buildtools.module.ConnectionProfileFlattener
 import com.zerobias.buildtools.module.ServerEntryPointGenerator
 import com.zerobias.buildtools.module.DockerRunner
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 
 plugins {
     id("zb.base")
@@ -110,7 +111,11 @@ tasks.named("validate") {
 val lintExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Run eslint on source code using shared config from @zerobias-org/eslint-config"
-    dependsOn(tasks.named("compile"))
+    // Lint reads src/ only (not dist/), so it doesn't need transpile —
+    // just node_modules for the eslint binary. Running BEFORE compile
+    // means a lint failure fails fast; the user fixes the code, re-runs,
+    // and the (now-correct) compile happens once instead of twice.
+    dependsOn(npmInstallModule)
     workingDir(project.projectDir)
     doFirst {
         // Generate ephemeral eslint.config.mjs in the module directory
@@ -363,7 +368,12 @@ tasks.named("generate") {
 val transpile by tasks.registering(NpxTask::class) {
     group = "lifecycle"
     description = "Compile TypeScript (ESM)"
-    dependsOn(npmInstallModule, tasks.named("generate"))
+    // lint runs first so a lint failure short-circuits before tsc burns
+    // 10+ seconds compiling code that has style issues anyway. User
+    // fixes the lint error → re-runs → lint passes → transpile starts
+    // fresh. Without this, transpile completes first, lint fails, the
+    // fix invalidates transpile's output, and tsc has to redo the work.
+    dependsOn(npmInstallModule, tasks.named("generate"), tasks.named("lint"))
     workingDir.set(project.projectDir)
     command.set("tsc")
     inputs.dir("src")
@@ -1170,6 +1180,50 @@ val flattenConnectionProfileForPublish by tasks.registering {
     }
 }
 
+// ── Prepublish: shrinkwrap generation ──
+// `npm pack` strips package-lock.json from tarballs by npm policy, so
+// app-style packages that need consumers to run a deterministic
+// `npm ci --omit=dev --ignore-scripts` ship an npm-shrinkwrap.json instead
+// (the only lockfile npm publishes).
+//
+// Opt-in: fires only when package.json's "files" array lists
+// "npm-shrinkwrap.json" AND a package-lock.json exists. Generates the
+// shrinkwrap right before `npm publish`; a finalizer removes it after, so
+// the working tree continues to track only package-lock.json
+// (npm-shrinkwrap.json should be gitignored as a build artifact).
+val cleanupShrinkwrap by tasks.registering {
+    group = "publish"
+    description = "Remove generated npm-shrinkwrap.json after npm publish"
+    // Wait for publish in the success case; on failure it fires right after
+    // generateShrinkwrap (its finalizer host) — same approach as
+    // restorePackageJson / restoreConnectionProfile above.
+    mustRunAfter(tasks.named("publishNpmExec"))
+    onlyIf { project.file("npm-shrinkwrap.json").exists() }
+    doLast {
+        project.file("npm-shrinkwrap.json").delete()
+        logger.lifecycle("[cleanupShrinkwrap] removed generated npm-shrinkwrap.json")
+    }
+}
+
+val generateShrinkwrap by tasks.registering {
+    group = "publish"
+    description = "Generate npm-shrinkwrap.json from package-lock.json before npm publish"
+    finalizedBy(cleanupShrinkwrap)
+    onlyIf {
+        val pkgFile = project.file("package.json")
+        val lockFile = project.file("package-lock.json")
+        if (!pkgFile.exists() || !lockFile.exists()) return@onlyIf false
+        Regex(""""files"\s*:\s*\[[^\]]*"npm-shrinkwrap\.json"""")
+            .containsMatchIn(pkgFile.readText())
+    }
+    doFirst {
+        val lockFile = project.file("package-lock.json")
+        val swFile = project.file("npm-shrinkwrap.json")
+        lockFile.copyTo(swFile, overwrite = true)
+        logger.lifecycle("[generateShrinkwrap] generated npm-shrinkwrap.json from package-lock.json")
+    }
+}
+
 // -- NPM Publish (staging with --tag next) ------------------------
 
 val isDryRun: Boolean = extra["isDryRun"] as Boolean
@@ -1670,7 +1724,7 @@ val testDataloaderExec by tasks.registering(com.zerobias.buildtools.tasks.NeonDa
     force.set(true)
     val safeProjectName = project.path.removePrefix(":").replace(":", "-")
     displayLogPath.set(rootProject.layout.projectDirectory
-        .file(".zbb-monorepo/logs/${safeProjectName}-testDataloader.log"))
+        .file("$ZBB_GRADLE_DIR/logs/${safeProjectName}-testDataloader.log"))
 
     // Symlink the distribution spec into the project root so dataloader can
     // find it. Other Exec tasks (lint/transpile/test/dockerBuild) don't need
@@ -1691,7 +1745,7 @@ tasks.named("testDataloader") {
 }
 
 tasks.named("publishNpmExec") {
-    dependsOn(flattenConnectionProfileForPublish)
+    dependsOn(flattenConnectionProfileForPublish, generateShrinkwrap)
 }
 
 tasks.named("publishNpm") {

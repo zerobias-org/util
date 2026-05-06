@@ -151,6 +151,7 @@ build/
 
 # zbb
 .zbb-build-cache.json
+.zbb-gradle
 .zbb-monorepo
 .zbb-publish-tmp/
 

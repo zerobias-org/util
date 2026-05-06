@@ -34,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Status values: passed | failed | skipped
  *
  * Output sink: file path from `eventFilePath` parameter (defaulting to
- * `<repo>/.zbb-monorepo/events.jsonl`). The file is preserved between runs
+ * `<repo>/.zbb-gradle/events.jsonl`). The file is preserved between runs
  * for post-mortem inspection.
  *
  * Thread-safety: PrintWriter wraps a synchronized file output stream so
@@ -164,6 +164,7 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
      */
     private fun subprojectTaskToPhase(taskName: String): String? = when (taskName) {
         // Build phase: anything that produces dist/ or compile output.
+        "npmInstallModule", "npmInstallCollectorbot",
         "lint", "generate", "transpile", "compile",
         "npmLint", "npmGenerate", "npmTranspile", "npmBuild",
         "lintExec", "transpileExec", "compileExec",
@@ -258,7 +259,7 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
         -> "generate"
 
         // npm install
-        "npmInstallModule" -> "install"
+        "npmInstallModule", "npmInstallCollectorbot" -> "install"
 
         // Compile (transpile + JVM compile collapse here)
         "transpile", "transpileExec",
@@ -590,11 +591,21 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
                 // appear stuck in running forever.
                 taskStartsEmitted.add(key)
                 synchronized(w) {
+                    // taskName is the RAW gradle task name (e.g. "lintExec",
+                    // "transpileExec") — distinct from `step` which is the
+                    // collapsed display name (e.g. "lint", "compile"). The
+                    // display reads `taskName` to find the per-task log file
+                    // on disk: capture in zb.base.gradle.kts writes
+                    // <safe>-<rawName>.log, but the display row is keyed on
+                    // the collapsed name. Without this field the display's
+                    // failure block points at <safe>-lint.log (using `step`)
+                    // when the actual file is <safe>-lintExec.log.
                     if (errorMessage != null) {
                         w.println(jsonLine(
                             "event" to "task_done",
                             "project" to projectPath,
                             "step" to displayName,
+                            "taskName" to taskName,
                             "status" to status,
                             "durationMs" to durationMs,
                             "error" to errorMessage,
@@ -605,6 +616,7 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
                             "event" to "task_done",
                             "project" to projectPath,
                             "step" to displayName,
+                            "taskName" to taskName,
                             "status" to status,
                             "durationMs" to durationMs,
                             "ts" to System.currentTimeMillis(),

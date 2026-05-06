@@ -27,6 +27,7 @@
 
 import com.zerobias.buildtools.monorepo.MonorepoGraphService
 import com.zerobias.buildtools.lifecycle.EventEmitter
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import org.gradle.api.tasks.Exec
 import org.gradle.build.event.BuildEventsListenerRegistry
 import org.gradle.kotlin.dsl.support.serviceOf
@@ -52,14 +53,14 @@ extensions.extraProperties["monorepoGraphService"] = graphService
 
 // ── EventEmitter — JSON-line events for the zbb TTY display ──
 //
-// Default event file: <repo>/.zbb-monorepo/events.jsonl (gitignored, preserved
+// Default event file: <repo>/.zbb-gradle/events.jsonl (gitignored, preserved
 // between runs for post-mortem inspection). Override with ZBB_MONOREPO_EVENT_FILE.
-// Per-task stdout/stderr captured to <repo>/.zbb-monorepo/logs/<safe>.log
+// Per-task stdout/stderr captured to <repo>/.zbb-gradle/logs/<safe>.log
 
 val eventFile = System.getenv("ZBB_MONOREPO_EVENT_FILE")
-    ?: rootProject.file(".zbb-monorepo/events.jsonl").absolutePath
+    ?: rootProject.file("$ZBB_GRADLE_DIR/events.jsonl").absolutePath
 
-val logsDir = rootProject.file(".zbb-monorepo/logs")
+val logsDir = rootProject.file("$ZBB_GRADLE_DIR/logs")
 
 val eventEmitter = gradle.sharedServices.registerIfAbsent(
     "monorepoEventEmitter",

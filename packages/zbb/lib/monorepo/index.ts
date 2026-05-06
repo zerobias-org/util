@@ -15,6 +15,10 @@
 
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import { ZBB_GRADLE_DIR } from '../paths.js';
+import { findGradleRoot } from '../gradle.js';
 
 // Sync `require` for use in ESM — we lazy-load Display.js without making
 // the whole call chain async.
@@ -145,10 +149,74 @@ export async function spawnLifecycleAndExit(
     }
   }
 
+  // Resolve `./gradlew` against the actual gradle root via walk-up.
+  // Sub-package zbb.yaml files commonly reference `./gradlew <task>`
+  // (often because the manifest is shipped with the published artifact
+  // and assumes a consumer's local gradlew). When zbb runs that command
+  // from the lifecycle owner's dir — which usually doesn't have its own
+  // wrapper — bash fails with "./gradlew: No such file or directory".
+  //
+  // Rewrite to the absolute wrapper path found by walking up. cwd stays
+  // at repoRoot so gradle's "current subproject from cwd" resolution
+  // still scopes the task correctly (e.g., `./gradlew test` from
+  // `stack/` becomes `<root>/gradlew test`, which gradle interprets as
+  // `:stack:test`).
+  let resolvedBaseCommand = baseCommand;
+  if (/(^|\s|&)\.\/gradlew(\s|$)/.test(baseCommand) && !existsSync(join(repoRoot, 'gradlew'))) {
+    const repo = findGradleRoot(repoRoot);
+    if (repo) {
+      // Replace the literal `./gradlew` token. Anchored on word boundaries
+      // (start/whitespace/&) to avoid touching strings like `something/./gradlew`.
+      resolvedBaseCommand = baseCommand.replace(/(^|\s|&)\.\/gradlew(\s|$)/g, `$1${repo.wrapper}$2`);
+      if (parsed.verbose) {
+        console.log(`[zbb] resolved ./gradlew → ${repo.wrapper}`);
+      }
+    }
+  }
+
   // Fallback path: bash -c "<full command>"
   const fullCommand = passthrough.length > 0
-    ? `${baseCommand} ${passthrough.join(' ')}`
-    : baseCommand;
+    ? `${resolvedBaseCommand} ${passthrough.join(' ')}`
+    : resolvedBaseCommand;
+
+  // Marker-based gradle delegation. When a wrapper script runs gradle
+  // internally (e.g. com/hub's gate-with-neon.sh that creates a Neon DB
+  // branch, exports PGHOST, then exec's into ./gradlew monorepoGate),
+  // zbb can't see gradle directly to engage the TUI. The script can
+  // opt-in by printing this marker to stderr or stdout BEFORE invoking
+  // gradle:
+  //
+  //     echo "ZBB_DELEGATE_GRADLE: ./gradlew monorepoGate" >&2
+  //     ./gradlew monorepoGate
+  //
+  // zbb watches the script's output for the marker. On detection it
+  // pre-creates the events file, sets ZBB_MONOREPO_EVENT_FILE in the
+  // child env (gradle's EventEmitter writes there), and starts a tailer
+  // + MonorepoDisplay just like a direct gradle invocation. Output AFTER
+  // the marker is redirected to gradle.log only — the TUI handles the
+  // visual update from events. Output BEFORE the marker (script setup
+  // logs) is passed through to the terminal as normal.
+  const isMarkerEligibleCommand =
+    !isGradleCommand &&
+    displayEligibleCommands.has(command) &&
+    !isGateCheck &&
+    (process.stdout.isTTY || forceDisplay);
+
+  const eventDir = join(repoRoot, ZBB_GRADLE_DIR);
+  const logsDir = join(eventDir, 'logs');
+  const eventFile = join(eventDir, 'events.jsonl');
+  const gradleLogFile = join(eventDir, 'gradle.log');
+  const childEnv: Record<string, string | undefined> = { ...process.env };
+  if (isMarkerEligibleCommand) {
+    mkdirSync(eventDir, { recursive: true });
+    mkdirSync(logsDir, { recursive: true });
+    try { unlinkSync(eventFile); } catch { /* didn't exist */ }
+    childEnv.ZBB_MONOREPO_EVENT_FILE = eventFile;
+    // Same gradle-console-plain hint as runWithDisplay, in case the
+    // script's gradle invocation respects $TERM.
+    childEnv.TERM = 'dumb';
+    childEnv.GRADLE_OPTS = `${process.env.GRADLE_OPTS ?? ''} -Dorg.gradle.console=plain`.trim();
+  }
 
   // Use async spawn (not spawnSync) so JS signal handlers can run on
   // Ctrl-C. spawnSync blocks the event loop; the parent dies but its
@@ -157,10 +225,51 @@ export async function spawnLifecycleAndExit(
   // whole tree with one signal.
   const child = spawn('bash', ['-c', fullCommand], {
     cwd: repoRoot,
-    stdio: 'inherit',
-    env: process.env,
+    // For marker-eligible commands, pipe stdout/stderr so we can watch
+    // for the delegation marker. Otherwise inherit (existing behavior).
+    stdio: isMarkerEligibleCommand ? ['inherit', 'pipe', 'pipe'] : 'inherit',
+    env: childEnv,
     detached: true,
   });
+
+  // Marker watching: forward script output until the marker is seen,
+  // then engage TUI and redirect subsequent output to gradle.log.
+  if (isMarkerEligibleCommand && child.stdout && child.stderr) {
+    let markerSeen = false;
+    let display: import('./Display.js').MonorepoDisplay | null = null;
+    let tailer: import('./Display.js').EventFileTailer | null = null;
+    const gradleLog = createWriteStream(gradleLogFile);
+
+    const markerRe = /ZBB_DELEGATE_GRADLE:\s*(.+)/;
+    const onChunk = (chunk: Buffer, sinkBefore: NodeJS.WriteStream) => {
+      if (markerSeen) {
+        gradleLog.write(chunk);
+        return;
+      }
+      sinkBefore.write(chunk);
+      gradleLog.write(chunk);
+      const m = chunk.toString('utf-8').match(markerRe);
+      if (m) {
+        markerSeen = true;
+        const { MonorepoDisplay, EventFileTailer } = requireCJS('./Display.js');
+        process.stdout.write(`\n${'[2m'}[zbb] delegated gradle: ${m[1].trim()}${'[0m'}\n\n`);
+        const localDisplay = new MonorepoDisplay(logsDir, true);
+        const localTailer = new EventFileTailer(eventFile, (ev: unknown) => localDisplay.handleEvent(ev as Parameters<typeof localDisplay.handleEvent>[0]));
+        display = localDisplay;
+        tailer = localTailer;
+        localTailer.start();
+      }
+    };
+
+    child.stdout.on('data', (c: Buffer) => onChunk(c, process.stdout));
+    child.stderr.on('data', (c: Buffer) => onChunk(c, process.stderr));
+
+    child.on('exit', () => {
+      try { tailer?.stop(); } catch {}
+      try { display?.finalize(child.exitCode === 0); } catch {}
+      try { gradleLog.end(); } catch {}
+    });
+  }
 
   // Signal forwarding mirrors lib/gradle.ts:runGradle and Display.ts:
   // first Ctrl-C → SIGINT to the whole group + ./gradlew --stop;

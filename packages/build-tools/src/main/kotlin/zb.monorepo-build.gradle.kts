@@ -34,6 +34,7 @@ import com.zerobias.buildtools.monorepo.PrepublishLockService
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.monorepo.SubstackDockerConfig
 import com.zerobias.buildtools.util.ExecUtils
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import org.gradle.api.tasks.Exec
 
 @Suppress("UNCHECKED_CAST")
@@ -369,7 +370,23 @@ fun hasLifecycleEntry(zbbYaml: java.io.File, command: String): Boolean {
         @Suppress("UNCHECKED_CAST")
         val parsed = org.yaml.snakeyaml.Yaml().load<Map<String, Any?>>(zbbYaml.readText())
         val lifecycle = parsed?.get("lifecycle") as? Map<*, *> ?: return false
-        lifecycle[command] != null
+        val raw = lifecycle[command] ?: return false
+        // Recursion guard: if the entry's command just calls `./gradlew`,
+        // delegating to zbb would spawn ANOTHER gradle invocation — and
+        // the outer gradle (which is already running this exact task) is
+        // holding the daemon, so the inner blocks forever. Sub-zbb.yaml
+        // files copied from a top-level template (the "shipped" manifest
+        // pattern, where consumers run `./gradlew test` from their
+        // extracted artifact) hit this every time. Skip — the outer
+        // gradle's task graph is already correct; falling through to npm
+        // script or no-op is right.
+        val cmdString = when (raw) {
+            is String -> raw
+            is Map<*, *> -> raw["command"] as? String
+            else -> null
+        }
+        if (cmdString?.trim()?.startsWith("./gradlew") == true) return false
+        true
     } catch (_: Exception) {
         false
     }
@@ -383,19 +400,44 @@ fun isRealScript(body: String?): Boolean =
 // All monorepo Exec tasks tee their stdout/stderr to:
 //   1. The live console (so users see progress as it happens)
 //   2. A per-task log file (for failure replay + zbb TUI display)
-//   3. A central .zbb-monorepo/gradle.log (truncated at start of each
-//      gradle invocation, then appended to by every task that runs)
+//   3. A central .zbb-gradle/gradle.log (truncated ONCE per gradle
+//      invocation by the taskGraph.whenReady hook below, then appended
+//      to by every task that runs)
 //
 // The central log is the user-facing artifact: a single file you can scroll
 // through after a run to review everything that happened across all
 // subprojects. Per-task logs stay around for the displayLog hook the TUI
 // uses for inline failure dumps.
 
-// Per-invocation flag — top-level vars are initialized fresh on each gradle
-// invocation, so the first openTee call truncates and subsequent calls in
-// the same run append. Synchronized for concurrent task safety.
-val centralLogLock = Any()
-@Volatile var centralLogTruncated = false
+// Truncate gradle.log once per build, BEFORE any tasks run.
+//
+// Skip truncation when zbb (Node) is the driver. Detection: the
+// ZBB_MONOREPO_EVENT_FILE env var is set by zbb's runWithDisplay /
+// marker-delegation paths before spawning gradle. zbb already opens
+// gradle.log in 'w' mode (truncate) via createWriteStream; if we also
+// truncate here, the user sees long runs of NULL bytes in the log:
+//
+//   1. Node opens gradle.log in 'w' mode → fd_node position 0, file empty.
+//   2. Node pipes gradle's configuration-phase output → file grows to N bytes,
+//      fd_node position N.
+//   3. taskGraph.whenReady fires → THIS truncation → file is 0 bytes.
+//      Node's fd_node position is still N (kernel doesn't reset Node's
+//      position when another fd truncates).
+//   4. Java's per-task tee opens FOS in append mode → writes banner at
+//      EOF (currently 0). File grows to M bytes.
+//   5. Node's pipe gets more output → write at fd_node position N → kernel
+//      fills the 0..N gap with zero bytes (sparse file). Result: N null bytes
+//      followed by the banner content Java already wrote, followed by Node's
+//      data → file looks corrupt.
+//
+// When zbb isn't involved (direct `./gradlew` run), Java owns the file
+// and the truncation runs as before.
+gradle.taskGraph.whenReady {
+    if (System.getenv("ZBB_MONOREPO_EVENT_FILE") != null) return@whenReady
+    val centralLog = rootProject.file("$ZBB_GRADLE_DIR/gradle.log")
+    centralLog.parentFile.mkdirs()
+    centralLog.writeText("")
+}
 
 fun openTee(
     perTaskLog: java.io.File,
@@ -405,14 +447,15 @@ fun openTee(
 ): java.io.OutputStream {
     perTaskLog.parentFile.mkdirs()
     centralLog.parentFile.mkdirs()
-    synchronized(centralLogLock) {
-        if (!centralLogTruncated) {
-            centralLog.writeText("")
-            centralLogTruncated = true
-        }
-    }
-    val perTask = java.io.BufferedOutputStream(java.io.FileOutputStream(perTaskLog))
-    val central = java.io.BufferedOutputStream(java.io.FileOutputStream(centralLog, /* append = */ true))
+    // SynchronizedOutputStream wrap: gradle reads stdout and stderr on
+    // separate threads, both writing to these BufferedOutputStreams.
+    // Unsynchronized count++ races produce zero-filled gaps in the log.
+    val perTask = com.zerobias.buildtools.util.SynchronizedOutputStream(
+        java.io.BufferedOutputStream(java.io.FileOutputStream(perTaskLog))
+    )
+    val central = com.zerobias.buildtools.util.SynchronizedOutputStream(
+        java.io.BufferedOutputStream(java.io.FileOutputStream(centralLog, /* append = */ true))
+    )
     central.write(banner.toByteArray())
     central.flush()
     // Compose: (perTask + central) + console. Three-way tee.
@@ -527,12 +570,12 @@ gradle.projectsEvaluated {
                 isIgnoreExitValue = true
                 val stdoutLog = pkg.dir.resolve("build/${phase}.stdout.log")
                 val stderrLog = pkg.dir.resolve("build/${phase}.stderr.log")
-                // Display log: .zbb-monorepo/logs/<safeName>-<phase>.log
+                // Display log: .zbb-gradle/logs/<safeName>-<phase>.log
                 // Must match the path Display.ts computes from the gradle
                 // project path so the TTY failure block can read it.
                 val safeName = gradlePath.removePrefix(":").replace(":", "-")
-                val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-${phase}.log")
-                val centralLog = rootProject.file(".zbb-monorepo/gradle.log")
+                val displayLog = rootProject.file("$ZBB_GRADLE_DIR/logs/${safeName}-${phase}.log")
+                val centralLog = rootProject.file("$ZBB_GRADLE_DIR/gradle.log")
                 doFirst {
                     displayLog.parentFile.mkdirs()
                     val banner = "\n===== ${gradlePath.removePrefix(":")}:$phase ($label) =====\n"
@@ -571,7 +614,7 @@ gradle.projectsEvaluated {
                     (standardOutput as? java.io.Closeable)?.close()
                     (errorOutput as? java.io.Closeable)?.close()
 
-                    // Write combined stdout+stderr to .zbb-monorepo/logs/ so the
+                    // Write combined stdout+stderr to .zbb-gradle/logs/ so the
                     // zbb TTY display can read it for inline failure output.
                     val combined = buildString {
                         if (stdoutLog.exists() && stdoutLog.length() > 0) append(stdoutLog.readText())
@@ -634,13 +677,13 @@ gradle.projectsEvaluated {
                 dependsOn(workspaceInstall)
 
                 // Capture stdout+stderr — tee to per-task file, central
-                // .zbb-monorepo/gradle.log, and live console.
+                // .zbb-gradle/gradle.log, and live console.
                 isIgnoreExitValue = true
                 val stdoutLog = pkg.dir.resolve("build/${testPhase}.stdout.log")
                 val stderrLog = pkg.dir.resolve("build/${testPhase}.stderr.log")
                 val safeName = gradlePath.removePrefix(":").replace(":", "-")
-                val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-${testPhase}.log")
-                val centralLog = rootProject.file(".zbb-monorepo/gradle.log")
+                val displayLog = rootProject.file("$ZBB_GRADLE_DIR/logs/${safeName}-${testPhase}.log")
+                val centralLog = rootProject.file("$ZBB_GRADLE_DIR/gradle.log")
                 doFirst {
                     displayLog.parentFile.mkdirs()
                     val banner = "\n===== ${gradlePath.removePrefix(":")}:$testPhase ($label) =====\n"
@@ -660,7 +703,7 @@ gradle.projectsEvaluated {
                     (standardOutput as? java.io.Closeable)?.close()
                     (errorOutput as? java.io.Closeable)?.close()
 
-                    // Write combined stdout+stderr to .zbb-monorepo/logs/ so the
+                    // Write combined stdout+stderr to .zbb-gradle/logs/ so the
                     // zbb TTY display can read it for inline failure output.
                     val combined = buildString {
                         if (stdoutLog.exists() && stdoutLog.length() > 0) append(stdoutLog.readText())
@@ -736,14 +779,14 @@ gradle.projectsEvaluated {
                     val stdoutLog = pkg.dir.resolve("build/${phase}.stdout.log")
                     val stderrLog = pkg.dir.resolve("build/${phase}.stderr.log")
                     val safeName = gradlePath.removePrefix(":").replace(":", "-")
-                    val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-${phase}.log")
-                    val centralLog = rootProject.file(".zbb-monorepo/gradle.log")
+                    val displayLog = rootProject.file("$ZBB_GRADLE_DIR/logs/${safeName}-${phase}.log")
+                    val centralLog = rootProject.file("$ZBB_GRADLE_DIR/gradle.log")
                     doFirst {
                         displayLog.parentFile.mkdirs()
                         val banner = "\n===== ${gradlePath.removePrefix(":")}:$phase ($label) =====\n"
                         // Tee: per-task file + central gradle.log + live console.
                         // Test output ("27 passing") streams to terminal AND
-                        // gets archived in .zbb-monorepo/gradle.log for review.
+                        // gets archived in .zbb-gradle/gradle.log for review.
                         standardOutput = openTee(stdoutLog, centralLog, System.out, banner)
                         errorOutput = openTee(stderrLog, centralLog, System.err, "")
                     }
@@ -1395,7 +1438,7 @@ fun registerDockerTasksForPackage(
                 // read the process's combined stdout+stderr line-by-line
                 // and write each line to both sinks.
                 val safeName = pkg.relDir.replace("/", "-")
-                val logFile = repoRoot.resolve(".zbb-monorepo/logs/$safeName-dockerBuild.log")
+                val logFile = repoRoot.resolve("$ZBB_GRADLE_DIR/logs/$safeName-dockerBuild.log")
                 logFile.parentFile.mkdirs()
 
                 val dockerProcess = ProcessBuilder(fullCommand)

@@ -30,6 +30,7 @@ import com.zerobias.buildtools.monorepo.Prepublish
 import com.zerobias.buildtools.monorepo.PrepublishLeftoverScanner
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.monorepo.StampValidator
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import com.zerobias.buildtools.monorepo.TestSuiteEntry
 import com.zerobias.buildtools.util.SourceHasher
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -141,7 +142,7 @@ tasks.register("monorepoGateCheck") {
         // BEFORE we throw on invalid, so an absent marker means we never
         // reached the validation logic at all (e.g. plugin failed to load,
         // JVM crashed, build-tools missing).
-        val markerDir = rootProject.file(".zbb-monorepo")
+        val markerDir = rootProject.file(ZBB_GRADLE_DIR)
         val markerFile = File(markerDir, "gate-check.marker")
         // Wipe any stale marker from a previous run before we start.
         markerDir.mkdirs()
@@ -414,7 +415,7 @@ gradle.taskGraph.whenReady {
     val gateInGraph = allTasks.any { it.path == ":monorepoGate" }
     if (!gateInGraph) return@whenReady
 
-    val logsDir = rootProject.file(".zbb-monorepo/logs")
+    val logsDir = rootProject.file("$ZBB_GRADLE_DIR/logs")
     if (logsDir.exists()) {
         logsDir.deleteRecursively()
     }
@@ -423,7 +424,7 @@ gradle.taskGraph.whenReady {
     // The events file is truncated-on-open by EventEmitter's
     // writer, but we delete it here too so there's no window where users
     // might look at a half-stale file while the build is spinning up.
-    val eventsFile = rootProject.file(".zbb-monorepo/events.jsonl")
+    val eventsFile = rootProject.file("$ZBB_GRADLE_DIR/events.jsonl")
     if (eventsFile.exists()) {
         eventsFile.delete()
     }

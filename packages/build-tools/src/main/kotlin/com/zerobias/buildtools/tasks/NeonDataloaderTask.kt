@@ -81,7 +81,7 @@ abstract class NeonDataloaderTask : DefaultTask() {
 
     /**
      * Optional path to write the captured dataloader output to. When set,
-     * matches the `.zbb-monorepo/logs/<task>.log` convention used by other
+     * matches the `.zbb-gradle/logs/<task>.log` convention used by other
      * Exec tasks so zbb's failure reporter finds the log.
      */
     @get:OutputFile
