@@ -21,6 +21,7 @@ export const LIFECYCLE_COMMANDS: ReadonlySet<string> = new Set([
   'clean',
   'build',
   'test',
+  'testIntegration',
   'gate',
   'version',
   'publish',

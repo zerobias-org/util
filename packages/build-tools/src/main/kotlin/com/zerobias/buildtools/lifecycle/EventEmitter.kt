@@ -139,6 +139,7 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
         "workspaceInstall",
         "monorepoBuild",
         "monorepoTest",
+        "monorepoTestIntegration",
         "monorepoDockerBuild",
         "monorepoPublishDryRun",
         "monorepoPublish",
@@ -176,13 +177,17 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
         -> "monorepoBuild"
 
         // Test phase: anything that executes tests.
-        "test", "testUnit", "testIntegration",
-        "testUnitExec", "testIntegrationExec",
+        "test", "testUnit",
+        "testUnitExec",
         "testDirect", "testDirectExec",
         "testHub", "testHubExec",
         "testDataloader", "testDataloaderExec",
         "npmTest", "check",
         -> "monorepoTest"
+
+        // Integration test phase: separate aggregator with its own gates.
+        "testIntegration", "testIntegrationExec"
+        -> "monorepoTestIntegration"
 
         // Docker phase: substack docker pipeline OR standard docker tests.
         "dockerBuild", "npmPack", "prepareDockerContext", "injectLocalDeps",

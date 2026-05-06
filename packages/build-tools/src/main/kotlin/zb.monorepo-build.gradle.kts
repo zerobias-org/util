@@ -189,6 +189,24 @@ val monorepoTest = tasks.register("monorepoTest") {
     dependsOn(monorepoBuild)
 }
 
+// monorepoTestIntegration — separate from monorepoTest. Integration tests
+// usually need real backend creds (aws/vault/etc.) and are too expensive to
+// run on every `zbb test`, so they have their own aggregator with their own
+// gates declared on `lifecycle.testIntegration`. Fans out to ALL packages
+// (not affected-only): integration runs are usually broad-confidence checks,
+// not change-scoped feedback.
+//
+// Deliberately does NOT depend on monorepoBuild. Most IT setups run via tsx
+// or against pre-built artifacts; pulling in a full lint+generate+transpile
+// across every affected package adds minutes of unrelated work. Packages
+// that genuinely need a rebuild before IT can wire it into their own
+// zbb.yaml lifecycle command (e.g. `npm run transpile && mocha …`).
+val monorepoTestIntegration = tasks.register("monorepoTestIntegration") {
+    group = "monorepo"
+    description = "Run integration tests for all workspace packages (zbb.yaml lifecycle preferred, npm script fallback)"
+    dependsOn(workspaceInstall)
+}
+
 // monorepoDockerBuild is intentionally separate from monorepoBuild — `zbb build`
 // stays fast and doesn't fork docker. `zbb dockerBuild` runs this directly,
 // and `monorepoGate` adds it to the gate chain so CI gets a clean image stamp.
@@ -313,6 +331,119 @@ fun hasExistingBuildInfra(subproject: org.gradle.api.Project): Boolean {
     return false
 }
 
+// ── Phase command resolution ─────────────────────────────────────────
+//
+// Per-package phase tasks pick what to run in this priority order:
+//
+//   1. Subproject zbb.yaml has `lifecycle.<phase>` → spawn `zbb <phase>`.
+//      The zbb dispatcher handles tools/env gates declared on that
+//      lifecycle entry and spawns the entry's command. Recursion-safe:
+//      `zbb <phase>` from the package dir resolves the closest zbb.yaml
+//      with that lifecycle entry (the package's own), never reaches the
+//      root entry that calls back into gradle.
+//
+//   2. package.json `scripts.<phase>` is a real command (not blank, not
+//      `echo …`) → spawn `npm run <phase>`. Falls back to the colon-
+//      snake form (`testIntegration` → `test:integration`, `copyDeps`
+//      → `copy:deps`) for back-compat with existing scripts.
+//
+//   3. Otherwise → register a no-op task. The display still shows the
+//      package row with a "skipped: <reason>" log line so it's clear
+//      no work was done (vs hiding the package entirely).
+//
+// zbb.yaml is the source of truth: when a package has its own zbb.yaml
+// lifecycle entry, that wins over the npm script.
+
+sealed class PhaseAction {
+    data class Zbb(val phase: String) : PhaseAction()
+    data class Npm(val script: String) : PhaseAction()
+    data class NoOp(val reason: String) : PhaseAction()
+}
+
+fun camelToColonSnake(s: String): String =
+    s.replace(Regex("([a-z])([A-Z])"), "$1:$2").lowercase()
+
+fun hasLifecycleEntry(zbbYaml: java.io.File, command: String): Boolean {
+    if (!zbbYaml.exists()) return false
+    return try {
+        @Suppress("UNCHECKED_CAST")
+        val parsed = org.yaml.snakeyaml.Yaml().load<Map<String, Any?>>(zbbYaml.readText())
+        val lifecycle = parsed?.get("lifecycle") as? Map<*, *> ?: return false
+        lifecycle[command] != null
+    } catch (_: Exception) {
+        false
+    }
+}
+
+fun isRealScript(body: String?): Boolean =
+    !body.isNullOrBlank() && !body.trimStart().startsWith("echo ")
+
+// ── Output tee helpers ───────────────────────────────────────────────
+//
+// All monorepo Exec tasks tee their stdout/stderr to:
+//   1. The live console (so users see progress as it happens)
+//   2. A per-task log file (for failure replay + zbb TUI display)
+//   3. A central .zbb-monorepo/gradle.log (truncated at start of each
+//      gradle invocation, then appended to by every task that runs)
+//
+// The central log is the user-facing artifact: a single file you can scroll
+// through after a run to review everything that happened across all
+// subprojects. Per-task logs stay around for the displayLog hook the TUI
+// uses for inline failure dumps.
+
+// Per-invocation flag — top-level vars are initialized fresh on each gradle
+// invocation, so the first openTee call truncates and subsequent calls in
+// the same run append. Synchronized for concurrent task safety.
+val centralLogLock = Any()
+@Volatile var centralLogTruncated = false
+
+fun openTee(
+    perTaskLog: java.io.File,
+    centralLog: java.io.File,
+    consoleStream: java.io.OutputStream,
+    banner: String,
+): java.io.OutputStream {
+    perTaskLog.parentFile.mkdirs()
+    centralLog.parentFile.mkdirs()
+    synchronized(centralLogLock) {
+        if (!centralLogTruncated) {
+            centralLog.writeText("")
+            centralLogTruncated = true
+        }
+    }
+    val perTask = java.io.BufferedOutputStream(java.io.FileOutputStream(perTaskLog))
+    val central = java.io.BufferedOutputStream(java.io.FileOutputStream(centralLog, /* append = */ true))
+    central.write(banner.toByteArray())
+    central.flush()
+    // Compose: (perTask + central) + console. Three-way tee.
+    val files = org.apache.tools.ant.util.TeeOutputStream(perTask, central)
+    return org.apache.tools.ant.util.TeeOutputStream(files, consoleStream)
+}
+
+fun resolvePhaseAction(
+    pkgDir: java.io.File,
+    phase: String,
+    scripts: Map<String, String>,
+): PhaseAction {
+    if (hasLifecycleEntry(pkgDir.resolve("zbb.yaml"), phase)) {
+        return PhaseAction.Zbb(phase)
+    }
+    if (isRealScript(scripts[phase])) {
+        return PhaseAction.Npm(phase)
+    }
+    val colonForm = camelToColonSnake(phase)
+    if (colonForm != phase && isRealScript(scripts[colonForm])) {
+        return PhaseAction.Npm(colonForm)
+    }
+    val reason = when {
+        scripts[phase] == null && (colonForm == phase || scripts[colonForm] == null) ->
+            "no zbb.yaml lifecycle.$phase, no npm script"
+        scripts[phase]?.isBlank() == true -> "npm script is empty"
+        else -> "npm script is an echo placeholder"
+    }
+    return PhaseAction.NoOp(reason)
+}
+
 gradle.projectsEvaluated {
     val service = graphService.get()
     val packages = service.graph.packages
@@ -356,35 +487,34 @@ gradle.projectsEvaluated {
         fun fileTreeOf(dir: java.io.File) = subproject.fileTree(dir).matching { include("**/*") }
 
         for (phase in phases) {
-            val scriptBody = pkg.scripts[phase]
-            // Empty/echo script: register a no-op task instead of skipping
-            // registration entirely. Same reasoning as the testPhase loop
-            // below — keeps the display showing "passed" for these phases
-            // rather than making them invisible.
-            val isNoOp =
-                scriptBody.isNullOrBlank() ||
-                scriptBody.trimStart().startsWith("echo ")
+            val action = resolvePhaseAction(pkg.dir, phase, pkg.scripts)
             val stampFile = pkg.dir.resolve("build/${phase}.stamp")
-            if (isNoOp) {
+            if (action is PhaseAction.NoOp) {
+                val reason = action.reason
                 subproject.tasks.register(phase) {
                     group = "monorepo"
-                    description = "No-op `$phase` for $pkgName (script empty)"
+                    description = "No-op `$phase` for $pkgName ($reason)"
                     dependsOn(workspaceInstall)
                     inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
                     if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
                     outputs.file(stampFile).withPropertyName("phaseStamp")
                     doLast {
                         stampFile.parentFile.mkdirs()
-                        stampFile.writeText("$phase no-op (script empty) at ${java.time.Instant.now()}\n")
+                        stampFile.writeText("$phase no-op ($reason) at ${java.time.Instant.now()}\n")
                     }
                 }
                 continue
             }
+            val (cmd, label) = when (action) {
+                is PhaseAction.Zbb -> listOf("zbb", action.phase) to "zbb ${action.phase}"
+                is PhaseAction.Npm -> listOf("npm", "run", action.script) to "npm run ${action.script}"
+                is PhaseAction.NoOp -> error("unreachable — handled above")
+            }
             subproject.tasks.register<Exec>(phase) {
                 group = "monorepo"
-                description = "Run `npm run $phase` for $pkgName"
+                description = "Run `$label` for $pkgName"
                 workingDir = pkg.dir
-                commandLine = listOf("npm", "run", phase)
+                commandLine = cmd
                 dependsOn(workspaceInstall)
 
                 // Capture stdout+stderr to log files so failure output is
@@ -402,11 +532,12 @@ gradle.projectsEvaluated {
                 // project path so the TTY failure block can read it.
                 val safeName = gradlePath.removePrefix(":").replace(":", "-")
                 val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-${phase}.log")
+                val centralLog = rootProject.file(".zbb-monorepo/gradle.log")
                 doFirst {
-                    stdoutLog.parentFile.mkdirs()
                     displayLog.parentFile.mkdirs()
-                    standardOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stdoutLog))
-                    errorOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stderrLog))
+                    val banner = "\n===== ${gradlePath.removePrefix(":")}:$phase ($label) =====\n"
+                    standardOutput = openTee(stdoutLog, centralLog, System.out, banner)
+                    errorOutput = openTee(stderrLog, centralLog, System.err, "")
                 }
 
                 // Directory inputs (always declared — empty FileTree if missing)
@@ -454,12 +585,12 @@ gradle.projectsEvaluated {
                     val exitValue = executionResult.get().exitValue
                     if (exitValue != 0) {
                         logger.lifecycle("")
-                        logger.lifecycle("===== npm run $phase FAILED for $pkgName (exit $exitValue) =====")
+                        logger.lifecycle("===== $label FAILED for $pkgName (exit $exitValue) =====")
                         logger.lifecycle(combined)
                         logger.lifecycle("===== end $pkgName:$phase output =====")
                         logger.lifecycle("")
                         throw GradleException(
-                            "npm run $phase failed for $pkgName (exit $exitValue) — " +
+                            "$label failed for $pkgName (exit $exitValue) — " +
                             "full output above; also at ${stdoutLog.relativeTo(rootProject.projectDir)}"
                         )
                     }
@@ -470,23 +601,14 @@ gradle.projectsEvaluated {
         }
 
         for (testPhase in testPhases) {
-            val scriptBody = pkg.scripts[testPhase]
-            // Empty / echo / missing script: still register a no-op task that
-            // shows up as "passed" in the display. Skipping registration
-            // entirely (the old behavior) hid these from the TUI and made it
-            // look like the package wasn't being tested at all. The no-op
-            // task satisfies gradle's task graph, runs in milliseconds, and
-            // the OperationCompletionListener emits a normal task_done
-            // event so the display row gets a check mark.
-            val isNoOp =
-                scriptBody.isNullOrBlank() ||
-                scriptBody.trimStart().startsWith("echo ")
+            val action = resolvePhaseAction(pkg.dir, testPhase, pkg.scripts)
             val stampFile = pkg.dir.resolve("build/${testPhase}.stamp")
             val testDir = pkg.dir.resolve("test")
-            if (isNoOp) {
+            if (action is PhaseAction.NoOp) {
+                val reason = action.reason
                 subproject.tasks.register(testPhase) {
                     group = "monorepo"
-                    description = "No-op `$testPhase` for $pkgName (script empty)"
+                    description = "No-op `$testPhase` for $pkgName ($reason)"
                     dependsOn(workspaceInstall)
                     inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
                     inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
@@ -494,31 +616,36 @@ gradle.projectsEvaluated {
                     outputs.file(stampFile).withPropertyName("phaseStamp")
                     doLast {
                         stampFile.parentFile.mkdirs()
-                        stampFile.writeText("$testPhase no-op (script empty) at ${java.time.Instant.now()}\n")
+                        stampFile.writeText("$testPhase no-op ($reason) at ${java.time.Instant.now()}\n")
                     }
                 }
                 continue
             }
+            val (cmd, label) = when (action) {
+                is PhaseAction.Zbb -> listOf("zbb", action.phase) to "zbb ${action.phase}"
+                is PhaseAction.Npm -> listOf("npm", "run", action.script) to "npm run ${action.script}"
+                is PhaseAction.NoOp -> error("unreachable — handled above")
+            }
             subproject.tasks.register<Exec>(testPhase) {
                 group = "monorepo"
-                description = "Run `npm run $testPhase` for $pkgName"
+                description = "Run `$label` for $pkgName"
                 workingDir = pkg.dir
-                commandLine = listOf("npm", "run", testPhase)
+                commandLine = cmd
                 dependsOn(workspaceInstall)
 
-                // Capture stdout+stderr to log files (same rationale as
-                // the phase Exec above — parallel Gradle + CI streaming
-                // swallows test-failure output otherwise).
+                // Capture stdout+stderr — tee to per-task file, central
+                // .zbb-monorepo/gradle.log, and live console.
                 isIgnoreExitValue = true
                 val stdoutLog = pkg.dir.resolve("build/${testPhase}.stdout.log")
                 val stderrLog = pkg.dir.resolve("build/${testPhase}.stderr.log")
                 val safeName = gradlePath.removePrefix(":").replace(":", "-")
                 val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-${testPhase}.log")
+                val centralLog = rootProject.file(".zbb-monorepo/gradle.log")
                 doFirst {
-                    stdoutLog.parentFile.mkdirs()
                     displayLog.parentFile.mkdirs()
-                    standardOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stdoutLog))
-                    errorOutput = java.io.BufferedOutputStream(java.io.FileOutputStream(stderrLog))
+                    val banner = "\n===== ${gradlePath.removePrefix(":")}:$testPhase ($label) =====\n"
+                    standardOutput = openTee(stdoutLog, centralLog, System.out, banner)
+                    errorOutput = openTee(stderrLog, centralLog, System.err, "")
                 }
 
                 inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
@@ -547,17 +674,101 @@ gradle.projectsEvaluated {
                     val exitValue = executionResult.get().exitValue
                     if (exitValue != 0) {
                         logger.lifecycle("")
-                        logger.lifecycle("===== npm run $testPhase FAILED for $pkgName (exit $exitValue) =====")
+                        logger.lifecycle("===== $label FAILED for $pkgName (exit $exitValue) =====")
                         logger.lifecycle(combined)
                         logger.lifecycle("===== end $pkgName:$testPhase output =====")
                         logger.lifecycle("")
                         throw GradleException(
-                            "npm run $testPhase failed for $pkgName (exit $exitValue) — " +
+                            "$label failed for $pkgName (exit $exitValue) — " +
                             "full output above; also at ${stdoutLog.relativeTo(rootProject.projectDir)}"
                         )
                     }
                     stampFile.parentFile.mkdirs()
                     stampFile.writeText("$testPhase completed at ${java.time.Instant.now()}\n")
+                }
+            }
+        }
+
+        // testIntegration phase — registered separately from testPhases so it's
+        // not coupled to monorepoTest. Same resolver logic (zbb.yaml lifecycle
+        // → npm script → no-op). All packages get a task; the monorepoTestIntegration
+        // aggregator below fans out across them all (not affected-only).
+        run {
+            val phase = "testIntegration"
+            val action = resolvePhaseAction(pkg.dir, phase, pkg.scripts)
+            val stampFile = pkg.dir.resolve("build/${phase}.stamp")
+            val testDir = pkg.dir.resolve("test")
+            if (action is PhaseAction.NoOp) {
+                val reason = action.reason
+                subproject.tasks.register(phase) {
+                    group = "monorepo"
+                    description = "No-op `$phase` for $pkgName ($reason)"
+                    dependsOn(workspaceInstall)
+                    inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
+                    inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
+                    if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
+                    outputs.file(stampFile).withPropertyName("phaseStamp")
+                    doLast {
+                        stampFile.parentFile.mkdirs()
+                        stampFile.writeText("$phase no-op ($reason) at ${java.time.Instant.now()}\n")
+                        logger.lifecycle("$pkgName: skipping $phase ($reason)")
+                    }
+                }
+            } else {
+                val (cmd, label) = when (action) {
+                    is PhaseAction.Zbb -> listOf("zbb", action.phase) to "zbb ${action.phase}"
+                    is PhaseAction.Npm -> listOf("npm", "run", action.script) to "npm run ${action.script}"
+                    is PhaseAction.NoOp -> error("unreachable — handled above")
+                }
+                subproject.tasks.register<Exec>(phase) {
+                    group = "monorepo"
+                    description = "Run `$label` for $pkgName"
+                    workingDir = pkg.dir
+                    commandLine = cmd
+                    dependsOn(workspaceInstall)
+
+                    // Integration tests exercise EXTERNAL state (vault tokens,
+                    // aws creds, remote API). Source files / package.json
+                    // haven't changed but the world has — always run.
+                    outputs.upToDateWhen { false }
+
+                    isIgnoreExitValue = true
+                    val stdoutLog = pkg.dir.resolve("build/${phase}.stdout.log")
+                    val stderrLog = pkg.dir.resolve("build/${phase}.stderr.log")
+                    val safeName = gradlePath.removePrefix(":").replace(":", "-")
+                    val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-${phase}.log")
+                    val centralLog = rootProject.file(".zbb-monorepo/gradle.log")
+                    doFirst {
+                        displayLog.parentFile.mkdirs()
+                        val banner = "\n===== ${gradlePath.removePrefix(":")}:$phase ($label) =====\n"
+                        // Tee: per-task file + central gradle.log + live console.
+                        // Test output ("27 passing") streams to terminal AND
+                        // gets archived in .zbb-monorepo/gradle.log for review.
+                        standardOutput = openTee(stdoutLog, centralLog, System.out, banner)
+                        errorOutput = openTee(stderrLog, centralLog, System.err, "")
+                    }
+
+                    inputs.files(srcDirs.map { fileTreeOf(it) }).withPropertyName("srcFiles")
+                    inputs.files(fileTreeOf(testDir)).withPropertyName("testFiles")
+                    inputs.files(fileTreeOf(generatedDir)).withPropertyName("generatedFiles")
+                    if (packageJson.exists()) inputs.file(packageJson).withPropertyName("packageJson")
+                    if (tsconfigJson.exists()) inputs.file(tsconfigJson).withPropertyName("tsconfigJson")
+
+                    doLast {
+                        (standardOutput as? java.io.Closeable)?.close()
+                        (errorOutput as? java.io.Closeable)?.close()
+                        val exitValue = executionResult.get().exitValue
+                        // Minimal stamp for the TUI's displayLog hook —
+                        // full output is in the central gradle.log and
+                        // per-task stdout/stderr files.
+                        displayLog.writeText("$phase completed (exit $exitValue) at ${java.time.Instant.now()}\n")
+                        if (exitValue != 0) {
+                            throw GradleException(
+                                "$label failed for $pkgName (exit $exitValue) — " +
+                                "see test output above; full log at ${centralLog.relativeTo(rootProject.projectDir)}"
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -688,6 +899,18 @@ gradle.projectsEvaluated {
             for (testPhase in testPhases) {
                 subproject.tasks.findByName(testPhase)?.let { dependsOn(it) }
             }
+        }
+    }
+
+    // monorepoTestIntegration fans out across ALL packages (not affected-only)
+    // — integration runs are broad-confidence checks rather than change-scoped
+    // feedback. Each subproject's testIntegration task was registered above
+    // with the resolver: zbb.yaml lifecycle → npm script → no-op skip.
+    monorepoTestIntegration.configure {
+        for ((_, pkg) in packages) {
+            val gradlePath = ":" + pkg.relDir.replace("/", ":")
+            val subproject = rootProject.findProject(gradlePath) ?: continue
+            subproject.tasks.findByName("testIntegration")?.let { dependsOn(it) }
         }
     }
 

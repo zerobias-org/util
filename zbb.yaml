@@ -65,25 +65,43 @@ env:
     mask: true
     description: "Gradle property — GPG key passphrase."
 
+  VAULT_ADDR:
+    source: env
+    description: "Vault url to use for connecting - optional."
+
+  VAULT_TOKEN:
+    source: env
+    description: "Vault token to use for connecting - optional."
+
+  VAULT_ROLE_ID:
+    source: env
+    description: "Vault role ID to use for connecting - optional."
+
+  VAULT_SECRET_ID:
+    source: env
+    description: "Vault secret ID to use for connecting - optional."
+
+  AWS_REGION:
+    source: env
+    description: "AWS Region to use for connecting - optional."
+
+  AWS_ACCESS_KEY_ID:
+    source: env
+    description: "AWS Access Key Id to use for connecting - optional."
+
+  AWS_SECRET_ACCESS_KEY:
+    source: env
+    description: "AWS Secret Access Key to use for connecting - optional."
+
+  AWS_PROFILE:
+    source: env
+    description: "AWS profile to use for connecting - optional."
+
 # ── Tool preflight ────────────────────────────────────────────────────
 require:
-  - tool: node
-    check: "node --version"
-    parse: "v(\\S+)"
-    version: ">=22"
-    install: "nvm install 22"
-
-  - tool: java
-    check: "bash -c '$JAVA_HOME/bin/java -version 2>&1'"
-    parse: 'version "(\S+)"'
-    version: "21"
-    install: "apt install openjdk-21-jdk"
-
-  - tool: docker
-    check: "docker --version"
-    parse: "Docker version (\\S+),"
-    version: ">=24"
-    install: "https://docs.docker.com/engine/install/"
+  - node
+  - java
+  - docker
 
 # ── Lifecycle delegation ──────────────────────────────────────────────
 # Routes through the new monorepo Gradle plugins, same as the consumer
@@ -92,9 +110,69 @@ lifecycle:
   clean:     ./gradlew monorepoClean
   build:     ./gradlew monorepoBuild
   test:      ./gradlew monorepoTest
+  testIntegration:      ./gradlew monorepoTestIntegration
   gate:      ./gradlew monorepoGate
   gateCheck: ./gradlew monorepoGateCheck
   publish:   ./gradlew monorepoPublish
+
+tools:
+  node:
+    check: "node --version"
+    parse: "v(\\S+)"
+    version: ">=22"
+    install: "nvm install 22"
+
+  java:
+    check: "bash -c '$JAVA_HOME/bin/java -version 2>&1'"
+    parse: 'version "(\S+)"'
+    version: "21"
+    install: "apt install openjdk-21-jdk"
+
+  docker:
+    check: "docker --version"
+    parse: "Docker version (\\S+),"
+    version: ">=24"
+    install: "https://docs.docker.com/engine/install/"
+
+  aws:
+    # Validates the AWS default credential chain (env vars, ~/.aws/credentials,
+    # SSO cache, EC2/ECS role) by issuing a real STS call. Covers both
+    # AwsIT.ts and AwsSsmIT.ts since they share the same client config.
+    check: "aws sts get-caller-identity --output text --query Arn"
+    parse: "(arn:aws:[^\\s]+)"
+    version: "*"
+    install: "SSO: 'aws sso login --profile <name>' then 'export AWS_PROFILE=<name>'. Direct: set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + (AWS_REGION or AWS_DEFAULT_REGION). Shared creds: 'aws configure'."
+
+  vault:
+    # Validates Vault reachability + at least one auth method usable by the
+    # secrets-manager package. Mirrors SecretsManagerImpl's fall-through:
+    # 1. VAULT_TOKEN env var
+    # 2. ~/.vault-token file (from `vault login`) — used even when VAULT_TOKEN
+    #    is set but stale, since the package retries this candidate on auth
+    #    failure (SecretsManagerImpl.ts:159-195)
+    # 3. Approle (VAULT_ROLE_ID + VAULT_SECRET_ID + optional VAULT_AUTH_PATH)
+    # All paths exercise a real call to VAULT_ADDR, so a misconfigured
+    # address fails here.
+    check: |
+      bash -c '
+        [ -n "$VAULT_ADDR" ] || { echo "VAULT_ADDR unset" >&2; exit 1; }
+        if vault token lookup >/dev/null 2>&1; then
+          echo "ok-token"
+        elif [ -f "$HOME/.vault-token" ] && \
+             VAULT_TOKEN="$(cat "$HOME/.vault-token")" vault token lookup >/dev/null 2>&1; then
+          echo "ok-file-token"
+        elif [ -n "$VAULT_ROLE_ID" ] && [ -n "$VAULT_SECRET_ID" ]; then
+          vault write -field=token "auth/${VAULT_AUTH_PATH:-approle}/login" \
+            role_id="$VAULT_ROLE_ID" secret_id="$VAULT_SECRET_ID" \
+            >/dev/null 2>&1 && echo "ok-approle"
+        else
+          echo "no auth: set VAULT_TOKEN, run vault login, or set VAULT_ROLE_ID + VAULT_SECRET_ID" >&2
+          exit 1
+        fi
+      '
+    parse: "(ok-\\S+)"
+    version: "*"
+    install: "Set VAULT_ADDR plus one of: VAULT_TOKEN (fresh), run 'vault login', or VAULT_ROLE_ID + VAULT_SECRET_ID. Note: a stale VAULT_TOKEN shadows ~/.vault-token — 'unset VAULT_TOKEN' or refresh it."
 
 # ── Monorepo orchestration (consumed by Gradle plugins) ───────────────
 monorepo:
