@@ -317,6 +317,13 @@ fun Project.registerBuildDeb() {
         description =
             "Build $pkgName .deb (all-arch, version $debVer from $npmName@$npmVersion)"
 
+        // Reproducible-build settings on AbstractArchiveTask. Explicit
+        // setter form because Kotlin maps boolean is/set accessors to
+        // "is*" property names, and `preserveFileTimestamps = false`
+        // fails to resolve through the groovy-compiled Deb class chain.
+        setPreserveFileTimestamps(false)
+        setReproducibleFileOrder(true)
+
         // Wire to the upstream compile lifecycle so :buildDeb implies
         // tsc/bun has run and dist/ is current.
         dependsOn("compile")
@@ -357,6 +364,11 @@ fun Project.registerBuildDeb() {
         }
 
         destinationDirectory.set(outDir)
+
+        // Reproducibility post-build — see repackDebDeterministic for why.
+        doLast {
+            project.repackDebDeterministic(archiveFile.get().asFile)
+        }
     }
 
     // Wire nebula.ospackage's `buildDeb` lifecycle task to depend on our
@@ -373,4 +385,40 @@ fun Project.registerBuildDeb() {
     // Do NOT wire buildDeb into `build` — per the Phase 9.5 brief, buildDeb
     // is an explicit task, not a side effect of `:build`. The docker phase's
     // image-build aggregator depends on it directly.
+}
+
+/**
+ * Post-process a built .deb so its bytes are a pure function of source
+ * content (no filesystem mtimes, no traversal-order surprises).
+ *
+ * Why: nebula.ospackage / jdeb pass file mtimes through to data.tar
+ * verbatim; the AbstractArchiveTask `setPreserveFileTimestamps(false)`
+ * flag is silently ignored by nebula's DebCopyAction. Without this
+ * post-process, two consecutive builds of identical sources produce
+ * different data.tar bytes, breaking the tag-time → publish-time
+ * payload-sha contract that :publishRelease enforces.
+ *
+ * Delegates to scripts/repack-deb-deterministic.sh under the consuming
+ * project's rootDir. Convention: every repo using these Deb tasks ships
+ * that script (see com/node/scripts/repack-deb-deterministic.sh).
+ *
+ * Idempotent — running on an already-normalized deb produces identical
+ * bytes.
+ */
+fun Project.repackDebDeterministic(deb: File) {
+    val script = rootProject.rootDir.resolve("scripts/repack-deb-deterministic.sh")
+    if (!script.exists()) {
+        throw GradleException(
+            "repackDebDeterministic: ${script.absolutePath} not found.\n" +
+                "Every repo using BuildDeb / nebula.ospackage Deb tasks must " +
+                "ship this post-build reproducibility step. Copy it from " +
+                "com/node/scripts/repack-deb-deterministic.sh."
+        )
+    }
+    if (!deb.exists()) {
+        throw GradleException("repackDebDeterministic: $deb doesn't exist")
+    }
+    exec {
+        commandLine("bash", script.absolutePath, deb.absolutePath)
+    }
 }
