@@ -802,6 +802,43 @@ gradle.projectsEvaluated {
         }
     }
 
+    // testIntegration's deps need the LAST build phase of each internal
+    // workspace dep, NOT each dep's own testIntegration. Package.json
+    // `main` for those deps points at dist/, so without their transpile
+    // running first, runtime resolution fails with ERR_MODULE_NOT_FOUND.
+    // (testIntegration of the consumer can run via tsx — no need to depend
+    // on its OWN transpile — but consumed packages must be built.)
+    //
+    // For JVM deps (codegen et al.), don't use the standard `build` task:
+    // it's a lifecycle alias for `assemble + check`, and `check` pulls in
+    // `test` — which for a workspace where codegen.package.json has npm
+    // dependencies (e.g. util-connector) cascades through the section-2
+    // cross-project test wiring into every npm package's :test, dragging
+    // unit tests into a testIntegration run. Prefer artifact-staging
+    // tasks: `stageBinJars` (zb.java-module convention), then `assemble`
+    // (gradle base plugin), then `jar` (java plugin). All produce the
+    // bin-staged JARs that runtime consumers need without firing tests.
+    val lastBuildPhase = phases.lastOrNull()
+    if (lastBuildPhase != null) {
+        for ((_, pkg) in packages) {
+            val gradlePath = ":" + pkg.relDir.replace("/", ":")
+            val subproject = rootProject.findProject(gradlePath) ?: continue
+            val itTask = subproject.tasks.findByName("testIntegration") ?: continue
+            for (depName in pkg.internalDeps) {
+                val depPath = service.packageNameToGradlePath[depName] ?: continue
+                val depProject = rootProject.findProject(depPath) ?: continue
+                val depTask = if (hasExistingBuildInfra(depProject)) {
+                    depProject.tasks.findByName("stageBinJars")
+                        ?: depProject.tasks.findByName("assemble")
+                        ?: depProject.tasks.findByName("jar")
+                } else {
+                    depProject.tasks.findByName(lastBuildPhase)
+                } ?: continue
+                itTask.dependsOn(depTask)
+            }
+        }
+    }
+
     // 3. Cross-phase ordering within a subproject (fallback Exec only).
     //
     // Honors the `monorepo.buildPhases` order from zbb.yaml — each phase

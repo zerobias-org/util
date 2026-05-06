@@ -610,7 +610,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.66",
-      "sourceHash": "106299cc40a31a5ed2fc6e52250a8724d02710d5ac8541e37b939e020059aa9d",
+      "sourceHash": "5606eafa9b3a0c0d671895a67df942523c05a1e1d5e856ce1734b56b6543f5ba",
       "testHash": "767d4eaa2c64ef46b33cb05bc621f2ee61a0bc64da6e5dd704e6b4bf0a3ff4e8",
       "tasks": {
         "lint": "passed",

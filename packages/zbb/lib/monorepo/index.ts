@@ -13,7 +13,7 @@
  * sole authoritative implementation.
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 // Sync `require` for use in ESM — we lazy-load Display.js without making
@@ -150,13 +150,58 @@ export async function spawnLifecycleAndExit(
     ? `${baseCommand} ${passthrough.join(' ')}`
     : baseCommand;
 
-  const result = spawnSync('bash', ['-c', fullCommand], {
+  // Use async spawn (not spawnSync) so JS signal handlers can run on
+  // Ctrl-C. spawnSync blocks the event loop; the parent dies but its
+  // gradle daemon escapes the process group and keeps building.
+  // detached:true puts bash in its own process group so we can kill the
+  // whole tree with one signal.
+  const child = spawn('bash', ['-c', fullCommand], {
     cwd: repoRoot,
     stdio: 'inherit',
     env: process.env,
+    detached: true,
   });
 
-  process.exit(result.status ?? 1);
+  // Signal forwarding mirrors lib/gradle.ts:runGradle and Display.ts:
+  // first Ctrl-C → SIGINT to the whole group + ./gradlew --stop;
+  // second Ctrl-C → SIGKILL.
+  let signalForwarded = false;
+  const forwardSignal = (sig: NodeJS.Signals) => {
+    if (signalForwarded) {
+      try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch {}
+      process.exit(130);
+    }
+    signalForwarded = true;
+    try { if (child.pid) process.kill(-child.pid, sig); } catch {}
+    if (isGradleCommand) {
+      try {
+        spawn('./gradlew', ['--stop'], {
+          cwd: repoRoot,
+          stdio: 'ignore',
+          detached: true,
+        }).unref();
+      } catch {}
+    }
+  };
+  process.on('SIGINT', () => forwardSignal('SIGINT'));
+  process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+
+  await new Promise<void>((resolve) => {
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        process.exit(128 + (signal === 'SIGINT' ? 2 : signal === 'SIGTERM' ? 15 : 1));
+      }
+      process.exit(code ?? 1);
+      resolve();
+    });
+    child.on('error', (err) => {
+      process.stderr.write(`zbb: lifecycle spawn failed: ${err.message}\n`);
+      process.exit(1);
+    });
+  });
+
+  // Unreachable — process.exit() above terminates.
+  throw new Error('unreachable');
 }
 
 /**

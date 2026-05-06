@@ -1084,6 +1084,37 @@ function runWithDisplayBody(
     child.unref();
   }
 
+  // ── Signal forwarding ────────────────────────────────────────────
+  // detached:true puts gradle in a NEW session via setsid(), which means
+  // the terminal's Ctrl-C signal goes only to us (zbb), not the gradle
+  // child. Without explicit forwarding, zbb dies and gradle keeps
+  // building. Mirror what runGradle does in lib/gradle.ts:
+  //   1. First Ctrl-C → forward SIGINT to the whole process group via
+  //      kill(-pid). Pid-of-process-group works because detached:true
+  //      put the child at the head of a new group whose pgid == pid.
+  //   2. Best-effort `./gradlew --stop` to kill any daemon that
+  //      detached itself out of the group on startup (Gradle does
+  //      this intentionally for daemon reuse).
+  //   3. Second Ctrl-C → SIGKILL the group and exit immediately.
+  let signalForwarded = false;
+  const forwardSignal = (sig: NodeJS.Signals) => {
+    if (signalForwarded) {
+      try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch {}
+      process.exit(130);
+    }
+    signalForwarded = true;
+    try { if (child.pid) process.kill(-child.pid, sig); } catch {}
+    try {
+      spawn(command, ['--stop'], {
+        cwd: repoRoot,
+        stdio: 'ignore',
+        detached: true,
+      }).unref();
+    } catch {}
+  };
+  process.on('SIGINT', () => forwardSignal('SIGINT'));
+  process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+
   let stderrBuffer = '';
   if (isTTY && child.stdout) {
     child.stdout.pipe(gradleLog);
