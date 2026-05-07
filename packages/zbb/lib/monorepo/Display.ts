@@ -462,10 +462,30 @@ export class MonorepoDisplay {
       process.stdout.write('\n');
     }
 
-    // 2. "All tasks up-to-date" line (nothing ran).
+    // 2. "All tasks up-to-date" line (nothing ran), OR a build-failed
+    //    summary when gradle exited non-zero before any phase emitted
+    //    events. Without this branch a failure (e.g. verifyNoLocalRegistry,
+    //    which runs before phase_start) would falsely render as
+    //    "All tasks up-to-date" because events.jsonl stayed empty.
     const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
     if (this.projectOrder.length === 0) {
-      process.stdout.write(`${COLOR.dim}  All tasks up-to-date (${elapsed}s)${COLOR.reset}\n`);
+      if (success) {
+        process.stdout.write(`${COLOR.dim}  All tasks up-to-date (${elapsed}s)${COLOR.reset}\n`);
+      } else {
+        process.stdout.write(`  ${COLOR.red}✗ Build failed (${elapsed}s)${COLOR.reset}\n`);
+        const failureBlock = this.extractGradleFailureBlock();
+        if (failureBlock.length > 0) {
+          process.stdout.write('\n');
+          for (const line of failureBlock) {
+            if (line.length === 0) {
+              process.stdout.write('\n');
+            } else {
+              process.stdout.write(`  ${COLOR.red}${line}${COLOR.reset}\n`);
+            }
+          }
+        }
+        this.didShowInlineErrors = true;
+      }
     }
 
     // 3. Publish plan summary box.
@@ -710,6 +730,35 @@ export class MonorepoDisplay {
     const lastMatch = matches[matches.length - 1];
     const failedMarker = lastMatch[0].replace(/ FAILED$/, '');
     return sectionFor(failedMarker);
+  }
+
+  /**
+   * Extract the failed-task block from gradle.log when no phase events
+   * fired (e.g. verifyNoLocalRegistry blocking the gate before any
+   * phase_start). Returns the lines from the most recent
+   * `> Task :NAME FAILED` marker up to (but not including) gradle's
+   * `* Try:` block, which is just generic --stacktrace boilerplate.
+   *
+   * Returns an empty array if no failure marker is found.
+   */
+  private extractGradleFailureBlock(): string[] {
+    const gradleLogPath = join(dirname(this.logsDir), 'gradle.log');
+    if (!existsSync(gradleLogPath)) return [];
+    const gradleContent = readFileSync(gradleLogPath, 'utf-8');
+
+    // Find the LAST "> Task :... FAILED" marker. Use that as the start.
+    const failedRe = /> Task :\S+ FAILED/g;
+    const matches = [...gradleContent.matchAll(failedRe)];
+    if (matches.length === 0) return [];
+    const last = matches[matches.length - 1];
+    const startIdx = last.index ?? 0;
+
+    // Cut at "* Try:" — that's gradle's --stacktrace hint, useful as a
+    // log-file footer but noisy to print inline.
+    const after = gradleContent.slice(startIdx);
+    const tryIdx = after.indexOf('\n* Try:');
+    const block = tryIdx !== -1 ? after.slice(0, tryIdx) : after.slice(0, 4000);
+    return block.split('\n');
   }
 
   /**

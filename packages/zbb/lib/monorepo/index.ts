@@ -87,27 +87,28 @@ export async function spawnLifecycleAndExit(
   parsed: ParsedLifecycleArgs,
   opts?: { scopePackage?: string },
 ): Promise<never> {
-  // Gradle flags (-P*) and the TUI display only apply when the lifecycle
-  // command is a gradle invocation. We detect that by literal `./gradlew`
-  // in the command — no heuristics, no assumptions about wrapper scripts.
-  // Anything else runs verbatim through bash (the default execution env)
-  // with no flag injection and no TUI display. If a user wants gradle-
-  // aware behavior, the command should say `./gradlew`.
+  // The TUI display only applies when the lifecycle command is a direct
+  // gradle invocation. Detect that by literal `./gradlew` in the command.
   const isGradleCommand = /(^|\s|&)\.\/gradlew(\s|$)/.test(baseCommand);
 
+  // Gradle property flags (and unrecognized passthrough args) are appended
+  // regardless of whether `baseCommand` is `./gradlew` directly. Wrapper
+  // scripts that forward `"$@"` to gradle (e.g. com/hub's
+  // gate-with-neon.sh) need these flags to reach the inner gradle call.
+  // Without this, `zbb gate --clean` silently drops `-Pcleanlocalregistry`
+  // because the wrapper script isn't `./gradlew`. Scripts that don't
+  // forward args are unaffected — they'd ignore the trailing flags.
   const passthrough: string[] = [];
-  if (isGradleCommand) {
-    if (parsed.all) passthrough.push('-Pmonorepo.all=true');
-    if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
-    if (parsed.dryRun) passthrough.push('-PdryRun=true');
-    if (parsed.force) passthrough.push('-Pforce=true');
-    if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
-    if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
-    // Anything zbb didn't recognize — forward to gradle verbatim so callers
-    // can pass through `-PfooBar=true` etc. without zbb needing to know each
-    // property name.
-    passthrough.push(...parsed.remaining);
-  }
+  if (parsed.all) passthrough.push('-Pmonorepo.all=true');
+  if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
+  if (parsed.dryRun) passthrough.push('-PdryRun=true');
+  if (parsed.force) passthrough.push('-Pforce=true');
+  if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
+  if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
+  // Anything zbb didn't recognize — forward verbatim so callers can pass
+  // through `-PfooBar=true` etc. without zbb needing to know each property
+  // name.
+  passthrough.push(...parsed.remaining);
 
   if (parsed.verbose) {
     const args = passthrough.length > 0 ? ` ${passthrough.join(' ')}` : '';

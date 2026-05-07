@@ -67,22 +67,24 @@ export async function spawnStandardLifecycleAndExit(
   // Flag passthrough — identical semantics to the monorepo dispatcher
   // for the flags that make sense here. Standard mode drops --all and
   // --base (they're monorepo-specific affected-set selectors).
+  //
+  // Flags are appended regardless of whether `baseCommand` is `./gradlew`
+  // directly — wrapper scripts that forward `"$@"` to gradle still need
+  // them. Scripts that don't forward args are unaffected.
   const passthrough: string[] = [];
-  if (isGradleCommand) {
-    if (parsed.dryRun) passthrough.push('-PdryRun=true');
-    if (parsed.force) passthrough.push('-Pforce=true');
-    if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
-    // version-specific flags. modules: comma-separated list of relative
-    // paths under package/ (matches the github workflow's `detect` output).
-    // noPush: keeps the version commit local — used by tests / dry-runs.
-    if (parsed.modules) passthrough.push(`-PmodulesToVersion=${parsed.modules}`);
-    if (parsed.noPush) passthrough.push('-Ppush=false');
-    // Anything zbb didn't recognize (gradle -P/-D project/system properties,
-    // bare task names, `--`-style flags) — forward to gradle verbatim. Without
-    // this, `zbb publish -PfooBar=true` silently drops the property and the
-    // gradle script never sees the override.
-    passthrough.push(...parsed.remaining);
-  }
+  if (parsed.dryRun) passthrough.push('-PdryRun=true');
+  if (parsed.force) passthrough.push('-Pforce=true');
+  if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
+  // version-specific flags. modules: comma-separated list of relative
+  // paths under package/ (matches the github workflow's `detect` output).
+  // noPush: keeps the version commit local — used by tests / dry-runs.
+  if (parsed.modules) passthrough.push(`-PmodulesToVersion=${parsed.modules}`);
+  if (parsed.noPush) passthrough.push('-Ppush=false');
+  // Anything zbb didn't recognize (gradle -P/-D project/system properties,
+  // bare task names, `--`-style flags) — forward verbatim. Without this,
+  // `zbb publish -PfooBar=true` silently drops the property and the
+  // gradle script never sees the override.
+  passthrough.push(...parsed.remaining);
 
   // Resolve the command to a specific subproject if cwd is one.
   //

@@ -212,11 +212,20 @@ object ChangeDetector {
     }
 
     /**
-     * Determine which root deps + overrides changed between baseRef and HEAD.
+     * Determine which root deps + overrides changed between baseRef and the
+     * current working tree.
+     *
+     * The "current" side reads the on-disk `package.json` rather than
+     * `git show HEAD:package.json` so that uncommitted dep bumps participate
+     * in the targeted-affected analysis. Without this, a developer with
+     * working-tree dep changes would see [getChangedFiles] flag `package.json`
+     * as modified but [findPackagesAffectedByRootDeps] return empty (because
+     * committed HEAD == base), and any package whose only path to "affected"
+     * is a root-dep change would silently drop out of the build set.
      */
     private fun getChangedRootDeps(repoRoot: File, baseRef: String): Set<String> {
         val old = getRootDepsAt(repoRoot, baseRef)
-        val current = getRootDepsAt(repoRoot, "HEAD")
+        val current = getCurrentRootDeps(repoRoot)
         val changed = mutableSetOf<String>()
 
         // Deps: added, removed, or version changed
@@ -245,20 +254,39 @@ object ChangeDetector {
         return try {
             val content = git(repoRoot, "show", "$ref:package.json")
             val pkg: Map<String, Any?> = mapper.readValue(content)
-            @Suppress("UNCHECKED_CAST")
-            val deps = mutableMapOf<String, String>()
-            (pkg["dependencies"] as? Map<String, Any?>)?.forEach { (k, v) ->
-                if (v is String) deps[k] = v
-            }
-            (pkg["devDependencies"] as? Map<String, Any?>)?.forEach { (k, v) ->
-                if (v is String) deps[k] = v
-            }
-            @Suppress("UNCHECKED_CAST")
-            val overrides = (pkg["overrides"] as? Map<String, Any?>) ?: emptyMap()
-            RootDepsSnapshot(deps, overrides)
+            parseRootDeps(pkg)
         } catch (_: Exception) {
             RootDepsSnapshot(emptyMap(), emptyMap())
         }
+    }
+
+    /**
+     * Read the current working-tree `package.json`. Counterpart to
+     * [getRootDepsAt] for the "current" side of [getChangedRootDeps] —
+     * uncommitted dep bumps must participate.
+     */
+    private fun getCurrentRootDeps(repoRoot: File): RootDepsSnapshot {
+        val pkgFile = File(repoRoot, "package.json")
+        if (!pkgFile.exists()) return RootDepsSnapshot(emptyMap(), emptyMap())
+        return try {
+            val pkg: Map<String, Any?> = mapper.readValue(pkgFile)
+            parseRootDeps(pkg)
+        } catch (_: Exception) {
+            RootDepsSnapshot(emptyMap(), emptyMap())
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun parseRootDeps(pkg: Map<String, Any?>): RootDepsSnapshot {
+        val deps = mutableMapOf<String, String>()
+        (pkg["dependencies"] as? Map<String, Any?>)?.forEach { (k, v) ->
+            if (v is String) deps[k] = v
+        }
+        (pkg["devDependencies"] as? Map<String, Any?>)?.forEach { (k, v) ->
+            if (v is String) deps[k] = v
+        }
+        val overrides = (pkg["overrides"] as? Map<String, Any?>) ?: emptyMap()
+        return RootDepsSnapshot(deps, overrides)
     }
 
     /**

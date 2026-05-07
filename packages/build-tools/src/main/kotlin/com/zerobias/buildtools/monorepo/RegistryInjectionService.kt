@@ -9,6 +9,8 @@ import org.gradle.api.services.BuildServiceParameters
 import org.semver4j.Semver
 import org.yaml.snakeyaml.Yaml
 import java.io.File
+import java.time.Instant
+import java.time.format.DateTimeParseException
 
 /**
  * Detects when a zbb slot is loaded with a healthy local Verdaccio registry
@@ -189,7 +191,17 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
         val publishes: List<PublishedPackage>,
     )
 
-    data class PublishedPackage(val name: String, val version: String)
+    data class PublishedPackage(
+        val name: String,
+        val version: String,
+        /**
+         * When the package was last published locally to Verdaccio, parsed
+         * from `publishes.json`. Used by [needsApply] to detect a stale
+         * install when the version on disk matches but a newer same-version
+         * tarball has been republished.
+         */
+        val publishedAt: Instant? = null,
+    )
 
     private data class InjectionState(
         val taintedPackages: List<String>,
@@ -241,7 +253,10 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
             raw.mapNotNull { entry ->
                 val name = entry["name"] as? String ?: return@mapNotNull null
                 val version = entry["version"] as? String ?: return@mapNotNull null
-                PublishedPackage(name, version)
+                val publishedAt = (entry["publishedAt"] as? String)?.let {
+                    try { Instant.parse(it) } catch (_: DateTimeParseException) { null }
+                }
+                PublishedPackage(name, version, publishedAt)
             }
         } catch (_: Exception) { return null }
 
@@ -429,13 +444,16 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
         }
 
         // ── node_modules taint (idempotent) ──
-        // Force-remove the package from node_modules if EITHER:
+        // Force-remove the package from node_modules if ANY of:
         //   (a) its installed version doesn't match the published one, OR
         //   (b) we just rewrote its lockfile entry's `resolved` URL — even
         //       if the version matches, the bytes on disk came from the old
         //       source and must be re-fetched from the new (localhost) one.
         //       Without this taint, npm install sees version match + lockfile
         //       entry intact and skips refetching, leaving stale bytes.
+        //   (c) `publishedAt` from publishes.json is newer than the on-disk
+        //       package.json mtime — covers the same-version republish case
+        //       where (a) and (b) are both false but the bytes are stale.
         val taintedPackages = mutableListOf<String>()
         for (pkg in applicable) {
             val modDir = File(repoRoot, "node_modules/${pkg.name}")
@@ -452,17 +470,19 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
             } else null
             val versionMismatch = installedVersion != pkg.version
             val lockfileMutated = pkg.name in mutatedPackageNames
-            if (!versionMismatch && !lockfileMutated) {
+            val installStale = pkg.publishedAt != null
+                && installedPj.exists()
+                && installedPj.lastModified() < pkg.publishedAt.toEpochMilli()
+            if (!versionMismatch && !lockfileMutated && !installStale) {
                 continue
             }
             modDir.deleteRecursively()
             taintedPackages.add(pkg.name)
-            val reason = when {
-                versionMismatch && lockfileMutated -> "was ${installedVersion ?: "unknown"}, expected ${pkg.version}; lockfile rewritten"
-                versionMismatch -> "was ${installedVersion ?: "unknown"}, expected ${pkg.version}"
-                else -> "lockfile rewritten — bytes on disk came from old source"
-            }
-            logger?.invoke("[registry] tainted ${pkg.name} ($reason)")
+            val reasons = mutableListOf<String>()
+            if (versionMismatch) reasons.add("was ${installedVersion ?: "unknown"}, expected ${pkg.version}")
+            if (lockfileMutated) reasons.add("lockfile rewritten")
+            if (installStale) reasons.add("installed copy older than publishedAt ${pkg.publishedAt}")
+            logger?.invoke("[registry] tainted ${pkg.name} (${reasons.joinToString("; ")})")
             anyChange = true
         }
 
@@ -751,13 +771,16 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
      * Returns true when injection should fire (something is stale or
      * resolved to the public registry). Returns false when every
      * applicable `PublishedPackage` (see [applicablePublishes]) already
-     * passes ALL five checks:
+     * passes ALL six checks:
      *
      *   1. `node_modules/<name>/package.json` exists
      *   2. its `version` field matches the expected published version
      *   3. project `package-lock.json` has an entry for `<name>`
      *   4. that lockfile entry's version matches the expected version
      *   5. the lockfile entry's `resolved` URL contains "localhost"
+     *   6. installed package.json mtime is >= `publishedAt` from
+     *      publishes.json (catches same-version republishes — version
+     *      and lockfile look fine but the on-disk bytes are stale)
      *
      * Packages not present in the lockfile at all are skipped (they
      * aren't deps of this workspace). Anything else short-circuits the
@@ -801,6 +824,19 @@ abstract class RegistryInjectionService : BuildService<RegistryInjectionService.
                 mapper.readValue(installed)
             } catch (_: Exception) { return true }
             if (installedJson["version"] != pkg.version) return true
+
+            // Check 6: same-version republish freshness. If publishes.json
+            // says the package was published more recently than the file
+            // on disk, the installed bytes are from an earlier publish at
+            // the same version — refetch.
+            val publishedAt = pkg.publishedAt
+            if (publishedAt != null && installed.lastModified() < publishedAt.toEpochMilli()) {
+                logger?.invoke(
+                    "[registry] ${pkg.name}@${pkg.version} republished at $publishedAt; " +
+                        "installed copy is older — triggering refetch"
+                )
+                return true
+            }
         }
 
         return false
