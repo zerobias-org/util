@@ -43,14 +43,10 @@ plugins {
 }
 
 // Extend the stock `base` plugin's `clean` task to also remove `dist/`
-// (tsc/bun output) and `node_modules/` (npm-installed deps). Without
-// this, `zbb clean` only removes build/ — leaving stale type defs and
-// half-relinked dependencies that can poison the next build's tsc
-// output. node_modules is included because Verdaccio-published
-// workspace packages get linked in transitively, and stale links
-// can produce wrong type defs across reinstalls.
+// (tsc/bun output). Stock `base` only removes build/, leaving stale
+// type defs that can poison the next build's tsc output.
 tasks.named<Delete>("clean") {
-    delete("dist", "node_modules")
+    delete("dist")
 }
 
 // nebula.ospackage is NOT applied here. It auto-registers a `buildDeb`
