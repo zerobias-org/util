@@ -101,10 +101,17 @@ export async function spawnStandardLifecycleAndExit(
   // Use the project-centric TTY display for commands that produce per-task
   // events. Same logic as the monorepo dispatcher — clean/gateCheck have
   // no per-task events worth rendering, so they fall through to plain bash.
+  //
+  // Opt-out via ZBB_NO_DISPLAY=1: skips the display unconditionally, falls
+  // through to bash -c with inherited stdio. Operators who want raw gradle
+  // output (full task list, real-time stderr from tsc/mocha, no overlay)
+  // export this in their shell rc and never think about it again.
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
+  const noDisplay = process.env.ZBB_NO_DISPLAY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
+    !noDisplay &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
     (process.stdout.isTTY || forceDisplay);
@@ -130,8 +137,24 @@ export async function spawnStandardLifecycleAndExit(
   }
 
   // Fallback path: bash -c "<full command>" with inherited stdio.
-  const fullCommand = passthrough.length > 0
-    ? `${cmdToRun} ${passthrough.join(' ')}`
+  //
+  // When the display is off (ZBB_NO_DISPLAY=1 or non-TTY stdout) AND the
+  // command is a gradle invocation, append `--console=plain` so each
+  // `> Task :foo:bar` line streams to stdout. Without it, gradle's
+  // default rich console clears progress lines and the operator sees
+  // only "BUILD SUCCESSFUL in Xs" — which is what gets piped to
+  // .zbb-monorepo/gradle.log instead of the user's terminal.
+  // Skip if the command already specifies a console mode.
+  const passthroughExtras = [...passthrough];
+  const isGradleCommand = cmdToRun.includes('gradlew');
+  const alreadyHasConsole =
+    cmdToRun.includes('--console') || passthrough.some(a => a.startsWith('--console'));
+  if (isGradleCommand && !alreadyHasConsole) {
+    passthroughExtras.push('--console=plain');
+  }
+
+  const fullCommand = passthroughExtras.length > 0
+    ? `${cmdToRun} ${passthroughExtras.join(' ')}`
     : cmdToRun;
 
   const result = spawnSync('bash', ['-c', fullCommand], {
