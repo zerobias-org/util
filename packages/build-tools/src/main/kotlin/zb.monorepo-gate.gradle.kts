@@ -27,6 +27,7 @@ import com.zerobias.buildtools.monorepo.LocalRegistryScanner
 import com.zerobias.buildtools.monorepo.MonorepoGraphService
 import com.zerobias.buildtools.monorepo.PackageStampEntry
 import com.zerobias.buildtools.monorepo.Prepublish
+import com.zerobias.buildtools.monorepo.PrepublishLeftoverScanner
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.monorepo.StampValidator
 import com.zerobias.buildtools.monorepo.TestSuiteEntry
@@ -90,6 +91,36 @@ val verifyNoLocalRegistry = tasks.register("verifyNoLocalRegistry") {
             logger.lifecycle("verifyNoLocalRegistry: --clean — nothing to wipe; forcing public registry on next install.")
         }
         logger.lifecycle("verifyNoLocalRegistry: forcing public registry for the rest of this build (forcePublic=true).")
+    }
+}
+
+// ── verifyNoPrepublishLeftover — block commits with prepublish drift ──
+//
+// `Prepublish.resolve()` mutates a workspace package's package.json with
+// hoisted root deps + overrides as part of `monorepoPublish`. The mutation is
+// supposed to be undone by `restorePackage` (finalizedBy publishPackage). If a
+// publish run is interrupted (Ctrl-C, network failure, skipped publishPackage)
+// the mutated state can end up committed — leading to per-package files with
+// duplicated overrides and pinned RC versions that break workspace hoisting in
+// downstream consumers. The dataloader package.json drift is the canonical
+// case; it's the only package with `bin` entries so its prepublish mutation is
+// large enough to be obvious in diffs, but the same flow affects every
+// workspace package.
+//
+// Two signals indicate a leftover:
+//   1. `package.json.prepublish-backup` exists alongside a workspace
+//      package.json — direct evidence that `restorePackage` never ran.
+//   2. A non-root workspace package.json declares an `overrides` block —
+//      `overrides` is npm-root-only metadata; if it appears in a workspace
+//      package, it was copied there by `Prepublish.resolve()`.
+val verifyNoPrepublishLeftover = tasks.register("verifyNoPrepublishLeftover") {
+    group = "monorepo"
+    description = "Fail fast if any workspace package.json carries prepublish leftovers (mutated state from an interrupted publish)"
+
+    doLast {
+        val offenders = PrepublishLeftoverScanner.scan(rootProject.rootDir)
+        if (offenders.isEmpty()) return@doLast
+        throw GradleException(PrepublishLeftoverScanner.buildFailureMessage(offenders))
     }
 }
 
@@ -189,6 +220,7 @@ val monorepoGate = tasks.register("monorepoGate") {
     group = "monorepo"
     description = "Run gate for all affected packages and write the root gate-stamp.json"
     dependsOn(verifyNoLocalRegistry)
+    dependsOn(verifyNoPrepublishLeftover)
     // monorepoBuild + monorepoTest + monorepoDockerBuild are added in
     // zb.monorepo-build (when applied). Wire conditionally so this plugin
     // works even if -build isn't applied.
@@ -440,7 +472,9 @@ gradle.projectsEvaluated {
     rootProject.tasks.findByName("workspaceInstall")?.mustRunAfter(verifyNoLocalRegistry)
 
     // monorepoPublishDryRun lives in zb.monorepo-publish (sibling plugin).
-    // When applied, it must also run the lockfile guard so direct invocation
-    // doesn't bypass the gate's localhost-URL check.
+    // When applied, it must also run both root-level guards so direct
+    // invocation doesn't bypass the gate's localhost-URL or prepublish-leftover
+    // checks.
     rootProject.tasks.findByName("monorepoPublishDryRun")?.dependsOn(verifyNoLocalRegistry)
+    rootProject.tasks.findByName("monorepoPublishDryRun")?.dependsOn(verifyNoPrepublishLeftover)
 }

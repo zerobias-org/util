@@ -1,24 +1,24 @@
 {
   "version": 1,
-  "branch": "module_fixes",
+  "branch": "feat/data-explorer-sql-query-enhancement",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "2.1.2",
-      "sourceHash": "648fc111bcd3a75f592119b482382f52db7fb2c8df4ff3147516450743ec5e2e",
+      "sourceHash": "87ee0a2b96f020f344ea18187ffde80e8ba2089890e0b646b470aff8bca8383d",
       "testHash": "31bcf4a9cc35001de836df01a9297b53c1d3833ff425abe7b6c3142f6b4001d4",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 1,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 1,
+          "status": "passed"
         },
         "integration": {
           "expected": 0,
@@ -326,8 +326,8 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "2.0.54",
-      "sourceHash": "6dd927f10a1fa9fd49e24c4cd0d2511affb33836c8886373030385a2ef307995",
+      "version": "2.0.55",
+      "sourceHash": "2634b9a7e42bffbee6719d258be04136a621bbbc0e7071f8542b0bfe76b379cc",
       "testHash": "ffd2c3654748679b3983df3bcc14c6ac63b37a636dac4fa65ebd6144805353db",
       "tasks": {
         "lint": "skipped",
@@ -482,8 +482,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "2.0.49",
-      "sourceHash": "6c18d3d8f365dc0b6f1886cff77cac523dd84db7f1bb0fd125ab12c2497b2b68",
+      "version": "2.0.50",
+      "sourceHash": "c6770c9046784bb21670ebf006c6b8c9234569b2ff86cccaa629971fb2bd814e",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
         "lint": "skipped",

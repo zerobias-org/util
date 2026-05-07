@@ -22,6 +22,12 @@ export * from './transform/index.js';
 // Data mapper (framework-agnostic)
 // Export core mapper class
 export { DataMapper } from './mapper/DataMapper.js';
+// Export query-source utilities (pure functions reused by UI + pipeline runner)
+export {
+  extractRows,
+  inferSchemaFromRows,
+  diffSchemas
+} from './mapper/utils/query.js';
 // Export mapper types explicitly to avoid conflicts with transform types
 export type {
   SourceField,
@@ -38,7 +44,13 @@ export type {
   LogicalOperator,
   ValidationRule,
   ValidationType,
-  ValidationTiming
+  ValidationTiming,
+  // Query-source mapping types
+  QuerySourceConfig,
+  InvokeFunction,
+  InferredSchema,
+  SchemaProperty,
+  SchemaDiff
 } from './mapper/types/index.js';
 
 // DataProducer client (framework-agnostic)
