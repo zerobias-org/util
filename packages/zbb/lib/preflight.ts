@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import semver from 'semver';
 import type { EnvVarDeclaration, ToolDefinition, ToolRequirement } from './config.js';
+import { knownJavaHomes } from './java-home.js';
 
 export interface CheckResult {
   tool: string;
@@ -13,11 +14,6 @@ export interface CheckResult {
 }
 
 const JAVA_VERSION_PARSE = /version "(\S+)"/;
-const KNOWN_JAVA_PATHS = [
-  '/usr/lib/jvm/java-21-openjdk-amd64/bin/java',
-  '/usr/lib/jvm/java-21-openjdk/bin/java',
-  '/usr/lib/jvm/java-21/bin/java',
-];
 
 /**
  * Multi-path Java version detection.
@@ -29,8 +25,9 @@ function checkJavaVersion(constraint: string): string | null {
   if (process.env.JAVA_HOME) {
     candidates.push(`${process.env.JAVA_HOME}/bin/java`);
   }
-  for (const p of KNOWN_JAVA_PATHS) {
-    if (existsSync(p)) candidates.push(p);
+  for (const home of knownJavaHomes()) {
+    const bin = `${home}/bin/java`;
+    if (existsSync(bin)) candidates.push(bin);
   }
 
   let firstFound: string | null = null;
