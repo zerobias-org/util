@@ -145,6 +145,17 @@ dependencies {
     // build.gradle.kts apply directly so the runtime Deb class is identical.
     implementation("com.netflix.nebula:gradle-ospackage-plugin:11.10.1")
 
+    // commons-compress — pure-JVM ar/tar/gzip used by DebRepack.kt to make
+    // built debs byte-reproducible without shelling out to GNU tar (which
+    // doesn't ship by default on macOS). Already present transitively via
+    // jdeb but declared explicitly so we control the version.
+    implementation("org.apache.commons:commons-compress:1.27.1")
+    // xz/zstd write-side support for DebRepack — only loaded when a deb
+    // actually uses those compression formats. Default jdeb output is gzip,
+    // so these are paid-for-only-if-used.
+    implementation("org.tukaani:xz:1.10")
+    implementation("com.github.luben:zstd-jni:1.5.6-6")
+
     // Kotlin test runner
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

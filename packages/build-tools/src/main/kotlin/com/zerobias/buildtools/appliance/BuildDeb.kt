@@ -398,27 +398,16 @@ fun Project.registerBuildDeb() {
  * different data.tar bytes, breaking the tag-time → publish-time
  * payload-sha contract that :publishRelease enforces.
  *
- * Delegates to scripts/repack-deb-deterministic.sh under the consuming
- * project's rootDir. Convention: every repo using these Deb tasks ships
- * that script (see com/node/scripts/repack-deb-deterministic.sh).
+ * Pure-JVM impl in DebRepack.kt — no shell-out, no GNU tar dep, runs
+ * identically on Mac/Linux/Windows. Replaced the historical
+ * scripts/repack-deb-deterministic.sh shell script that required gtar.
  *
  * Idempotent — running on an already-normalized deb produces identical
  * bytes.
  */
 fun Project.repackDebDeterministic(deb: File) {
-    val script = rootProject.rootDir.resolve("scripts/repack-deb-deterministic.sh")
-    if (!script.exists()) {
-        throw GradleException(
-            "repackDebDeterministic: ${script.absolutePath} not found.\n" +
-                "Every repo using BuildDeb / nebula.ospackage Deb tasks must " +
-                "ship this post-build reproducibility step. Copy it from " +
-                "com/node/scripts/repack-deb-deterministic.sh."
-        )
-    }
     if (!deb.exists()) {
         throw GradleException("repackDebDeterministic: $deb doesn't exist")
     }
-    exec {
-        commandLine("bash", script.absolutePath, deb.absolutePath)
-    }
+    repackDebDeterministicJvm(deb)
 }
