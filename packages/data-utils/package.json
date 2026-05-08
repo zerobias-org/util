@@ -77,8 +77,6 @@
     "README.md"
   ],
   "dependencies": {
-    "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.4",
-    "@zerobias-org/module-interface-dataproducer": "^2.1.4",
     "@zerobias-org/util-connector": "^1.0.40"
   }
 }

@@ -4,7 +4,7 @@
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "2.1.3",
-      "sourceHash": "80fe9a1499748020ea077664e4ba7313f8705662427d3d24f322fd2de0d598aa",
+      "sourceHash": "104faed43a3f8cd6dd0f9aecf99ac4fbc8781c7fb0a662dee27cfc83280ec6b5",
       "testHash": "31bcf4a9cc35001de836df01a9297b53c1d3833ff425abe7b6c3142f6b4001d4",
       "tasks": {
         "lint": "passed",
@@ -32,6 +32,8 @@
         }
       },
       "rootDeps": {
+        "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.4",
+        "@zerobias-org/module-interface-dataproducer": "^2.1.4",
         "@zerobias-org/types-core-js": "^1.2.23",
         "jsonata": "^2.0.0",
         "yaml": "\"2.8.3\"",
