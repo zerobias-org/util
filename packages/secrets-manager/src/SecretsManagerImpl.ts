@@ -12,7 +12,7 @@ import stringify from 'safe-stable-stringify';
 import axios from 'axios';
 import { lstatSync } from 'node:fs';
 
-import { SecretNode } from './SecretNode.js';
+import { SecretNode } from '../generated/model/index.js';
 import { DELIMITER, SecretsManager, SecretType } from './SecretsManager.js';
 import { TreeNode } from './TreeNode.js';
 import { VaultNode, ROOT as VAULT_ROOT } from './VaultNode.js';

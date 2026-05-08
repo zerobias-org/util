@@ -1,5 +1,5 @@
 import { IllegalArgumentError, UnexpectedError } from '@zerobias-org/types-core-js';
-import { SecretNode } from './SecretNode.js';
+import { SecretNode } from '../generated/model/index.js';
 import { TreeNode } from './TreeNode.js';
 
 type JsonValueType = object | string | number | boolean;

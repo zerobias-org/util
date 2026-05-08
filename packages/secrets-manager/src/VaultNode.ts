@@ -1,7 +1,7 @@
 import { IllegalArgumentError } from '@zerobias-org/types-core-js';
 import stringify from 'safe-stable-stringify';
 
-import { SecretNode } from './SecretNode.js';
+import { SecretNode } from '../generated/model/index.js';
 import { TreeNode } from './TreeNode.js';
 import { SecretType, DELIMITER } from './SecretsManager.js';
 import { JsonNode } from './JsonNode.js';

@@ -6,9 +6,10 @@
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "scripts": {
-    "clean": "rimraf dist/",
+    "clean": "rimraf dist/ generated/",
+    "generate": "hub-generator generate -g hub-module -i ./secrets-manager.yml -o generated/ --global-property models,supportingFiles=index.ts && rm -f ./generated/api/index.ts",
     "transpile": "tsc -b",
-    "build": "npm run lint && npm run transpile",
+    "build": "npm run lint && npm run generate && npm run transpile",
     "test": "npm run test:unit",
     "test:unit": "CACHE_TIMEOUT_SECONDS=5 node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/unit/**/*.ts",
     "test:integration": "CACHE_TIMEOUT_SECONDS=5 node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/integration/**/*.ts",
@@ -31,9 +32,12 @@
   },
   "files": [
     "dist/src",
+    "dist/generated",
+    "secrets-manager.yml",
     "*.md"
   ],
   "dependencies": {
-    "@zerobias-org/logger": "^3.0.10"
+    "@zerobias-org/logger": "^3.0.10",
+    "@zerobias-org/util-codegen": "^2.0.56"
   }
 }

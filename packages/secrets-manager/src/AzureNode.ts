@@ -10,7 +10,7 @@ import { logger } from './common.js';
 import { JsonNode } from './JsonNode.js';
 import { DELIMITER, SecretType } from './SecretsManager.js';
 import { TreeNode } from './TreeNode.js';
-import { SecretNode } from './SecretNode.js';
+import { SecretNode } from '../generated/model/index.js';
 
 export const ROOT = 'azure';
 

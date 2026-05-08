@@ -1,7 +1,7 @@
 import { IllegalArgumentError, NoSuchObjectError } from '@zerobias-org/types-core-js';
 import stringify from 'safe-stable-stringify';
 
-import { SecretNode } from './SecretNode.js';
+import { SecretNode } from '../generated/model/index.js';
 import { AwsSecretsClient } from './AwsSecretsClient.js';
 import { DELIMITER, SecretType } from './SecretsManager.js';
 import { TreeNode } from './TreeNode.js';

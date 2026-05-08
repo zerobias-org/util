@@ -1,4 +1,4 @@
-import { SecretNode } from './SecretNode.js';
+import { SecretNode } from '../generated/model/index.js';
 
 export type SecretType = string | number | boolean;
 

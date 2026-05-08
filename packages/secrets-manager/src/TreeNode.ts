@@ -1,7 +1,7 @@
 import { InvalidStateError, NoSuchObjectError, UnexpectedError } from '@zerobias-org/types-core-js';
 import stringify from 'safe-stable-stringify';
 import { SecretType, DELIMITER } from './SecretsManager.js';
-import { SecretNode } from './SecretNode.js';
+import { SecretNode } from '../generated/model/index.js';
 import { logger } from './common.js';
 
 const cacheTimeout = 1000 * (

@@ -1,7 +1,7 @@
 /* eslint-disable */
 import { expect } from 'chai';
 import * as process from 'process';
-import { SecretNode } from '../../src/index.js';
+import { SecretNode } from '../../generated/model/index.js';
 import { SecretsManagerImpl } from '../../src/SecretsManagerImpl.js';
 import { logger } from '../../src/common.js';
 

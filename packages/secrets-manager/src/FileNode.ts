@@ -5,7 +5,7 @@ import { lstatSync, readdirSync } from 'node:fs';
 import { access, lstat, readFile, writeFile } from 'node:fs/promises';
 import { parse as yamlParse } from 'yaml';
 
-import { SecretNode } from './SecretNode.js';
+import { SecretNode } from '../generated/model/index.js';
 import { TreeNode } from './TreeNode.js';
 import { JsonNode } from './JsonNode.js';
 import { DELIMITER, SecretType } from './SecretsManager.js';
