@@ -1,24 +1,24 @@
 {
   "version": 1,
-  "branch": "osx_support",
+  "branch": "core-secrets-manager-fixes",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "2.1.3",
-      "sourceHash": "c7c7d41f2fe72cc30bef11974df141bfa58b3ebc5be699f2bfa8ac7aee495761",
+      "sourceHash": "104faed43a3f8cd6dd0f9aecf99ac4fbc8781c7fb0a662dee27cfc83280ec6b5",
       "testHash": "31bcf4a9cc35001de836df01a9297b53c1d3833ff425abe7b6c3142f6b4001d4",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 1,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 1,
+          "status": "passed"
         },
         "integration": {
           "expected": 0,
@@ -32,11 +32,12 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.3",
-        "@zerobias-org/module-interface-dataproducer": "^2.1.3",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "@zerobias-org/hub-sdk-interface-dataproducer": "^2.1.4",
+        "@zerobias-org/module-interface-dataproducer": "^2.1.4",
+        "@zerobias-org/types-core-js": "^1.2.23",
         "jsonata": "^2.0.0",
         "yaml": "\"2.8.3\"",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -76,7 +77,7 @@
         "@typescript-eslint/eslint-plugin": "^8.53.0",
         "@typescript-eslint/parser": "^8.53.0",
         "eslint": "^10.1.0",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -117,7 +118,7 @@
         "chalk": "^5.6.2",
         "winston": "^3.2.0",
         "winston-transport": "^4.9.0",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -130,11 +131,11 @@
       "sourceHash": "777d1144e5617c34801916aff8178be018cf86457cd70642cb94ab195c393c61",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
         "test": "skipped"
       },
       "tests": {
@@ -155,9 +156,8 @@
         }
       },
       "rootDeps": {
-        "axios": "^1.15.0",
+        "axios": "\"^1.16.0\"",
         "yaml": "\"2.8.3\"",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -169,23 +169,23 @@
       "sourceHash": "6e3f2b4c50535e93f065f1cc1087a29d5e8d06a1a8cb8863a65b32971fdee07e",
       "testHash": "cde5b931c178ea511af07afca046a323dd387db237e7b7eff2eb3bb64a1f1c9c",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 55,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 55,
+          "status": "passed"
         },
         "integration": {
           "expected": 10,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 10,
+          "status": "passed"
         },
         "e2e": {
           "expected": 0,
@@ -194,12 +194,11 @@
         }
       },
       "rootDeps": {
-        "axios": "^1.15.0",
+        "axios": "\"^1.16.0\"",
         "dockerode": "^4.0.0",
         "get-port": "^7.1.0",
         "uuid": "\"^14.0.0\"",
         "yaml": "\"2.8.3\"",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\""
@@ -235,8 +234,8 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "^1.15.0",
+        "@zerobias-org/types-core-js": "^1.2.23",
+        "axios": "\"^1.16.0\"",
         "qs": "^6.14.0",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
@@ -275,8 +274,8 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "^1.15.0",
+        "@zerobias-org/types-core-js": "^1.2.23",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -286,7 +285,7 @@
     },
     "@zerobias-org/util-api-invoker-isomorphic": {
       "version": "1.0.38",
-      "sourceHash": "a8ca966cf11960442f409e69b6c10607bd8d2c14de4f3a8a2adf170eedb2bae5",
+      "sourceHash": "843083655d34ce73eabf7e81a221707d5d968ac649b998996669d44ee017be1a",
       "testHash": "d87ecf960dfafe908b8ab2ddade655c07c893d1ec7e162ab30c1509967501fd5",
       "tasks": {
         "lint": "passed",
@@ -314,8 +313,8 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "^1.15.0",
+        "@zerobias-org/types-core-js": "^1.2.23",
+        "axios": "\"^1.16.0\"",
         "form-data": "^4.0.0",
         "qs": "^6.14.0",
         "diff": "\"^8.0.4\"",
@@ -355,7 +354,7 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -368,18 +367,18 @@
       "sourceHash": "b4d6890b6568f10e50cd663ddb12507f46910f0c516cd036a4e6405d6d84b612",
       "testHash": "538007cc6c8a0c66415559ba2d3c2c8059f58b3476939056f98460ba5ca91647",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 1,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 1,
+          "status": "passed"
         },
         "integration": {
           "expected": 0,
@@ -394,8 +393,8 @@
       },
       "rootDeps": {
         "@zerobias-com/platform-sdk": "^1.1.5",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "^1.15.0",
+        "@zerobias-org/types-core-js": "^1.2.23",
+        "axios": "\"^1.16.0\"",
         "csv-parse": "^6.0.0",
         "yaml": "\"2.8.3\"",
         "diff": "\"^8.0.4\"",
@@ -406,7 +405,7 @@
     },
     "@zerobias-org/util-connector": {
       "version": "1.0.40",
-      "sourceHash": "b00ef37919ef55cb801012f0b61c7234512351b857ad807fb1bb044167224ab4",
+      "sourceHash": "82fb3a2fe319bd4ef4d060732bcd706c4e3184314c3a38917019c20e99129dea",
       "testHash": "2bb646e7472ba501356498be2c59c152821649ad5150cf4ec3dbfe38df0167d6",
       "tasks": {
         "lint": "passed",
@@ -434,8 +433,8 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "^1.15.0",
+        "@zerobias-org/types-core-js": "^1.2.23",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -473,7 +472,7 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -486,18 +485,18 @@
       "sourceHash": "c6770c9046784bb21670ebf006c6b8c9234569b2ff86cccaa629971fb2bd814e",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 38,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 38,
+          "status": "passed"
         },
         "integration": {
           "expected": 0,
@@ -513,9 +512,9 @@
       "rootDeps": {
         "@zerobias-org/types-amazon-js": "^1.0.40",
         "@zerobias-org/types-core": "^1.0.24",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "@zerobias-org/types-core-js": "^1.2.23",
         "@zerobias-org/types-microsoft-js": "^1.0.40",
-        "axios": "^1.15.0",
+        "axios": "\"^1.16.0\"",
         "change-case": "^5.0.0",
         "jsonata": "^2.0.0",
         "qs": "^6.14.0",
@@ -524,6 +523,51 @@
         "serialize-javascript": "\"7.0.5\"",
         "uuid": "\"^14.0.0\"",
         "yaml": "\"2.8.3\""
+      }
+    },
+    "@zerobias-org/util-secrets-manager": {
+      "version": "1.0.0",
+      "sourceHash": "7543bedd91e1751c20d9fb26d988192c860d457460041136dbedd84ea07cf7db",
+      "testHash": "575ef4c49d64db1c1f3bf6df131f46c43db3fd963e8c9c82e347b2b6335e3771",
+      "tasks": {
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
+      },
+      "tests": {
+        "unit": {
+          "expected": 24,
+          "ran": 24,
+          "status": "passed"
+        },
+        "integration": {
+          "expected": 40,
+          "ran": 40,
+          "status": "passed"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      },
+      "rootDeps": {
+        "@aws-sdk/client-secrets-manager": "^3.700.0",
+        "@aws-sdk/client-ssm": "^3.700.0",
+        "@azure/arm-keyvault": "^2.0.0",
+        "@azure/identity": "^4.13.0",
+        "@azure/keyvault-secrets": "^4.6.0",
+        "@zerobias-org/types-core-js": "^1.2.23",
+        "axios": "\"^1.16.0\"",
+        "safe-stable-stringify": "^2.5.0",
+        "yaml": "\"2.8.3\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "uuid": "\"^14.0.0\""
       }
     },
     "@zerobias-org/util-spectral-config": {
@@ -558,7 +602,7 @@
       "rootDeps": {
         "@stoplight/json-ref-resolver": "^3.1.6",
         "@zerobias-org/types-format-spectral-ruleset": "^1.0.42",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -567,8 +611,8 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.67",
-      "sourceHash": "9895b3c9ccdaab2377cc6bf45b7e1a9ff9bd997bbdbe29dbd4c46238d04ed5db",
+      "version": "0.3.68",
+      "sourceHash": "4f0dfda1a0d73a18a522a5456851094ce5f83444a132a4e89c852960a1d8ebd1",
       "testHash": "767d4eaa2c64ef46b33cb05bc621f2ee61a0bc64da6e5dd704e6b4bf0a3ff4e8",
       "tasks": {
         "lint": "passed",
@@ -599,7 +643,7 @@
         "jsonata": "^2.0.0",
         "semver": "^7.6.0",
         "yaml": "\"2.8.3\"",
-        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",

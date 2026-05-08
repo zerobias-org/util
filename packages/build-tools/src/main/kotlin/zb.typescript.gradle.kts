@@ -9,6 +9,7 @@ import com.zerobias.buildtools.module.ConnectionProfileFlattener
 import com.zerobias.buildtools.module.ServerEntryPointGenerator
 import com.zerobias.buildtools.module.DockerRunner
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 
 plugins {
     id("zb.base")
@@ -110,7 +111,11 @@ tasks.named("validate") {
 val lintExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Run eslint on source code using shared config from @zerobias-org/eslint-config"
-    dependsOn(tasks.named("compile"))
+    // Lint reads src/ only (not dist/), so it doesn't need transpile —
+    // just node_modules for the eslint binary. Running BEFORE compile
+    // means a lint failure fails fast; the user fixes the code, re-runs,
+    // and the (now-correct) compile happens once instead of twice.
+    dependsOn(npmInstallModule)
     workingDir(project.projectDir)
     doFirst {
         // Generate ephemeral eslint.config.mjs in the module directory
@@ -363,7 +368,12 @@ tasks.named("generate") {
 val transpile by tasks.registering(NpxTask::class) {
     group = "lifecycle"
     description = "Compile TypeScript (ESM)"
-    dependsOn(npmInstallModule, tasks.named("generate"))
+    // lint runs first so a lint failure short-circuits before tsc burns
+    // 10+ seconds compiling code that has style issues anyway. User
+    // fixes the lint error → re-runs → lint passes → transpile starts
+    // fresh. Without this, transpile completes first, lint fails, the
+    // fix invalidates transpile's output, and tsc has to redo the work.
+    dependsOn(npmInstallModule, tasks.named("generate"), tasks.named("lint"))
     workingDir.set(project.projectDir)
     command.set("tsc")
     inputs.dir("src")
@@ -1170,6 +1180,50 @@ val flattenConnectionProfileForPublish by tasks.registering {
     }
 }
 
+// ── Prepublish: shrinkwrap generation ──
+// `npm pack` strips package-lock.json from tarballs by npm policy, so
+// app-style packages that need consumers to run a deterministic
+// `npm ci --omit=dev --ignore-scripts` ship an npm-shrinkwrap.json instead
+// (the only lockfile npm publishes).
+//
+// Opt-in: fires only when package.json's "files" array lists
+// "npm-shrinkwrap.json" AND a package-lock.json exists. Generates the
+// shrinkwrap right before `npm publish`; a finalizer removes it after, so
+// the working tree continues to track only package-lock.json
+// (npm-shrinkwrap.json should be gitignored as a build artifact).
+val cleanupShrinkwrap by tasks.registering {
+    group = "publish"
+    description = "Remove generated npm-shrinkwrap.json after npm publish"
+    // Wait for publish in the success case; on failure it fires right after
+    // generateShrinkwrap (its finalizer host) — same approach as
+    // restorePackageJson / restoreConnectionProfile above.
+    mustRunAfter(tasks.named("publishNpmExec"))
+    onlyIf { project.file("npm-shrinkwrap.json").exists() }
+    doLast {
+        project.file("npm-shrinkwrap.json").delete()
+        logger.lifecycle("[cleanupShrinkwrap] removed generated npm-shrinkwrap.json")
+    }
+}
+
+val generateShrinkwrap by tasks.registering {
+    group = "publish"
+    description = "Generate npm-shrinkwrap.json from package-lock.json before npm publish"
+    finalizedBy(cleanupShrinkwrap)
+    onlyIf {
+        val pkgFile = project.file("package.json")
+        val lockFile = project.file("package-lock.json")
+        if (!pkgFile.exists() || !lockFile.exists()) return@onlyIf false
+        Regex(""""files"\s*:\s*\[[^\]]*"npm-shrinkwrap\.json"""")
+            .containsMatchIn(pkgFile.readText())
+    }
+    doFirst {
+        val lockFile = project.file("package-lock.json")
+        val swFile = project.file("npm-shrinkwrap.json")
+        lockFile.copyTo(swFile, overwrite = true)
+        logger.lifecycle("[generateShrinkwrap] generated npm-shrinkwrap.json from package-lock.json")
+    }
+}
+
 // -- NPM Publish (staging with --tag next) ------------------------
 
 val isDryRun: Boolean = extra["isDryRun"] as Boolean
@@ -1659,172 +1713,29 @@ val testHub by tasks.registering {
 // ════════════════════════════════════════════════════════════
 // DATALOADER TEST — create Neon branch, load artifacts, validate, clean up
 // ════════════════════════════════════════════════════════════
+//
+// All Neon orchestration lives in NeonDataloaderTask. This file just wires
+// up a typescript-flavored instance: -f to defeat the parent-branch snapshot
+// no-op skip, and a displayLog for zbb's failure reporter.
 
-val testDataloaderExec by tasks.registering {
-    group = "lifecycle"
-    description = "Run dataloader against ephemeral Neon branch"
+val testDataloaderExec by tasks.registering(com.zerobias.buildtools.tasks.NeonDataloaderTask::class) {
     dependsOn(tasks.named("compile"))
-    onlyIf {
-        // Only run if NEON_API_KEY is available (vault resolved)
-        val hasNeon = System.getenv("NEON_API_KEY")?.isNotBlank() == true
-        if (!hasNeon) logger.lifecycle("testDataloader: NEON_API_KEY not set — skipping")
-        hasNeon
-    }
-    doLast {
-        val neonApiKey = System.getenv("NEON_API_KEY")
-            ?: throw GradleException("NEON_API_KEY not set — configure vault source in zbb.yaml")
-        val neonProjectId = System.getenv("NEON_PROJECT_ID")
-            ?: throw GradleException("NEON_PROJECT_ID not set — configure vault source in zbb.yaml")
-        val parentBranch = System.getenv("NEON_PARENT_BRANCH") ?: "content-master"
-        val dbRole = System.getenv("NEON_DB_ROLE") ?: "neondb_owner"
-        val dbName = System.getenv("NEON_DB_NAME") ?: "zerobias"
+    packageDir.set(layout.projectDirectory)
+    force.set(true)
+    val safeProjectName = project.path.removePrefix(":").replace(":", "-")
+    displayLogPath.set(rootProject.layout.projectDirectory
+        .file("$ZBB_GRADLE_DIR/logs/${safeProjectName}-testDataloader.log"))
 
-        val (moduleName, _) = readPackageNameVersion()
-        val branchName = "test/${moduleName.replace("@", "").replace("/", "-")}-${System.currentTimeMillis()}"
-
-        // ── Step 1a: Look up parent branch ID by name ──
-        logger.lifecycle("testDataloader: Looking up parent branch '$parentBranch'")
-        val branchesOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf(
-                "curl", "-sf",
-                "-H", "Authorization: Bearer $neonApiKey",
-                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches"
-            ),
-            workingDir = project.projectDir,
-            throwOnError = true
-        )
-        // Find the branch with matching name and extract its ID
-        val parentIdPattern = Regex(""""id"\s*:\s*"(br-[^"]+)"[^}]*?"name"\s*:\s*"${Regex.escape(parentBranch)}"""")
-        val parentIdAlt = Regex(""""name"\s*:\s*"${Regex.escape(parentBranch)}"[^}]*?"id"\s*:\s*"(br-[^"]+)"""")
-        val parentId = parentIdPattern.find(branchesOutput)?.groupValues?.get(1)
-            ?: parentIdAlt.find(branchesOutput)?.groupValues?.get(1)
-            ?: throw GradleException("testDataloader: Parent branch '$parentBranch' not found in project $neonProjectId")
-
-        logger.lifecycle("testDataloader: Parent branch ID = $parentId")
-
-        // ── Step 1b: Create Neon branch ──
-        logger.lifecycle("testDataloader: Creating Neon branch '$branchName' from '$parentBranch'")
-        val createPayload = """{"branch":{"name":"$branchName","parent_id":"$parentId"},"endpoints":[{"type":"read_write","suspend_timeout_seconds":300}]}"""
-        val createOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf(
-                "curl", "-sf",
-                "-H", "Authorization: Bearer $neonApiKey",
-                "-H", "Content-Type: application/json",
-                "-X", "POST",
-                "-d", createPayload,
-                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches"
-            ),
-            workingDir = project.projectDir,
-            throwOnError = true
-        )
-
-        // Parse branch ID and endpoint host from response
-        val branchId = Regex(""""id"\s*:\s*"(br-[^"]+)"""").find(createOutput)?.groupValues?.get(1)
-            ?: throw GradleException("testDataloader: Failed to parse branch ID from Neon response:\n$createOutput")
-        val host = Regex(""""host"\s*:\s*"([^"]+)"""").find(createOutput)?.groupValues?.get(1)
-            ?: throw GradleException("testDataloader: Failed to parse host from Neon response:\n$createOutput")
-
-        // ── Step 1c: Get the role password ──
-        val passwordOutput = com.zerobias.buildtools.util.ExecUtils.execCapture(
-            command = listOf(
-                "curl", "-sf",
-                "-H", "Authorization: Bearer $neonApiKey",
-                "https://console.neon.tech/api/v2/projects/$neonProjectId/branches/$branchId/roles/$dbRole/reveal_password"
-            ),
-            workingDir = project.projectDir,
-            throwOnError = true
-        )
-        val password = Regex(""""password"\s*:\s*"([^"]+)"""").find(passwordOutput)?.groupValues?.get(1)
-            ?: throw GradleException("testDataloader: Failed to get password for role $dbRole")
-
-        logger.lifecycle("testDataloader: Neon branch created")
-        logger.lifecycle("  NEON_PROJECT_ID = $neonProjectId")
-        logger.lifecycle("  NEON_PARENT_BRANCH = $parentBranch")
-        logger.lifecycle("  NEON_BRANCH_ID = $branchId")
-        logger.lifecycle("  NEON_BRANCH_NAME = $branchName")
-        logger.lifecycle("  NEON_DB_ROLE = $dbRole")
-        logger.lifecycle("  NEON_DB_NAME = $dbName")
-        logger.lifecycle("  PGHOST = $host")
-        logger.lifecycle("  PGPORT = 5432")
-        logger.lifecycle("  PGUSER = $dbRole")
-        logger.lifecycle("  PGPASSWORD = ***")
-        logger.lifecycle("  PGDATABASE = $dbName")
-        logger.lifecycle("  PGSSLMODE = require")
-
-        try {
-            // ── Step 2: Run dataloader with Neon PG vars ──
-            logger.lifecycle("testDataloader: Running dataloader")
-
-            // Symlink distribution spec if needed
-            val (name, _) = readPackageNameVersion()
-            val noScope = name.split("/").last()
-            val distSpec = project.file("generated/${noScope}.yml")
-            val rootLink = project.file("${noScope}.yml")
-            if (distSpec.exists() && !rootLink.exists()) {
-                java.nio.file.Files.createSymbolicLink(rootLink.toPath(), distSpec.toPath())
-            }
-
-            val pgEnv = mapOf(
-                "PGHOST" to host,
-                "PGPORT" to "5432",
-                "PGUSER" to dbRole,
-                "PGPASSWORD" to password,
-                "PGDATABASE" to dbName,
-                "PGSSLMODE" to "require"
-            )
-
-            // Run dataloader and capture all output.
-            // -f forces (re)installation: the Neon test branch is parented from
-            // a snapshot that may already contain this artifact at this version,
-            // so without -f the loader exits 0 after a no-op skip and the gate
-            // stamps green without ever validating the new bits.
-            val dlProcess = ProcessBuilder(listOf("dataloader", "-f", "-d", "."))
-                .directory(project.projectDir)
-                .redirectErrorStream(true)
-                .apply { environment().putAll(pgEnv) }
-                .start()
-
-            // Stream output line by line to Gradle logger
-            val reader = dlProcess.inputStream.bufferedReader()
-            val output = StringBuilder()
-            reader.forEachLine { line ->
-                logger.lifecycle("  [dataloader] $line")
-                output.appendLine(line)
-            }
-
-            val dlExit = dlProcess.waitFor()
-
-            // Write captured output to .zbb-monorepo/logs/ so the failure
-            // reporter in zbb's Display.ts finds the log it advertises.
-            // Other Exec tasks (lint, transpile, test, dockerBuild) follow
-            // this same convention via zb.monorepo-build's displayLog.
-            val safeName = project.path.removePrefix(":").replace(":", "-")
-            val displayLog = rootProject.file(".zbb-monorepo/logs/${safeName}-testDataloader.log")
-            displayLog.parentFile.mkdirs()
-            displayLog.writeText(output.toString())
-
-            if (dlExit != 0) {
-                throw GradleException("testDataloader: dataloader exited with code $dlExit\n${output}")
-            }
-            logger.lifecycle("testDataloader: Dataloader completed successfully")
-
-        } finally {
-            // ── Step 3: Clean up Neon branch ──
-            logger.lifecycle("testDataloader: Cleaning up Neon branch '$branchName'")
-            try {
-                com.zerobias.buildtools.util.ExecUtils.exec(
-                    command = listOf(
-                        "curl", "-sf", "-X", "DELETE",
-                        "-H", "Authorization: Bearer $neonApiKey",
-                        "https://console.neon.tech/api/v2/projects/$neonProjectId/branches/$branchId"
-                    ),
-                    workingDir = project.projectDir,
-                    throwOnError = false
-                )
-                logger.lifecycle("testDataloader: Neon branch deleted")
-            } catch (e: Exception) {
-                logger.warn("testDataloader: Failed to delete Neon branch $branchId: ${e.message}")
-            }
+    // Symlink the distribution spec into the project root so dataloader can
+    // find it. Other Exec tasks (lint/transpile/test/dockerBuild) don't need
+    // this because they don't load the spec; only dataloader does.
+    doFirst {
+        val (name, _) = readPackageNameVersion()
+        val noScope = name.split("/").last()
+        val distSpec = project.file("generated/${noScope}.yml")
+        val rootLink = project.file("${noScope}.yml")
+        if (distSpec.exists() && !rootLink.exists()) {
+            java.nio.file.Files.createSymbolicLink(rootLink.toPath(), distSpec.toPath())
         }
     }
 }
@@ -1834,7 +1745,7 @@ tasks.named("testDataloader") {
 }
 
 tasks.named("publishNpmExec") {
-    dependsOn(flattenConnectionProfileForPublish)
+    dependsOn(flattenConnectionProfileForPublish, generateShrinkwrap)
 }
 
 tasks.named("publishNpm") {

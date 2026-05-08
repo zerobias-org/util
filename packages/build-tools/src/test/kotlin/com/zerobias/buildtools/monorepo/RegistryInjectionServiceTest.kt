@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import java.nio.file.Path
+import java.time.Instant
 
 /**
  * Tests for RegistryInjectionService trigger detection, apply/restore, the
@@ -65,6 +66,17 @@ class RegistryInjectionServiceTest {
         @Volatile
         var fakeTrigger: RegistryInjectionService.TriggerInfo? = null
         override fun detectTrigger(): RegistryInjectionService.TriggerInfo? = fakeTrigger
+    }
+
+    /**
+     * Write a minimal root `package.json` declaring [name] as a dependency
+     * with constraint [constraint]. Required so [RegistryInjectionService.applicablePublishes]
+     * doesn't filter the package out before [RegistryInjectionService.needsApply] runs.
+     */
+    private fun writeRootPackageJson(repoRoot: File, name: String, constraint: String = "*") {
+        File(repoRoot, "package.json").writeText(
+            """{"name":"test","dependencies":{"$name":"$constraint"}}"""
+        )
     }
 
     @Test
@@ -137,6 +149,7 @@ class RegistryInjectionServiceTest {
 
         val repoRoot = tmp.toFile()
         val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+        writeRootPackageJson(repoRoot, pkg.name)
 
         // Lockfile entry resolved through localhost — passes checks 3-5.
         File(repoRoot, "package-lock.json").writeText(
@@ -168,6 +181,7 @@ class RegistryInjectionServiceTest {
 
         val repoRoot = tmp.toFile()
         val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+        writeRootPackageJson(repoRoot, pkg.name)
         File(repoRoot, "package-lock.json").writeText(
             """
             {
@@ -194,6 +208,7 @@ class RegistryInjectionServiceTest {
 
         val repoRoot = tmp.toFile()
         val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+        writeRootPackageJson(repoRoot, pkg.name)
         File(repoRoot, "package-lock.json").writeText(
             """
             {
@@ -223,6 +238,7 @@ class RegistryInjectionServiceTest {
 
         val repoRoot = tmp.toFile()
         val pkg = RegistryInjectionService.PublishedPackage("@zerobias-org/foo", "1.2.3")
+        writeRootPackageJson(repoRoot, pkg.name)
         // Public-registry-resolved URL — check 5 fails (no "localhost" substring).
         File(repoRoot, "package-lock.json").writeText(
             """
@@ -243,6 +259,91 @@ class RegistryInjectionServiceTest {
 
         val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
         assertTrue(service.needsApply(repoRoot))
+    }
+
+    @Test
+    fun `needsApply returns true when same-version republish is newer than installed`(
+        @TempDir tmp: Path,
+    ) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        // publishedAt is in the future relative to the file mtime that
+        // gets stamped when we write the package.json below.
+        val publishedAt = Instant.now().plusSeconds(3600)
+        val pkg = RegistryInjectionService.PublishedPackage(
+            "@zerobias-org/foo",
+            "1.2.3",
+            publishedAt,
+        )
+        writeRootPackageJson(repoRoot, pkg.name)
+
+        File(repoRoot, "package-lock.json").writeText(
+            """
+            {
+              "lockfileVersion": 3,
+              "packages": {
+                "node_modules/@zerobias-org/foo": {
+                  "version": "1.2.3",
+                  "resolved": "http://localhost:15016/@zerobias-org/foo/-/foo-1.2.3.tgz"
+                }
+              }
+            }
+            """.trimIndent()
+        )
+        val installed = File(repoRoot, "node_modules/@zerobias-org/foo")
+        installed.mkdirs()
+        // Same version on disk — checks 1-5 pass — but the file mtime is
+        // older than publishedAt, so check 6 forces a refetch.
+        File(installed, "package.json").writeText("""{"name":"@zerobias-org/foo","version":"1.2.3"}""")
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        assertTrue(
+            service.needsApply(repoRoot),
+            "publishedAt newer than installed mtime → refetch required",
+        )
+    }
+
+    @Test
+    fun `needsApply returns false when publishedAt predates the install`(
+        @TempDir tmp: Path,
+    ) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        // publishedAt in the past — install is fresh enough.
+        val publishedAt = Instant.now().minusSeconds(3600)
+        val pkg = RegistryInjectionService.PublishedPackage(
+            "@zerobias-org/foo",
+            "1.2.3",
+            publishedAt,
+        )
+        writeRootPackageJson(repoRoot, pkg.name)
+
+        File(repoRoot, "package-lock.json").writeText(
+            """
+            {
+              "lockfileVersion": 3,
+              "packages": {
+                "node_modules/@zerobias-org/foo": {
+                  "version": "1.2.3",
+                  "resolved": "http://localhost:15016/@zerobias-org/foo/-/foo-1.2.3.tgz"
+                }
+              }
+            }
+            """.trimIndent()
+        )
+        val installed = File(repoRoot, "node_modules/@zerobias-org/foo")
+        installed.mkdirs()
+        File(installed, "package.json").writeText("""{"name":"@zerobias-org/foo","version":"1.2.3"}""")
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        assertFalse(
+            service.needsApply(repoRoot),
+            "publishedAt older than install → no refetch",
+        )
     }
 
     @Test
@@ -375,6 +476,59 @@ class RegistryInjectionServiceTest {
     fun `cleanupStale is a no-op for empty list`(@TempDir tmp: Path) {
         val service = newService(tmp.toFile())
         assertFalse(service.cleanupStale(tmp.toFile(), emptyList()))
+    }
+
+    // ── apply: same-version republish taint ──────────────────────
+
+    @Test
+    fun `apply taints node_modules when publishedAt is newer than installed mtime`(
+        @TempDir tmp: Path,
+    ) {
+        val previous = System.getenv("ZB_SLOT")
+        if (previous != null) return
+
+        val repoRoot = tmp.toFile()
+        val publishedAt = Instant.now().plusSeconds(3600)
+        val pkg = RegistryInjectionService.PublishedPackage(
+            "@zerobias-org/foo",
+            "1.2.3",
+            publishedAt,
+        )
+        writeRootPackageJson(repoRoot, pkg.name)
+
+        // Lockfile entry already correct — won't be rewritten by apply().
+        File(repoRoot, "package-lock.json").writeText(
+            """
+            {
+              "lockfileVersion": 3,
+              "packages": {
+                "node_modules/@zerobias-org/foo": {
+                  "version": "1.2.3",
+                  "resolved": "http://localhost:15016/@zerobias-org/foo/-/foo-1.2.3.tgz"
+                }
+              }
+            }
+            """.trimIndent()
+        )
+
+        // Installed copy with the right version but stale mtime.
+        val installed = File(repoRoot, "node_modules/@zerobias-org/foo")
+        installed.mkdirs()
+        File(installed, "package.json").writeText("""{"name":"@zerobias-org/foo","version":"1.2.3"}""")
+        File(installed, "stale-marker.txt").writeText("from previous publish")
+
+        val service = newServiceWithTrigger(repoRoot, publishes = listOf(pkg))
+        val logs = mutableListOf<String>()
+        service.apply { logs.add(it) }
+
+        assertFalse(
+            installed.exists(),
+            "installed dir should be deleted when publishedAt is newer than its mtime",
+        )
+        assertTrue(
+            logs.any { it.contains("tainted @zerobias-org/foo") && it.contains("publishedAt") },
+            "should log taint with publishedAt reason; got: $logs",
+        )
     }
 
     // ── forcePublic ──────────────────────────────────────────────

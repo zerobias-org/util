@@ -25,7 +25,7 @@
  * as a standalone unit."
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
@@ -55,10 +55,23 @@ export async function spawnStandardLifecycleAndExit(
   command: string,
   baseCommand: string,
   parsed: ParsedLifecycleArgs,
+  opts?: { skipDisplay?: boolean },
 ): Promise<never> {
+  // Gradle flags (-P*) and the TUI display only apply when the lifecycle
+  // command is a gradle invocation. We detect that by literal `./gradlew`
+  // in the command — no heuristics, no assumptions about wrapper scripts.
+  // Anything else runs verbatim through bash (the default execution env)
+  // with no flag injection and no TUI display. If a user wants gradle-
+  // aware behavior, the command should say `./gradlew`.
+  const isGradleCommand = /(^|\s|&)\.\/gradlew(\s|$)/.test(baseCommand);
+
   // Flag passthrough — identical semantics to the monorepo dispatcher
   // for the flags that make sense here. Standard mode drops --all and
   // --base (they're monorepo-specific affected-set selectors).
+  //
+  // Flags are appended regardless of whether `baseCommand` is `./gradlew`
+  // directly — wrapper scripts that forward `"$@"` to gradle still need
+  // them. Scripts that don't forward args are unaffected.
   const passthrough: string[] = [];
   if (parsed.dryRun) passthrough.push('-PdryRun=true');
   if (parsed.force) passthrough.push('-Pforce=true');
@@ -69,8 +82,8 @@ export async function spawnStandardLifecycleAndExit(
   if (parsed.modules) passthrough.push(`-PmodulesToVersion=${parsed.modules}`);
   if (parsed.noPush) passthrough.push('-Ppush=false');
   // Anything zbb didn't recognize (gradle -P/-D project/system properties,
-  // bare task names, `--`-style flags) — forward to gradle verbatim. Without
-  // this, `zbb publish -PfooBar=true` silently drops the property and the
+  // bare task names, `--`-style flags) — forward verbatim. Without this,
+  // `zbb publish -PfooBar=true` silently drops the property and the
   // gradle script never sees the override.
   passthrough.push(...parsed.remaining);
 
@@ -107,10 +120,15 @@ export async function spawnStandardLifecycleAndExit(
   // output (full task list, real-time stderr from tsc/mocha, no overlay)
   // export this in their shell rc and never think about it again.
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
-  const noDisplay = process.env.ZBB_NO_DISPLAY === '1';
+  // Caller can force the display off (e.g. cli.ts's standalone-sub-package
+  // dispatch — those builds don't apply zb.monorepo-base, so no per-task
+  // events ever arrive and the TUI would falsely render "All tasks
+  // up-to-date" while gradle silently does real work).
+  const noDisplay = opts?.skipDisplay === true || process.env.ZBB_NO_DISPLAY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
+    isGradleCommand &&
     !noDisplay &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
@@ -122,17 +140,38 @@ export async function spawnStandardLifecycleAndExit(
     // This only works for single-command lifecycle entries; chained
     // commands (`./gradlew a && ./gradlew b`) fall through to bash.
     const parts = cmdToRun.trim().split(/\s+/);
+    // Direct spawn skips shell parsing — a command with shell quoting,
+    // semicolons, pipes, multi-line bodies, or env-var prefixes needs
+    // bash to interpret it. Fall through to the bash -c path for those.
     const safe =
       parts.length > 0 &&
       !cmdToRun.includes('|') &&
       !cmdToRun.includes('&&') &&
-      !cmdToRun.includes(';');
+      !cmdToRun.includes(';') &&
+      !cmdToRun.includes('"') &&
+      !cmdToRun.includes("'") &&
+      !cmdToRun.includes('\n') &&
+      !parts[0].includes('=');
     if (safe) {
       const cmd = parts[0];
       const args = [...parts.slice(1), ...passthrough];
       const { runWithDisplay } = requireCJS('./monorepo/Display.js');
       const code = await runWithDisplay(repoRoot, cmd, args);
       process.exit(code);
+    }
+  }
+
+  // Resolve `./gradlew` against the actual gradle root if cwd lacks
+  // one. Mirrors the same fix in monorepo/index.ts — see comments
+  // there for the full rationale.
+  let resolvedCmdToRun = cmdToRun;
+  if (/(^|\s|&)\.\/gradlew(\s|$)/.test(cmdToRun) && !existsSync(join(repoRoot, 'gradlew'))) {
+    const repo = findGradleRoot(repoRoot);
+    if (repo) {
+      resolvedCmdToRun = cmdToRun.replace(/(^|\s|&)\.\/gradlew(\s|$)/g, `$1${repo.wrapper}$2`);
+      if (parsed.verbose) {
+        console.log(`[zbb] resolved ./gradlew → ${repo.wrapper}`);
+      }
     }
   }
 
@@ -146,24 +185,68 @@ export async function spawnStandardLifecycleAndExit(
   // .zbb-monorepo/gradle.log instead of the user's terminal.
   // Skip if the command already specifies a console mode.
   const passthroughExtras = [...passthrough];
-  const isGradleCommand = cmdToRun.includes('gradlew');
   const alreadyHasConsole =
-    cmdToRun.includes('--console') || passthrough.some(a => a.startsWith('--console'));
+    resolvedCmdToRun.includes('--console') || passthrough.some(a => a.startsWith('--console'));
   if (isGradleCommand && !alreadyHasConsole) {
     passthroughExtras.push('--console=plain');
   }
 
   const fullCommand = passthroughExtras.length > 0
-    ? `${cmdToRun} ${passthroughExtras.join(' ')}`
-    : cmdToRun;
+    ? `${resolvedCmdToRun} ${passthroughExtras.join(' ')}`
+    : resolvedCmdToRun;
 
-  const result = spawnSync('bash', ['-c', fullCommand], {
+  // Use async spawn so JS signal handlers can run on Ctrl-C. spawnSync
+  // blocks the event loop — the parent dies but its gradle daemon can
+  // escape the process group and keep building. detached:true puts bash
+  // in its own process group so we can kill the whole tree at once.
+  const child = spawn('bash', ['-c', fullCommand], {
     cwd: repoRoot,
     stdio: 'inherit',
     env: process.env,
+    detached: true,
   });
 
-  process.exit(result.status ?? 1);
+  // Signal forwarding mirrors lib/gradle.ts:runGradle. First Ctrl-C
+  // sends the signal to the whole process group + best-effort
+  // ./gradlew --stop for any detached daemon. Second Ctrl-C escalates
+  // to SIGKILL.
+  let signalForwarded = false;
+  const forwardSignal = (sig: NodeJS.Signals) => {
+    if (signalForwarded) {
+      try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch {}
+      process.exit(130);
+    }
+    signalForwarded = true;
+    try { if (child.pid) process.kill(-child.pid, sig); } catch {}
+    if (isGradleCommand) {
+      try {
+        spawn('./gradlew', ['--stop'], {
+          cwd: repoRoot,
+          stdio: 'ignore',
+          detached: true,
+        }).unref();
+      } catch {}
+    }
+  };
+  process.on('SIGINT', () => forwardSignal('SIGINT'));
+  process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+
+  await new Promise<void>((resolve) => {
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        process.exit(128 + (signal === 'SIGINT' ? 2 : signal === 'SIGTERM' ? 15 : 1));
+      }
+      process.exit(code ?? 1);
+      resolve();
+    });
+    child.on('error', (err) => {
+      process.stderr.write(`zbb: lifecycle spawn failed: ${err.message}\n`);
+      process.exit(1);
+    });
+  });
+
+  // Unreachable — process.exit() above terminates.
+  throw new Error('unreachable');
 }
 
 /**

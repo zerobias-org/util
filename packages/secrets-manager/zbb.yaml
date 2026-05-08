@@ -1,0 +1,6 @@
+lifecycle:
+  testIntegration:
+    command: |
+      CACHE_TIMEOUT_SECONDS=5 node --import tsx/esm ../../node_modules/mocha/bin/mocha.js --exit --extensions ts --inline-diffs --reporter=list test/integration/**/*.ts
+    tools: [aws, vault]
+

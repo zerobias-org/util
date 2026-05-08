@@ -152,6 +152,44 @@ class ChangeDetectorTest {
     }
 
     @Test
+    fun `uncommitted root dep bump pulls importing package into affected`(@TempDir tmp: Path) {
+        val root = setupMonorepo(tmp)
+
+        // Make foo import the root dep `lodash` so the targeted root-dep
+        // analysis has something to match against.
+        File(root, "packages/foo/src/index.ts").writeText(
+            """import _ from 'lodash'; export const foo = _.identity(1);"""
+        )
+        // Leave foo's dist in place so the missing-dist fallback doesn't
+        // mask the root-dep path we're trying to exercise.
+        File(root, "packages/foo/dist").mkdirs()
+        File(root, "packages/bar/dist").mkdirs()
+        runGit(root, "add", ".")
+        runGit(root, "commit", "-q", "-m", "foo imports lodash")
+
+        // Bump lodash in root package.json — UNCOMMITTED.
+        // Pre-fix, getRootDepsAt(HEAD) reads committed HEAD and misses this,
+        // so getChangedRootDeps returns empty and foo isn't pulled in.
+        File(root, "package.json").writeText("""
+            {
+              "name": "test-monorepo",
+              "version": "1.0.0",
+              "workspaces": ["packages/foo", "packages/bar"],
+              "dependencies": {"lodash": "^5.0.0"}
+            }
+        """.trimIndent())
+
+        val packages = Workspace.discoverWorkspaces(root)
+        val graph = Workspace.buildDependencyGraph(packages)
+        val result = ChangeDetector.detectChanges(root, graph)
+
+        assertTrue(
+            result.affected.contains("@t/foo"),
+            "foo imports lodash and root bumped lodash (uncommitted) — should be affected; got ${result.affected}",
+        )
+    }
+
+    @Test
     fun `getCurrentBranch returns the active branch`(@TempDir tmp: Path) {
         val root = setupMonorepo(tmp)
         val branch = ChangeDetector.getCurrentBranch(root)

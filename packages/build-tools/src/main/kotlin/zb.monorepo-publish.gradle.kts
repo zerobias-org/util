@@ -35,6 +35,7 @@ import com.zerobias.buildtools.monorepo.GateStampResult
 import com.zerobias.buildtools.monorepo.MonorepoGraphService
 import com.zerobias.buildtools.monorepo.Prepublish
 import com.zerobias.buildtools.monorepo.PublishChangeDetector
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import com.zerobias.buildtools.monorepo.StampValidator
 import com.zerobias.buildtools.util.ReleaseAnnouncement
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -147,7 +148,7 @@ val publishGuard = tasks.register("publishGuard") {
 // resolves publish versions (auto-patch-bumps if already published), and
 // patches package.json version fields.
 
-val publishPlanFile = rootProject.file(".zbb-monorepo/publish-plan.json")
+val publishPlanFile = rootProject.file("$ZBB_GRADLE_DIR/publish-plan.json")
 
 val publishPlan = tasks.register("publishPlan") {
     group = "monorepo"
@@ -359,7 +360,7 @@ fun resolveGradleVersion(pkgDir: java.io.File): String? {
     }
 }
 
-val javaPublishFile = rootProject.file(".zbb-monorepo/java-publish.json")
+val javaPublishFile = rootProject.file("$ZBB_GRADLE_DIR/java-publish.json")
 
 val publishJavaPackages = tasks.register("publishJavaPackages") {
     group = "monorepo"
@@ -1164,7 +1165,7 @@ gradle.projectsEvaluated {
                 }
 
                 // Merge in Java publishes from publishJavaPackages (side file
-                // .zbb-monorepo/java-publish.json). isJava=true keeps them out
+                // .zbb-gradle/java-publish.json). isJava=true keeps them out
                 // of the Lambda event path (no package.json / npm dist-tags)
                 // but includes them in the Slack message.
                 if (javaPublishFile.exists()) {

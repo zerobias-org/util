@@ -11,6 +11,13 @@ _ZBB_CURRENT_STACK=""
 _ZBB_CURRENT_STACK_VARS=()
 # Full npm package name of the active stack (e.g. "@zerobias-org/util")
 _ZBB_CURRENT_STACK_FULL=""
+# mtime of the stack's .env when last loaded. Lets us detect external
+# rewrites (vault re-pull at slot load elsewhere, another terminal
+# running `zbb env set`, etc.) so we reload instead of trusting the
+# already-in-stack short-circuit. Without this, a stack .env that's
+# updated AFTER the subshell entered the stack stays invisible until
+# the user manually `source ~/.bashrc` or exits/re-enters the slot.
+_ZBB_CURRENT_STACK_ENV_MTIME=""
 
 # ── Load a stack's .env into the current shell ───────────────────────
 
@@ -105,15 +112,37 @@ _zbb_scope_env() {
     PS1="\[\033[01;36m\][zb:${ZB_SLOT}]\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
   fi
 
-  # If same stack and not a forced reload, skip the env reload (we only
-  # rebuild PS1 above — the env scope didn't change).
-  [ "$stack_name" = "$_ZBB_CURRENT_STACK" ] && [ "${_ZBB_FORCE_RELOAD:-}" != "1" ] && return
+  # If same stack and not a forced reload, also check whether the stack
+  # .env was rewritten on disk since we last loaded it. The original
+  # short-circuit assumed `_ZBB_CURRENT_STACK == stack_name` was enough,
+  # but stack .envs can be rewritten by another terminal (`zbb env set`),
+  # by vault re-pull on a fresh slot load elsewhere, or by zbb itself
+  # during a command — and the subshell would silently keep stale values
+  # until the user exited and re-entered. mtime check is one stat() per
+  # prompt redraw, near-free.
+  local env_file=""
+  local env_mtime=""
+  if [ -n "$stack_name" ]; then
+    env_file="$stacks_dir/$stack_name/.env"
+    if [ -f "$env_file" ]; then
+      # GNU stat first, BSD stat fallback (macOS).
+      env_mtime=$(stat -c '%Y' "$env_file" 2>/dev/null || stat -f '%m' "$env_file" 2>/dev/null || echo "")
+    fi
+  fi
+
+  if [ "$stack_name" = "$_ZBB_CURRENT_STACK" ] \
+     && [ "${_ZBB_FORCE_RELOAD:-}" != "1" ] \
+     && [ "$env_mtime" = "$_ZBB_CURRENT_STACK_ENV_MTIME" ]; then
+    return
+  fi
 
   local prev="$_ZBB_CURRENT_STACK"
+  local prev_mtime="$_ZBB_CURRENT_STACK_ENV_MTIME"
   _ZBB_FORCE_RELOAD=""
 
   _ZBB_CURRENT_STACK_FULL="$stack_full"
   _zbb_load_stack_env "$stack_name"
+  _ZBB_CURRENT_STACK_ENV_MTIME="$env_mtime"
 
   # Log the transition
   if [ -n "$stack_name" ] && [ "$stack_name" != "$prev" ]; then
@@ -121,7 +150,11 @@ _zbb_scope_env() {
   elif [ -z "$stack_name" ] && [ -n "$prev" ]; then
     echo "[stack: none]"
   elif [ -n "$stack_name" ] && [ "$stack_name" = "$prev" ]; then
-    echo "[stack: $stack_name] (reloaded)"
+    if [ "$env_mtime" != "$prev_mtime" ]; then
+      echo "[stack: $stack_name] (.env updated — reloaded)"
+    else
+      echo "[stack: $stack_name] (reloaded)"
+    fi
   fi
 }
 

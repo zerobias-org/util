@@ -13,8 +13,12 @@
  * sole authoritative implementation.
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import { ZBB_GRADLE_DIR } from '../paths.js';
+import { findGradleRoot } from '../gradle.js';
 
 // Sync `require` for use in ESM — we lazy-load Display.js without making
 // the whole call chain async.
@@ -83,6 +87,17 @@ export async function spawnLifecycleAndExit(
   parsed: ParsedLifecycleArgs,
   opts?: { scopePackage?: string },
 ): Promise<never> {
+  // The TUI display only applies when the lifecycle command is a direct
+  // gradle invocation. Detect that by literal `./gradlew` in the command.
+  const isGradleCommand = /(^|\s|&)\.\/gradlew(\s|$)/.test(baseCommand);
+
+  // Gradle property flags (and unrecognized passthrough args) are appended
+  // regardless of whether `baseCommand` is `./gradlew` directly. Wrapper
+  // scripts that forward `"$@"` to gradle (e.g. com/hub's
+  // gate-with-neon.sh) need these flags to reach the inner gradle call.
+  // Without this, `zbb gate --clean` silently drops `-Pcleanlocalregistry`
+  // because the wrapper script isn't `./gradlew`. Scripts that don't
+  // forward args are unaffected — they'd ignore the trailing flags.
   const passthrough: string[] = [];
   if (parsed.all) passthrough.push('-Pmonorepo.all=true');
   if (parsed.base) passthrough.push(`-Pmonorepo.base=${parsed.base}`);
@@ -90,9 +105,9 @@ export async function spawnLifecycleAndExit(
   if (parsed.force) passthrough.push('-Pforce=true');
   if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
   if (opts?.scopePackage) passthrough.push(`-Pmonorepo.scope=${opts.scopePackage}`);
-  // Anything zbb didn't recognize — forward to gradle verbatim so callers
-  // can pass through `-PfooBar=true` etc. without zbb needing to know each
-  // property name.
+  // Anything zbb didn't recognize — forward verbatim so callers can pass
+  // through `-PfooBar=true` etc. without zbb needing to know each property
+  // name.
   passthrough.push(...parsed.remaining);
 
   if (parsed.verbose) {
@@ -103,16 +118,30 @@ export async function spawnLifecycleAndExit(
   // Use the project-centric display for commands that produce per-task events
   // (build, test, gate). Skip clean (single root task — no per-task events)
   // and gate --check (fast file read — no point spinning up the display).
+  // Display also requires the command to BE gradle — the event tailer parses
+  // gradle's per-task events, which arbitrary scripts don't emit.
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
+    isGradleCommand &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
     (process.stdout.isTTY || forceDisplay);
   if (useDisplay) {
     const parts = baseCommand.trim().split(/\s+/);
-    if (parts.length > 0 && !baseCommand.includes('|') && !baseCommand.includes('&&')) {
+    // Direct spawn skips shell parsing — a command with shell quoting,
+    // semicolons, pipes, multi-line bodies, or env-var prefixes needs
+    // bash to interpret it. Fall through to the bash -c path for those.
+    const safeForDirectSpawn = parts.length > 0
+      && !baseCommand.includes('|')
+      && !baseCommand.includes('&&')
+      && !baseCommand.includes(';')
+      && !baseCommand.includes('"')
+      && !baseCommand.includes("'")
+      && !baseCommand.includes('\n')
+      && !parts[0].includes('=');
+    if (safeForDirectSpawn) {
       const cmd = parts[0];
       const args = [...parts.slice(1), ...passthrough];
       const { runWithDisplay } = requireCJS('./Display.js');
@@ -121,18 +150,168 @@ export async function spawnLifecycleAndExit(
     }
   }
 
+  // Resolve `./gradlew` against the actual gradle root via walk-up.
+  // Sub-package zbb.yaml files commonly reference `./gradlew <task>`
+  // (often because the manifest is shipped with the published artifact
+  // and assumes a consumer's local gradlew). When zbb runs that command
+  // from the lifecycle owner's dir — which usually doesn't have its own
+  // wrapper — bash fails with "./gradlew: No such file or directory".
+  //
+  // Rewrite to the absolute wrapper path found by walking up. cwd stays
+  // at repoRoot so gradle's "current subproject from cwd" resolution
+  // still scopes the task correctly (e.g., `./gradlew test` from
+  // `stack/` becomes `<root>/gradlew test`, which gradle interprets as
+  // `:stack:test`).
+  let resolvedBaseCommand = baseCommand;
+  if (/(^|\s|&)\.\/gradlew(\s|$)/.test(baseCommand) && !existsSync(join(repoRoot, 'gradlew'))) {
+    const repo = findGradleRoot(repoRoot);
+    if (repo) {
+      // Replace the literal `./gradlew` token. Anchored on word boundaries
+      // (start/whitespace/&) to avoid touching strings like `something/./gradlew`.
+      resolvedBaseCommand = baseCommand.replace(/(^|\s|&)\.\/gradlew(\s|$)/g, `$1${repo.wrapper}$2`);
+      if (parsed.verbose) {
+        console.log(`[zbb] resolved ./gradlew → ${repo.wrapper}`);
+      }
+    }
+  }
+
   // Fallback path: bash -c "<full command>"
   const fullCommand = passthrough.length > 0
-    ? `${baseCommand} ${passthrough.join(' ')}`
-    : baseCommand;
+    ? `${resolvedBaseCommand} ${passthrough.join(' ')}`
+    : resolvedBaseCommand;
 
-  const result = spawnSync('bash', ['-c', fullCommand], {
+  // Marker-based gradle delegation. When a wrapper script runs gradle
+  // internally (e.g. com/hub's gate-with-neon.sh that creates a Neon DB
+  // branch, exports PGHOST, then exec's into ./gradlew monorepoGate),
+  // zbb can't see gradle directly to engage the TUI. The script can
+  // opt-in by printing this marker to stderr or stdout BEFORE invoking
+  // gradle:
+  //
+  //     echo "ZBB_DELEGATE_GRADLE: ./gradlew monorepoGate" >&2
+  //     ./gradlew monorepoGate
+  //
+  // zbb watches the script's output for the marker. On detection it
+  // pre-creates the events file, sets ZBB_MONOREPO_EVENT_FILE in the
+  // child env (gradle's EventEmitter writes there), and starts a tailer
+  // + MonorepoDisplay just like a direct gradle invocation. Output AFTER
+  // the marker is redirected to gradle.log only — the TUI handles the
+  // visual update from events. Output BEFORE the marker (script setup
+  // logs) is passed through to the terminal as normal.
+  const isMarkerEligibleCommand =
+    !isGradleCommand &&
+    displayEligibleCommands.has(command) &&
+    !isGateCheck &&
+    (process.stdout.isTTY || forceDisplay);
+
+  const eventDir = join(repoRoot, ZBB_GRADLE_DIR);
+  const logsDir = join(eventDir, 'logs');
+  const eventFile = join(eventDir, 'events.jsonl');
+  const gradleLogFile = join(eventDir, 'gradle.log');
+  const childEnv: Record<string, string | undefined> = { ...process.env };
+  if (isMarkerEligibleCommand) {
+    mkdirSync(eventDir, { recursive: true });
+    mkdirSync(logsDir, { recursive: true });
+    try { unlinkSync(eventFile); } catch { /* didn't exist */ }
+    childEnv.ZBB_MONOREPO_EVENT_FILE = eventFile;
+    // Same gradle-console-plain hint as runWithDisplay, in case the
+    // script's gradle invocation respects $TERM.
+    childEnv.TERM = 'dumb';
+    childEnv.GRADLE_OPTS = `${process.env.GRADLE_OPTS ?? ''} -Dorg.gradle.console=plain`.trim();
+  }
+
+  // Use async spawn (not spawnSync) so JS signal handlers can run on
+  // Ctrl-C. spawnSync blocks the event loop; the parent dies but its
+  // gradle daemon escapes the process group and keeps building.
+  // detached:true puts bash in its own process group so we can kill the
+  // whole tree with one signal.
+  const child = spawn('bash', ['-c', fullCommand], {
     cwd: repoRoot,
-    stdio: 'inherit',
-    env: process.env,
+    // For marker-eligible commands, pipe stdout/stderr so we can watch
+    // for the delegation marker. Otherwise inherit (existing behavior).
+    stdio: isMarkerEligibleCommand ? ['inherit', 'pipe', 'pipe'] : 'inherit',
+    env: childEnv,
+    detached: true,
   });
 
-  process.exit(result.status ?? 1);
+  // Marker watching: forward script output until the marker is seen,
+  // then engage TUI and redirect subsequent output to gradle.log.
+  if (isMarkerEligibleCommand && child.stdout && child.stderr) {
+    let markerSeen = false;
+    let display: import('./Display.js').MonorepoDisplay | null = null;
+    let tailer: import('./Display.js').EventFileTailer | null = null;
+    const gradleLog = createWriteStream(gradleLogFile);
+
+    const markerRe = /ZBB_DELEGATE_GRADLE:\s*(.+)/;
+    const onChunk = (chunk: Buffer, sinkBefore: NodeJS.WriteStream) => {
+      if (markerSeen) {
+        gradleLog.write(chunk);
+        return;
+      }
+      sinkBefore.write(chunk);
+      gradleLog.write(chunk);
+      const m = chunk.toString('utf-8').match(markerRe);
+      if (m) {
+        markerSeen = true;
+        const { MonorepoDisplay, EventFileTailer } = requireCJS('./Display.js');
+        process.stdout.write(`\n${'[2m'}[zbb] delegated gradle: ${m[1].trim()}${'[0m'}\n\n`);
+        const localDisplay = new MonorepoDisplay(logsDir, true);
+        const localTailer = new EventFileTailer(eventFile, (ev: unknown) => localDisplay.handleEvent(ev as Parameters<typeof localDisplay.handleEvent>[0]));
+        display = localDisplay;
+        tailer = localTailer;
+        localTailer.start();
+      }
+    };
+
+    child.stdout.on('data', (c: Buffer) => onChunk(c, process.stdout));
+    child.stderr.on('data', (c: Buffer) => onChunk(c, process.stderr));
+
+    child.on('exit', () => {
+      try { tailer?.stop(); } catch {}
+      try { display?.finalize(child.exitCode === 0); } catch {}
+      try { gradleLog.end(); } catch {}
+    });
+  }
+
+  // Signal forwarding mirrors lib/gradle.ts:runGradle and Display.ts:
+  // first Ctrl-C → SIGINT to the whole group + ./gradlew --stop;
+  // second Ctrl-C → SIGKILL.
+  let signalForwarded = false;
+  const forwardSignal = (sig: NodeJS.Signals) => {
+    if (signalForwarded) {
+      try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch {}
+      process.exit(130);
+    }
+    signalForwarded = true;
+    try { if (child.pid) process.kill(-child.pid, sig); } catch {}
+    if (isGradleCommand) {
+      try {
+        spawn('./gradlew', ['--stop'], {
+          cwd: repoRoot,
+          stdio: 'ignore',
+          detached: true,
+        }).unref();
+      } catch {}
+    }
+  };
+  process.on('SIGINT', () => forwardSignal('SIGINT'));
+  process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+
+  await new Promise<void>((resolve) => {
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        process.exit(128 + (signal === 'SIGINT' ? 2 : signal === 'SIGTERM' ? 15 : 1));
+      }
+      process.exit(code ?? 1);
+      resolve();
+    });
+    child.on('error', (err) => {
+      process.stderr.write(`zbb: lifecycle spawn failed: ${err.message}\n`);
+      process.exit(1);
+    });
+  });
+
+  // Unreachable — process.exit() above terminates.
+  throw new Error('unreachable');
 }
 
 /**

@@ -4,6 +4,8 @@ import com.github.gradle.node.npm.task.NpmTask
 import com.github.gradle.node.npm.task.NpxTask
 import com.zerobias.buildtools.collectorbot.CollectorbotEntryPointGenerator
 import com.zerobias.buildtools.module.ZbExtension
+import com.zerobias.buildtools.tasks.NeonDataloaderTask
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 
 plugins {
     id("zb.base")
@@ -76,7 +78,11 @@ tasks.named("validate") {
 val lintExec by tasks.registering(Exec::class) {
     group = "lifecycle"
     description = "Run eslint on source code using shared config from @zerobias-org/eslint-config"
-    dependsOn(tasks.named("compile"))
+    // Lint reads src/ only (not dist/), so it doesn't need transpile —
+    // just node_modules for the eslint binary. Running BEFORE compile
+    // means a lint failure fails fast; the user fixes the code, re-runs,
+    // and the (now-correct) compile happens once instead of twice.
+    dependsOn(npmInstallCollectorbot)
     workingDir(project.projectDir)
     doFirst {
         // Generate ephemeral eslint.config.js in the module directory
@@ -188,7 +194,12 @@ tasks.named("generate") {
 val transpile by tasks.registering(NpxTask::class) {
     group = "lifecycle"
     description = "Compile TypeScript (ESM)"
-    dependsOn(npmInstallCollectorbot, tasks.named("generate"))
+    // lint runs first so a lint failure short-circuits before tsc burns
+    // 10+ seconds compiling code that has style issues anyway. User
+    // fixes the lint error → re-runs → lint passes → transpile starts
+    // fresh. Without this, transpile completes first, lint fails, the
+    // fix invalidates transpile's output, and tsc has to redo the work.
+    dependsOn(npmInstallCollectorbot, tasks.named("generate"), tasks.named("lint"))
     workingDir.set(project.projectDir)
     command.set("tsc")
     inputs.dir("src")
@@ -255,6 +266,34 @@ val testE2eExec by tasks.registering(NpxTask::class) {
 
 tasks.named("testDirect") {
     dependsOn(testE2eExec)
+}
+
+// ════════════════════════════════════════════════════════════
+// DATALOADER TEST — create Neon branch, load artifacts, validate, clean up
+// ════════════════════════════════════════════════════════════
+//
+// Mirrors zb.typescript's testDataloaderExec wiring so collectorbot modules
+// exercise the same dataloader path as connector / agent / content modules.
+// `zb.typescript-collectorbot` only applies `zb.base`, so it doesn't inherit
+// the wiring from `zb.typescript` (the parent of typescript-connector and
+// typescript-agent) — we have to register it explicitly here.
+//
+// Collectorbot doesn't generate a `<noScope>.yml` distribution spec the way
+// content modules do, so the symlink-doFirst from zb.typescript:1729-1740 is
+// intentionally omitted. If a future collectorbot dataloader path needs that
+// shape, mirror that block here.
+
+val testDataloaderExec by tasks.registering(NeonDataloaderTask::class) {
+    dependsOn(tasks.named("compile"))
+    packageDir.set(layout.projectDirectory)
+    force.set(true)
+    val safeProjectName = project.path.removePrefix(":").replace(":", "-")
+    displayLogPath.set(rootProject.layout.projectDirectory
+        .file("$ZBB_GRADLE_DIR/logs/${safeProjectName}-testDataloader.log"))
+}
+
+tasks.named("testDataloader") {
+    dependsOn(testDataloaderExec)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -630,7 +669,18 @@ tasks.named("publishImage") {
 
 val collectorbotChangedSinceTag: Boolean = extra["changedSinceTag"] as Boolean
 
+// Guard ALL publish/promote exec tasks. Without these, publishNpmExec
+// runs (and uploads with --tag next) even on no-change runs because its
+// parent publishNpm's onlyIf doesn't gate the exec — tasks resolve their
+// own onlyIf at execution time, after their deps have already run.
+// promoteNpm needs the same guard so it doesn't move the 'next' tag
+// off a package whose publish was a re-publish of an unchanged version.
+// Symptom without these: rollback fires on a successful no-op run because
+// stagedPackages is non-empty (publishNpmExec added) but promoteAll
+// skipped (publishAll said no-changes).
 listOf(
+    "publishNpmExec",
+    "promoteNpm",
     "publishImageEcr",
     "publishImageGhcr"
 ).forEach { taskName ->
