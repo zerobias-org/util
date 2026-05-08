@@ -34,6 +34,6 @@
     "*.md"
   ],
   "dependencies": {
-    "@zerobias-org/logger": "^3.0.9"
+    "@zerobias-org/logger": "^3.0.10"
   }
 }
