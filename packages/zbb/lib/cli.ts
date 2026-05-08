@@ -289,11 +289,14 @@ async function _main(argv: string[]): Promise<void> {
     const slot = await SlotManager.load(slotName);
     process.env.ZB_SLOT = slotName;
 
-    // Set JAVA_HOME if not already correct
+    // Set JAVA_HOME if not already correct. findDefaultJavaHome walks
+    // platform-appropriate candidates (brew on macOS, distro paths on
+    // Linux) and returns null if none exist — in which case we leave
+    // env alone for downstream tools to diagnose.
     if (!process.env.JAVA_HOME || !process.env.JAVA_HOME.includes('21')) {
-      const java21Home = '/usr/lib/jvm/java-21-openjdk-amd64';
-      const { existsSync } = await import('node:fs');
-      if (existsSync(`${java21Home}/bin/java`)) {
+      const { findDefaultJavaHome } = await import('./java-home.js');
+      const java21Home = findDefaultJavaHome();
+      if (java21Home) {
         process.env.JAVA_HOME = java21Home;
         process.env.PATH = `${java21Home}/bin:${process.env.PATH ?? ''}`;
       }
@@ -948,11 +951,12 @@ async function handleSlot(args: string[]): Promise<void> {
       shellEnv.ZB_SLOT = slotName;
       shellEnv.ZB_SLOT_DIR = slot.path;
 
-      // Ensure JAVA_HOME is set and on PATH if not already correct
+      // Ensure JAVA_HOME is set and on PATH if not already correct.
+      // Same platform-aware fallback as the global --slot path above.
       if (!shellEnv.JAVA_HOME || !shellEnv.JAVA_HOME.includes('21')) {
-        const java21Home = '/usr/lib/jvm/java-21-openjdk-amd64';
-        const { existsSync } = await import('node:fs');
-        if (existsSync(`${java21Home}/bin/java`)) {
+        const { findDefaultJavaHome } = await import('./java-home.js');
+        const java21Home = findDefaultJavaHome();
+        if (java21Home) {
           shellEnv.JAVA_HOME = java21Home;
           shellEnv.PATH = `${java21Home}/bin:${shellEnv.PATH ?? ''}`;
         }

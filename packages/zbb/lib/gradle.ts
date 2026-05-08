@@ -8,17 +8,21 @@ import { existsSync, readFileSync, writeFileSync, statSync, mkdirSync } from 'no
 import { join, resolve, relative, sep } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { platform } from 'node:os';
+import { findDefaultJavaHome } from './java-home.js';
 
 // ── Environment Setup ────────────────────────────────────────────────
 
 export function prepareGradleEnv(): Record<string, string> {
   const env: Record<string, string> = { ...process.env as Record<string, string> };
 
-  // Force Java 21 to avoid Gradle 8.10.2 issues with Java 25
-  const defaultJavaHome = platform() === 'darwin'
-    ? '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'
-    : '/usr/lib/jvm/java-21-openjdk-amd64';
-  env.JAVA_HOME = env.JAVA_HOME || defaultJavaHome;
+  // Force Java 21 to avoid Gradle 8.10.2 issues with Java 25. Resolution
+  // walks platform-appropriate candidate paths; null means no Java 21
+  // found locally and we leave JAVA_HOME unset for downstream tools to
+  // diagnose.
+  if (!env.JAVA_HOME) {
+    const found = findDefaultJavaHome();
+    if (found) env.JAVA_HOME = found;
+  }
 
   // Suppress Java 21 native access warnings
   const jvmArgs = '--enable-native-access=ALL-UNNAMED';
