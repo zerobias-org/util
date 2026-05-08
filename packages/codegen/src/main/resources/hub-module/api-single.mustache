@@ -106,7 +106,7 @@ export interface {{classname}} {
    {{#hasParams}}
    * @example
    * ```typescript
-   * const result = await api.{{nickname}}({{#allParams}}{{^-first}}, {{/-first}}{{#isString}}'{{paramName}}'{{/isString}}{{#isUuid}}'00000000-0000-0000-0000-000000000000'{{/isUuid}}{{#isDateTime}}'2020-01-01T00:00:00Z'{{/isDateTime}}{{#isDate}}'2020-01-01'{{/isDate}}{{#isInteger}}1{{/isInteger}}{{#isLong}}1{{/isLong}}{{#isFloat}}1.0{{/isFloat}}{{#isDouble}}1.0{{/isDouble}}{{#isBoolean}}true{{/isBoolean}}{{^isString}}{{^isUuid}}{{^isDateTime}}{{^isDate}}{{^isInteger}}{{^isLong}}{{^isFloat}}{{^isDouble}}{{^isBoolean}}null{{/isBoolean}}{{/isDouble}}{{/isFloat}}{{/isLong}}{{/isInteger}}{{/isDate}}{{/isDateTime}}{{/isUuid}}{{/isString}}{{/allParams}});
+   * const result = await api.{{nickname}}({{#allParams}}{{^-first}}, {{/-first}}{{#isString}}'{{paramName}}'{{/isString}}{{#isUuid}}'00000000-0000-0000-0000-000000000000'{{/isUuid}}{{#isDateTime}}new DateTime('2020-01-01T00:00:00Z'){{/isDateTime}}{{#isDate}}new DateFormat('2020-01-01'){{/isDate}}{{#isInteger}}1{{/isInteger}}{{#isLong}}1{{/isLong}}{{#isFloat}}1.0{{/isFloat}}{{#isDouble}}1.0{{/isDouble}}{{#isBoolean}}true{{/isBoolean}}{{^isString}}{{^isUuid}}{{^isDateTime}}{{^isDate}}{{^isInteger}}{{^isLong}}{{^isFloat}}{{^isDouble}}{{^isBoolean}}null{{/isBoolean}}{{/isDouble}}{{/isFloat}}{{/isLong}}{{/isInteger}}{{/isDate}}{{/isDateTime}}{{/isUuid}}{{/isString}}{{/allParams}});
    * ```
    {{/hasParams}}
    * @openapi operation={{operationId}} path={{path}} method={{httpMethod}}

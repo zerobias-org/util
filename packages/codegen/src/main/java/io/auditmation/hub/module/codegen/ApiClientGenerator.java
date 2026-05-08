@@ -115,10 +115,10 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
         CORE_TYPES_MAP.put("b64", new CoreTypeMetadata("Byte", CoreTypeSource.CORE));
         CORE_TYPES_MAP.put("base64", new CoreTypeMetadata("Byte", CoreTypeSource.CORE));
         CORE_TYPES_MAP.put("cidr", new CoreTypeMetadata("Cidr", CoreTypeSource.CORE));
-        CORE_TYPES_MAP.put("date-time", new CoreTypeMetadata("Date", CoreTypeSource.CORE));
-        CORE_TYPES_MAP.put("time", new CoreTypeMetadata("Date", CoreTypeSource.CORE));
-        CORE_TYPES_MAP.put("timestamp", new CoreTypeMetadata("Date", CoreTypeSource.CORE));
-        CORE_TYPES_MAP.put("date", new CoreTypeMetadata("Date", CoreTypeSource.CORE));
+        CORE_TYPES_MAP.put("date-time", new CoreTypeMetadata("DateTime", CoreTypeSource.CORE));
+        CORE_TYPES_MAP.put("time", new CoreTypeMetadata("DateTime", CoreTypeSource.CORE));
+        CORE_TYPES_MAP.put("timestamp", new CoreTypeMetadata("DateTime", CoreTypeSource.CORE));
+        CORE_TYPES_MAP.put("date", new CoreTypeMetadata("DateFormat", CoreTypeSource.CORE));
         CORE_TYPES_MAP.put("double", new CoreTypeMetadata("number", CoreTypeSource.CORE));
         CORE_TYPES_MAP.put("duration", new CoreTypeMetadata("Duration", CoreTypeSource.CORE));
         CORE_TYPES_MAP.put("email", new CoreTypeMetadata("Email", CoreTypeSource.CORE));
@@ -301,8 +301,7 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
             return super.toDefaultValue(p);
         }
 
-        if (CORE_TYPES_MAP.get(p.getFormat()).type.equals("Date")
-                || CORE_TYPES_MAP.get(p.getFormat()).type.equals("number")) {
+        if (CORE_TYPES_MAP.get(p.getFormat()).type.equals("number")) {
             return super.toDefaultValue(p);
         }
 
