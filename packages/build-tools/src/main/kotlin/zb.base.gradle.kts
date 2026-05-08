@@ -1854,6 +1854,18 @@ gradle.taskGraph.whenReady {
             return Triple(outTee, errTee, perTask)
         }
 
+        // Write a `$ <cmd>` line at the top of the tee'd section so silent
+        // tools (eslint/tsc passing with no output, npm scripts that exit
+        // 0 with nothing on stdout) leave a breadcrumb behind. Without
+        // this, gradle.log shows just `===== ...:lintExec =====` followed
+        // by a blank line — gives the reader no idea what actually ran.
+        fun writeCmdLine(out: java.io.OutputStream, line: String) {
+            try {
+                out.write("$ $line\n".toByteArray())
+                out.flush()
+            } catch (_: Exception) {}
+        }
+
         when (task) {
             is Exec -> {
                 val execTask: Exec = task
@@ -1861,6 +1873,7 @@ gradle.taskGraph.whenReady {
                 execTask.doFirst {
                     val (outTee, errTee, perTask) = openTeeStream()
                     perTaskStream = perTask
+                    writeCmdLine(outTee, execTask.commandLine.joinToString(" "))
                     @Suppress("DEPRECATION")
                     (execTask as org.gradle.process.BaseExecSpec).standardOutput = outTee
                     @Suppress("DEPRECATION")
@@ -1876,6 +1889,9 @@ gradle.taskGraph.whenReady {
                 npxTask.doFirst {
                     val (outTee, errTee, perTask) = openTeeStream()
                     perTaskStream = perTask
+                    val cmd = npxTask.command.orNull ?: ""
+                    val args = npxTask.args.getOrElse(emptyList()).joinToString(" ")
+                    writeCmdLine(outTee, "npx $cmd $args".trim())
                     npxTask.execOverrides {
                         standardOutput = outTee
                         errorOutput = errTee
@@ -1891,6 +1907,8 @@ gradle.taskGraph.whenReady {
                 npmTask.doFirst {
                     val (outTee, errTee, perTask) = openTeeStream()
                     perTaskStream = perTask
+                    val args = npmTask.args.getOrElse(emptyList()).joinToString(" ")
+                    writeCmdLine(outTee, "npm $args".trim())
                     npmTask.execOverrides {
                         standardOutput = outTee
                         errorOutput = errTee
@@ -1898,6 +1916,33 @@ gradle.taskGraph.whenReady {
                 }
                 npmTask.doLast {
                     try { perTaskStream?.flush(); perTaskStream?.close() } catch (_: Exception) {}
+                }
+            }
+            is com.zerobias.buildtools.tasks.NeonDataloaderTask -> {
+                // NeonDataloaderTask is a DefaultTask that runs the
+                // `dataloader` CLI via ProcessBuilder internally, so the
+                // Exec/NpxTask/NpmTask tee branches above don't apply. Its
+                // captured output is written to `displayLogPath` (the per-
+                // task log). Mirror that into the central gradle.log so the
+                // build timeline isn't a one-line `===== lintExec =====`.
+                val ndlTask = task
+                ndlTask.doFirst {
+                    try {
+                        centralLog.parentFile.mkdirs()
+                        java.io.FileOutputStream(centralLog, /* append = */ true).use {
+                            it.write("\n===== ${capturedProjectPath}:${capturedTaskName} =====\n".toByteArray())
+                        }
+                    } catch (_: Exception) {}
+                }
+                ndlTask.doLast {
+                    val perTaskFile = ndlTask.displayLogPath.orNull?.asFile
+                    if (perTaskFile != null && perTaskFile.exists()) {
+                        try {
+                            java.io.FileOutputStream(centralLog, /* append = */ true).use {
+                                it.write(perTaskFile.readBytes())
+                            }
+                        } catch (_: Exception) {}
+                    }
                 }
             }
         }

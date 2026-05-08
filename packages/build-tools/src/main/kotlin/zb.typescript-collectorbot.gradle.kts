@@ -4,6 +4,8 @@ import com.github.gradle.node.npm.task.NpmTask
 import com.github.gradle.node.npm.task.NpxTask
 import com.zerobias.buildtools.collectorbot.CollectorbotEntryPointGenerator
 import com.zerobias.buildtools.module.ZbExtension
+import com.zerobias.buildtools.tasks.NeonDataloaderTask
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 
 plugins {
     id("zb.base")
@@ -264,6 +266,34 @@ val testE2eExec by tasks.registering(NpxTask::class) {
 
 tasks.named("testDirect") {
     dependsOn(testE2eExec)
+}
+
+// ════════════════════════════════════════════════════════════
+// DATALOADER TEST — create Neon branch, load artifacts, validate, clean up
+// ════════════════════════════════════════════════════════════
+//
+// Mirrors zb.typescript's testDataloaderExec wiring so collectorbot modules
+// exercise the same dataloader path as connector / agent / content modules.
+// `zb.typescript-collectorbot` only applies `zb.base`, so it doesn't inherit
+// the wiring from `zb.typescript` (the parent of typescript-connector and
+// typescript-agent) — we have to register it explicitly here.
+//
+// Collectorbot doesn't generate a `<noScope>.yml` distribution spec the way
+// content modules do, so the symlink-doFirst from zb.typescript:1729-1740 is
+// intentionally omitted. If a future collectorbot dataloader path needs that
+// shape, mirror that block here.
+
+val testDataloaderExec by tasks.registering(NeonDataloaderTask::class) {
+    dependsOn(tasks.named("compile"))
+    packageDir.set(layout.projectDirectory)
+    force.set(true)
+    val safeProjectName = project.path.removePrefix(":").replace(":", "-")
+    displayLogPath.set(rootProject.layout.projectDirectory
+        .file("$ZBB_GRADLE_DIR/logs/${safeProjectName}-testDataloader.log"))
+}
+
+tasks.named("testDataloader") {
+    dependsOn(testDataloaderExec)
 }
 
 // ════════════════════════════════════════════════════════════
