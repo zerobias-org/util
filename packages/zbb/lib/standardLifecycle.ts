@@ -55,6 +55,7 @@ export async function spawnStandardLifecycleAndExit(
   command: string,
   baseCommand: string,
   parsed: ParsedLifecycleArgs,
+  opts?: { skipDisplay?: boolean },
 ): Promise<never> {
   // Gradle flags (-P*) and the TUI display only apply when the lifecycle
   // command is a gradle invocation. We detect that by literal `./gradlew`
@@ -113,11 +114,22 @@ export async function spawnStandardLifecycleAndExit(
   // Use the project-centric TTY display for commands that produce per-task
   // events. Same logic as the monorepo dispatcher — clean/gateCheck have
   // no per-task events worth rendering, so they fall through to plain bash.
+  //
+  // Opt-out via ZBB_NO_DISPLAY=1: skips the display unconditionally, falls
+  // through to bash -c with inherited stdio. Operators who want raw gradle
+  // output (full task list, real-time stderr from tsc/mocha, no overlay)
+  // export this in their shell rc and never think about it again.
   const forceDisplay = process.env.ZBB_FORCE_TTY === '1';
+  // Caller can force the display off (e.g. cli.ts's standalone-sub-package
+  // dispatch — those builds don't apply zb.monorepo-base, so no per-task
+  // events ever arrive and the TUI would falsely render "All tasks
+  // up-to-date" while gradle silently does real work).
+  const noDisplay = opts?.skipDisplay === true || process.env.ZBB_NO_DISPLAY === '1';
   const displayEligibleCommands = new Set(['build', 'test', 'gate', 'dockerBuild']);
   const isGateCheck = command === 'gate' && parsed.check;
   const useDisplay =
     isGradleCommand &&
+    !noDisplay &&
     displayEligibleCommands.has(command) &&
     !isGateCheck &&
     (process.stdout.isTTY || forceDisplay);
@@ -164,8 +176,23 @@ export async function spawnStandardLifecycleAndExit(
   }
 
   // Fallback path: bash -c "<full command>" with inherited stdio.
-  const fullCommand = passthrough.length > 0
-    ? `${resolvedCmdToRun} ${passthrough.join(' ')}`
+  //
+  // When the display is off (ZBB_NO_DISPLAY=1 or non-TTY stdout) AND the
+  // command is a gradle invocation, append `--console=plain` so each
+  // `> Task :foo:bar` line streams to stdout. Without it, gradle's
+  // default rich console clears progress lines and the operator sees
+  // only "BUILD SUCCESSFUL in Xs" — which is what gets piped to
+  // .zbb-monorepo/gradle.log instead of the user's terminal.
+  // Skip if the command already specifies a console mode.
+  const passthroughExtras = [...passthrough];
+  const alreadyHasConsole =
+    resolvedCmdToRun.includes('--console') || passthrough.some(a => a.startsWith('--console'));
+  if (isGradleCommand && !alreadyHasConsole) {
+    passthroughExtras.push('--console=plain');
+  }
+
+  const fullCommand = passthroughExtras.length > 0
+    ? `${resolvedCmdToRun} ${passthroughExtras.join(' ')}`
     : resolvedCmdToRun;
 
   // Use async spawn so JS signal handlers can run on Ctrl-C. spawnSync

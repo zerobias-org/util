@@ -15,3 +15,6 @@ export * from './validation.types.js';
 
 // Mapping types
 export * from './mapping.types.js';
+
+// Query-source mapping types
+export * from './query.types.js';

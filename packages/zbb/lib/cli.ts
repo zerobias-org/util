@@ -525,6 +525,43 @@ async function _main(argv: string[]): Promise<void> {
       ? derivePackageScope(process.cwd(), monorepoEntry!.dir)
       : null;
 
+    // Standalone-Gradle-root precedence inside a monorepo.
+    //
+    // packages/build-tools, packages/lite-filter, packages/codegen sit
+    // INSIDE org/util but are deliberately excluded from the monorepo
+    // npm-workspaces list — they have their own gradlew and publish
+    // independently. When a closer zbb.yaml claims this lifecycle
+    // command (so `owner` resolved to the sub-package, not the
+    // monorepo root), AND scope.derivePackageScope rejected cwd as not
+    // a workspace member, dispatch the sub-package's own lifecycle via
+    // standard mode and skip every monorepo-aggregator guard below
+    // (publish-subdir block, gate --check fast path, scope.invalid
+    // refusal). The sub-package is self-contained: `./gradlew build`
+    // from packages/build-tools is the right thing to run; the
+    // monorepo aggregator has nothing to add and nothing to scope.
+    const ownerIsStandaloneSubPkg =
+      isMonorepo &&
+      !owner.isFallback &&
+      owner.entry.dir !== monorepoEntry!.dir &&
+      scope?.kind === 'invalid';
+    if (ownerIsStandaloneSubPkg && owner.lifecycleCmd) {
+      // skipDisplay: standalone sub-packages (build-tools, lite-filter,
+      // codegen) don't apply zb.monorepo-base, so no per-task events
+      // ever arrive at events.jsonl. The TUI display would render
+      // "All tasks up-to-date" while gradle silently does real work
+      // (see 57s build-tools build that reported "up-to-date"). Falling
+      // through to the bash -c path lets PR #76's --console=plain
+      // injection stream raw gradle output to the terminal.
+      const { spawnStandardLifecycleAndExit } = await import('./standardLifecycle.js');
+      return spawnStandardLifecycleAndExit(
+        ownerDir,
+        command,
+        owner.lifecycleCmd,
+        parsed,
+        { skipDisplay: true },
+      );
+    }
+
     // Publish from a subpackage is intentionally blocked — see
     // project_publish_subdir_block memory. Scoping publish interacts
     // with the PR #52 changedSinceTag guard in ways that aren't
@@ -699,6 +736,21 @@ async function _main(argv: string[]): Promise<void> {
       }
 
       if (gateFailed) process.exit(1);
+    }
+
+    // Refresh stale gradle daemon env. After prepareSlot has populated
+    // process.env from the stack's .env, any value declared in this
+    // chain's `env:` blocks should match what a running daemon was
+    // started with. If a daemon predates a stack-env refresh (or lives
+    // in a subshell that didn't reload), its Exec children will still
+    // see the daemon's frozen env — so npm/psql/docker get a stale
+    // NPM_TOKEN/PGHOST/etc. Stop drifted daemons here so the next
+    // gradle invocation respawns with the current process.env.
+    {
+      const { refreshGradleDaemonEnv } = await import('./gradleDaemon.js');
+      const { collectChainEnvKeys } = await import('./config.js');
+      const watched = collectChainEnvKeys(chain);
+      refreshGradleDaemonEnv(ownerDir, process.env, watched, console.log);
     }
 
     // Spawn — canonical verbs (clean/build/test/gate/version/publish/dockerBuild)

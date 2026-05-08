@@ -140,6 +140,11 @@ dependencies {
     // `zb.maven-central-publish` script plugin.
     implementation("com.vanniktech:gradle-maven-publish-plugin:0.30.0")
 
+    // nebula.ospackage — Deb task type used by the appliance per-module
+    // buildDeb extension (Phase 9.5). Same version as com/node/{shared,os}/
+    // build.gradle.kts apply directly so the runtime Deb class is identical.
+    implementation("com.netflix.nebula:gradle-ospackage-plugin:11.10.1")
+
     // Kotlin test runner
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

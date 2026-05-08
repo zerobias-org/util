@@ -700,7 +700,21 @@ export class MonorepoDisplay {
     const gradleContent = readFileSync(gradleLogPath, 'utf-8');
 
     const sectionFor = (marker: string): string[] => {
-      const markerIdx = gradleContent.lastIndexOf(marker);
+      // Match the marker as a complete task header line. Without
+      // line-end anchoring, a plain lastIndexOf("> Task :workspaceInstall")
+      // matches the prefix of "> Task :workspaceInstallRestore" — the
+      // wrong line — and we end up dumping the FAILURE block that
+      // gradle prints AFTER the failing task instead of the actual
+      // task stderr (e.g. the `npm error 401` line). Excluding " FAILED"
+      // also matters: the FAILED result line has no output under it;
+      // the introductory marker is the one that captures the task's
+      // own stdout/stderr.
+      const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`${escaped}(?=\\n|$)`, 'g');
+      let markerIdx = -1;
+      for (const m of gradleContent.matchAll(re)) {
+        markerIdx = m.index ?? markerIdx;
+      }
       if (markerIdx === -1) return [];
       const afterMarker = gradleContent.slice(markerIdx);
       const nextTask = afterMarker.indexOf('\n> Task ', marker.length);

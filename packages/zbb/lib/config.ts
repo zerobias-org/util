@@ -676,6 +676,27 @@ export function resolveGateRegistry(
 }
 
 
+/**
+ * Collect every env-var name declared anywhere in the chain — the
+ * union of each zbb.yaml's `env:` keys. Used by the gradle-daemon
+ * env-drift check (lib/gradleDaemon.ts) so a refresh of any tracked
+ * value triggers a daemon restart.
+ *
+ * Order is insertion order across the chain (cwd-first), but consumers
+ * shouldn't rely on order — the result is treated as a set.
+ */
+export function collectChainEnvKeys(chain: ZbbChainEntry[]): string[] {
+  const keys = new Set<string>();
+  for (const entry of chain) {
+    const cfg = entry.config as Partial<RepoConfig & StackManifest>;
+    if (cfg.env) {
+      for (const k of Object.keys(cfg.env)) keys.add(k);
+    }
+  }
+  return [...keys];
+}
+
+
 // ── Loaders ──────────────────────────────────────────────────────────
 
 export async function loadUserConfig(): Promise<UserConfig> {
