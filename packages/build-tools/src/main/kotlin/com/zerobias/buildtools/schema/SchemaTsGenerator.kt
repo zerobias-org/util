@@ -55,7 +55,30 @@ object SchemaTsGenerator {
             )
         val repoUrl = resolveRepoUrl(ctx)
 
-        // 1. GraphQL test-start (validation step). Fail the gate on
+        // 1. Ensure schema-ts-generator is available globally. The
+        //    legacy prepublish-init.sh installed it via `npm i -g`.
+        //    We mirror that here rather than baking it into the bundled
+        //    template, because lockfile drift on types-* makes `npm ci`
+        //    fragile when types-* publishes a new minor between template
+        //    bundle time and gate run time.
+        //
+        //    `npx schema-ts-generator` later won't try to install from
+        //    public npm registry (which 404s — the package is
+        //    @zerobias-com/platform-schema-ts-generator, not bare
+        //    schema-ts-generator) because the binary will be on PATH.
+        logger.lifecycle("$tag installing schema-ts-generator globally")
+        ExecUtils.exec(
+            command = listOf(
+                "npm", "i", "-g",
+                "@zerobias-com/platform-schema-ts-generator@latest",
+                "--no-audit", "--no-fund", "--silent"
+            ),
+            workingDir = ctx.packageDir,
+            environment = ctx.pgEnv,
+            throwOnError = true,
+        )
+
+        // 2. GraphQL test-start (validation step). Fail the gate on
         //    non-zero exit — same semantics as the legacy script.
         logger.lifecycle("$tag running GraphQL test-start")
         ExecUtils.exec(
@@ -65,22 +88,26 @@ object SchemaTsGenerator {
             throwOnError = true,
         )
 
-        // 2. Stage template
+        // 3. Stage template
         val tsDir = ctx.packageDir.resolve("ts")
         if (tsDir.exists()) tsDir.deleteRecursively()
         tsDir.mkdirs()
         stageTemplate(tsDir, artifactName, version, repoUrl, repoDir, packageName)
 
-        // 3. npm ci inside ts/
-        logger.lifecycle("$tag npm ci in ts/")
+        // 4. npm install inside ts/. `npm install` (not `ci`) so
+        //    drift in the bundled lockfile vs the bundled template
+        //    doesn't fail the gate. ts/ is regenerated every gate run
+        //    so lockfile mutations don't matter.
+        logger.lifecycle("$tag npm install in ts/")
         ExecUtils.exec(
-            command = listOf("npm", "ci"),
+            command = listOf("npm", "install", "--no-audit", "--no-fund", "--silent"),
             workingDir = tsDir,
             environment = ctx.pgEnv,
             throwOnError = true,
         )
 
-        // 4. Run the generator
+        // 5. Run the generator. The binary `schema-ts-generator` is
+        //    on PATH from the global install above.
         logger.lifecycle("$tag generating TS for package=$packageName")
         ExecUtils.exec(
             command = listOf("npx", "schema-ts-generator", "-p", packageName, "-o", "./src"),
