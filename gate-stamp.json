@@ -1,24 +1,24 @@
 {
   "version": 1,
-  "branch": "main",
+  "branch": "codegen/date-format-types",
   "packages": {
     "@zerobias-org/data-utils": {
       "version": "2.1.4",
       "sourceHash": "085b97c8d424eaa9adf6d0a1b1a175b667f52407b3289aa6d8a3893013f5fd47",
       "testHash": "31bcf4a9cc35001de836df01a9297b53c1d3833ff425abe7b6c3142f6b4001d4",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 1,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 1,
+          "status": "passed"
         },
         "integration": {
           "expected": 0,
@@ -131,11 +131,11 @@
       "sourceHash": "62f76eb92d8b39e238ea54db3a356d4f6cdeaf83e8d17951985c81256baf3062",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
         "test": "skipped"
       },
       "tests": {
@@ -169,23 +169,23 @@
       "sourceHash": "841d53ff0021234a7e0e30dd9f3caf3bea5a8373a9975527f4f5dc839a802a44",
       "testHash": "cde5b931c178ea511af07afca046a323dd387db237e7b7eff2eb3bb64a1f1c9c",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 55,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 55,
+          "status": "passed"
         },
         "integration": {
           "expected": 10,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 10,
+          "status": "passed"
         },
         "e2e": {
           "expected": 0,
@@ -325,8 +325,8 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "2.0.56",
-      "sourceHash": "9eb47e70ebfbe55fd7c89595c5598fb157db89c97797bd778a0ecdb3125e5543",
+      "version": "3.0.0",
+      "sourceHash": "5abe0981ce8e057c5a831b0bedb21e7d6640c1151cc93d86d819852cf738ecbf",
       "testHash": "ffd2c3654748679b3983df3bcc14c6ac63b37a636dac4fa65ebd6144805353db",
       "tasks": {
         "lint": "skipped",
@@ -367,18 +367,18 @@
       "sourceHash": "774befeaedea3309e333325a2f849130df33c5f4f8639129493ed29b10186755",
       "testHash": "538007cc6c8a0c66415559ba2d3c2c8059f58b3476939056f98460ba5ca91647",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 1,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 1,
+          "status": "passed"
         },
         "integration": {
           "expected": 0,
@@ -485,18 +485,18 @@
       "sourceHash": "62a56bf5f9d7f4b3ea1dbe6cb70c2125b6e8cdb9b53a5ad83055d83ef4ba88f8",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
-        "lint": "skipped",
-        "compile": "skipped",
-        "copyDeps": "skipped",
-        "generate": "skipped",
-        "transpile": "skipped",
-        "test": "skipped"
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "passed"
       },
       "tests": {
         "unit": {
           "expected": 38,
-          "ran": 0,
-          "status": "skipped"
+          "ran": 38,
+          "status": "passed"
         },
         "integration": {
           "expected": 0,
