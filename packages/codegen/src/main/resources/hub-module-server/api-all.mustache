@@ -97,9 +97,13 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
 {{/apis}}
 
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    let { message = 'Unknown Error', stack = {}, key = 'err.unknown', statusCode = 500, args = {} } = err;
+    // express-openapi-validator and other http-errors carry `.status`; CoreError and
+    // ad-hoc errors may carry `.statusCode`. Resolve the effective status BEFORE logging
+    // so a 4xx (e.g. a request-validation failure) isn't mis-logged as a 500.
+    const { message = 'Unknown Error', stack = {}, key = 'err.unknown', args = {} } = err;
+    let statusCode: number = err.status ?? err.statusCode ?? 500;
     if (statusCode >= 400 && statusCode < 500) {
-      logger.info(`Request validation failed (${statusCode}): ${req.method} ${req.path} - ${err.message}`);
+      logger.info(`Client error (${statusCode}): ${req.method} ${req.path} - ${err.message}`);
     } else {
       logger.error(`Server error (${statusCode}): ${req.method} ${req.path} - ${err.message} - ${JSON.stringify(err.stack)}`);
     }
@@ -108,23 +112,28 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
       json = err.toJSON();
     } else if (err instanceof NotFound) {
       statusCode = err.status;
-      json = (new NotFoundError(err.errors[0].path)).toJSON();
+      json = (new NotFoundError(err.errors?.[0]?.path)).toJSON();
     } else if (err instanceof BadRequest) {
       statusCode = err.status;
-      if (err.errors[0]['errorCode']) {
-        if (err.errors[0]['errorCode'] === 'required.openapi.validation') {
-          json = (new ParameterRequiredError(err.errors[0].path)).toJSON();
-        } else if (err.errors[0]['errorCode'] === 'type.openapi.validation') {
-          const errorObj = err.errors[0];
+      const errorObj = (err.errors && err.errors[0]) ? err.errors[0] : {};
+      switch (errorObj['errorCode']) {
+        case 'required.openapi.validation':
+          json = (new ParameterRequiredError(errorObj.path)).toJSON();
+          break;
+        case 'type.openapi.validation':
           json = (new IllegalArgumentError(`${errorObj.path} - ${errorObj.message}`)).toJSON();
-        } else if (err.errors[0]['errorCode'] === 'format.openapi.validation') {
-          const errorObj = err.errors[0];
+          break;
+        case 'format.openapi.validation': {
           const format = (errorObj.path ? errorObj.path.split('/').pop() : undefined) || 'unknown';
           const value = errorObj.message || 'invalid';
           json = (new InvalidInputError(format, value)).toJSON();
-        } else if (err.errors[0]['errorCode'] === 'enum.openapi.validation') {
-          json = (new IllegalArgumentError(err.message)).toJSON();
+          break;
         }
+        default:
+          // pattern / enum / minLength / maxLength / minimum / maximum / minItems /
+          // additionalProperties / ... or a BadRequest without structured errors —
+          // surface the validator's message rather than returning an empty body.
+          json = (new IllegalArgumentError(err.message)).toJSON();
       }
     } else if (err instanceof Unauthorized) {
       statusCode = err.status;
