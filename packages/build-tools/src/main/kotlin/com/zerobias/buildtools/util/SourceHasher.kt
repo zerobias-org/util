@@ -1,5 +1,8 @@
 package com.zerobias.buildtools.util
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.io.File
 import java.security.MessageDigest
 import java.util.Locale
@@ -13,6 +16,12 @@ import java.util.Locale
  *
  * Falls back to recursive directory walk only when not in a git repo,
  * to support non-git contexts (rare).
+ *
+ * `package.json`, when listed in `sourceFiles`, is hashed with its top-level
+ * `version` field stripped — a version bump (every `chore(release)` commit
+ * rewrites the version in every published package's package.json) changes the
+ * file on disk but nothing about the package's source or built output, so it
+ * must not invalidate the gate stamp. See `sourceFileBytes`.
  *
  * Shared by:
  * - `zb.base.gradle.kts` per-project gate stamp (single-package consumers)
@@ -43,7 +52,7 @@ object SourceHasher {
             if (!file.exists()) continue
             if (!isGitTracked(packageDir, name)) continue
             digest.update(name.toByteArray())
-            digest.update(file.readBytes())
+            digest.update(sourceFileBytes(file, name))
         }
 
         // 2. Hash source directories — only git-tracked files
@@ -64,6 +73,41 @@ object SourceHasher {
         }
 
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private val PACKAGE_JSON_MAPPER: ObjectMapper = ObjectMapper().registerKotlinModule()
+
+    /**
+     * Bytes to feed into the digest for an individual `sourceFiles` entry.
+     *
+     * Everything except `package.json` is hashed verbatim. `package.json` is
+     * normalized first: parse it, drop the top-level `version` key, re-serialize.
+     * Rationale —
+     *
+     *  - A version bump rewrites package.json on disk (the `chore(release)`
+     *    commit bumps every published package) but changes nothing about the
+     *    package's source or built output. Hashing the version meant every
+     *    release left the committed gate-stamp.json stale for every bumped
+     *    package, so the next branch's CI `gate --check` failed until someone
+     *    re-ran `zbb gate` and committed. Dropping it removes that trap.
+     *  - The version is still tracked separately on each PackageStampEntry, and
+     *    dependency pins are covered by the rootDeps drift check, so no signal
+     *    is lost.
+     *  - Re-serializing also normalizes whitespace, so a reformat-only edit to
+     *    package.json no longer invalidates the stamp either.
+     *
+     * Any parse failure falls back to the raw bytes — a malformed package.json
+     * still contributes to the hash, just without normalization.
+     */
+    private fun sourceFileBytes(file: File, name: String): ByteArray {
+        if (name != "package.json") return file.readBytes()
+        return try {
+            val parsed = LinkedHashMap(PACKAGE_JSON_MAPPER.readValue<Map<String, Any?>>(file))
+            parsed.remove("version")
+            PACKAGE_JSON_MAPPER.writeValueAsBytes(parsed)
+        } catch (_: Exception) {
+            file.readBytes()
+        }
     }
 
     /**

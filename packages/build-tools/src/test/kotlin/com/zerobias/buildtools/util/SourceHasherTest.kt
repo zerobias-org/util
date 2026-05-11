@@ -196,4 +196,100 @@ class SourceHasherTest {
         val hash = SourceHasher.hashSources(pkg, listOf(), listOf("src"))
         assertTrue(hash.isNotEmpty())
     }
+
+    @Test
+    fun `hashSources ignores a version-only change to package json`(@TempDir tmp: Path) {
+        val pkg = setupGitRepo(tmp)
+        File(pkg, "package.json").writeText("""{"name":"@x/y","version":"1.0.0","dependencies":{"lodash":"^4"}}""")
+        File(pkg, "src").mkdirs()
+        File(pkg, "src/index.ts").writeText("export const foo = 1;")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "init")
+
+        val before = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
+
+        // Bump only the version — the kind of change a `chore(release)` commit makes.
+        File(pkg, "package.json").writeText("""{"name":"@x/y","version":"1.0.1","dependencies":{"lodash":"^4"}}""")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "release")
+
+        val after = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
+        assertEquals(before, after) {
+            "a version-only bump to package.json must not invalidate the gate stamp"
+        }
+    }
+
+    @Test
+    fun `hashSources still detects non-version package json changes`(@TempDir tmp: Path) {
+        val pkg = setupGitRepo(tmp)
+        File(pkg, "package.json").writeText("""{"name":"@x/y","version":"1.0.0","dependencies":{"lodash":"^4"}}""")
+        File(pkg, "src").mkdirs()
+        File(pkg, "src/index.ts").writeText("export const foo = 1;")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "init")
+
+        val before = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
+
+        // Change a dependency pin — that IS a meaningful change.
+        File(pkg, "package.json").writeText("""{"name":"@x/y","version":"1.0.0","dependencies":{"lodash":"^5"}}""")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "bump dep")
+
+        val after = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
+        assertNotEquals(before, after) {
+            "a dependency change in package.json must still affect the hash"
+        }
+    }
+
+    @Test
+    fun `hashSources ignores package json reformatting`(@TempDir tmp: Path) {
+        val pkg = setupGitRepo(tmp)
+        File(pkg, "package.json").writeText("""{"name":"@x/y","version":"1.0.0","dependencies":{"lodash":"^4"}}""")
+        File(pkg, "src").mkdirs()
+        File(pkg, "src/index.ts").writeText("export const foo = 1;")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "init")
+
+        val before = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
+
+        // Same content, pretty-printed — re-serialization normalizes whitespace.
+        File(pkg, "package.json").writeText(
+            """
+            {
+              "name": "@x/y",
+              "version": "1.0.0",
+              "dependencies": {
+                "lodash": "^4"
+              }
+            }
+            """.trimIndent() + "\n"
+        )
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "reformat")
+
+        val after = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
+        assertEquals(before, after) {
+            "reformatting package.json (no semantic change) must not invalidate the gate stamp"
+        }
+    }
+
+    @Test
+    fun `hashSources falls back to raw bytes for malformed package json`(@TempDir tmp: Path) {
+        val pkg = setupGitRepo(tmp)
+        File(pkg, "package.json").writeText("{ this is not valid json ")
+        File(pkg, "src").mkdirs()
+        File(pkg, "src/index.ts").writeText("x")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "init")
+
+        // Should not throw — bad JSON just gets hashed verbatim.
+        val before = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
+        assertTrue(before.isNotEmpty())
+
+        File(pkg, "package.json").writeText("{ still not valid, but different ")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "change")
+        val after = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
+        assertNotEquals(before, after) { "raw-byte fallback still tracks changes" }
+    }
 }
