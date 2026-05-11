@@ -1720,6 +1720,23 @@ val testHub by tasks.registering {
 
 val testDataloaderExec by tasks.registering(com.zerobias.buildtools.tasks.NeonDataloaderTask::class) {
     dependsOn(tasks.named("compile"))
+    // Tasks that write into projectDir / generated/ — gradle 8 strict
+    // validation treats unrelated tasks reading the same paths as
+    // implicit-dependency violations unless ordered explicitly. Pin
+    // mustRunAfter so testDataloaderExec runs after image/server-entry
+    // codegen + dockerfile + image build, none of which the dataloader
+    // actually depends on functionally but which co-locate output dirs.
+    mustRunAfter(
+        tasks.named("buildImageExec"),
+        tasks.named("buildImage"),
+        tasks.named("buildHubSdkExec"),
+        tasks.named("buildHubSdk"),
+        tasks.named("generateServerApi"),
+        tasks.named("generateServerEntry"),
+        tasks.named("generateDockerfile"),
+        tasks.named("compileServer"),
+        tasks.named("startModuleExec")
+    )
     packageDir.set(layout.projectDirectory)
     force.set(true)
     val safeProjectName = project.path.removePrefix(":").replace(":", "-")
