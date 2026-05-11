@@ -358,9 +358,17 @@ fun Project.registerBuildDeb() {
         }
 
         // Bin shim → /opt/node/bin/<binName> at mode 0755.
+        //
+        // `CopySpec.fileMode` (Int) was deprecated in Gradle 8.3 and removed
+        // in Gradle 9.0. build-tools' own wrapper is 8.10.2 (still has it) but
+        // it's also pulled in as a composite build by packages on Gradle 9.x
+        // (codegen, lite-filter) — there `fileMode` is an unresolved reference
+        // and :build-tools:compileKotlin fails, taking those builds down with
+        // it. `filePermissions { unix(...) }` exists since 8.3, so it compiles
+        // on both.
         into("/opt/node/bin") {
             from(shimStageFile)
-            fileMode = 0b111_101_101 // 0755
+            filePermissions { unix("0755") }
         }
 
         destinationDirectory.set(outDir)

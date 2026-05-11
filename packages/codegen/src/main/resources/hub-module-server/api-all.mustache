@@ -100,7 +100,6 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
     // express-openapi-validator and other http-errors carry `.status`; CoreError and
     // ad-hoc errors may carry `.statusCode`. Resolve the effective status BEFORE logging
     // so a 4xx (e.g. a request-validation failure) isn't mis-logged as a 500.
-    const { message = 'Unknown Error', stack = {}, key = 'err.unknown', args = {} } = err;
     let statusCode: number = err.status ?? err.statusCode ?? 500;
     if (statusCode >= 400 && statusCode < 500) {
       logger.info(`Client error (${statusCode}): ${req.method} ${req.path} - ${err.message}`);
@@ -148,13 +147,11 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
       statusCode = err.status;
       json = (new UnexpectedError(err.message, statusCode)).toJSON();
     } else {
-      json = {
-        key,
-        timestamp: new Date().toISOString(),
-        message,
-        stack,
-        args,
-      };
+      // Coerce anything else (plain Errors, ad-hoc throwables, error-shaped objects
+      // with a registered `key`) into a well-formed CoreError body so every error
+      // response carries key/template/statusCode/timestamp instead of the bare
+      // {key:'err.unknown', ...} shape. CoreError.from never throws.
+      json = { ...CoreError.from(err).toJSON(), statusCode };
     }
 
     res.writeHead(statusCode, { 'Content-Type': 'application/json' });
