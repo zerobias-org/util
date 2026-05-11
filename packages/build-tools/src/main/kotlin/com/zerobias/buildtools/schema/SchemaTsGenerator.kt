@@ -14,14 +14,16 @@ import java.io.File
  * Sequence — mirrors the legacy `prepublish.sh` + `generate.sh`:
  *
  *   1. Skip if zerobias.deprecated == true
- *   2. Run GraphQL test-start against the loaded branch
+ *   2. Install schema-ts-generator globally (mirrors legacy
+ *      prepublish-init.sh — avoids ts/ lockfile drift in CI)
+ *   3. Run GraphQL test-start against the loaded branch
  *      (fails the gate if the loaded schema can't build a GraphQL schema)
- *   3. Stage the bundled TS template (resources/ts-schema-package-template/)
+ *   4. Stage the bundled TS template (resources/ts-schema-package-template/)
  *      into <pkg>/ts/, patching placeholders
- *   4. npm ci inside <pkg>/ts/ (installs schema-ts-generator + types-*)
- *   5. npx schema-ts-generator -p <zerobias.package> -o ./src
- *   6. Rewrite emitted *.ts files: add .js to relative imports (ESM/NodeNext)
- *   7. npx tsc → dist/
+ *   5. npm install inside <pkg>/ts/ (drift-tolerant — ts/ is ephemeral)
+ *   6. npx schema-ts-generator -p <zerobias.package> -o ./src
+ *   7. Rewrite emitted *.ts files: add .js to relative imports (ESM/NodeNext)
+ *   8. npx tsc → dist/
  *
  * All subprocesses inherit `ctx.pgEnv` so the generator can read from
  * the live branch.

@@ -30,7 +30,6 @@
     "diff": "^8.0.3"
   },
   "devDependencies": {
-    "@zerobias-com/platform-schema-ts-generator": "latest",
     "@zerobias-org/types-amazon": "^1.0.10",
     "@zerobias-org/types-amazon-js": "^1.0.28",
     "@zerobias-org/types-core": "^1.0.14",
