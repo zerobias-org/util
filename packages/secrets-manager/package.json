@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/util-secrets-manager",
-  "version": "1.0.1",
+  "version": "1.0.5",
   "description": "Secrets manager abstraction over AWS Secrets Manager, AWS SSM Parameter Store, HashiCorp Vault, Azure Key Vault, and local file/env backends",
   "type": "module",
   "main": "dist/src/index.js",
@@ -38,6 +38,6 @@
   ],
   "dependencies": {
     "@zerobias-org/logger": "^3.0.10",
-    "@zerobias-org/util-codegen": "^2.0.56"
+    "@zerobias-org/util-codegen": "^3.0.3"
   }
 }
