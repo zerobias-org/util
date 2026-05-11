@@ -1,0 +1,47 @@
+{
+  "name": "{ARTIFACT_NAME}-ts",
+  "version": "{VERSION}",
+  "description": "typescript interfaces for {ARTIFACT_NAME} schemas",
+  "author": "team@zerobias.com",
+  "license": "ISC",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "{REPO_URL}",
+    "directory": "{REPO_DIR}"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "clean": "rm -rf dist && rm -rf node_modules",
+    "generate": "npx schema-ts-generator",
+    "transpile": "tsc"
+  },
+  "overrides": {
+    "@rollup/plugin-commonjs": "^28.0.0",
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
+    "diff": "^8.0.3"
+  },
+  "devDependencies": {
+    "@zerobias-com/platform-schema-ts-generator": "latest",
+    "@zerobias-org/types-amazon": "^1.0.10",
+    "@zerobias-org/types-amazon-js": "^1.0.28",
+    "@zerobias-org/types-core": "^1.0.14",
+    "@zerobias-org/types-core-js": "^1.2.10",
+    "@zerobias-org/types-google": "^1.0.14",
+    "@zerobias-org/types-google-js": "^1.0.28",
+    "@zerobias-org/types-microsoft": "^1.0.10",
+    "@zerobias-org/types-microsoft-js": "^1.0.27",
+    "@types/node": "^22.0.0",
+    "rimraf": "^6.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
