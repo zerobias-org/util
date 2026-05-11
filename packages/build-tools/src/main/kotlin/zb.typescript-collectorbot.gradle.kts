@@ -285,6 +285,17 @@ tasks.named("testDirect") {
 
 val testDataloaderExec by tasks.registering(NeonDataloaderTask::class) {
     dependsOn(tasks.named("compile"))
+    // Tasks that write into projectDir / generated/ — gradle 8 strict
+    // validation treats unrelated tasks reading the same paths as
+    // implicit-dependency violations unless ordered explicitly. Pin
+    // mustRunAfter so testDataloaderExec runs after image/dockerfile
+    // codegen, none of which the dataloader actually depends on
+    // functionally but which co-locate output dirs.
+    mustRunAfter(
+        tasks.named("generateCollectorbotDockerfile"),
+        tasks.named("buildImageExec"),
+        tasks.named("buildImage")
+    )
     packageDir.set(layout.projectDirectory)
     force.set(true)
     val safeProjectName = project.path.removePrefix(":").replace(":", "-")
