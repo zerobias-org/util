@@ -1,13 +1,16 @@
 package com.zerobias.buildtools.tasks
 
 import com.zerobias.buildtools.util.ExecUtils
+import org.gradle.api.Action
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
@@ -81,6 +84,23 @@ abstract class NeonDataloaderTask : DefaultTask() {
     @get:OutputFile
     @get:Optional
     abstract val displayLogPath: RegularFileProperty
+
+    /**
+     * Optional callbacks invoked AFTER the dataloader load succeeds and
+     * BEFORE the Neon branch is torn down. Each action receives a
+     * [NeonBranchContext] with the live PG env, so it can run additional
+     * tools (codegen, validators) against the loaded schema while the
+     * branch is still alive.
+     *
+     * Used by `zb.schema` to generate TS interface twins from the loaded
+     * dataloader output. If an action throws, the exception propagates —
+     * the branch still tears down in `finally`, and the task fails.
+     *
+     * Empty by default; existing zb.content / zb.typescript-* consumers
+     * are unaffected.
+     */
+    @get:Internal
+    abstract val postLoadActions: ListProperty<Action<NeonBranchContext>>
 
     /* TODO(dataloader-service): UNCOMMENT — service-mode-only inputs.
      *
@@ -257,6 +277,21 @@ abstract class NeonDataloaderTask : DefaultTask() {
                 throw GradleException("${name}: dataloader exited with code $exit\n$output")
             }
             logger.lifecycle("${name}: dataloader completed successfully")
+
+            // ── 2b: Post-load actions (e.g. zb.schema TS twin gen) ──
+            // Fire AFTER dataloader load succeeds. Branch is still alive;
+            // PG env still valid. If an action throws the exception
+            // propagates and finally still tears the branch down.
+            val actions = postLoadActions.getOrElse(emptyList())
+            if (actions.isNotEmpty()) {
+                logger.lifecycle("${name}: running ${actions.size} post-load action(s)")
+                val ctx = NeonBranchContext(
+                    project = project,
+                    packageDir = pkgDir,
+                    pgEnv = pgEnv,
+                )
+                actions.forEach { action -> action.execute(ctx) }
+            }
         } finally {
             // ── 3: Delete the Neon branch (best effort) ──
             logger.lifecycle("${name}: Deleting Neon branch '$branchName'")
