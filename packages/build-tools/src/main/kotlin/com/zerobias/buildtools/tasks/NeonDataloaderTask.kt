@@ -1,9 +1,11 @@
 package com.zerobias.buildtools.tasks
 
 import com.zerobias.buildtools.util.ExecUtils
+import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import org.gradle.api.Action
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.Project
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
@@ -14,6 +16,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.TaskProvider
 import java.io.File
 import kotlin.random.Random
 
@@ -55,10 +58,10 @@ import kotlin.random.Random
  * without vault proceed without blowing up gate. CI jobs that require
  * dataloader validation must ensure the slot exposes NEON_API_KEY.
  *
- * Usage:
- *   tasks.register<NeonDataloaderTask>("testIntegrationDataloader") {
- *       packageDir.set(layout.projectDirectory)
- *   }
+ * Usage: leaf plugins call the [registerDataloader] helper at the bottom
+ * of this file, NOT `tasks.register<NeonDataloaderTask>(...)` directly,
+ * so name + log-path conventions stay consistent across plugin types
+ * and the EventEmitter display map only needs one entry.
  */
 abstract class NeonDataloaderTask : DefaultTask() {
 
@@ -601,3 +604,36 @@ abstract class NeonDataloaderTask : DefaultTask() {
      * }
      */
 }
+
+/**
+ * Canonical NeonDataloaderTask registration. Every leaf plugin
+ * (zb.typescript / zb.typescript-collectorbot / zb.content) registers
+ * exactly ONE worker named [DATALOADER_TASK_NAME] with the same conventions
+ * (packageDir = projectDir, displayLog under .zbb-gradle/logs/), and then
+ * wires it into whichever lifecycle phase its package type advertises:
+ *
+ *   - typescript modules + collectorbots: `tasks.named("testDataloader") { dependsOn(dataloaderExec) }`
+ *   - content packages:                   `tasks.named("testIntegration") { dependsOn(dataloaderExec) }`
+ *
+ * Plugin-specific extras (force, mustRunAfter, postLoadActions, doFirst
+ * spec-symlink, etc.) live in the [configure] block.
+ *
+ * One name across the codebase keeps the EventEmitter display map and
+ * zbb's failure reporter trivial — no per-plugin aliasing, no drift.
+ */
+fun Project.registerDataloader(
+    force: Boolean = false,
+    configure: NeonDataloaderTask.() -> Unit = {},
+): TaskProvider<NeonDataloaderTask> =
+    tasks.register(DATALOADER_TASK_NAME, NeonDataloaderTask::class.java) {
+        packageDir.set(layout.projectDirectory)
+        this.force.set(force)
+        val safeProjectName = path.removePrefix(":").replace(":", "-")
+        displayLogPath.set(
+            rootProject.layout.projectDirectory
+                .file("$ZBB_GRADLE_DIR/logs/$safeProjectName-dataloader.log")
+        )
+        configure()
+    }
+
+const val DATALOADER_TASK_NAME = "dataloaderExec"

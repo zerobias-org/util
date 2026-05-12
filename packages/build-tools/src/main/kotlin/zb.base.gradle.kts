@@ -1175,7 +1175,7 @@ gradle.taskGraph.whenReady {
         "testDirect", "testDirectExec",
         "testDocker", "testDockerExec",
         "testHub", "testHubExec",
-        "testDataloader", "testDataloaderExec",
+        "testDataloader", "dataloaderExec",
         "startModule", "startModuleExec",
         "stopModule", "stopModuleExec"
     )
@@ -1765,7 +1765,7 @@ val zbbBasePhaseTaskNames = setOf(
     "testDirect", "testDirectExec",
     "testDocker", "testDockerExec",
     "testHub", "testHubExec",
-    "testDataloader", "testDataloaderExec",
+    "testDataloader", "dataloaderExec",
     // Gate + stamp
     "gate", "gateCheck", "writeGateStamp",
 )

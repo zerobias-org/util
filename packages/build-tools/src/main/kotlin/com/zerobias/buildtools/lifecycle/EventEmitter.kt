@@ -182,7 +182,7 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
         "testUnitExec",
         "testDirect", "testDirectExec",
         "testHub", "testHubExec",
-        "testDataloader", "testDataloaderExec",
+        "testDataloader", "dataloaderExec",
         "npmTest", "check",
         -> "monorepoTest"
 
@@ -279,7 +279,16 @@ abstract class EventEmitter : BuildService<EventEmitter.Params>,
         "testDirect", "testDirectExec" -> "testDirect"
         "testHub", "testHubExec" -> "testHub"
         "testDocker", "testDockerExec" -> "testDocker"
-        "testDataloader", "testDataloaderExec" -> "testDataloader"
+        // dataloaderExec is the canonical NeonDataloaderTask name shared by
+        // zb.typescript / zb.typescript-collectorbot / zb.content (registered
+        // via the Project.registerDataloader helper). On AWS-flavored modules
+        // this is a 10–30 min phase, and historically every leaf plugin
+        // registered its own task name (testDataloaderExec /
+        // testIntegrationDataloader) which forced a per-name display map and
+        // dropped untracked names into the `+N` overflow with no label —
+        // making long dataloader runs look like a stuck docker build. One
+        // canonical task name → one display entry.
+        "testDataloader", "dataloaderExec" -> "testDataloader"
 
         // Gate
         "gate" -> "gate"

@@ -1,7 +1,7 @@
 @file:OptIn(ExperimentalStdlibApi::class)
 
 import com.github.gradle.node.npm.task.NpmTask
-import com.zerobias.buildtools.tasks.NeonDataloaderTask
+import com.zerobias.buildtools.tasks.registerDataloader
 
 /**
  * zb.content — leaf plugin for content-catalog NPM packages that ship
@@ -171,7 +171,7 @@ val npmInstallContent by tasks.registering(NpmTask::class) {
 // NeonDataloaderTask provisions a Neon Postgres branch on-the-fly via the
 // Neon API, runs dataloader with the branch's PG env injected directly
 // into the subprocess (overriding any inherited shell PG vars), then
-// deletes the branch. Same pattern as zb.typescript's testDataloaderExec.
+// deletes the branch. Same pattern as zb.typescript's dataloaderExec.
 //
 // Requires NEON_API_KEY + NEON_PROJECT_ID in the env. Locally these come
 // from the slot via vault refs declared in the repo's zbb.yaml; in CI
@@ -181,8 +181,7 @@ val npmInstallContent by tasks.registering(NpmTask::class) {
 // gate runs without vault credentials from blowing up.
 // ════════════════════════════════════════════════════════════
 
-val testIntegrationDataloader by tasks.registering(NeonDataloaderTask::class) {
-    packageDir.set(layout.projectDirectory)
+val dataloaderExec = registerDataloader {
     // Dataloader resolves the artifact's dependencies from node_modules; without
     // an explicit dep on npmInstallContent gradle 8+ flags the implicit input
     // and fails the build (validation-type problem on parallel runs).
@@ -190,7 +189,7 @@ val testIntegrationDataloader by tasks.registering(NeonDataloaderTask::class) {
 }
 
 tasks.named("testIntegration") {
-    dependsOn(testIntegrationDataloader)
+    dependsOn(dataloaderExec)
 }
 
 // ════════════════════════════════════════════════════════════

@@ -32,7 +32,7 @@ import java.time.Instant
  * No per-artifact-type code lives in util — adding suite/product/framework/
  * standard/crosswalk/benchmark to the gradle pipeline doesn't change util.
  *
- * The dataloader (run by `testIntegrationDataloader` against an ephemeral
+ * The dataloader (run by `dataloaderExec` against an ephemeral
  * Neon branch) is the universal "is this loadable?" check. Validators
  * built from these primitives are pre-flight schema checks — fast, fail
  * early on obvious problems before the artifact ever reaches the

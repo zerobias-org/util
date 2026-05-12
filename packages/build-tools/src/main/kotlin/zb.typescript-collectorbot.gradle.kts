@@ -4,7 +4,7 @@ import com.github.gradle.node.npm.task.NpmTask
 import com.github.gradle.node.npm.task.NpxTask
 import com.zerobias.buildtools.collectorbot.CollectorbotEntryPointGenerator
 import com.zerobias.buildtools.module.ZbExtension
-import com.zerobias.buildtools.tasks.NeonDataloaderTask
+import com.zerobias.buildtools.tasks.registerDataloader
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 
 plugins {
@@ -272,39 +272,27 @@ tasks.named("testDirect") {
 // DATALOADER TEST — create Neon branch, load artifacts, validate, clean up
 // ════════════════════════════════════════════════════════════
 //
-// Mirrors zb.typescript's testDataloaderExec wiring so collectorbot modules
-// exercise the same dataloader path as connector / agent / content modules.
-// `zb.typescript-collectorbot` only applies `zb.base`, so it doesn't inherit
-// the wiring from `zb.typescript` (the parent of typescript-connector and
-// typescript-agent) — we have to register it explicitly here.
-//
-// Collectorbot doesn't generate a `<noScope>.yml` distribution spec the way
-// content modules do, so the symlink-doFirst from zb.typescript:1729-1740 is
-// intentionally omitted. If a future collectorbot dataloader path needs that
-// shape, mirror that block here.
+// Collectorbot dataloader: same canonical NeonDataloaderTask via the
+// shared `registerDataloader` helper, only the bot-specific task-graph
+// wiring lives here. Bots don't have buildHubSdk*/server-entry codegen
+// in their task graph (those are connector-only), so the mustRunAfter
+// list is shorter than zb.typescript's. No spec-symlink either: bots
+// don't ship a distribution YAML.
 
-val testDataloaderExec by tasks.registering(NeonDataloaderTask::class) {
+val dataloaderExec = registerDataloader(force = true) {
     dependsOn(tasks.named("compile"))
     // Tasks that write into projectDir / generated/ — gradle 8 strict
     // validation treats unrelated tasks reading the same paths as
-    // implicit-dependency violations unless ordered explicitly. Pin
-    // mustRunAfter so testDataloaderExec runs after image/dockerfile
-    // codegen, none of which the dataloader actually depends on
-    // functionally but which co-locate output dirs.
+    // implicit-dependency violations unless ordered explicitly.
     mustRunAfter(
         tasks.named("generateCollectorbotDockerfile"),
         tasks.named("buildImageExec"),
-        tasks.named("buildImage")
+        tasks.named("buildImage"),
     )
-    packageDir.set(layout.projectDirectory)
-    force.set(true)
-    val safeProjectName = project.path.removePrefix(":").replace(":", "-")
-    displayLogPath.set(rootProject.layout.projectDirectory
-        .file("$ZBB_GRADLE_DIR/logs/${safeProjectName}-testDataloader.log"))
 }
 
 tasks.named("testDataloader") {
-    dependsOn(testDataloaderExec)
+    dependsOn(dataloaderExec)
 }
 
 // ════════════════════════════════════════════════════════════

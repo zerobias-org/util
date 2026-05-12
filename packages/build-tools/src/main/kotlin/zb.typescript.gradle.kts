@@ -9,6 +9,7 @@ import com.zerobias.buildtools.module.ConnectionProfileFlattener
 import com.zerobias.buildtools.module.ServerEntryPointGenerator
 import com.zerobias.buildtools.module.DockerRunner
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
+import com.zerobias.buildtools.tasks.registerDataloader
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 
 plugins {
@@ -1714,16 +1715,20 @@ val testHub by tasks.registering {
 // DATALOADER TEST — create Neon branch, load artifacts, validate, clean up
 // ════════════════════════════════════════════════════════════
 //
-// All Neon orchestration lives in NeonDataloaderTask. This file just wires
-// up a typescript-flavored instance: -f to defeat the parent-branch snapshot
-// no-op skip, and a displayLog for zbb's failure reporter.
+// All Neon orchestration lives in NeonDataloaderTask. The shared
+// `registerDataloader` helper handles the common conventions
+// (packageDir, log-path naming). This block only carries the
+// typescript-module-specific bits: force=true (to defeat parent-branch
+// snapshot no-op skips), task-graph ordering for gradle 8 strict
+// validation, and the spec-symlink doFirst that lets the dataloader
+// CLI find the generated distribution YAML at the project root.
 
-val testDataloaderExec by tasks.registering(com.zerobias.buildtools.tasks.NeonDataloaderTask::class) {
+val dataloaderExec = registerDataloader(force = true) {
     dependsOn(tasks.named("compile"))
     // Tasks that write into projectDir / generated/ — gradle 8 strict
     // validation treats unrelated tasks reading the same paths as
     // implicit-dependency violations unless ordered explicitly. Pin
-    // mustRunAfter so testDataloaderExec runs after image/server-entry
+    // mustRunAfter so dataloaderExec runs after image/server-entry
     // codegen + dockerfile + image build, none of which the dataloader
     // actually depends on functionally but which co-locate output dirs.
     mustRunAfter(
@@ -1735,13 +1740,8 @@ val testDataloaderExec by tasks.registering(com.zerobias.buildtools.tasks.NeonDa
         tasks.named("generateServerEntry"),
         tasks.named("generateDockerfile"),
         tasks.named("compileServer"),
-        tasks.named("startModuleExec")
+        tasks.named("startModuleExec"),
     )
-    packageDir.set(layout.projectDirectory)
-    force.set(true)
-    val safeProjectName = project.path.removePrefix(":").replace(":", "-")
-    displayLogPath.set(rootProject.layout.projectDirectory
-        .file("$ZBB_GRADLE_DIR/logs/${safeProjectName}-testDataloader.log"))
 
     // Symlink the distribution spec into the project root so dataloader can
     // find it. Other Exec tasks (lint/transpile/test/dockerBuild) don't need
@@ -1749,8 +1749,8 @@ val testDataloaderExec by tasks.registering(com.zerobias.buildtools.tasks.NeonDa
     doFirst {
         val (name, _) = readPackageNameVersion()
         val noScope = name.split("/").last()
-        val distSpec = project.file("generated/${noScope}.yml")
-        val rootLink = project.file("${noScope}.yml")
+        val distSpec = project.file("generated/$noScope.yml")
+        val rootLink = project.file("$noScope.yml")
         if (distSpec.exists() && !rootLink.exists()) {
             java.nio.file.Files.createSymbolicLink(rootLink.toPath(), distSpec.toPath())
         }
@@ -1758,7 +1758,7 @@ val testDataloaderExec by tasks.registering(com.zerobias.buildtools.tasks.NeonDa
 }
 
 tasks.named("testDataloader") {
-    dependsOn(testDataloaderExec)
+    dependsOn(dataloaderExec)
 }
 
 tasks.named("publishNpmExec") {
