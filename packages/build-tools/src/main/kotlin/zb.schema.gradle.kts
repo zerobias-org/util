@@ -108,6 +108,37 @@ tasks.named<NeonDataloaderTask>("dataloaderExec") {
 }
 
 // ════════════════════════════════════════════════════════════
+// Re-enable dataloaderExec when publishTsTwin is in the task graph.
+// ════════════════════════════════════════════════════════════
+//
+// zb.base's "gate stamp valid → skip gate" logic (zb.base.gradle.kts:1163)
+// disables every task in its testAndValidationTasks set when the stamp
+// is valid and `publish` is in the graph. That set includes
+// `dataloaderExec` — but that's the only place the TS-twin generator
+// runs (postLoadAction registered above).
+//
+// Net effect of NOT re-enabling: a release commit (version bump only)
+// keeps the stamp valid → dataloaderExec disabled → no ts/ produced →
+// publishTsTwin's onlyIf finds no ts/ and skips → schema publishes at
+// the new version but TS twin stays at the previous version. Skew
+// ships to consumers.
+//
+// We re-enable `dataloaderExec` in a later-registered taskGraph
+// callback (Gradle runs them in registration order, so this overrides
+// zb.base's disable). Side effect: every publish creates a Neon
+// branch + runs dataloader, even when the stamp says nothing changed.
+// That's the correct semantics — if we're publishing a new version,
+// the TS twin must reflect it.
+gradle.taskGraph.whenReady {
+    val publishTsTwinInGraph = try {
+        hasTask(tasks.named("publishTsTwin").get())
+    } catch (_: Exception) { false }
+    if (publishTsTwinInGraph) {
+        tasks.named("dataloaderExec").get().enabled = true
+    }
+}
+
+// ════════════════════════════════════════════════════════════
 // PUBLISH — TS twin npm publish, hung off the schema publish.
 // ════════════════════════════════════════════════════════════
 //
