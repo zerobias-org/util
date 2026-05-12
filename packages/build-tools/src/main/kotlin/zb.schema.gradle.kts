@@ -47,6 +47,47 @@ plugins {
 }
 
 // ════════════════════════════════════════════════════════════
+// SOURCE/TEST HASH INPUTS — overrides zb.base's TS-shape defaults
+// ════════════════════════════════════════════════════════════
+//
+// Without these overrides, zb.base's SourceHasher walks `api.yml`,
+// `tsconfig.json`, `src/`, `test/` — none of which exist in a schema
+// package. The hash falls through to SHA-256 of empty (e3b0c4...),
+// so every schema's gate-stamp.json was "valid forever" once written:
+// real yml content changes never invalidated it, and the gate (which
+// owns the TS-twin generation) was always skipped after the first
+// release commit, leaving the TS twin one version behind the schema.
+//
+// project.extra reads happen at hash-compute time (inside
+// computeSourceHash()), so setting them here at plugin-apply time
+// guarantees they're in place before the first taskGraph.whenReady
+// fires.
+//
+// File set:
+//   package.json — required (SourceHasher version-strips it so the
+//                  chore(release): commit's version bump alone doesn't
+//                  invalidate the stamp).
+//   catalog.yml  — schema metadata, changes when zerobias.package or
+//                  description change.
+//   README.md    — typically copy-pasted boilerplate but tracked.
+//
+// Dir set: every YAML definition directory a schema can ship.
+project.extra["sourceFiles"] = listOf(
+    "package.json",
+    "catalog.yml",
+    "deprecated.yml",
+    "README.md",
+)
+project.extra["sourceDirs"] = listOf(
+    "classes",
+    "interfaces",
+    "fields",
+    "enums",
+    "documents",
+)
+project.extra["testDirs"] = emptyList<String>()  // schemas have no test/
+
+// ════════════════════════════════════════════════════════════
 // GATE — hook TS generation into the existing Neon dataloader task.
 // ════════════════════════════════════════════════════════════
 //

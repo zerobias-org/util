@@ -924,19 +924,45 @@ val gate by tasks.registering {
 // for monorepo SourceHasher.hashTests, now unified here via the shared
 // SourceHasher implementation.
 //
-// package.json excluded — version field gets patched during publish, which
-// would invalidate the hash.
+// package.json excluded by default — version field gets patched during
+// publish, which would invalidate the hash. (SourceHasher does have a
+// version-strip special case if a plugin explicitly opts in by listing
+// package.json in sourceFiles — content/schema plugins do that.)
 // package-lock.json excluded — npm ci may regenerate it slightly differently
 // across environments.
-val sourceFiles = listOf("api.yml", "tsconfig.json")
-val sourceDirs = listOf("src")
-val testDirs = listOf("test")
+//
+// Defaults are TypeScript-module shape (api.yml, tsconfig.json, src/, test/).
+// Other plugins (zb.schema, future zb.content opt-ins) can override via
+// project.extra:
+//
+//     project.extra["sourceFiles"] = listOf("package.json", "catalog.yml")
+//     project.extra["sourceDirs"]  = listOf("classes", "interfaces", ...)
+//     project.extra["testDirs"]    = listOf<String>()
+//
+// Reading at hash-compute time (not at plugin-apply time) so plugins
+// applied AFTER zb.base can still set the extras before the first gate-stamp
+// check runs.
+val defaultSourceFiles = listOf("api.yml", "tsconfig.json")
+val defaultSourceDirs = listOf("src")
+val defaultTestDirs = listOf("test")
+
+@Suppress("UNCHECKED_CAST")
+fun resolvedSourceFiles(): List<String> =
+    (project.extra.properties["sourceFiles"] as? List<String>) ?: defaultSourceFiles
+
+@Suppress("UNCHECKED_CAST")
+fun resolvedSourceDirs(): List<String> =
+    (project.extra.properties["sourceDirs"] as? List<String>) ?: defaultSourceDirs
+
+@Suppress("UNCHECKED_CAST")
+fun resolvedTestDirs(): List<String> =
+    (project.extra.properties["testDirs"] as? List<String>) ?: defaultTestDirs
 
 fun computeSourceHash(): String =
-    SourceHasher.hashSources(project.projectDir, sourceFiles, sourceDirs)
+    SourceHasher.hashSources(project.projectDir, resolvedSourceFiles(), resolvedSourceDirs())
 
 fun computeTestHash(): String =
-    SourceHasher.hashTests(project.projectDir, testDirs)
+    SourceHasher.hashTests(project.projectDir, resolvedTestDirs())
 
 val gateStampFile = project.layout.projectDirectory.file("gate-stamp.json")
 
