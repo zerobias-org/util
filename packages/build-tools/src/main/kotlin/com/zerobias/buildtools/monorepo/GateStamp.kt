@@ -150,6 +150,14 @@ object GateStampIO {
 // ── Validation ───────────────────────────────────────────────────────
 
 /**
+ * Outcome of validating one package's stamp entry, plus a human-readable
+ * `reason` identifying WHICH check failed. `reason` is null when `result` is
+ * VALID. Get it from [StampValidator.validateDetailed]; [StampValidator.validate]
+ * returns just the enum for callers that don't surface a reason.
+ */
+data class StampValidation(val result: GateStampResult, val reason: String? = null)
+
+/**
  * Validates a single package's stamp entry against the current source state.
  *
  * Mirrors `validatePackageStamp` from `lib/monorepo/GateStamp.ts`.
@@ -173,14 +181,34 @@ class StampValidator(
         packageName: String,
         stamp: GateStamp?,
         rootPackageJson: Map<String, Any?>? = null,
-    ): GateStampResult {
-        if (stamp == null) return GateStampResult.MISSING
-        val entry = stamp.packages[packageName] ?: return GateStampResult.MISSING
+    ): GateStampResult = validateDetailed(packageDir, packageName, stamp, rootPackageJson).result
+
+    /**
+     * Like [validate], but also returns a reason identifying the exact check
+     * that failed (mismatched hash with both truncated values, the drifted
+     * root dep + values, the failing task name, …). A bare `INVALID` is
+     * undiagnosable — anything user-facing should print this reason.
+     */
+    fun validateDetailed(
+        packageDir: File,
+        packageName: String,
+        stamp: GateStamp?,
+        rootPackageJson: Map<String, Any?>? = null,
+    ): StampValidation {
+        if (stamp == null) return StampValidation(GateStampResult.MISSING, "no gate-stamp.json on disk")
+        val entry = stamp.packages[packageName]
+            ?: return StampValidation(GateStampResult.MISSING, "no stamp entry for $packageName (run a full `zbb gate`)")
 
         // 1. Source hash check
         val currentSourceHash = SourceHasher.hashSources(packageDir, sourceFiles, sourceDirs)
         if (entry.sourceHash != currentSourceHash) {
-            return GateStampResult.INVALID
+            return StampValidation(
+                GateStampResult.INVALID,
+                "sourceHash mismatch: stamp=${shortHash(entry.sourceHash)} current=${shortHash(currentSourceHash)} " +
+                "— a tracked source file ($sourceFiles + $sourceDirs/) changed since the stamp was written, " +
+                "or build-tools' hashing differs between where the stamp was written and here " +
+                "(check both are on the same build-tools version)",
+            )
         }
 
         // 1b. Root deps drift check (only if rootDeps is present in stamp and root pkg available)
@@ -191,41 +219,53 @@ class StampValidator(
                 val currentDep = currentRootDeps[depName]
                 val currentOverride = currentOverrides[depName]?.let { jsonStringify(it) }
                 if (currentDep != stampVersion && currentOverride != stampVersion) {
-                    return GateStampResult.INVALID
+                    val now = currentOverride ?: currentDep ?: "<absent>"
+                    return StampValidation(
+                        GateStampResult.INVALID,
+                        "root package.json dep drift: '$depName' stamp=$stampVersion now=$now",
+                    )
                 }
             }
         }
 
         // 2. Build task failures (test tasks separated)
-        var buildFailed = false
-        var testTaskFailed = false
+        var failedTestTask: String? = null
         for ((taskName, status) in entry.tasks) {
             if (status != "passed" && status != "skipped" && status != "not-found") {
                 if (testPhases.contains(taskName)) {
-                    testTaskFailed = true
+                    if (failedTestTask == null) failedTestTask = taskName
                 } else {
-                    buildFailed = true
+                    return StampValidation(
+                        GateStampResult.INVALID,
+                        "build task '$taskName' recorded as '$status' in the stamp",
+                    )
                 }
             }
         }
-        if (buildFailed) return GateStampResult.INVALID
 
         // 3. Test hash check
         val currentTestHash = SourceHasher.hashTests(packageDir)
         if (entry.testHash != currentTestHash) {
-            return GateStampResult.TESTS_CHANGED
+            return StampValidation(
+                GateStampResult.TESTS_CHANGED,
+                "testHash mismatch: stamp=${shortHash(entry.testHash)} current=${shortHash(currentTestHash)} — test files changed since the stamp",
+            )
         }
 
         // 4. Test task or test suite failures
-        if (testTaskFailed) return GateStampResult.TESTS_FAILED
-        for ((_, suite) in entry.tests) {
-            if (suite.expected > 0 && suite.status != "passed" && suite.status != "skipped") {
-                return GateStampResult.TESTS_FAILED
+        if (failedTestTask != null) {
+            return StampValidation(GateStampResult.TESTS_FAILED, "test task '$failedTestTask' recorded as failed in the stamp")
+        }
+        for ((suite, s) in entry.tests) {
+            if (s.expected > 0 && s.status != "passed" && s.status != "skipped") {
+                return StampValidation(GateStampResult.TESTS_FAILED, "test suite '$suite' status='${s.status}' in the stamp")
             }
         }
 
-        return GateStampResult.VALID
+        return StampValidation(GateStampResult.VALID)
     }
+
+    private fun shortHash(h: String): String = if (h.length > 12) h.take(12) + "…" else h
 
     @Suppress("UNCHECKED_CAST")
     private fun extractRootDeps(rootPkg: Map<String, Any?>): Map<String, String> {

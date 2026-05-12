@@ -189,7 +189,7 @@ tasks.register("monorepoGateCheck") {
             if (pkg.private) continue
             if (scopeFilter != null && name != scopeFilter) continue
 
-            val result = validator.validate(
+            val v = validator.validateDetailed(
                 packageDir = pkg.dir,
                 packageName = name,
                 stamp = stamp,
@@ -197,9 +197,9 @@ tasks.register("monorepoGateCheck") {
             )
 
             val shortName = name.replace(Regex("^@[^/]+/"), "")
-            val icon = if (result == GateStampResult.VALID) "✓" else "✗"
-            logger.lifecycle("  $icon $shortName: $result")
-            if (result != GateStampResult.VALID) allValid = false
+            val icon = if (v.result == GateStampResult.VALID) "✓" else "✗"
+            logger.lifecycle("  $icon $shortName: ${v.result}${v.reason?.let { " — $it" } ?: ""}")
+            if (v.result != GateStampResult.VALID) allValid = false
         }
 
         if (!allValid) {
@@ -259,6 +259,15 @@ val monorepoGate = tasks.register("monorepoGate") {
         // stamp has for the other packages.
         val gateScope = (project.findProperty("monorepo.scope") as? String)?.takeIf { it.isNotBlank() }
 
+        // Prior stamp. Entries for packages this gate run didn't touch (not
+        // affected this run, or out of scope) are carried forward verbatim —
+        // see participatedInRun below. Without this, a re-run with nothing
+        // affected rewrites every package's tasks/tests to "skipped" (their
+        // Gradle tasks were never scheduled, so mapTaskState falls through to
+        // "skipped"), clobbering the "passed" written by the run that actually
+        // built them.
+        val existingEntries = GateStampIO.read(rootStampFile)?.packages ?: emptyMap()
+
         // Build per-package entries. When scope is set, skip everyone
         // else so we don't emit "skipped" rows for packages that simply
         // weren't in scope this run.
@@ -266,6 +275,26 @@ val monorepoGate = tasks.register("monorepoGate") {
         for ((name, pkg) in packages) {
             if (pkg.private) continue
             if (gateScope != null && name != gateScope) continue
+
+            // Look up the matching Gradle subproject for this npm package
+            val gradlePath = ":" + pkg.relDir.replace("/", ":")
+            val subproject = rootProject.findProject(gradlePath)
+
+            // Did this gate run actually touch this package's build/test
+            // tasks? If none were scheduled, the package wasn't affected —
+            // carry its prior stamp entry forward rather than overwriting a
+            // real "passed" with a phantom "skipped". (A task that never
+            // entered the graph has executed=skipped=upToDate=noSource=false;
+            // anything else means Gradle visited it.)
+            val participatedInRun = subproject != null && (phases + testPhases).any { ph ->
+                subproject.tasks.findByName(ph)?.state?.let {
+                    it.executed || it.upToDate || it.skipped || it.noSource
+                } == true
+            }
+            if (!participatedInRun) {
+                existingEntries[name]?.let { packageEntries[name] = it }
+                continue
+            }
 
             val sourceHash = SourceHasher.hashSources(pkg.dir, sourceFiles, sourceDirs)
             val testHash = SourceHasher.hashTests(pkg.dir)
@@ -275,10 +304,6 @@ val monorepoGate = tasks.register("monorepoGate") {
             } catch (_: Exception) {
                 emptyMap()
             }
-
-            // Look up the matching Gradle subproject for this npm package
-            val gradlePath = ":" + pkg.relDir.replace("/", ":")
-            val subproject = rootProject.findProject(gradlePath)
 
             // Query real task state for each phase. The mapping:
             //   not in graph / no script   → "skipped" (matches TS Builder.ts:1592)
@@ -362,14 +387,15 @@ val monorepoGate = tasks.register("monorepoGate") {
             )
         }
 
-        // Merge existing stamp in scope mode so we don't drop entries for
-        // packages that weren't in this run's scope.
+        // In scope mode the loop only built the scoped package's entry, so
+        // start from the prior stamp to keep the rest. In a full run every
+        // non-private workspace package already has an entry in packageEntries
+        // (freshly computed, or carried forward above), so packageEntries IS
+        // the stamp — which also prunes entries for deleted / now-private
+        // packages.
         val mergedEntries = linkedMapOf<String, PackageStampEntry>()
         if (gateScope != null) {
-            val existing = GateStampIO.read(rootStampFile)
-            if (existing != null) {
-                mergedEntries.putAll(existing.packages)
-            }
+            mergedEntries.putAll(existingEntries)
         }
         mergedEntries.putAll(packageEntries)
 
