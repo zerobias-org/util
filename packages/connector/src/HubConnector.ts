@@ -1,4 +1,4 @@
-import { CoreError, NotConnectedError } from '@zerobias-org/types-core-js';
+import { CoreError, DateTime, NotConnectedError } from '@zerobias-org/types-core-js';
 import {
   ConnectionMetadata,
   ConnectionStatus,
@@ -56,7 +56,7 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
       headers: this._headers,
       withCredentials: typeof globalThis.window === 'object', // If running in a browser use withCredentials
     });
-    this._metadata.connected = new Date();
+    this._metadata.connected = new DateTime(new Date());
     this._metadata.status = ConnectionStatus.Starting;
 
     this._client.interceptors.request.use((config) => {
@@ -66,7 +66,7 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
       if (config.data) {
         this._metadata.bytesOut += JSON.stringify(config.data).length;
       }
-      this._metadata.lastActivity = new Date();
+      this._metadata.lastActivity = new DateTime(new Date());
       return config;
     }, (error) => {
       this._metadata.status = ConnectionStatus.Error;
@@ -160,7 +160,7 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
   async disconnect(): Promise<void> {
     this._client = undefined;
     this._metadata.status = ConnectionStatus.Off;
-    this._metadata.disconnected = new Date();
+    this._metadata.disconnected = new DateTime(new Date());
   }
 
   async metadata(): Promise<ConnectionMetadata> {
