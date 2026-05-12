@@ -167,9 +167,19 @@ tasks.register("publishToGithub") {
     })
 }
 
-// `publish` runs all three targets.
+// `publish` runs mavenLocal + GitHub Packages.
+//
+// Maven Central is INTENTIONALLY left out for now: the `com.zerobias`
+// namespace isn't authorized on the Sonatype Central Portal, so
+// `publishToMavenCentral` (automaticRelease=true) hangs polling the
+// deployment status for minutes and then fails — red-ing CI for an
+// artifact nothing resolves from Central anyway. Re-add
+// "publishToMavenCentral" here (and to the gradlew args in
+// zb.monorepo-publish's publishJavaPackages) once the namespace is
+// registered + verified. You can still publish to Central by hand with
+// `./gradlew publishToMavenCentral` if/when it's set up.
 tasks.named("publish") {
-    dependsOn("publishToMavenLocal", "publishToMavenCentral", "publishToGithub")
+    dependsOn("publishToMavenLocal", "publishToGithub")
 }
 
 // Signing is only required by Maven Central. GitHub Packages and Maven
