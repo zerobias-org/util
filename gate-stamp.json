@@ -326,7 +326,7 @@
     },
     "@zerobias-org/util-codegen": {
       "version": "3.0.3",
-      "sourceHash": "71d38075cdc5e4d28a401499a5a936592a214054b3f049143e43731a5d167317",
+      "sourceHash": "8ac220f87334eda44daf67bb9ea86acabc8e6d5d8175dc06a56fbaf539653e74",
       "testHash": "ffd2c3654748679b3983df3bcc14c6ac63b37a636dac4fa65ebd6144805353db",
       "tasks": {
         "lint": "skipped",

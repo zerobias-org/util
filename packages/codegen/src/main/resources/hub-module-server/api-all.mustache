@@ -114,7 +114,10 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
       json = (new NotFoundError(err.errors?.[0]?.path)).toJSON();
     } else if (err instanceof BadRequest) {
       statusCode = err.status;
-      const errorObj = (err.errors && err.errors[0]) ? err.errors[0] : {};
+      // `err` is narrowed to BadRequest here, so `err.errors` is typed — the
+      // `{}` fallback would otherwise make `errorObj` a `ValidationError | {}`
+      // and break the `.path`/`.message` accesses below. Keep it loose.
+      const errorObj: any = (err.errors && err.errors[0]) ? err.errors[0] : {};
       switch (errorObj['errorCode']) {
         case 'required.openapi.validation':
           json = (new ParameterRequiredError(errorObj.path)).toJSON();
