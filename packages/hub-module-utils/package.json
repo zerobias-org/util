@@ -35,7 +35,7 @@
     "dist"
   ],
   "dependencies": {
-    "@zerobias-org/util-codegen": "^3.0.4",
+    "@zerobias-org/util-codegen": "^3.0.5",
     "@zerobias-org/util-connector": "^2.0.0"
   }
 }
