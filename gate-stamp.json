@@ -325,7 +325,7 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "3.0.3",
+      "version": "3.0.4",
       "sourceHash": "8ac220f87334eda44daf67bb9ea86acabc8e6d5d8175dc06a56fbaf539653e74",
       "testHash": "ffd2c3654748679b3983df3bcc14c6ac63b37a636dac4fa65ebd6144805353db",
       "tasks": {
@@ -481,8 +481,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "2.0.55",
-      "sourceHash": "fecf7e617ac74bfd3e2fd5d5630ba1838be4df25c03178b105063cf5c1553d02",
+      "version": "2.0.56",
+      "sourceHash": "e81d12e2e4fdd8613bb4df435a916a962e5a1416a0d82963e42940c866ec2009",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
         "lint": "passed",
@@ -526,8 +526,8 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "1.0.5",
-      "sourceHash": "12f0c584cb0931f6dd4ed3d2450507b625a21bdca02744ed677defcdbd23d6f5",
+      "version": "1.0.6",
+      "sourceHash": "541223e2766ffea436905e874c2c837044f8f5b4a5f52d4dd987d5f6617e5a19",
       "testHash": "446a47d1dd07ac1e455431e782def2a601d5b98974da834216c139be3258be97",
       "tasks": {
         "lint": "passed",
