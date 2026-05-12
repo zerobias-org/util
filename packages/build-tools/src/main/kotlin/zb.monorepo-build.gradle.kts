@@ -958,7 +958,52 @@ gradle.projectsEvaluated {
     //    Subprojects with a JVM language plugin (codegen) expose `build` as
     //    the aggregator; pure-npm subprojects use the per-phase fallback tasks
     //    we registered above.
-    val affected = service.changeResult.affected
+    //
+    //    "Affected" = change-detector result PLUS, when this invocation is a
+    //    gate run, any package whose committed gate-stamp.json entry doesn't
+    //    validate against the *current* build-tools (sourceHash/testHash
+    //    mismatch, recorded task failure, missing entry, …). Forcing those
+    //    through build+test means the stamp `monorepoGate` writes afterward is
+    //    valid against whatever build-tools just ran it — otherwise an
+    //    unchanged package's stale entry (e.g. after a hashing change in
+    //    build-tools) never gets refreshed, because it isn't "changed" so it's
+    //    never rebuilt, so `zbb gate` followed by `zbb gate --check` loops
+    //    forever. Scoped to gate runs only — `zbb build` shouldn't suddenly
+    //    rebuild "unchanged" packages just because a stamp is stale.
+    val isGateRun = gradle.startParameter.taskNames.any {
+        it == "monorepoGate" || it.endsWith(":monorepoGate")
+    }
+    val gateScopeFilter = (project.findProperty("monorepo.scope") as? String)?.takeIf { it.isNotBlank() }
+    val staleStampPackages: Set<String> = if (!isGateRun) emptySet() else try {
+        val stamp = com.zerobias.buildtools.monorepo.GateStampIO.read(rootProject.file("gate-stamp.json"))
+        val validator = com.zerobias.buildtools.monorepo.StampValidator(
+            sourceFiles = service.config.sourceFiles,
+            sourceDirs = service.config.sourceDirs,
+            testPhases = service.config.testPhases.toSet(),
+        )
+        val rootPkg: Map<String, Any?>? = try {
+            @Suppress("UNCHECKED_CAST")
+            com.fasterxml.jackson.databind.ObjectMapper()
+                .readValue(rootProject.file("package.json"), Map::class.java) as Map<String, Any?>
+        } catch (_: Exception) { null }
+        service.graph.packages.asSequence()
+            .filterNot { (_, pkg) -> pkg.private }
+            .filter { (name, _) -> gateScopeFilter == null || name == gateScopeFilter }
+            .filter { (name, pkg) ->
+                validator.validate(pkg.dir, name, stamp, rootPkg) != com.zerobias.buildtools.monorepo.GateStampResult.VALID
+            }
+            .map { it.key }
+            .toSet()
+    } catch (_: Exception) { emptySet() }
+    if (staleStampPackages.isNotEmpty()) {
+        logger.lifecycle(
+            "[gate] ${staleStampPackages.size} package(s) have a stale gate-stamp entry — forcing rebuild: " +
+            staleStampPackages.sorted().joinToString(", ")
+        )
+    }
+    // .toSet() so the union is duplicate-free regardless of whether
+    // changeResult.affected is a List or a Set.
+    val affected: Set<String> = service.changeResult.affected.toSet() + staleStampPackages
     monorepoBuild.configure {
         for (pkgName in affected) {
             val gradlePath = service.packageNameToGradlePath[pkgName] ?: continue

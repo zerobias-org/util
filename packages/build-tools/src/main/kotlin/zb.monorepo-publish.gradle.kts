@@ -446,23 +446,39 @@ val publishJavaPackages = tasks.register("publishJavaPackages") {
 
             logger.lifecycle("[java-publish] $name → $version (publishing)")
 
-            // `publish` is the aggregator from zb.maven-central-publish that runs
-            // publishToMavenLocal + publishToMavenCentral + publishToGithub. Using
-            // it (not `publishAndReleaseToMavenCentral`) ensures the artifact also
-            // lands on GitHub Packages, which is what `1.+` resolution actually
-            // reads from in CI — Maven Central propagation has historically been
-            // lossy for these artifacts and downstream consumers all hit the
-            // GitHub Packages mirror anyway.
-            val publishProc = ProcessBuilder("./gradlew", "publish")
-                .directory(pkgDir)
-                .inheritIO()
-                .start()
-            publishProc.waitFor(30, java.util.concurrent.TimeUnit.MINUTES)
+            fun gradlew(vararg args: String, timeoutMin: Long): Int {
+                val proc = ProcessBuilder(listOf("./gradlew") + args)
+                    .directory(pkgDir)
+                    .inheritIO()
+                    .start()
+                proc.waitFor(timeoutMin, java.util.concurrent.TimeUnit.MINUTES)
+                return try { proc.exitValue() } catch (_: IllegalThreadStateException) { proc.destroyForcibly(); 124 }
+            }
 
-            if (publishProc.exitValue() != 0) {
-                logger.error("[java-publish] $name PUBLISH FAILED")
+            // GitHub Packages (+ mavenLocal) is the source of truth: `1.+`
+            // resolution in CI reads from the GitHub Packages mirror, not
+            // Maven Central (Central propagation has historically been lossy,
+            // and the `com.zerobias` namespace's Central registration has been
+            // flaky). So that publish MUST succeed — if it doesn't, the
+            // package genuinely failed.
+            val ghExit = gradlew("publishToGithub", "publishToMavenLocal", timeoutMin = 15)
+            if (ghExit != 0) {
+                logger.error("[java-publish] $name PUBLISH FAILED (GitHub Packages / mavenLocal)")
                 failures.add(name)
                 continue
+            }
+
+            // Maven Central is then best-effort — a Central outage or a
+            // namespace-validation hiccup must not red the whole release run
+            // when the artifact already landed on GitHub Packages. Logged, not
+            // fatal; re-run the workflow (or fix the Central namespace) to get
+            // it onto Central.
+            val mcExit = gradlew("publishToMavenCentral", timeoutMin = 20)
+            if (mcExit != 0) {
+                logger.warn(
+                    "[java-publish] $name: Maven Central publish failed (exit $mcExit) — NON-FATAL; " +
+                    "the artifact is on GitHub Packages, which is what consumers resolve from."
+                )
             }
 
             val tag = "$name-v$version"

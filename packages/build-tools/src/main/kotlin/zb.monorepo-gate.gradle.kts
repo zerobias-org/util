@@ -259,13 +259,16 @@ val monorepoGate = tasks.register("monorepoGate") {
         // stamp has for the other packages.
         val gateScope = (project.findProperty("monorepo.scope") as? String)?.takeIf { it.isNotBlank() }
 
-        // Prior stamp. Entries for packages this gate run didn't touch (not
-        // affected this run, or out of scope) are carried forward verbatim —
-        // see participatedInRun below. Without this, a re-run with nothing
-        // affected rewrites every package's tasks/tests to "skipped" (their
-        // Gradle tasks were never scheduled, so mapTaskState falls through to
-        // "skipped"), clobbering the "passed" written by the run that actually
-        // built them.
+        // Prior stamp. For packages this gate run didn't actually build (not
+        // affected this run, or out of scope) we keep their prior tasks/tests
+        // below — see participatedInRun. Without that, a re-run with nothing
+        // affected rewrites every package's tasks to "skipped" (their Gradle
+        // tasks were never scheduled, so mapTaskState falls through to
+        // "skipped"), clobbering the "passed" from the run that built them.
+        // Note: sourceHash/testHash/version/rootDeps are still recomputed for
+        // every package — they're pure functions of the tree (+ build-tools'
+        // hashing), so a carried-forward entry must NOT keep a stale hash, or
+        // `gate --check` right after `zbb gate` fails.
         val existingEntries = GateStampIO.read(rootStampFile)?.packages ?: emptyMap()
 
         // Build per-package entries. When scope is set, skip everyone
@@ -280,29 +283,26 @@ val monorepoGate = tasks.register("monorepoGate") {
             val gradlePath = ":" + pkg.relDir.replace("/", ":")
             val subproject = rootProject.findProject(gradlePath)
 
-            // Did this gate run actually touch this package's build/test
-            // tasks? If none were scheduled, the package wasn't affected —
-            // carry its prior stamp entry forward rather than overwriting a
-            // real "passed" with a phantom "skipped". (A task that never
-            // entered the graph has executed=skipped=upToDate=noSource=false;
-            // anything else means Gradle visited it.)
-            val participatedInRun = subproject != null && (phases + testPhases).any { ph ->
-                subproject.tasks.findByName(ph)?.state?.let {
-                    it.executed || it.upToDate || it.skipped || it.noSource
-                } == true
-            }
-            if (!participatedInRun) {
-                existingEntries[name]?.let { packageEntries[name] = it }
-                continue
-            }
-
+            // Always fresh — pure functions of the current tree.
             val sourceHash = SourceHasher.hashSources(pkg.dir, sourceFiles, sourceDirs)
             val testHash = SourceHasher.hashTests(pkg.dir)
-
             val rootDeps = try {
                 Prepublish.resolveRootDeps(pkg.dir, rootProject.projectDir)
             } catch (_: Exception) {
                 emptyMap()
+            }
+
+            // Did this gate run actually touch this package's build/test
+            // tasks? If none were scheduled, the package wasn't affected — so
+            // below we keep its prior tasks/tests instead of overwriting a
+            // real "passed" with the "skipped" that mapTaskState returns for a
+            // never-scheduled task. (A task that never entered the graph has
+            // executed=skipped=upToDate=noSource=false; anything else means
+            // Gradle visited it.)
+            val participatedInRun = subproject != null && (phases + testPhases).any { ph ->
+                subproject.tasks.findByName(ph)?.state?.let {
+                    it.executed || it.upToDate || it.skipped || it.noSource
+                } == true
             }
 
             // Query real task state for each phase. The mapping:
@@ -377,12 +377,16 @@ val monorepoGate = tasks.register("monorepoGate") {
                 tests[suite] = TestSuiteEntry(expected, ran, status)
             }
 
+            // If this run didn't build the package, the tasksMap/tests above
+            // are all "skipped" (nothing was scheduled) — keep the prior run's
+            // results instead. Hashes stay fresh (computed above).
+            val priorEntry = if (!participatedInRun) existingEntries[name] else null
             packageEntries[name] = PackageStampEntry(
                 version = pkg.version,
                 sourceHash = sourceHash,
                 testHash = testHash,
-                tasks = tasksMap,
-                tests = tests,
+                tasks = priorEntry?.tasks ?: tasksMap,
+                tests = priorEntry?.tests ?: tests,
                 rootDeps = rootDeps.takeIf { it.isNotEmpty() },
             )
         }
