@@ -47,6 +47,6 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
-    "@zerobias-org/util-connector": "^1.0.41"
+    "@zerobias-org/util-connector": "^2.0.0"
   }
 }
