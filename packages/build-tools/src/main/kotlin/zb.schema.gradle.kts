@@ -313,6 +313,7 @@ val promoteTsTwin by tasks.registering {
     group = "publish"
     description = "Promote the TS twin from 'next' to all applicable dist-tags"
     onlyIf { !isTsTwinSkipped() }
+    mustRunAfter(publishTsTwin)
     doLast {
         val name = readTsArtifactName()
         val ver = project.version.toString()

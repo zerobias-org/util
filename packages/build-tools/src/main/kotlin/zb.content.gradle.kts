@@ -355,6 +355,12 @@ fun promotePackage(name: String, ver: String, workDir: java.io.File, tags: List<
 val promoteNpm by tasks.registering {
     group = "publish"
     description = "Promote npm package from 'next' to all applicable dist-tags"
+    // Without this, Gradle's scheduler can run promoteNpm before
+    // publishNpmExec. promoteNpm then dist-tags a version that was
+    // never published (404), the build fail-fasts, and publishNpmExec
+    // never runs. Schema worked by scheduling luck; vendor exposed the
+    // bug because its task graph happened to surface promote first.
+    mustRunAfter(publishNpmExec)
     doLast {
         val (name, _) = readPackageNameVersion()
         val ver = project.version.toString()
