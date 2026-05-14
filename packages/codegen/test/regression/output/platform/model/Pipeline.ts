@@ -25,7 +25,7 @@ import { PipelineExecutionModeEnum } from './PipelineExecutionModeEnum.js';
 import { PipelineFrequencyEnum } from './PipelineFrequencyEnum.js';
 import { PipelineSelectedScopes } from './PipelineSelectedScopes.js';
 import { PipelineScopeModeEnum } from './PipelineScopeModeEnum.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -43,13 +43,13 @@ export class Pipeline {
   'scopeMode': PipelineScopeModeEnumDef;
   'description'?: string | null;
   'parentId'?: UUID | null;
-  'created'?: Date;
-  'updated'?: Date;
+  'created'?: DateTime;
+  'updated'?: DateTime;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
   'keywords'?: Array<string> | null;
-  'deleted'?: Date | null;
+  'deleted'?: DateTime | null;
   'frequency'?: PipelineFrequencyEnumDef;
   'adminStatus'?: PipelineAdminStatusEnumDef;
   'executionStatus'?: PipelineExecutionStatusEnumDef;
@@ -175,18 +175,18 @@ export class Pipeline {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -229,9 +229,9 @@ export class Pipeline {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -378,7 +378,7 @@ export class Pipeline {
     return ObjectSerializer.deserialize(obj, 'Pipeline');
   }
 
-  constructor(id: UUID, name: string, ownerId: UUID, boundaryProductId: UUID, format: PipelineFormatEnumDef, executionMode: PipelineExecutionModeEnumDef, batchMode: PipelineBatchModeEnumDef, connectorType: PipelineConnectorTypeEnumDef, scopeMode: PipelineScopeModeEnumDef, description?: string, parentId?: UUID, created?: Date, updated?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, deleted?: Date, frequency?: PipelineFrequencyEnumDef, adminStatus?: PipelineAdminStatusEnumDef, executionStatus?: PipelineExecutionStatusEnumDef, dayOfWeek?: PipelineDayOfWeekEnumDef, dayOfMonth?: number, monthOfYear?: PipelineMonthOfYearEnumDef, executionTime?: string, timezone?: TimeZoneDef, targets?: { [key: string]: UUID; }, collectorBotId?: UUID, params?: { [key: string]: any; }, moduleName?: string, token?: string, cronId?: UUID, selectedScopes?: PipelineSelectedScopes) {
+  constructor(id: UUID, name: string, ownerId: UUID, boundaryProductId: UUID, format: PipelineFormatEnumDef, executionMode: PipelineExecutionModeEnumDef, batchMode: PipelineBatchModeEnumDef, connectorType: PipelineConnectorTypeEnumDef, scopeMode: PipelineScopeModeEnumDef, description?: string, parentId?: UUID, created?: DateTime, updated?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, deleted?: DateTime, frequency?: PipelineFrequencyEnumDef, adminStatus?: PipelineAdminStatusEnumDef, executionStatus?: PipelineExecutionStatusEnumDef, dayOfWeek?: PipelineDayOfWeekEnumDef, dayOfMonth?: number, monthOfYear?: PipelineMonthOfYearEnumDef, executionTime?: string, timezone?: TimeZoneDef, targets?: { [key: string]: UUID; }, collectorBotId?: UUID, params?: { [key: string]: any; }, moduleName?: string, token?: string, cronId?: UUID, selectedScopes?: PipelineSelectedScopes) {
     this.id = id;
     this.name = name;
     this.ownerId = ownerId;

@@ -154,9 +154,10 @@ Access via `client.getFooApi()`
 | `url` | string | Yes | Base URL of the API server |
 | `apiKey` | string | No* | API key for authentication |
 | `jwt` | string | No* | JWT token for authentication |
+| `session` | string | No* | Session token for authentication (e.g., Dana session); takes precedence over `jwt` and `apiKey` |
 | `orgId` | string | Yes | Organization ID for multi-tenancy |
 
-*Either `apiKey` or `jwt` is required for authentication.
+*One of `apiKey`, `jwt`, or `session` is required for authentication.
 
 ## TypeScript Support
 
@@ -177,5 +178,5 @@ import {
 - [manifest.json](./generated/api/manifest.json) - Operation metadata for AI/tooling integration
 
 ---
-*Generated: 2025-12-03T13:26:23Z*
-*Codegen Version: 1.0.12*
+*Generated: 2026-05-14T11:20:40Z*
+*Codegen Version: 3.0.6*

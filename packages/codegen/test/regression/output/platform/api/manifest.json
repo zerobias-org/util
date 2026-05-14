@@ -1,8 +1,8 @@
 {
   "serviceName": "PlatformApi",
   "version": "0.8.0",
-  "codegenVersion": "1.0.12",
-  "generatedAt": "2025-12-03T13:26:09Z",
+  "codegenVersion": "3.0.6",
+  "generatedAt": "2026-05-14T11:20:28Z",
   "clientClass": "PlatformApiClient",
   "factoryFunction": "newPlatformApi",
   "operations": [
@@ -98,6 +98,13 @@
           "required": false,
           "type": "UUID",
           "description": "ID of a role to filter access rules with"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AccessRule&gt;"
@@ -195,6 +202,13 @@
           "required": false,
           "type": "ActivityTypeEnum",
           "description": "Filter by activity type"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ActivityExtended&gt;"
@@ -227,6 +241,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SchemasLinkType&gt;"
@@ -393,6 +414,13 @@
           "in": "query",
           "required": false,
           "type": "AuditTypeEnum"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AppOrgAuditEvidenceAssessmentMetric&gt;"
@@ -431,6 +459,13 @@
           "in": "query",
           "required": false,
           "type": "BoundaryStatusEnum"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AppOrgBoundaryMetric&gt;"
@@ -471,6 +506,13 @@
           "required": false,
           "type": "OrganizationInvitationStatusEnum",
           "description": "Status of the invitation object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;OrganizationInvitation&gt;"
@@ -503,6 +545,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AppOrgMonthlyUsageMetric&gt;"
@@ -536,6 +585,13 @@
           "required": false,
           "type": "boolean",
           "description": "Expand response to all org information"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AppOrgProfile | AppOrgProfileView&gt;"
@@ -580,6 +636,13 @@
           "in": "query",
           "required": false,
           "type": "ReportFormatTypeEnum"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AppOrgMonthlyUsageReport&gt;"
@@ -642,6 +705,13 @@
           "in": "query",
           "required": false,
           "type": "SortObject"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Invitation&gt;"
@@ -817,6 +887,13 @@
           "required": false,
           "type": "UUID",
           "description": "a trigger id"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AlertView&gt;"
@@ -904,6 +981,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AlertLinkExtendedResource&gt;"
@@ -984,6 +1068,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ResourceView&gt;"
@@ -1010,6 +1101,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AlertTriggerView&gt;"
@@ -1135,6 +1233,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;string&gt;"
@@ -1189,6 +1294,13 @@
           "required": false,
           "type": "number",
           "description": "Filter by the number of days to go back."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ArtifactVersion &amp; ArtifactUpdate&gt;"
@@ -1250,6 +1362,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ArtifactVersion&gt;"
@@ -1569,6 +1688,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AssessmentResult &amp; ExtendedAssessmentResult&gt;"
@@ -1613,6 +1739,13 @@
           "in": "query",
           "required": false,
           "type": "EvidenceAssessmentStatusEnum"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceAssessment &amp; ExtendedEvidenceAssessment&gt;"
@@ -1666,6 +1799,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AuditMessage&gt;"
@@ -1720,6 +1860,13 @@
           "required": false,
           "type": "UUID",
           "description": "Filter by boundary id"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Audit &amp; AuditExtended&gt;"
@@ -1767,6 +1914,13 @@
           "required": false,
           "type": "string",
           "description": "Name of the evidence file"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceFileExtended&gt;"
@@ -2073,6 +2227,13 @@
           "required": false,
           "type": "BatchLogLevelEnum",
           "description": "An bag log level value to filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BatchLog&gt;"
@@ -2106,6 +2267,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BatchWithLogCountsAndTags&gt;"
@@ -2138,6 +2306,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AppObjectVersionWithTags&gt;"
@@ -2231,6 +2406,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BaselineElementExtended&gt;"
@@ -2263,6 +2445,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BaselineExtended&gt;"
@@ -2289,6 +2478,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BenchmarkExtended&gt;"
@@ -2466,6 +2662,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BaselineBenchmarkElementExtended&gt;"
@@ -2511,6 +2714,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BaselineExtended&gt;"
@@ -2574,6 +2784,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BenchmarkElementExtended&gt;"
@@ -2619,6 +2836,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TestCaseExtended&gt;"
@@ -2676,6 +2900,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BenchmarkExtended&gt;"
@@ -2965,6 +3196,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundarySearchResult&gt;"
@@ -3029,6 +3267,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundarySearchResult&gt;"
@@ -4214,6 +4459,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryProductForList&gt;"
@@ -4268,6 +4520,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryExtended&gt;"
@@ -4313,6 +4572,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryAlertView&gt;"
@@ -4360,6 +4626,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryAlertSubjectExtended&gt;"
@@ -4405,6 +4678,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AlertSubscriptionExtended&gt;"
@@ -4456,6 +4736,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryAlertBotExtended&gt;"
@@ -4495,6 +4782,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryAlertView&gt;"
@@ -4541,6 +4835,13 @@
           "required": false,
           "type": "AuditTypeEnum",
           "description": "Filter by type"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryAuditMetrics&gt;"
@@ -4594,6 +4895,13 @@
           "required": false,
           "type": "boolean",
           "description": "Filter by audited flag"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Audit &amp; AuditExtended&gt;"
@@ -4634,6 +4942,13 @@
           "required": false,
           "type": "UUID",
           "description": "Component ID filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryComponentExtended&gt;"
@@ -4666,6 +4981,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryComponentExtended&gt;"
@@ -4698,6 +5020,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryConnectionForList&gt;"
@@ -4730,6 +5059,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryEvent &amp; ExtendedBoundaryEvent&gt;"
@@ -4792,6 +5128,13 @@
           "in": "query",
           "required": false,
           "type": "SortOrderOptions"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryEvidence &amp; ExtendedBoundaryEvidence&gt;"
@@ -4850,6 +5193,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;PartyExtended&gt;"
@@ -4912,6 +5262,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryPartyRoleExtended&gt;"
@@ -4951,6 +5308,13 @@
           "required": false,
           "type": "UUID",
           "description": "Party Id filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryPartyRoleExtended&gt;"
@@ -5020,6 +5384,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Pipeline&gt;"
@@ -5065,6 +5436,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryConnectionForList&gt;"
@@ -5134,6 +5512,13 @@
           "in": "query",
           "required": false,
           "type": "boolean"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryProductPipeline&gt;"
@@ -5186,6 +5571,13 @@
           "in": "query",
           "required": false,
           "type": "SortObject"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryProductExtended&gt;"
@@ -5232,6 +5624,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryAlertView&gt;"
@@ -5270,6 +5669,13 @@
           "in": "query",
           "required": false,
           "type": "UUID"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryRoleExtended&gt;"
@@ -5326,6 +5732,13 @@
           "in": "query",
           "required": false,
           "type": "boolean"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ExtendedBoundaryScfControl&gt;"
@@ -5371,6 +5784,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ElementExtended&gt;"
@@ -5403,6 +5823,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryStandardBaselineExtended&gt;"
@@ -5442,6 +5869,13 @@
           "required": false,
           "type": "string",
           "description": "Search like filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundarySuggestedProduct&gt;"
@@ -5487,6 +5921,13 @@
           "required": false,
           "type": "string",
           "description": "Search like filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryProductTarget &amp; ExtendedBoundaryProductTarget&gt;"
@@ -5519,6 +5960,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryTeamMetrics&gt;"
@@ -5563,6 +6011,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryTeamScfControlEvidenceDefinitionImplementation&gt;"
@@ -5615,6 +6070,13 @@
           "required": false,
           "type": "string",
           "description": "Filter by code"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryTeamScfControl&gt;"
@@ -5654,6 +6116,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryTeam&gt;"
@@ -5723,6 +6192,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TestExtended&gt;"
@@ -5755,6 +6231,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ScfDomain&gt;"
@@ -5802,6 +6285,13 @@
           "required": false,
           "type": "UUID",
           "description": "Role ID filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryPartyRoleExtended&gt;"
@@ -6362,6 +6852,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryRoleExtended&gt;"
@@ -6401,6 +6898,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ActivityExtended&gt;"
@@ -6458,6 +6962,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TaskExtended&gt;"
@@ -6525,6 +7036,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BoundaryRoleExtended&gt;"
@@ -6654,6 +7172,13 @@
           "in": "query",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;RoleCategory&gt;"
@@ -6686,6 +7211,13 @@
           "in": "query",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;JobDuty&gt;"
@@ -6724,6 +7256,13 @@
           "in": "query",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Qualification&gt;"
@@ -6769,6 +7308,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;CatalogRoleExtended&gt;"
@@ -6845,6 +7391,13 @@
           "required": false,
           "type": "string",
           "description": "A string to search for"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AppObject &amp; ExtendAppObject&gt;"
@@ -6905,6 +7458,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;GraphqlQueryExtended&gt;"
@@ -6952,6 +7512,13 @@
           "required": false,
           "type": "string",
           "description": "An string to search for"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ClassWithViewProperties&gt;"
@@ -7142,6 +7709,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComplianceFeatureVersion&gt;"
@@ -7168,6 +7742,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComplianceFeature&gt;"
@@ -7634,6 +8215,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentFilterExtended&gt;"
@@ -7691,6 +8279,13 @@
           "required": false,
           "type": "ComponentFormat",
           "description": "Component format filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentType&gt;"
@@ -7780,6 +8375,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentExtended&gt;"
@@ -7818,6 +8420,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ExternalControlExtended&gt;"
@@ -7872,6 +8481,13 @@
           "required": false,
           "type": "Raci",
           "description": "Component Party Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentPartyExtended&gt;"
@@ -7923,6 +8539,13 @@
           "required": false,
           "type": "Raci",
           "description": "Component Party Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentPartyExtended&gt;"
@@ -7977,6 +8600,13 @@
           "required": false,
           "type": "Raci",
           "description": "Component Role Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentRoleExtended&gt;"
@@ -8028,6 +8658,13 @@
           "required": false,
           "type": "Raci",
           "description": "Component Role Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentRoleExtended&gt;"
@@ -8090,6 +8727,13 @@
           "in": "query",
           "required": false,
           "type": "SortObject"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentExtended&gt;"
@@ -8238,6 +8882,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentEvidenceExtended&gt;"
@@ -8313,6 +8964,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentEvidenceExtended&gt;"
@@ -8472,6 +9130,13 @@
           "in": "query",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ControlActivityExtended&gt;"
@@ -8566,6 +9231,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ImplementationStatementExtended&gt;"
@@ -8871,6 +9543,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EnumInfo&gt;"
@@ -8911,6 +9590,13 @@
           "required": false,
           "type": "string",
           "description": "An string to search for"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;DataType &amp; PackageObject&gt;"
@@ -9025,6 +9711,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceBotExtended&gt;"
@@ -9164,6 +9857,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceDefinitionFrameworkElementLink&gt;"
@@ -9196,6 +9896,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceDefinitionFrameworkVersion&gt;"
@@ -9248,6 +9955,13 @@
           "in": "query",
           "required": false,
           "type": "UUID"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceDefinitionWithScfLinksAndTags&gt;"
@@ -9298,6 +10012,13 @@
           "in": "query",
           "required": false,
           "type": "SortObject"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceDefinitionExtended&gt;"
@@ -9429,6 +10150,13 @@
           "required": false,
           "type": "string",
           "description": "Filter by search name or description"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceRequestListByRequest&gt;"
@@ -9481,6 +10209,13 @@
           "in": "query",
           "required": false,
           "type": "UUID"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceRequestWithExtendedInfo&gt;"
@@ -9607,6 +10342,13 @@
           "required": false,
           "type": "string",
           "description": "Filter by search name or description"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceRequestListWithTags&gt;"
@@ -9682,6 +10424,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Property &amp; ExtendedProperty&gt;"
@@ -9722,6 +10471,13 @@
           "required": false,
           "type": "string",
           "description": "An string to search for"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Field &amp; ExtendedField&gt;"
@@ -9814,13 +10570,13 @@
           "name": "discoveredDate",
           "in": "query",
           "required": false,
-          "type": "Date"
+          "type": "DateTime"
         },
         {
           "name": "resolvedDate",
           "in": "query",
           "required": false,
-          "type": "Date"
+          "type": "DateTime"
         },
         {
           "name": "configRule",
@@ -9834,6 +10590,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;FindingList&gt;"
@@ -10017,6 +10780,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;OldFramework&gt;"
@@ -10070,6 +10840,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;EvidenceDefinitionFrameworkElementLink&gt;"
@@ -10102,6 +10879,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;FrameworkElementType&gt;"
@@ -10161,6 +10945,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;OldFrameworkElement &amp; OldFrameworkElementExtended&gt;"
@@ -10199,6 +10990,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;OldFrameworkElement &amp; OldFrameworkElementExtended&gt;"
@@ -10231,6 +11029,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;FrameworkVersion&gt;"
@@ -10263,6 +11068,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;FrameworkVersion&gt;"
@@ -10289,6 +11101,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;OldFramework&gt;"
@@ -10315,6 +11134,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ScfControl&gt;"
@@ -10341,6 +11167,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ScfDomain&gt;"
@@ -10386,6 +11219,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ScfSearchResult&gt;"
@@ -10543,6 +11383,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;GraphqlQueryExtended&gt;"
@@ -10582,6 +11429,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AlertBotExtended&gt;"
@@ -10628,6 +11482,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;GraphqlQueryVersion&gt;"
@@ -11067,6 +11928,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ImplementationStatementExtended&gt;"
@@ -11136,6 +12004,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Pipeline&gt;"
@@ -11199,6 +12074,13 @@
           "required": false,
           "type": "Raci",
           "description": "Implementation Statement Role Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ImplementationStatementPartyExtended&gt;"
@@ -11244,6 +12126,13 @@
           "required": false,
           "type": "Raci",
           "description": "Implementation Statement Role Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ImplementationStatementRoleExtended&gt;"
@@ -11565,6 +12454,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ComponentEvidenceExtendedByInternalControl&gt;"
@@ -11634,6 +12530,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;PipelineExtended&gt;"
@@ -11712,6 +12615,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;InternalControlExtended&gt;"
@@ -11744,6 +12654,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ExternalControlExtended&gt;"
@@ -11798,6 +12715,13 @@
           "required": false,
           "type": "Raci",
           "description": "Internal Control Party Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;InternalControlPartyExtended&gt;"
@@ -11843,6 +12767,13 @@
           "required": false,
           "type": "Raci",
           "description": "Internal Control Role Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;InternalControlPartyExtended&gt;"
@@ -11897,6 +12828,13 @@
           "required": false,
           "type": "Raci",
           "description": "Internal Control Role Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;InternalControlRoleExtended&gt;"
@@ -11942,6 +12880,13 @@
           "required": false,
           "type": "Raci",
           "description": "Internal Control Role Raci filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;InternalControlRoleExtended&gt;"
@@ -12003,6 +12948,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;InternalControlSlim&gt;"
@@ -12086,6 +13038,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;InternalDomainExtended&gt;"
@@ -12160,6 +13119,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;KbArticleExtended&gt;"
@@ -12191,7 +13157,7 @@
           "name": "asOf",
           "in": "query",
           "required": false,
-          "type": "Date",
+          "type": "DateTime",
           "description": "As of date"
         }
       ],
@@ -12259,7 +13225,7 @@
           "name": "asOf",
           "in": "query",
           "required": false,
-          "type": "Date",
+          "type": "DateTime",
           "description": "As of date. Defaults to Date.now() if unspecified"
         }
       ],
@@ -12298,8 +13264,15 @@
           "name": "asOf",
           "in": "query",
           "required": false,
-          "type": "Date",
+          "type": "DateTime",
           "description": "As of date"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;VersionByObject&gt;"
@@ -12462,6 +13435,13 @@
           "required": false,
           "type": "string",
           "description": "A comma serparated list of role ids. Filter by role ids. Currenly, this will only return assignable parties."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Party&gt;"
@@ -12621,6 +13601,13 @@
           "in": "query",
           "required": false,
           "type": "boolean"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;PipelineJob &amp; ExtendedPipelineJob&gt;"
@@ -12745,6 +13732,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ImplementationStatementExtended&gt;"
@@ -12826,6 +13820,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;PipelineExtended&gt;"
@@ -13009,6 +14010,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;PipelineJob &amp; ExtendedPipelineJob&gt;"
@@ -13053,6 +14061,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AppObjectVersionWithTags&gt;"
@@ -13241,6 +14256,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;PrincipalAccessRuleGroupedView&gt;"
@@ -13714,6 +14736,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;string&gt;"
@@ -13752,6 +14781,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ProductComponentVersionExtended&gt;"
@@ -13790,6 +14826,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ProductEditionVersionExtended&gt;"
@@ -13822,6 +14865,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ProductVersionExtended&gt;"
@@ -13872,6 +14922,13 @@
           "in": "query",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ProductExtended&gt;"
@@ -14375,6 +15432,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SchemasLinkType&gt;"
@@ -14408,6 +15472,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Alert&gt;"
@@ -14454,6 +15525,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SchemasLinkType&gt;"
@@ -14563,6 +15641,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SchemasResourceLink&gt;"
@@ -14615,6 +15700,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Alert&gt;"
@@ -14669,6 +15761,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ResourceView&gt;"
@@ -14702,6 +15801,13 @@
           "required": false,
           "type": "ResourceSearchFilter",
           "description": "Filters to apply to the search."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ResourceView&gt;"
@@ -14749,6 +15855,13 @@
           "required": false,
           "type": "TagSearchBody",
           "description": "Filters to apply to the search."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TagExtended&gt;"
@@ -14822,6 +15935,13 @@
           "required": false,
           "type": "boolean",
           "description": "Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ResourceView&gt;"
@@ -15100,6 +16220,13 @@
           "required": false,
           "type": "UUID",
           "description": "An optional principalId to filter by"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Role&gt;"
@@ -15255,6 +16382,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;AccessRuleView&gt;"
@@ -15301,6 +16435,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;PrincipalWithVia&gt;"
@@ -15340,6 +16481,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SecurityRoleViewExtended&gt;"
@@ -15386,6 +16534,13 @@
           "required": false,
           "type": "object",
           "description": "Sortable object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SecurityRoleViewExtended&gt;"
@@ -15540,6 +16695,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SegmentType&gt;"
@@ -15572,6 +16734,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SegmentVersion&gt;"
@@ -15598,6 +16767,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Segment&gt;"
@@ -15788,6 +16964,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BaselineElementExtended&gt;"
@@ -15820,6 +17003,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BaselineExtended&gt;"
@@ -15846,6 +17036,13 @@
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StandardExtended&gt;"
@@ -16023,6 +17220,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BaselineElementExtended&gt;"
@@ -16068,6 +17272,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;BaselineExtended&gt;"
@@ -16125,6 +17336,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ElementExtended&gt;"
@@ -16188,6 +17406,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StandardExtended&gt;"
@@ -16233,6 +17458,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ElementExtended&gt;"
@@ -16272,6 +17504,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StandardExtended&gt;"
@@ -16323,6 +17562,13 @@
           "in": "query",
           "required": false,
           "type": "string"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SuggestedActivityExtended&gt;"
@@ -16364,6 +17610,13 @@
           "required": false,
           "type": "UUID",
           "description": "An ID of a vendor to filter against"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Suite&gt;"
@@ -16461,6 +17714,13 @@
           "required": false,
           "type": "string",
           "description": "Filter to apply to the &#x60;name&#x60; field. This will be &#x60;ORed&#x60; with other filters  and is case-insensitive."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TagView&gt;"
@@ -16501,6 +17761,13 @@
           "required": false,
           "type": "TagSearchBody",
           "description": "Filters to apply to the search."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TagExtended&gt;"
@@ -16674,6 +17941,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TagRuleExtended&gt;"
@@ -16902,6 +18176,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TaskAttachment&gt;"
@@ -16941,6 +18222,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TaskComment&gt;"
@@ -17033,6 +18321,13 @@
           "required": false,
           "type": "Array&lt;UUID&gt;",
           "description": "Filter by resource ids. Only tasks linked to the given resources will be returned"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TaskExtended&gt;"
@@ -17187,6 +18482,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TeamExtended&gt;"
@@ -17263,6 +18565,13 @@
           "required": false,
           "type": "string",
           "description": "Search like filter"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;SuggestedVendor&gt;"
@@ -17296,6 +18605,13 @@
           "required": false,
           "type": "string",
           "description": "A string to search for"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Vendor&gt;"
@@ -17348,6 +18664,13 @@
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Workflow&gt;"

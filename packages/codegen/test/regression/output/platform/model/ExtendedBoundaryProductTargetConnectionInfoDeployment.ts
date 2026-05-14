@@ -4,14 +4,14 @@
 // ===============================================
 import { ConnectionOperationalStatusDef } from './ConnectionOperationalStatus.js';
 import { ConnectionOperationalStatus } from './ConnectionOperationalStatus.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ExtendedBoundaryProductTargetConnectionInfoDeployment {
   'id': UUID;
   'name': string;
-  'created': Date;
-  'updated': Date;
+  'created': DateTime;
+  'updated': DateTime;
   'nodeId': UUID;
   'moduleVersionId': UUID;
   'status': ConnectionOperationalStatusDef;
@@ -41,18 +41,18 @@ export class ExtendedBoundaryProductTargetConnectionInfoDeployment {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -91,7 +91,7 @@ export class ExtendedBoundaryProductTargetConnectionInfoDeployment {
     return ObjectSerializer.deserialize(obj, 'ExtendedBoundaryProductTargetConnectionInfoDeployment');
   }
 
-  constructor(id: UUID, name: string, created: Date, updated: Date, nodeId: UUID, moduleVersionId: UUID, status: ConnectionOperationalStatusDef, ) {
+  constructor(id: UUID, name: string, created: DateTime, updated: DateTime, nodeId: UUID, moduleVersionId: UUID, status: ConnectionOperationalStatusDef, ) {
     this.id = id;
     this.name = name;
     this.created = created;

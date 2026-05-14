@@ -15,7 +15,7 @@ import { VendorChangeEvent } from './VendorChangeEvent.js';
 import { ResourceTypeEnumDef } from './ResourceTypeEnum.js';
 import { ModuleVersionChangeEvent } from './ModuleVersionChangeEvent.js';
 import { CatalogingOrderChangeEvent } from './CatalogingOrderChangeEvent.js';
-import { EnumValue, Nmtoken, IllegalArgumentError, UUID, URL } from '@zerobias-org/types-core-js';
+import { EnumValue, Nmtoken, IllegalArgumentError, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -41,11 +41,11 @@ export class Event {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'eventType': EventTypeDef;
   /**
   * whether the resource described in the payload was created or updated
@@ -72,7 +72,7 @@ export class Event {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -141,18 +141,18 @@ export class Event {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -231,9 +231,9 @@ export class Event {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -299,7 +299,7 @@ export class Event {
     return ObjectSerializer.deserialize(obj, 'Event');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, eventType: EventTypeDef, action: Event.ActionEnumDef, changedFields: Array<string>, resourceId: UUID, resourceType: ResourceTypeEnumDef, payload: VendorChangeEvent | SuiteChangeEvent | ProductChangeEvent | OperationOrderChangeEvent | CatalogingOrderChangeEvent | ProductOrderChangeEvent | ModuleVersionChangeEvent, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, resourceOwnerId?: UUID, packageNames?: Array<string>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, eventType: EventTypeDef, action: Event.ActionEnumDef, changedFields: Array<string>, resourceId: UUID, resourceType: ResourceTypeEnumDef, payload: VendorChangeEvent | SuiteChangeEvent | ProductChangeEvent | OperationOrderChangeEvent | CatalogingOrderChangeEvent | ProductOrderChangeEvent | ModuleVersionChangeEvent, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, resourceOwnerId?: UUID, packageNames?: Array<string>) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -8,7 +8,7 @@ import { SchemasPrincipalStatusDef } from './SchemasPrincipalStatus.js';
 import { SchemasPrincipalType } from './SchemasPrincipalType.js';
 import { SchemasPrincipalOriginDef } from './SchemasPrincipalOrigin.js';
 import { SchemasPrincipalOrigin } from './SchemasPrincipalOrigin.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -34,9 +34,9 @@ export class SchemasPrincipal {
   */
   'enabled': boolean;
   'origin': SchemasPrincipalOriginDef;
-  'created'?: Date | null;
-  'deleted'?: Date | null;
-  'updated'?: Date | null;
+  'created'?: DateTime | null;
+  'deleted'?: DateTime | null;
+  'updated'?: DateTime | null;
   /**
   * Identifier for this Principal in an external system, when available
   */
@@ -112,27 +112,27 @@ export class SchemasPrincipal {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -153,7 +153,7 @@ export class SchemasPrincipal {
     return ObjectSerializer.deserialize(obj, 'SchemasPrincipal');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, created?: Date, deleted?: Date, updated?: Date, externalId?: string) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string) {
     this.id = id;
     this.ownerId = ownerId;
     this.name = name;

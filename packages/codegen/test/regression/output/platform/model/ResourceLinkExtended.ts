@@ -8,7 +8,7 @@ import { SchemasLinkType } from './SchemasLinkType.js';
 import { ResourceLink } from './ResourceLink.js';
 import { ResourceLinkExtendedAllOf } from './ResourceLinkExtendedAllOf.js';
 import { ResourceLinkSideEnum } from './ResourceLinkSideEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ResourceLinkExtended {
@@ -31,11 +31,11 @@ export class ResourceLinkExtended {
   /**
   * Timestamp when the link was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * Timestamp when the link was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'linkTypeInfo': SchemasLinkType;
   'linkSide': ResourceLinkSideEnumDef;
   'fromResourceInfo': IdNameDescriptionTypeImageUrlObject;
@@ -43,7 +43,7 @@ export class ResourceLinkExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * Arbitrary context around this link
   */
@@ -100,18 +100,18 @@ export class ResourceLinkExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -154,9 +154,9 @@ export class ResourceLinkExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -195,7 +195,7 @@ export class ResourceLinkExtended {
     return ObjectSerializer.deserialize(obj, 'ResourceLinkExtended');
   }
 
-  constructor(id: UUID, linkType: UUID, fromResource: UUID, toResource: UUID, created: Date, updated: Date, linkTypeInfo: SchemasLinkType, linkSide: ResourceLinkSideEnumDef, fromResourceInfo: IdNameDescriptionTypeImageUrlObject, toResourceInfo: IdNameDescriptionTypeImageUrlObject, deleted?: Date, context?: { [key: string]: object; }, fromObject?: { [key: string]: object; }, toObject?: { [key: string]: object; }) {
+  constructor(id: UUID, linkType: UUID, fromResource: UUID, toResource: UUID, created: DateTime, updated: DateTime, linkTypeInfo: SchemasLinkType, linkSide: ResourceLinkSideEnumDef, fromResourceInfo: IdNameDescriptionTypeImageUrlObject, toResourceInfo: IdNameDescriptionTypeImageUrlObject, deleted?: DateTime, context?: { [key: string]: object; }, fromObject?: { [key: string]: object; }, toObject?: { [key: string]: object; }) {
     this.id = id;
     this.linkType = linkType;
     this.fromResource = fromResource;

@@ -6,7 +6,7 @@ import { AuditTypeEnumDef } from './AuditTypeEnum.js';
 import { AuditStatusEnumDef } from './AuditStatusEnum.js';
 import { AuditTypeEnum } from './AuditTypeEnum.js';
 import { AuditStatusEnum } from './AuditStatusEnum.js';
-import { Email, UUID, URL } from '@zerobias-org/types-core-js';
+import { Email, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -18,21 +18,21 @@ export class Audit {
   'ownerId': UUID;
   'status': AuditStatusEnumDef;
   'auditType': AuditTypeEnumDef;
-  'plannedStartDate': Date;
-  'plannedEndDate': Date;
+  'plannedStartDate': DateTime;
+  'plannedEndDate': DateTime;
   'auditeeInitiated': boolean;
   'invitedOrgUserId': UUID;
   'description'?: string | null;
-  'created'?: Date;
-  'updated'?: Date;
-  'deleted'?: Date | null;
+  'created'?: DateTime;
+  'updated'?: DateTime;
+  'deleted'?: DateTime | null;
   'parentId'?: UUID | null;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
   'keywords'?: Array<string> | null;
-  'lookbackPeriodStart'?: Date | null;
-  'lookbackPeriodEnd'?: Date | null;
+  'lookbackPeriodStart'?: DateTime | null;
+  'lookbackPeriodEnd'?: DateTime | null;
   'invitedOrgUserEmail'?: Email | null;
   'reasonForRejectingInvitation'?: string | null;
   'auditedOrgId'?: UUID | null;
@@ -96,18 +96,18 @@ export class Audit {
       "name": "plannedStartDate",
       "baseName": "plannedStartDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "plannedEndDate",
       "baseName": "plannedEndDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -141,27 +141,27 @@ export class Audit {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -213,18 +213,18 @@ export class Audit {
       "name": "lookbackPeriodStart",
       "baseName": "lookbackPeriodStart",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "lookbackPeriodEnd",
       "baseName": "lookbackPeriodEnd",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -326,7 +326,7 @@ export class Audit {
     return ObjectSerializer.deserialize(obj, 'Audit');
   }
 
-  constructor(id: UUID, name: string, ownerId: UUID, status: AuditStatusEnumDef, auditType: AuditTypeEnumDef, plannedStartDate: Date, plannedEndDate: Date, auditeeInitiated: boolean, invitedOrgUserId: UUID, description?: string, created?: Date, updated?: Date, deleted?: Date, parentId?: UUID, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, lookbackPeriodStart?: Date, lookbackPeriodEnd?: Date, invitedOrgUserEmail?: Email, reasonForRejectingInvitation?: string, auditedOrgId?: UUID, auditedOrgUserId?: UUID, auditingOrgId?: UUID, auditingOrgUserId?: UUID, boundaryId?: UUID, evidenceRequestListId?: UUID, frameworkVersionId?: UUID, folderId?: UUID) {
+  constructor(id: UUID, name: string, ownerId: UUID, status: AuditStatusEnumDef, auditType: AuditTypeEnumDef, plannedStartDate: DateTime, plannedEndDate: DateTime, auditeeInitiated: boolean, invitedOrgUserId: UUID, description?: string, created?: DateTime, updated?: DateTime, deleted?: DateTime, parentId?: UUID, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, lookbackPeriodStart?: DateTime, lookbackPeriodEnd?: DateTime, invitedOrgUserEmail?: Email, reasonForRejectingInvitation?: string, auditedOrgId?: UUID, auditedOrgUserId?: UUID, auditingOrgId?: UUID, auditingOrgUserId?: UUID, boundaryId?: UUID, evidenceRequestListId?: UUID, frameworkVersionId?: UUID, folderId?: UUID) {
     this.id = id;
     this.name = name;
     this.ownerId = ownerId;

@@ -9,7 +9,7 @@ import { ProductComponentExtendedAllOf } from './ProductComponentExtendedAllOf.j
 import { ProductComponentVersion } from './ProductComponentVersion.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { IdNameCodeExternalIdDescriptionImageUrlObject } from './IdNameCodeExternalIdDescriptionImageUrlObject.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ProductComponentExtended {
@@ -32,11 +32,11 @@ export class ProductComponentExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'productId': UUID;
   'status': CatalogPublishStatusEnumDef;
   'latestVersionId': UUID;
@@ -58,7 +58,7 @@ export class ProductComponentExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -124,18 +124,18 @@ export class ProductComponentExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -250,9 +250,9 @@ export class ProductComponentExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -345,7 +345,7 @@ export class ProductComponentExtended {
     return ObjectSerializer.deserialize(obj, 'ProductComponentExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, productId: UUID, status: CatalogPublishStatusEnumDef, latestVersionId: UUID, latestVersion: ProductComponentVersion, code: string, externalId: string, versionId: UUID, semver: string, value: number, floatValue: number, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, latestReleasedVersionId?: UUID, artifactId?: UUID, productEditions?: Array<IdNameCodeExternalIdDescriptionImageUrlObject>, complianceFeatures?: Array<ProductComplianceFeature>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, productId: UUID, status: CatalogPublishStatusEnumDef, latestVersionId: UUID, latestVersion: ProductComponentVersion, code: string, externalId: string, versionId: UUID, semver: string, value: number, floatValue: number, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, latestReleasedVersionId?: UUID, artifactId?: UUID, productEditions?: Array<IdNameCodeExternalIdDescriptionImageUrlObject>, complianceFeatures?: Array<ProductComplianceFeature>) {
     this.id = id;
     this.name = name;
     this.type = type;

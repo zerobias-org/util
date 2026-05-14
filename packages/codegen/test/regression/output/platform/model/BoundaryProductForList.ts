@@ -6,7 +6,7 @@ import { CatalogPublishStatusEnumDef } from './CatalogPublishStatusEnum.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { ColorStatusEnum } from './ColorStatusEnum.js';
 import { ColorStatusEnumDef } from './ColorStatusEnum.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -25,7 +25,7 @@ export class BoundaryProductForList {
   'logo'?: URL | null;
   'description'?: string | null;
   'pipelineStatus'?: ColorStatusEnumDef;
-  'lastPipelineRun'?: Date | null;
+  'lastPipelineRun'?: DateTime | null;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -142,9 +142,9 @@ export class BoundaryProductForList {
       "name": "lastPipelineRun",
       "baseName": "lastPipelineRun",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -156,7 +156,7 @@ export class BoundaryProductForList {
     return ObjectSerializer.deserialize(obj, 'BoundaryProductForList');
   }
 
-  constructor(id: UUID, productId: UUID, status: CatalogPublishStatusEnumDef, name: string, connectionCount: number, pipelineCount: number, controlCount: number, objectCount: number, evidenceStatus: string, logo?: URL, description?: string, pipelineStatus?: ColorStatusEnumDef, lastPipelineRun?: Date) {
+  constructor(id: UUID, productId: UUID, status: CatalogPublishStatusEnumDef, name: string, connectionCount: number, pipelineCount: number, controlCount: number, objectCount: number, evidenceStatus: string, logo?: URL, description?: string, pipelineStatus?: ColorStatusEnumDef, lastPipelineRun?: DateTime) {
     this.id = id;
     this.productId = productId;
     this.status = status;

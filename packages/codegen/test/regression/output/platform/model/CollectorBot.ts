@@ -6,7 +6,7 @@ import { PipelineBatchModeEnumDef } from './PipelineBatchModeEnum.js';
 import { PipelineBatchModeEnum } from './PipelineBatchModeEnum.js';
 import { Resource } from './Resource.js';
 import { CollectorBotAllOf } from './CollectorBotAllOf.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class CollectorBot {
@@ -29,11 +29,11 @@ export class CollectorBot {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'version': Semver;
   'batchModes': Array<PipelineBatchModeEnumDef>;
   /**
@@ -47,7 +47,7 @@ export class CollectorBot {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -122,18 +122,18 @@ export class CollectorBot {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -176,9 +176,9 @@ export class CollectorBot {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -352,7 +352,7 @@ export class CollectorBot {
     return ObjectSerializer.deserialize(obj, 'CollectorBot');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, version: Semver, batchModes: Array<PipelineBatchModeEnumDef>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, changeLog?: string, readMe?: string, remediation?: string, userGuide?: string, versionId?: UUID, versionValue?: number, versionFloatValue?: number, preRelease?: boolean, packageCode?: string, parameters?: { [key: string]: any; }, modulesInfo?: Array<{ [key: string]: any; }>, products?: Array<UUID>, classes?: Array<UUID>, artifactVersionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, version: Semver, batchModes: Array<PipelineBatchModeEnumDef>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, changeLog?: string, readMe?: string, remediation?: string, userGuide?: string, versionId?: UUID, versionValue?: number, versionFloatValue?: number, preRelease?: boolean, packageCode?: string, parameters?: { [key: string]: any; }, modulesInfo?: Array<{ [key: string]: any; }>, products?: Array<UUID>, classes?: Array<UUID>, artifactVersionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

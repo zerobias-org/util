@@ -5,6 +5,7 @@
 import { AppOrgMonthlyUsageReportAllOf } from './AppOrgMonthlyUsageReportAllOf.js';
 import { AppOrgUsageMetricBoundariesProductCollectingData } from './AppOrgUsageMetricBoundariesProductCollectingData.js';
 import { AppOrgUsageMetric } from './AppOrgUsageMetric.js';
+import { DateFormat } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class AppOrgMonthlyUsageReport {
@@ -28,7 +29,7 @@ export class AppOrgMonthlyUsageReport {
   /**
   * Date of the monthly usage metric collection
   */
-  'month': Date;
+  'month': DateFormat;
   /**
   * Name of the organization report
   */
@@ -90,9 +91,9 @@ export class AppOrgMonthlyUsageReport {
       "name": "month",
       "baseName": "month",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateFormat
+      // DateFormat
+      "type": "DateFormat",
       "format": "date"
     },
     {
@@ -122,7 +123,7 @@ export class AppOrgMonthlyUsageReport {
     return ObjectSerializer.deserialize(obj, 'AppOrgMonthlyUsageReport');
   }
 
-  constructor(connectedProductCount: number, objectCount: number, objectVersionCount: number, activeBoundaryCount: number, boundariesProductCollectingData: Array<AppOrgUsageMetricBoundariesProductCollectingData>, month: Date, organizationName: string, organizationTypes: string, ) {
+  constructor(connectedProductCount: number, objectCount: number, objectVersionCount: number, activeBoundaryCount: number, boundariesProductCollectingData: Array<AppOrgUsageMetricBoundariesProductCollectingData>, month: DateFormat, organizationName: string, organizationTypes: string, ) {
     this.connectedProductCount = connectedProductCount;
     this.objectCount = objectCount;
     this.objectVersionCount = objectVersionCount;

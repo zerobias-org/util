@@ -105,13 +105,19 @@ export interface StoreApi {
  * const result = await client.getSomeApi().someMethod();
  * ```
  */
+/**
+ * Base path for this SDK (from OpenAPI servers[0].url)
+ * This path is appended to the connection profile URL when connecting
+ */
+export const BASE_PATH = '';
+
 export class StoreApiClient implements StoreApi {
   private baseClient: BaseApiClient;
   private client: AxiosInstance | null = null;
   private headers: { [key: string]: string } = {};
 
   constructor() {
-    this.baseClient = new BaseApiClient();
+    this.baseClient = new BaseApiClient(undefined, BASE_PATH);
   }
 
   /**
@@ -127,12 +133,15 @@ export class StoreApiClient implements StoreApi {
     }
     this.client = axiosInstance;
 
-    // Set up headers from connection profile for generated API classes
+    // Set up headers from connection profile for generated API classes (session > jwt > apiKey)
     if (connectionProfile.apiKey) {
       this.headers['Authorization'] = `APIKey ${connectionProfile.apiKey}`;
     }
     if (connectionProfile.jwt) {
       this.headers['Authorization'] = `Bearer ${connectionProfile.jwt}`;
+    }
+    if (connectionProfile.session) {
+      this.headers['Authorization'] = `session ${connectionProfile.session}`;
     }
     if (connectionProfile.orgId) {
       // Handle orgId - convert to string if it's a UUID object

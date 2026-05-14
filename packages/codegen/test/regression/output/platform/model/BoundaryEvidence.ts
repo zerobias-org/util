@@ -4,7 +4,7 @@
 // ===============================================
 import { BoundaryEvidenceStatusEnumDef } from './BoundaryEvidenceStatusEnum.js';
 import { BoundaryEvidenceStatusEnum } from './BoundaryEvidenceStatusEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -17,8 +17,8 @@ export class BoundaryEvidence {
   'pipelineId'?: UUID | null;
   'queryParams'?: object | null;
   'status'?: BoundaryEvidenceStatusEnumDef;
-  'created'?: Date;
-  'lastUpdated'?: Date | null;
+  'created'?: DateTime;
+  'lastUpdated'?: DateTime | null;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -81,18 +81,18 @@ export class BoundaryEvidence {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "lastUpdated",
       "baseName": "lastUpdated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -104,7 +104,7 @@ export class BoundaryEvidence {
     return ObjectSerializer.deserialize(obj, 'BoundaryEvidence');
   }
 
-  constructor(id: UUID, boundaryId: UUID, evidenceBotId: UUID, pipelineId?: UUID, queryParams?: object, status?: BoundaryEvidenceStatusEnumDef, created?: Date, lastUpdated?: Date) {
+  constructor(id: UUID, boundaryId: UUID, evidenceBotId: UUID, pipelineId?: UUID, queryParams?: object, status?: BoundaryEvidenceStatusEnumDef, created?: DateTime, lastUpdated?: DateTime) {
     this.id = id;
     this.boundaryId = boundaryId;
     this.evidenceBotId = evidenceBotId;

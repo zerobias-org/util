@@ -7,7 +7,7 @@ import { Alert } from './Alert.js';
 import { TagView } from './TagView.js';
 import { AlertSummary } from './AlertSummary.js';
 import { ResourceViewAllOf } from './ResourceViewAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -33,11 +33,11 @@ export class ResourceView {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * All tags assigned to this resource (names only)
   */
@@ -61,7 +61,7 @@ export class ResourceView {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -127,18 +127,18 @@ export class ResourceView {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -190,9 +190,9 @@ export class ResourceView {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -258,7 +258,7 @@ export class ResourceView {
     return ObjectSerializer.deserialize(obj, 'ResourceView');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, tags: Array<TagView>, causing: Array<Alert>, impactedBy: Array<Alert>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, object?: { [key: string]: object; }, alertSummary?: AlertSummary) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, tags: Array<TagView>, causing: Array<Alert>, impactedBy: Array<Alert>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, object?: { [key: string]: object; }, alertSummary?: AlertSummary) {
     this.id = id;
     this.name = name;
     this.type = type;

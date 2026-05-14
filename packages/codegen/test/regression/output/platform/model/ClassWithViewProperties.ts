@@ -7,7 +7,7 @@ import { ClassWithViewPropertiesAllOf } from './ClassWithViewPropertiesAllOf.js'
 import { ClassViewProperty } from './ClassViewProperty.js';
 import { Class } from './Class.js';
 import { ClassTypeEnumDef } from './ClassTypeEnum.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ClassWithViewProperties {
@@ -30,12 +30,12 @@ export class ClassWithViewProperties {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
-  'updatedIndex': Date;
+  'updated': DateTime;
+  'updatedIndex': DateTime;
   'objectType': ClassTypeEnumDef;
   'shared': boolean;
   'viewProperties': Array<ClassViewProperty>;
@@ -50,7 +50,7 @@ export class ClassWithViewProperties {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -119,27 +119,27 @@ export class ClassWithViewProperties {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updatedIndex",
       "baseName": "updatedIndex",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -191,9 +191,9 @@ export class ClassWithViewProperties {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -286,7 +286,7 @@ export class ClassWithViewProperties {
     return ObjectSerializer.deserialize(obj, 'ClassWithViewProperties');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, updatedIndex: Date, objectType: ClassTypeEnumDef, shared: boolean, viewProperties: Array<ClassViewProperty>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, schema?: object, packageCode?: string, artifactVersionId?: UUID, dynamicExtendsId?: UUID, schemaId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, updatedIndex: DateTime, objectType: ClassTypeEnumDef, shared: boolean, viewProperties: Array<ClassViewProperty>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, schema?: object, packageCode?: string, artifactVersionId?: UUID, dynamicExtendsId?: UUID, schemaId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

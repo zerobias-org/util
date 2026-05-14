@@ -6,6 +6,7 @@ import { AllOrderStatusDef } from './AllOrderStatus.js';
 import { AllOrderStatus } from './AllOrderStatus.js';
 import { Priority } from './Priority.js';
 import { PriorityDef } from './Priority.js';
+import { DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -33,7 +34,7 @@ export class PatchOrder {
   /**
   * The timestamp when the order is expected to be completed
   */
-  'expected'?: Date;
+  'expected'?: DateTime;
   /**
   * Business analysis results. This may only be set for `catalog` orders.
   */
@@ -100,9 +101,9 @@ export class PatchOrder {
       "name": "expected",
       "baseName": "expected",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -123,7 +124,7 @@ export class PatchOrder {
     return ObjectSerializer.deserialize(obj, 'PatchOrder');
   }
 
-  constructor(name?: string, description?: string, priority?: PriorityDef, status?: AllOrderStatusDef, statusReason?: string, additionalInformation?: { [key: string]: any; }, expected?: Date, businessAnalysis?: { [key: string]: any; }) {
+  constructor(name?: string, description?: string, priority?: PriorityDef, status?: AllOrderStatusDef, statusReason?: string, additionalInformation?: { [key: string]: any; }, expected?: DateTime, businessAnalysis?: { [key: string]: any; }) {
     this.name = name;
     this.description = description;
     this.priority = priority;

@@ -15,7 +15,7 @@ import { ModuleVersion } from './ModuleVersion.js';
 import { DeploymentInfo } from './DeploymentInfo.js';
 import { Module } from './Module.js';
 import { DeploymentViewAllOf } from './DeploymentViewAllOf.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class DeploymentView {
@@ -38,11 +38,11 @@ export class DeploymentView {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * ID of the Node this Deployment is on
   */
@@ -84,7 +84,7 @@ export class DeploymentView {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -104,7 +104,7 @@ export class DeploymentView {
   /**
   * Last time this deployment was used
   */
-  'lastUse'?: Date;
+  'lastUse'?: DateTime;
   /**
   * Whether or not the last use was successful
   */
@@ -165,18 +165,18 @@ export class DeploymentView {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -282,9 +282,9 @@ export class DeploymentView {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -327,9 +327,9 @@ export class DeploymentView {
       "name": "lastUse",
       "baseName": "lastUse",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -404,7 +404,7 @@ export class DeploymentView {
     return ObjectSerializer.deserialize(obj, 'DeploymentView');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, nodeId: UUID, moduleVersionId: UUID, adminStatus: AdminStatusDef, status: OperationalStatusDef, moduleId: UUID, moduleKey: string, moduleName: string, moduleVersion: Semver, connections: number, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, lastUse?: Date, lastUseSuccess?: boolean, downReason?: Array<DeploymentDownReasonDef>, degradedReason?: Array<DeploymentDegradedReasonDef>, moduleLogo?: URL, module?: Module, version?: ModuleVersion, nodeName?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, nodeId: UUID, moduleVersionId: UUID, adminStatus: AdminStatusDef, status: OperationalStatusDef, moduleId: UUID, moduleKey: string, moduleName: string, moduleVersion: Semver, connections: number, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, lastUse?: DateTime, lastUseSuccess?: boolean, downReason?: Array<DeploymentDownReasonDef>, degradedReason?: Array<DeploymentDegradedReasonDef>, moduleLogo?: URL, module?: Module, version?: ModuleVersion, nodeName?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

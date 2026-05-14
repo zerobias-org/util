@@ -9,15 +9,15 @@ import { ConnectionOperationalStatusDef } from './ConnectionOperationalStatus.js
 import { ConnectionOperationalStatus } from './ConnectionOperationalStatus.js';
 import { SchemasAdminStatus } from './SchemasAdminStatus.js';
 import { ExtendedBoundaryProductTargetConnectionInfoDeployment } from './ExtendedBoundaryProductTargetConnectionInfoDeployment.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ExtendedBoundaryProductTargetConnectionInfo {
   'id': UUID;
   'name': string;
   'ownerId': UUID;
-  'created': Date;
-  'updated': Date;
+  'created': DateTime;
+  'updated': DateTime;
   'deploymentId': UUID;
   'adminStatus': SchemasAdminStatusDef;
   'lifecycleConfig': LifecycleConfig;
@@ -62,18 +62,18 @@ export class ExtendedBoundaryProductTargetConnectionInfo {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -166,7 +166,7 @@ export class ExtendedBoundaryProductTargetConnectionInfo {
     return ObjectSerializer.deserialize(obj, 'ExtendedBoundaryProductTargetConnectionInfo');
   }
 
-  constructor(id: UUID, name: string, ownerId: UUID, created: Date, updated: Date, deploymentId: UUID, adminStatus: SchemasAdminStatusDef, lifecycleConfig: LifecycleConfig, status: ConnectionOperationalStatusDef, secretId: UUID, description?: string, connectionProfile?: { [key: string]: string; }, deployment?: ExtendedBoundaryProductTargetConnectionInfoDeployment, tags?: Array<ExtendedBoundaryProductTargetConnectionInfoTags>) {
+  constructor(id: UUID, name: string, ownerId: UUID, created: DateTime, updated: DateTime, deploymentId: UUID, adminStatus: SchemasAdminStatusDef, lifecycleConfig: LifecycleConfig, status: ConnectionOperationalStatusDef, secretId: UUID, description?: string, connectionProfile?: { [key: string]: string; }, deployment?: ExtendedBoundaryProductTargetConnectionInfoDeployment, tags?: Array<ExtendedBoundaryProductTargetConnectionInfoTags>) {
     this.id = id;
     this.name = name;
     this.ownerId = ownerId;

@@ -7,7 +7,7 @@ import { BoundaryPartyRoleExtendedBoundary } from './BoundaryPartyRoleExtendedBo
 import { BoundaryRole } from './BoundaryRole.js';
 import { BoundaryPartyRoleExtendedRole } from './BoundaryPartyRoleExtendedRole.js';
 import { BoundaryRoleExtendedAllOf } from './BoundaryRoleExtendedAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BoundaryRoleExtended {
@@ -30,11 +30,11 @@ export class BoundaryRoleExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * A resource id which acts as a boundary/container for this resource.
   */
@@ -57,7 +57,7 @@ export class BoundaryRoleExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -114,18 +114,18 @@ export class BoundaryRoleExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -222,9 +222,9 @@ export class BoundaryRoleExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -263,7 +263,7 @@ export class BoundaryRoleExtended {
     return ObjectSerializer.deserialize(obj, 'BoundaryRoleExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, roleId: UUID, taskEnabled: boolean, overrideDelete: boolean, manualAdd: boolean, boundary: BoundaryPartyRoleExtendedBoundary, role: BoundaryPartyRoleExtendedRole, parties: Array<BoundaryPartyRoleExtendedParty>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, roleId: UUID, taskEnabled: boolean, overrideDelete: boolean, manualAdd: boolean, boundary: BoundaryPartyRoleExtendedBoundary, role: BoundaryPartyRoleExtendedRole, parties: Array<BoundaryPartyRoleExtendedParty>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>) {
     this.id = id;
     this.name = name;
     this.type = type;

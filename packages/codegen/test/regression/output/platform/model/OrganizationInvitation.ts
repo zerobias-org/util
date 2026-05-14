@@ -6,7 +6,7 @@ import { AppOrgTypeEnum } from './AppOrgTypeEnum.js';
 import { AppOrgTypeEnumDef } from './AppOrgTypeEnum.js';
 import { OrganizationInvitationStatusEnum } from './OrganizationInvitationStatusEnum.js';
 import { OrganizationInvitationStatusEnumDef } from './OrganizationInvitationStatusEnum.js';
-import { Email, UUID, URL } from '@zerobias-org/types-core-js';
+import { Email, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -25,7 +25,7 @@ export class OrganizationInvitation {
   'contactPhoneNumber'?: string | null;
   'invitedOrgId'?: UUID | null;
   'invitedUserId'?: UUID | null;
-  'created'?: Date | null;
+  'created'?: DateTime | null;
   'crmRecordId'?: string | null;
   'userInvitationId'?: UUID | null;
 
@@ -144,9 +144,9 @@ export class OrganizationInvitation {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -176,7 +176,7 @@ export class OrganizationInvitation {
     return ObjectSerializer.deserialize(obj, 'OrganizationInvitation');
   }
 
-  constructor(id: UUID, companyName: string, companyWebsite: URL, contactFullName: string, contactWorkEmail: Email, invitedOrgType: AppOrgTypeEnumDef, invitingOrgId: UUID, invitingUserId: UUID, status: OrganizationInvitationStatusEnumDef, contactPhoneNumber?: string, invitedOrgId?: UUID, invitedUserId?: UUID, created?: Date, crmRecordId?: string, userInvitationId?: UUID) {
+  constructor(id: UUID, companyName: string, companyWebsite: URL, contactFullName: string, contactWorkEmail: Email, invitedOrgType: AppOrgTypeEnumDef, invitingOrgId: UUID, invitingUserId: UUID, status: OrganizationInvitationStatusEnumDef, contactPhoneNumber?: string, invitedOrgId?: UUID, invitedUserId?: UUID, created?: DateTime, crmRecordId?: string, userInvitationId?: UUID) {
     this.id = id;
     this.companyName = companyName;
     this.companyWebsite = companyWebsite;

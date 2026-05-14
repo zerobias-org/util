@@ -4,7 +4,7 @@
 // ===============================================
 import { OpTypeEnum } from './OpTypeEnum.js';
 import { OpTypeEnumDef } from './OpTypeEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -22,15 +22,15 @@ export class GraphqlQueryVersionSystemParameters {
   /**
   * An asOf date, does not work in conjunction with op/start/stop. 
   */
-  'asOf'?: Date;
+  'asOf'?: DateTime;
   /**
   * used alongside stop. A start date. If unset, this means up to `stop`
   */
-  'start'?: Date;
+  'start'?: DateTime;
   /**
   * used alongside start. A stop date. If unset, defaults to now()
   */
-  'stop'?: Date;
+  'stop'?: DateTime;
   /**
   * used alongside start/stop. set to true to only return the latest version of an object within the result set
   */
@@ -61,27 +61,27 @@ export class GraphqlQueryVersionSystemParameters {
       "name": "asOf",
       "baseName": "asOf",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "start",
       "baseName": "start",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "stop",
       "baseName": "stop",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -102,7 +102,7 @@ export class GraphqlQueryVersionSystemParameters {
     return ObjectSerializer.deserialize(obj, 'GraphqlQueryVersionSystemParameters');
   }
 
-  constructor(tags?: Array<UUID>, op?: Array<OpTypeEnumDef>, asOf?: Date, start?: Date, stop?: Date, latest?: boolean) {
+  constructor(tags?: Array<UUID>, op?: Array<OpTypeEnumDef>, asOf?: DateTime, start?: DateTime, stop?: DateTime, latest?: boolean) {
     this.tags = tags;
     this.op = op;
     this.asOf = asOf;

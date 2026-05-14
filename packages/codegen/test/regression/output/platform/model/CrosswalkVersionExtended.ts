@@ -8,7 +8,7 @@ import { CrosswalkVersionExtendedAllOf } from './CrosswalkVersionExtendedAllOf.j
 import { CrosswalkStandard } from './CrosswalkStandard.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { CrosswalkVersion } from './CrosswalkVersion.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class CrosswalkVersionExtended {
@@ -31,11 +31,11 @@ export class CrosswalkVersionExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'status': CatalogPublishStatusEnumDef;
   'versionId': UUID;
   'versionValue': number;
@@ -58,7 +58,7 @@ export class CrosswalkVersionExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -128,18 +128,18 @@ export class CrosswalkVersionExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -263,9 +263,9 @@ export class CrosswalkVersionExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -367,7 +367,7 @@ export class CrosswalkVersionExtended {
     return ObjectSerializer.deserialize(obj, 'CrosswalkVersionExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, status: CatalogPublishStatusEnumDef, versionId: UUID, versionValue: number, versionSemver: Semver, crosswalkId: UUID, sourceStandardId: UUID, targetStandardId: UUID, sourceStandard: CrosswalkStandard, targetStandard: CrosswalkStandard, crosswalkCode: string, crosswalkExternalId: string, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, logoFileVersionId?: UUID, taskId?: UUID, vendor?: IdNameCodeDescriptionImageUrlObject, suite?: IdNameCodeDescriptionImageUrlObject, product?: IdNameCodeDescriptionImageUrlObject) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, status: CatalogPublishStatusEnumDef, versionId: UUID, versionValue: number, versionSemver: Semver, crosswalkId: UUID, sourceStandardId: UUID, targetStandardId: UUID, sourceStandard: CrosswalkStandard, targetStandard: CrosswalkStandard, crosswalkCode: string, crosswalkExternalId: string, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, logoFileVersionId?: UUID, taskId?: UUID, vendor?: IdNameCodeDescriptionImageUrlObject, suite?: IdNameCodeDescriptionImageUrlObject, product?: IdNameCodeDescriptionImageUrlObject) {
     this.id = id;
     this.name = name;
     this.type = type;

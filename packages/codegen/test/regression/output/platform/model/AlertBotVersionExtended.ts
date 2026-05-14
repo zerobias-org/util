@@ -9,7 +9,7 @@ import { PublishAlertBotStatusEnum } from './PublishAlertBotStatusEnum.js';
 import { AlertBotVersion } from './AlertBotVersion.js';
 import { IdNameDescriptionObject } from './IdNameDescriptionObject.js';
 import { AlertBotVersionExtendedAllOf } from './AlertBotVersionExtendedAllOf.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class AlertBotVersionExtended {
@@ -32,11 +32,11 @@ export class AlertBotVersionExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'versionId': UUID;
   'versionSemver': Semver;
   'versionValue': number;
@@ -61,7 +61,7 @@ export class AlertBotVersionExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -127,18 +127,18 @@ export class AlertBotVersionExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -280,9 +280,9 @@ export class AlertBotVersionExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -375,7 +375,7 @@ export class AlertBotVersionExtended {
     return ObjectSerializer.deserialize(obj, 'AlertBotVersionExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, versionId: UUID, versionSemver: Semver, versionValue: number, alertBotId: UUID, graphqlQueryVersionId: UUID, transformer: string, createdBy: UUID, status: PublishAlertBotStatusEnumDef, elementIds: Array<UUID>, roleIds: Array<UUID>, graphqlQuery: BoundaryAlertEntityDetails, graphqlQueryVersion: BoundaryAlertEntityDetails, roles: Array<IdNameDescriptionObject>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, transformerBuilder?: string, updatedBy?: UUID, artifactVersionId?: UUID, remediation?: string, elements?: Array<BoundaryAlertBotExtendedElement>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, versionId: UUID, versionSemver: Semver, versionValue: number, alertBotId: UUID, graphqlQueryVersionId: UUID, transformer: string, createdBy: UUID, status: PublishAlertBotStatusEnumDef, elementIds: Array<UUID>, roleIds: Array<UUID>, graphqlQuery: BoundaryAlertEntityDetails, graphqlQueryVersion: BoundaryAlertEntityDetails, roles: Array<IdNameDescriptionObject>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, transformerBuilder?: string, updatedBy?: UUID, artifactVersionId?: UUID, remediation?: string, elements?: Array<BoundaryAlertBotExtendedElement>) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -6,7 +6,7 @@ import { OrderTypeDef } from './OrderType.js';
 import { OrderType } from './OrderType.js';
 import { Priority } from './Priority.js';
 import { PriorityDef } from './Priority.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -26,15 +26,15 @@ export class OrderChangeEvent {
   /**
   * The timestamp when this order was created
   */
-  'created'?: Date;
+  'created'?: DateTime;
   /**
   * The timestamp when this order was last updated
   */
-  'updated'?: Date;
+  'updated'?: DateTime;
   /**
   * The timestamp when this order is expected to be completed
   */
-  'expected'?: Date;
+  'expected'?: DateTime;
   /**
   * A description for this order
   */
@@ -42,7 +42,7 @@ export class OrderChangeEvent {
   /**
   * When the order was completed
   */
-  'completed'?: Date;
+  'completed'?: DateTime;
   /**
   * Customer created Custom properties.
   */
@@ -95,27 +95,27 @@ export class OrderChangeEvent {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "expected",
       "baseName": "expected",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -131,9 +131,9 @@ export class OrderChangeEvent {
       "name": "completed",
       "baseName": "completed",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -163,7 +163,7 @@ export class OrderChangeEvent {
     return ObjectSerializer.deserialize(obj, 'OrderChangeEvent');
   }
 
-  constructor(id: UUID, ownerId: UUID, orderType: OrderTypeDef, priority: PriorityDef, created?: Date, updated?: Date, expected?: Date, description?: string, completed?: Date, context?: { [key: string]: any; }, additionalInformation?: { [key: string]: any; }) {
+  constructor(id: UUID, ownerId: UUID, orderType: OrderTypeDef, priority: PriorityDef, created?: DateTime, updated?: DateTime, expected?: DateTime, description?: string, completed?: DateTime, context?: { [key: string]: any; }, additionalInformation?: { [key: string]: any; }) {
     this.id = id;
     this.ownerId = ownerId;
     this.orderType = orderType;

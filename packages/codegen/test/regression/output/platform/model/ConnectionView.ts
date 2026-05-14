@@ -17,7 +17,7 @@ import { ConnectionDownReasonDef } from './ConnectionDownReason.js';
 import { ConnectionModel } from './ConnectionModel.js';
 import { ConnectionInfo } from './ConnectionInfo.js';
 import { DeploymentView } from './DeploymentView.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ConnectionView {
@@ -40,11 +40,11 @@ export class ConnectionView {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'lifecycleConfig': LifecycleConfig;
   /**
   * The ID of the `Secret` which this `Connection` uses
@@ -63,7 +63,7 @@ export class ConnectionView {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -103,7 +103,7 @@ export class ConnectionView {
   /**
   * Last time this deployment was used
   */
-  'lastUse'?: Date;
+  'lastUse'?: DateTime;
   /**
   * Whether or not the last use was successful
   */
@@ -111,7 +111,7 @@ export class ConnectionView {
   /**
   * Last time this connection had metadata called
   */
-  'lastMetadata'?: Date;
+  'lastMetadata'?: DateTime;
   'downReason'?: Array<ConnectionDownReasonDef>;
   'degradedReason'?: Array<ConnectionDegradedReasonDef>;
   'deployment'?: DeploymentView;
@@ -176,18 +176,18 @@ export class ConnectionView {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -248,9 +248,9 @@ export class ConnectionView {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -338,9 +338,9 @@ export class ConnectionView {
       "name": "lastUse",
       "baseName": "lastUse",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -356,9 +356,9 @@ export class ConnectionView {
       "name": "lastMetadata",
       "baseName": "lastMetadata",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -442,7 +442,7 @@ export class ConnectionView {
     return ObjectSerializer.deserialize(obj, 'ConnectionView');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, lifecycleConfig: LifecycleConfig, secretId: UUID, status: ConnectionOperationalStatusDef, adminStatus: AdminStatusDef, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, deploymentId?: UUID, connectionProfileId?: UUID, connectionProfile?: { [key: string]: string; }, draft?: boolean, statusMessage?: string, lastUse?: Date, lastUseSuccess?: boolean, lastMetadata?: Date, downReason?: Array<ConnectionDownReasonDef>, degradedReason?: Array<ConnectionDegradedReasonDef>, deployment?: DeploymentView, scoped?: boolean, tags?: Array<HubTagView>, boundaries?: Array<HubTagView>, products?: Array<HubTagView>, defaultScope?: Scope) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, lifecycleConfig: LifecycleConfig, secretId: UUID, status: ConnectionOperationalStatusDef, adminStatus: AdminStatusDef, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, deploymentId?: UUID, connectionProfileId?: UUID, connectionProfile?: { [key: string]: string; }, draft?: boolean, statusMessage?: string, lastUse?: DateTime, lastUseSuccess?: boolean, lastMetadata?: DateTime, downReason?: Array<ConnectionDownReasonDef>, degradedReason?: Array<ConnectionDegradedReasonDef>, deployment?: DeploymentView, scoped?: boolean, tags?: Array<HubTagView>, boundaries?: Array<HubTagView>, products?: Array<HubTagView>, defaultScope?: Scope) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -10,7 +10,7 @@ import { SchemasRoleTypeEnumDef } from './SchemasRoleTypeEnum.js';
 import { SchemasRoleTypeEnum } from './SchemasRoleTypeEnum.js';
 import { RoleView } from './RoleView.js';
 import { SchemasRoleStatusDef } from './SchemasRoleStatus.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -36,11 +36,11 @@ export class RoleViewExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * The source of this role
   */
@@ -59,7 +59,7 @@ export class RoleViewExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -129,18 +129,18 @@ export class RoleViewExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -201,9 +201,9 @@ export class RoleViewExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -278,7 +278,7 @@ export class RoleViewExtended {
     return ObjectSerializer.deserialize(obj, 'RoleViewExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, source: string, roleType: SchemasRoleTypeEnumDef, boundaryIds: Array<UUID>, principals: Array<IdNameOwnerIdTypeImageUrlViaObject>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, status?: SchemasRoleStatusDef, principalsCount?: number, via?: Array<IdNameOwnerIdTypeImageUrlLevelObject>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, source: string, roleType: SchemasRoleTypeEnumDef, boundaryIds: Array<UUID>, principals: Array<IdNameOwnerIdTypeImageUrlViaObject>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, status?: SchemasRoleStatusDef, principalsCount?: number, via?: Array<IdNameOwnerIdTypeImageUrlLevelObject>) {
     this.id = id;
     this.name = name;
     this.type = type;

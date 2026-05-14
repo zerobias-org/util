@@ -4,7 +4,7 @@
 // ===============================================
 import { BoundaryEventTypeEnumDef } from './BoundaryEventTypeEnum.js';
 import { BoundaryEventTypeEnum } from './BoundaryEventTypeEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -16,7 +16,7 @@ export class BoundaryEvent {
   'boundaryId': UUID;
   'userId': UUID;
   'description': string;
-  'tstamp': Date;
+  'tstamp': DateTime;
   'productId'?: UUID | null;
   'suggestedProductId'?: UUID | null;
   'targetId'?: UUID | null;
@@ -73,9 +73,9 @@ export class BoundaryEvent {
       "name": "tstamp",
       "baseName": "tstamp",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -114,7 +114,7 @@ export class BoundaryEvent {
     return ObjectSerializer.deserialize(obj, 'BoundaryEvent');
   }
 
-  constructor(id: UUID, type: BoundaryEventTypeEnumDef, boundaryId: UUID, userId: UUID, description: string, tstamp: Date, productId?: UUID, suggestedProductId?: UUID, targetId?: UUID) {
+  constructor(id: UUID, type: BoundaryEventTypeEnumDef, boundaryId: UUID, userId: UUID, description: string, tstamp: DateTime, productId?: UUID, suggestedProductId?: UUID, targetId?: UUID) {
     this.id = id;
     this.type = type;
     this.boundaryId = boundaryId;

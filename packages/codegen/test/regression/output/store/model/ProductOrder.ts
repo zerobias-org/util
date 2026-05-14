@@ -18,7 +18,7 @@ import { OrderType } from './OrderType.js';
 import { OperationOrderStatus } from './OperationOrderStatus.js';
 import { OrderAllOf } from './OrderAllOf.js';
 import { ProductOrderAllOf } from './ProductOrderAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -61,7 +61,7 @@ export class ProductOrder extends Order {
     return ObjectSerializer.deserialize(obj, 'ProductOrder');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, orderType: OrderTypeDef, priority: PriorityDef, status: CatalogingOrderStatusDef | OperationOrderStatusDef | OrderStatusDef, context: { [key: string]: any; }, requestedProduct: ProductOrderDetails, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, completed?: Date, expected?: Date, additionalInformation?: { [key: string]: any; }, statusReason?: string, products?: Array<ProductOrderAllOfProducts>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, orderType: OrderTypeDef, priority: PriorityDef, status: CatalogingOrderStatusDef | OperationOrderStatusDef | OrderStatusDef, context: { [key: string]: any; }, requestedProduct: ProductOrderDetails, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, completed?: DateTime, expected?: DateTime, additionalInformation?: { [key: string]: any; }, statusReason?: string, products?: Array<ProductOrderAllOfProducts>) {
     super(id, name, type, ownerId, created, updated, orderType, priority, status, context, description, parentId, deleted, imageUrl, url, aliases, boundaryId, completed, expected, additionalInformation, statusReason);
     this.requestedProduct = requestedProduct;
     this.products = products;

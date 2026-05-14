@@ -5,7 +5,7 @@
 import { ResourceLinkSideEnumDef } from './ResourceLinkSideEnum.js';
 import { SchemasLinkType } from './SchemasLinkType.js';
 import { ResourceLinkSideEnum } from './ResourceLinkSideEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -31,17 +31,17 @@ export class ResourceLink {
   /**
   * Timestamp when the link was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * Timestamp when the link was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'linkTypeInfo': SchemasLinkType;
   'linkSide': ResourceLinkSideEnumDef;
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * Arbitrary context around this link
   */
@@ -98,18 +98,18 @@ export class ResourceLink {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -134,9 +134,9 @@ export class ResourceLink {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -175,7 +175,7 @@ export class ResourceLink {
     return ObjectSerializer.deserialize(obj, 'ResourceLink');
   }
 
-  constructor(id: UUID, linkType: UUID, fromResource: UUID, toResource: UUID, created: Date, updated: Date, linkTypeInfo: SchemasLinkType, linkSide: ResourceLinkSideEnumDef, deleted?: Date, context?: { [key: string]: object; }, fromObject?: { [key: string]: object; }, toObject?: { [key: string]: object; }) {
+  constructor(id: UUID, linkType: UUID, fromResource: UUID, toResource: UUID, created: DateTime, updated: DateTime, linkTypeInfo: SchemasLinkType, linkSide: ResourceLinkSideEnumDef, deleted?: DateTime, context?: { [key: string]: object; }, fromObject?: { [key: string]: object; }, toObject?: { [key: string]: object; }) {
     this.id = id;
     this.linkType = linkType;
     this.fromResource = fromResource;

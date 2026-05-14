@@ -6,7 +6,7 @@ import { TestCaseSource } from './TestCaseSource.js';
 import { TestCaseSourceDef } from './TestCaseSource.js';
 import { Resource } from './Resource.js';
 import { TestCaseAllOf } from './TestCaseAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class TestCase {
@@ -29,11 +29,11 @@ export class TestCase {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'externalId': string;
   'severity': string;
   'source': TestCaseSourceDef;
@@ -48,7 +48,7 @@ export class TestCase {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -121,18 +121,18 @@ export class TestCase {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -184,9 +184,9 @@ export class TestCase {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -342,7 +342,7 @@ export class TestCase {
     return ObjectSerializer.deserialize(obj, 'TestCase');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, externalId: string, severity: string, source: TestCaseSourceDef, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, standardName?: string, acceptanceCriteria?: string, notes?: string, remediation?: string, background?: string, subjectIds?: Array<UUID>, publisherId?: UUID, categoryId?: UUID, productId?: UUID, benchmarkElementId?: UUID, objectId?: UUID, packageCode?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, externalId: string, severity: string, source: TestCaseSourceDef, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, standardName?: string, acceptanceCriteria?: string, notes?: string, remediation?: string, background?: string, subjectIds?: Array<UUID>, publisherId?: UUID, categoryId?: UUID, productId?: UUID, benchmarkElementId?: UUID, objectId?: UUID, packageCode?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

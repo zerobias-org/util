@@ -14,7 +14,7 @@ import { TaskExtendedAllOf } from './TaskExtendedAllOf.js';
 import { Transition } from './Transition.js';
 import { TaskStatusEnum } from './TaskStatusEnum.js';
 import { TaskAssignment } from './TaskAssignment.js';
-import { Nmtoken, OID, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, OID, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -40,11 +40,11 @@ export class TaskExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'activityId': UUID;
   'code': string;
   'status': TaskStatusEnumDef;
@@ -79,7 +79,7 @@ export class TaskExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -147,18 +147,18 @@ export class TaskExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -309,9 +309,9 @@ export class TaskExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -422,7 +422,7 @@ export class TaskExtended {
     return ObjectSerializer.deserialize(obj, 'TaskExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, activityId: UUID, code: string, status: TaskStatusEnumDef, priority: TaskPriority, rank: OID, approvers: Array<TaskAssignment>, notified: Array<TaskAssignment>, links: Array<TaskExtendedLink>, activity: Activity, workflow: WorkflowExtended, nbComments: number, nbAttachments: number, nextTransitions: Array<Transition>, owner: SchemasIdNameDescriptionImageUrlObject, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, customFields?: { [key: string]: any; }, assigned?: TaskAssignment, accountable?: TaskAssignment, statusCode?: string, phaseCode?: string, boundary?: SchemasIdNameDescriptionImageUrlObject, statusInfo?: TaskStatusInfo) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, activityId: UUID, code: string, status: TaskStatusEnumDef, priority: TaskPriority, rank: OID, approvers: Array<TaskAssignment>, notified: Array<TaskAssignment>, links: Array<TaskExtendedLink>, activity: Activity, workflow: WorkflowExtended, nbComments: number, nbAttachments: number, nextTransitions: Array<Transition>, owner: SchemasIdNameDescriptionImageUrlObject, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, customFields?: { [key: string]: any; }, assigned?: TaskAssignment, accountable?: TaskAssignment, statusCode?: string, phaseCode?: string, boundary?: SchemasIdNameDescriptionImageUrlObject, statusInfo?: TaskStatusInfo) {
     this.id = id;
     this.name = name;
     this.type = type;

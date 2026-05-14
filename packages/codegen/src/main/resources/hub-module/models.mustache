@@ -259,17 +259,28 @@ export class ObjectSerializer {
             } else if (format === 'password') {
                 return data;
             }
-            // Normalize date-time variants that arrive without a TZ designator
-            // (e.g. Postgres JSONB-embedded timestamps, which pg-types does
-            // NOT auto-cast — top-level columns get a Date via setTypeParser,
-            // but nested JSONB values come through verbatim as
-            // "YYYY-MM-DDTHH:MM:SS.ffffff"). DateTime itself stays strict
-            // RFC3339 (time-offset required); we canonicalize to UTC here at
-            // the deserialization boundary.
+            // Canonicalize date-time variants to the strict RFC3339 Z form
+            // that the DateTime CoreType pattern requires. Variants we see
+            // at the deserialization boundary:
+            //   - no TZ designator (PG JSONB-embedded timestamps; pg-types
+            //     does NOT auto-cast nested JSONB values like top-level
+            //     TIMESTAMPTZ columns do)
+            //   - numeric offsets: +00:00, +0500, -08:00 (PG's default
+            //     to_jsonb(timestamptz) rendering, other ISO 8601 emitters)
+            //   - space separator instead of T (some PG drivers)
             if (typeof sanitizedData === 'string'
-                && (format === 'date-time' || format === 'time' || format === 'timestamp')
-                && !/(Z|[+-]\d{2}:?\d{2})$/.test(sanitizedData)) {
-                sanitizedData = sanitizedData + 'Z';
+                && (format === 'date-time' || format === 'time' || format === 'timestamp')) {
+                if (format === 'date-time' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(sanitizedData)) {
+                    sanitizedData = sanitizedData.replace(' ', 'T');
+                }
+                if (!/(Z|[+-]\d{2}:?\d{2})$/.test(sanitizedData)) {
+                    sanitizedData = sanitizedData + 'Z';
+                } else if (format === 'date-time' && !/Z$/.test(sanitizedData)) {
+                    const d = new Date(sanitizedData);
+                    if (!isNaN(d.getTime())) {
+                        sanitizedData = d.toISOString();
+                    }
+                }
             }
             const ct = CoreType.get(format)
             const ctInstance = ct.newInstance(sanitizedData);

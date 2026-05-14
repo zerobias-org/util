@@ -4,6 +4,7 @@
 // ===============================================
 import { ColorStatusEnum } from './ColorStatusEnum.js';
 import { ColorStatusEnumDef } from './ColorStatusEnum.js';
+import { DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -13,9 +14,9 @@ export class BoundaryProductOverviewPipelineSummary {
   'count': number;
   'jobStatus': ColorStatusEnumDef;
   'scheduledStatus': ColorStatusEnumDef;
-  'lastRunSuccess'?: Date | null;
-  'lastRunError'?: Date | null;
-  'lastRun'?: Date | null;
+  'lastRunSuccess'?: DateTime | null;
+  'lastRunError'?: DateTime | null;
+  'lastRun'?: DateTime | null;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -51,27 +52,27 @@ export class BoundaryProductOverviewPipelineSummary {
       "name": "lastRunSuccess",
       "baseName": "lastRunSuccess",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "lastRunError",
       "baseName": "lastRunError",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "lastRun",
       "baseName": "lastRun",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -83,7 +84,7 @@ export class BoundaryProductOverviewPipelineSummary {
     return ObjectSerializer.deserialize(obj, 'BoundaryProductOverviewPipelineSummary');
   }
 
-  constructor(count: number, jobStatus: ColorStatusEnumDef, scheduledStatus: ColorStatusEnumDef, lastRunSuccess?: Date, lastRunError?: Date, lastRun?: Date) {
+  constructor(count: number, jobStatus: ColorStatusEnumDef, scheduledStatus: ColorStatusEnumDef, lastRunSuccess?: DateTime, lastRunError?: DateTime, lastRun?: DateTime) {
     this.count = count;
     this.jobStatus = jobStatus;
     this.scheduledStatus = scheduledStatus;

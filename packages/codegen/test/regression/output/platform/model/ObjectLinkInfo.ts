@@ -4,7 +4,7 @@
 // ===============================================
 import { ObjectLinkMatchInfo } from './ObjectLinkMatchInfo.js';
 import { ObjectRemoteLinkMatchInfo } from './ObjectRemoteLinkMatchInfo.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -19,10 +19,10 @@ export class ObjectLinkInfo {
   * The id of the link type.
   */
   'linkTypeId': UUID;
-  'linkStartTime': Date;
+  'linkStartTime': DateTime;
   'local': ObjectLinkMatchInfo;
   'remote': ObjectRemoteLinkMatchInfo;
-  'linkEndTime'?: Date | null;
+  'linkEndTime'?: DateTime | null;
   /**
   * The value on the edge. i.e. t3
   */
@@ -53,9 +53,9 @@ export class ObjectLinkInfo {
       "name": "linkStartTime",
       "baseName": "linkStartTime",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -80,9 +80,9 @@ export class ObjectLinkInfo {
       "name": "linkEndTime",
       "baseName": "linkEndTime",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -103,7 +103,7 @@ export class ObjectLinkInfo {
     return ObjectSerializer.deserialize(obj, 'ObjectLinkInfo');
   }
 
-  constructor(id: UUID, linkTypeId: UUID, linkStartTime: Date, local: ObjectLinkMatchInfo, remote: ObjectRemoteLinkMatchInfo, linkEndTime?: Date, edgeValue?: string) {
+  constructor(id: UUID, linkTypeId: UUID, linkStartTime: DateTime, local: ObjectLinkMatchInfo, remote: ObjectRemoteLinkMatchInfo, linkEndTime?: DateTime, edgeValue?: string) {
     this.id = id;
     this.linkTypeId = linkTypeId;
     this.linkStartTime = linkStartTime;

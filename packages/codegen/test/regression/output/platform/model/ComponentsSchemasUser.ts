@@ -10,7 +10,7 @@ import { SchemasPrincipalType } from './SchemasPrincipalType.js';
 import { SchemasPrincipalStatusDef } from './SchemasPrincipalStatus.js';
 import { SchemasPrincipalOriginDef } from './SchemasPrincipalOrigin.js';
 import { SchemasPrincipalOrigin } from './SchemasPrincipalOrigin.js';
-import { Email, UUID, URL } from '@zerobias-org/types-core-js';
+import { Email, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -121,7 +121,7 @@ export class ComponentsSchemasUser extends ComponentsSchemasPrincipal {
     return ObjectSerializer.deserialize(obj, 'ComponentsSchemasUser');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, emails: Array<Email>, social: boolean, created?: Date, deleted?: Date, updated?: Date, externalId?: string, email?: Email, avatarUrl?: URL, connection?: string, provider?: string, subjects?: Array<string>) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, emails: Array<Email>, social: boolean, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, email?: Email, avatarUrl?: URL, connection?: string, provider?: string, subjects?: Array<string>) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
     this.emails = emails;
     this.social = social;

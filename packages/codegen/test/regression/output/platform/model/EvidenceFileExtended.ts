@@ -4,7 +4,7 @@
 // ===============================================
 import { EvidenceFileExtendedAllOf } from './EvidenceFileExtendedAllOf.js';
 import { EvidenceFile } from './EvidenceFile.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class EvidenceFileExtended {
@@ -44,7 +44,7 @@ export class EvidenceFileExtended {
   /**
   * Date of creation of the evidence file
   */
-  'created'?: Date;
+  'created'?: DateTime;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -134,9 +134,9 @@ export class EvidenceFileExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -148,7 +148,7 @@ export class EvidenceFileExtended {
     return ObjectSerializer.deserialize(obj, 'EvidenceFileExtended');
   }
 
-  constructor(id: UUID, name: string, auditId: UUID, evidenceDefinitionId: UUID, fileId: UUID, createdBy: UUID, evidenceDefinitionName: string, createdByUserName: string, comment?: string, created?: Date) {
+  constructor(id: UUID, name: string, auditId: UUID, evidenceDefinitionId: UUID, fileId: UUID, createdBy: UUID, evidenceDefinitionName: string, createdByUserName: string, comment?: string, created?: DateTime) {
     this.id = id;
     this.name = name;
     this.auditId = auditId;

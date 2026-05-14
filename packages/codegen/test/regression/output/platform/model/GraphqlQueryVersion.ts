@@ -7,7 +7,7 @@ import { PublishQueryStatusEnumDef } from './PublishQueryStatusEnum.js';
 import { GraphqlQueryVersionAllOf } from './GraphqlQueryVersionAllOf.js';
 import { Resource } from './Resource.js';
 import { PublishQueryStatusEnum } from './PublishQueryStatusEnum.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class GraphqlQueryVersion {
@@ -30,11 +30,11 @@ export class GraphqlQueryVersion {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'graphqlQueryId': UUID;
   'versionId': UUID;
   'versionSemver': Semver;
@@ -54,7 +54,7 @@ export class GraphqlQueryVersion {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -122,18 +122,18 @@ export class GraphqlQueryVersion {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -230,9 +230,9 @@ export class GraphqlQueryVersion {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -343,7 +343,7 @@ export class GraphqlQueryVersion {
     return ObjectSerializer.deserialize(obj, 'GraphqlQueryVersion');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, graphqlQueryId: UUID, versionId: UUID, versionSemver: Semver, versionValue: number, template: string, createdBy: UUID, status: PublishQueryStatusEnumDef, classIds: Array<UUID>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, updatedBy?: UUID, artifactVersionId?: UUID, elementIds?: Array<UUID>, evidenceDefinitionIds?: Array<UUID>, pagination?: GraphqlQueryVersionPagination, viewProperties?: { [key: string]: Array<{ [key: string]: any; }>; }) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, graphqlQueryId: UUID, versionId: UUID, versionSemver: Semver, versionValue: number, template: string, createdBy: UUID, status: PublishQueryStatusEnumDef, classIds: Array<UUID>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, updatedBy?: UUID, artifactVersionId?: UUID, elementIds?: Array<UUID>, evidenceDefinitionIds?: Array<UUID>, pagination?: GraphqlQueryVersionPagination, viewProperties?: { [key: string]: Array<{ [key: string]: any; }>; }) {
     this.id = id;
     this.name = name;
     this.type = type;

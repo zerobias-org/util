@@ -9,7 +9,7 @@ import { PublishEvidenceStatusEnumDef } from './PublishEvidenceStatusEnum.js';
 import { PublishEvidenceStatusEnum } from './PublishEvidenceStatusEnum.js';
 import { SchemasTag } from './SchemasTag.js';
 import { IdNameDescriptionObject } from './IdNameDescriptionObject.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class EvidenceBotExtended {
@@ -32,11 +32,11 @@ export class EvidenceBotExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'version': Semver;
   'graphqlQueryVersionId': UUID;
   'evidenceDefinitionId': UUID;
@@ -56,7 +56,7 @@ export class EvidenceBotExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -126,18 +126,18 @@ export class EvidenceBotExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -234,9 +234,9 @@ export class EvidenceBotExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -365,7 +365,7 @@ export class EvidenceBotExtended {
     return ObjectSerializer.deserialize(obj, 'EvidenceBotExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, version: Semver, graphqlQueryVersionId: UUID, evidenceDefinitionId: UUID, status: PublishEvidenceStatusEnumDef, graphqlQueryVersion: IdNameDescriptionObject, evidenceDefinition: IdNameDescriptionObject, standardElements: Array<EvidenceBotExtendedStandardElement>, tags: Array<SchemasTag>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, versionId?: UUID, versionValue?: number, preRelease?: boolean, packageCode?: string, params?: { [key: string]: any; }, artifactVersionId?: UUID, publishedBy?: UUID, elementIds?: Array<UUID>, productIds?: Array<UUID>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, version: Semver, graphqlQueryVersionId: UUID, evidenceDefinitionId: UUID, status: PublishEvidenceStatusEnumDef, graphqlQueryVersion: IdNameDescriptionObject, evidenceDefinition: IdNameDescriptionObject, standardElements: Array<EvidenceBotExtendedStandardElement>, tags: Array<SchemasTag>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, versionId?: UUID, versionValue?: number, preRelease?: boolean, packageCode?: string, params?: { [key: string]: any; }, artifactVersionId?: UUID, publishedBy?: UUID, elementIds?: Array<UUID>, productIds?: Array<UUID>) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -11,7 +11,7 @@ import { HostingTypeEnum } from './HostingTypeEnum.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { HostingTypeEnumDef } from './HostingTypeEnum.js';
 import { FactoryTypeEnumDef } from './FactoryTypeEnum.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ProductVersion {
@@ -34,11 +34,11 @@ export class ProductVersion {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'productId': UUID;
   'createdBy': UUID;
   'status': CatalogPublishStatusEnumDef;
@@ -58,7 +58,7 @@ export class ProductVersion {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -133,18 +133,18 @@ export class ProductVersion {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -241,9 +241,9 @@ export class ProductVersion {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -417,7 +417,7 @@ export class ProductVersion {
     return ObjectSerializer.deserialize(obj, 'ProductVersion');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, productId: UUID, createdBy: UUID, status: CatalogPublishStatusEnumDef, code: string, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: number, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, updatedBy?: UUID, logoFileVersionId?: UUID, taskId?: UUID, apiDocsUrl?: URL, segmentIds?: Array<UUID>, complianceFeatureIds?: Array<UUID>, productComponentIds?: Array<UUID>, productEditionIds?: Array<UUID>, factoryTypes?: Array<FactoryTypeEnumDef>, hostingTypes?: Array<HostingTypeEnumDef>, artifactVersionId?: UUID, suggestedProductId?: UUID, cpeProducts?: Array<CpeProduct>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, productId: UUID, createdBy: UUID, status: CatalogPublishStatusEnumDef, code: string, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: number, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, updatedBy?: UUID, logoFileVersionId?: UUID, taskId?: UUID, apiDocsUrl?: URL, segmentIds?: Array<UUID>, complianceFeatureIds?: Array<UUID>, productComponentIds?: Array<UUID>, productEditionIds?: Array<UUID>, factoryTypes?: Array<FactoryTypeEnumDef>, hostingTypes?: Array<HostingTypeEnumDef>, artifactVersionId?: UUID, suggestedProductId?: UUID, cpeProducts?: Array<CpeProduct>) {
     this.id = id;
     this.name = name;
     this.type = type;

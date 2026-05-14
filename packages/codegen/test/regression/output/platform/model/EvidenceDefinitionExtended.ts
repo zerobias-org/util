@@ -6,11 +6,11 @@ import { EvidenceDefinitionFormatEnum } from './EvidenceDefinitionFormatEnum.js'
 import { EvidenceDefinitionFormatEnumDef } from './EvidenceDefinitionFormatEnum.js';
 import { EvidenceDefinitionCategoryEnumDef } from './EvidenceDefinitionCategoryEnum.js';
 import { PublishEvidenceStatusEnumDef } from './PublishEvidenceStatusEnum.js';
-import { EvidenceDefinitionExtendedAllOf } from './EvidenceDefinitionExtendedAllOf.js';
 import { Resource } from './Resource.js';
 import { EvidenceDefinitionCategoryEnum } from './EvidenceDefinitionCategoryEnum.js';
 import { PublishEvidenceStatusEnum } from './PublishEvidenceStatusEnum.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { EvidenceDefinitionExtendedAllOf } from './EvidenceDefinitionExtendedAllOf.js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class EvidenceDefinitionExtended {
@@ -33,11 +33,11 @@ export class EvidenceDefinitionExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'latestVersion': Semver;
   'status': PublishEvidenceStatusEnumDef;
   /**
@@ -51,7 +51,7 @@ export class EvidenceDefinitionExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -122,18 +122,18 @@ export class EvidenceDefinitionExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -176,9 +176,9 @@ export class EvidenceDefinitionExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -316,7 +316,7 @@ export class EvidenceDefinitionExtended {
     return ObjectSerializer.deserialize(obj, 'EvidenceDefinitionExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, latestVersion: Semver, status: PublishEvidenceStatusEnumDef, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, domain?: string, code?: Nmtoken, category?: EvidenceDefinitionCategoryEnumDef, format?: EvidenceDefinitionFormatEnumDef, publishedBy?: UUID, artifactId?: UUID, artifactVersionId?: UUID, changeLog?: string, readMe?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, latestVersion: Semver, status: PublishEvidenceStatusEnumDef, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, domain?: string, code?: Nmtoken, category?: EvidenceDefinitionCategoryEnumDef, format?: EvidenceDefinitionFormatEnumDef, publishedBy?: UUID, artifactId?: UUID, artifactVersionId?: UUID, changeLog?: string, readMe?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -13,7 +13,7 @@ import { StandardStatusDef } from './StandardStatus.js';
 import { StandardCategoryDef } from './StandardCategory.js';
 import { StandardTypeDef } from './StandardType.js';
 import { StandardCategory } from './StandardCategory.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class Standard {
@@ -36,11 +36,11 @@ export class Standard {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'code': string;
   'externalId': string;
   'standardType': StandardTypeDef;
@@ -62,7 +62,7 @@ export class Standard {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -81,7 +81,7 @@ export class Standard {
   'vspInfo'?: VspInfo;
   'kbArticleId'?: UUID | null;
   'version'?: string | null;
-  'releaseDate'?: Date | null;
+  'releaseDate'?: DateTime | null;
   'objectId'?: UUID;
 
   static readonly discriminator: string | undefined = undefined;
@@ -127,18 +127,18 @@ export class Standard {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -253,9 +253,9 @@ export class Standard {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -343,9 +343,9 @@ export class Standard {
       "name": "releaseDate",
       "baseName": "releaseDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -366,7 +366,7 @@ export class Standard {
     return ObjectSerializer.deserialize(obj, 'Standard');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, code: string, externalId: string, standardType: StandardTypeDef, standardCategory: StandardCategoryDef, status: StandardStatusDef, local: boolean, versionSemver: Semver, hasElements: boolean, elementCount: number, source: CatalogSourceDef, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, artifactVersionId?: UUID, packageCode?: string, vspInfo?: VspInfo, kbArticleId?: UUID, version?: string, releaseDate?: Date, objectId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, code: string, externalId: string, standardType: StandardTypeDef, standardCategory: StandardCategoryDef, status: StandardStatusDef, local: boolean, versionSemver: Semver, hasElements: boolean, elementCount: number, source: CatalogSourceDef, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, artifactVersionId?: UUID, packageCode?: string, vspInfo?: VspInfo, kbArticleId?: UUID, version?: string, releaseDate?: DateTime, objectId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

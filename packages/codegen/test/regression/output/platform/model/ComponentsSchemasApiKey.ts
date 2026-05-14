@@ -10,7 +10,7 @@ import { SchemasPrincipalType } from './SchemasPrincipalType.js';
 import { SchemasPrincipalStatusDef } from './SchemasPrincipalStatus.js';
 import { SchemasPrincipalOriginDef } from './SchemasPrincipalOrigin.js';
 import { SchemasPrincipalOrigin } from './SchemasPrincipalOrigin.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -20,7 +20,7 @@ export class ComponentsSchemasApiKey extends ComponentsSchemasPrincipal {
   /**
   * An optional expiration date for this API key
   */
-  'expiration'?: Date;
+  'expiration'?: DateTime;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -29,9 +29,9 @@ export class ComponentsSchemasApiKey extends ComponentsSchemasPrincipal {
       "name": "expiration",
       "baseName": "expiration",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -43,7 +43,7 @@ export class ComponentsSchemasApiKey extends ComponentsSchemasPrincipal {
     return ObjectSerializer.deserialize(obj, 'ComponentsSchemasApiKey');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, created?: Date, deleted?: Date, updated?: Date, externalId?: string, expiration?: Date) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, expiration?: DateTime) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
     this.expiration = expiration;
   }

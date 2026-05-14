@@ -5,7 +5,7 @@
 import { LifecycleConfig } from './LifecycleConfig.js';
 import { Resource } from './Resource.js';
 import { ConnectionModelAllOf } from './ConnectionModelAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -31,11 +31,11 @@ export class ConnectionModel {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'lifecycleConfig': LifecycleConfig;
   /**
   * The ID of the `Secret` which this `Connection` uses
@@ -52,7 +52,7 @@ export class ConnectionModel {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -129,18 +129,18 @@ export class ConnectionModel {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -183,9 +183,9 @@ export class ConnectionModel {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -269,7 +269,7 @@ export class ConnectionModel {
     return ObjectSerializer.deserialize(obj, 'ConnectionModel');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, lifecycleConfig: LifecycleConfig, secretId: UUID, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, deploymentId?: UUID, connectionProfileId?: UUID, connectionProfile?: { [key: string]: string; }, draft?: boolean) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, lifecycleConfig: LifecycleConfig, secretId: UUID, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, deploymentId?: UUID, connectionProfileId?: UUID, connectionProfile?: { [key: string]: string; }, draft?: boolean) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -6,7 +6,7 @@ import { TestResultEnumDef } from './TestResultEnum.js';
 import { TestFindingSourceDef } from './TestFindingSource.js';
 import { TestFindingSource } from './TestFindingSource.js';
 import { TestResultEnum } from './TestResultEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -16,7 +16,7 @@ export class Test {
   'id': UUID;
   'ownerId': UUID;
   'testCaseId': UUID;
-  'testDate': Date;
+  'testDate': DateTime;
   'result': TestResultEnumDef;
   'source': TestFindingSourceDef;
   'localId'?: UUID | null;
@@ -56,9 +56,9 @@ export class Test {
       "name": "testDate",
       "baseName": "testDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -106,7 +106,7 @@ export class Test {
     return ObjectSerializer.deserialize(obj, 'Test');
   }
 
-  constructor(id: UUID, ownerId: UUID, testCaseId: UUID, testDate: Date, result: TestResultEnumDef, source: TestFindingSourceDef, localId?: UUID, objectId?: UUID) {
+  constructor(id: UUID, ownerId: UUID, testCaseId: UUID, testDate: DateTime, result: TestResultEnumDef, source: TestFindingSourceDef, localId?: UUID, objectId?: UUID) {
     this.id = id;
     this.ownerId = ownerId;
     this.testCaseId = testCaseId;

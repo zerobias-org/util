@@ -4,7 +4,7 @@
 // ===============================================
 import { CatalogPublishStatusEnumDef } from './CatalogPublishStatusEnum.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -18,9 +18,9 @@ export class BoundaryProduct {
   'boundaryId': UUID;
   'suggested': boolean;
   'parentId'?: UUID | null;
-  'created'?: Date;
-  'updated'?: Date;
-  'deleted'?: Date | null;
+  'created'?: DateTime;
+  'updated'?: DateTime;
+  'deleted'?: DateTime | null;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
@@ -99,27 +99,27 @@ export class BoundaryProduct {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -194,7 +194,7 @@ export class BoundaryProduct {
     return ObjectSerializer.deserialize(obj, 'BoundaryProduct');
   }
 
-  constructor(id: UUID, name: string, description: string, ownerId: UUID, boundaryId: UUID, suggested: boolean, parentId?: UUID, created?: Date, updated?: Date, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, status?: CatalogPublishStatusEnumDef, productId?: UUID, suggestedProductId?: UUID) {
+  constructor(id: UUID, name: string, description: string, ownerId: UUID, boundaryId: UUID, suggested: boolean, parentId?: UUID, created?: DateTime, updated?: DateTime, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, status?: CatalogPublishStatusEnumDef, productId?: UUID, suggestedProductId?: UUID) {
     this.id = id;
     this.name = name;
     this.description = description;

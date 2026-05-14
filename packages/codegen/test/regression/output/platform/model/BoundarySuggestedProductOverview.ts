@@ -10,7 +10,7 @@ import { NameDescriptionObject } from './NameDescriptionObject.js';
 import { IdNameCodeDescriptionImageUrlVersionObject } from './IdNameCodeDescriptionImageUrlVersionObject.js';
 import { HostingTypeEnumDef } from './HostingTypeEnum.js';
 import { FactoryTypeEnumDef } from './FactoryTypeEnum.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -21,7 +21,7 @@ export class BoundarySuggestedProductOverview {
   'productId': UUID;
   'productName': string;
   'pipelineSummary': BoundaryProductOverviewPipelineSummary;
-  'productCreated': Date;
+  'productCreated': DateTime;
   'scfControls': Array<BoundaryProductOverviewScfControl>;
   'productDescription'?: string | null;
   'productImageUrl'?: URL | null;
@@ -76,9 +76,9 @@ export class BoundarySuggestedProductOverview {
       "name": "productCreated",
       "baseName": "productCreated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -180,7 +180,7 @@ export class BoundarySuggestedProductOverview {
     return ObjectSerializer.deserialize(obj, 'BoundarySuggestedProductOverview');
   }
 
-  constructor(id: UUID, productId: UUID, productName: string, pipelineSummary: BoundaryProductOverviewPipelineSummary, productCreated: Date, scfControls: Array<BoundaryProductOverviewScfControl>, productDescription?: string, productImageUrl?: URL, productUrl?: URL, segmentIds?: Array<UUID>, segments?: Array<IdNameCodeDescriptionImageUrlVersionObject>, factoryTypes?: Array<FactoryTypeEnumDef>, factoryTypeObjects?: Array<NameDescriptionObject>, hostingTypes?: Array<HostingTypeEnumDef>, hostingTypeObjects?: Array<NameDescriptionObject>) {
+  constructor(id: UUID, productId: UUID, productName: string, pipelineSummary: BoundaryProductOverviewPipelineSummary, productCreated: DateTime, scfControls: Array<BoundaryProductOverviewScfControl>, productDescription?: string, productImageUrl?: URL, productUrl?: URL, segmentIds?: Array<UUID>, segments?: Array<IdNameCodeDescriptionImageUrlVersionObject>, factoryTypes?: Array<FactoryTypeEnumDef>, factoryTypeObjects?: Array<NameDescriptionObject>, hostingTypes?: Array<HostingTypeEnumDef>, hostingTypeObjects?: Array<NameDescriptionObject>) {
     this.id = id;
     this.productId = productId;
     this.productName = productName;

@@ -4,7 +4,7 @@
 // ===============================================
 import { TestResultEnumDef } from './TestResultEnum.js';
 import { TestResultEnum } from './TestResultEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -12,7 +12,7 @@ import { ObjectSerializer, RequestFile } from './index.js';
 */
 export class FindingTest {
   'id': UUID;
-  'testDate': Date;
+  'testDate': DateTime;
   'result': TestResultEnumDef;
 
   static readonly discriminator: string | undefined = undefined;
@@ -31,9 +31,9 @@ export class FindingTest {
       "name": "testDate",
       "baseName": "testDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -54,7 +54,7 @@ export class FindingTest {
     return ObjectSerializer.deserialize(obj, 'FindingTest');
   }
 
-  constructor(id: UUID, testDate: Date, result: TestResultEnumDef, ) {
+  constructor(id: UUID, testDate: DateTime, result: TestResultEnumDef, ) {
     this.id = id;
     this.testDate = testDate;
     this.result = result;

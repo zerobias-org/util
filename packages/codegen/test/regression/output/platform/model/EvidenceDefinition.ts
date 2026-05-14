@@ -10,7 +10,7 @@ import { Resource } from './Resource.js';
 import { EvidenceDefinitionAllOf } from './EvidenceDefinitionAllOf.js';
 import { EvidenceDefinitionCategoryEnum } from './EvidenceDefinitionCategoryEnum.js';
 import { PublishEvidenceStatusEnum } from './PublishEvidenceStatusEnum.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class EvidenceDefinition {
@@ -33,11 +33,11 @@ export class EvidenceDefinition {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'version': Semver;
   'status': PublishEvidenceStatusEnumDef;
   /**
@@ -51,7 +51,7 @@ export class EvidenceDefinition {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -122,18 +122,18 @@ export class EvidenceDefinition {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -176,9 +176,9 @@ export class EvidenceDefinition {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -316,7 +316,7 @@ export class EvidenceDefinition {
     return ObjectSerializer.deserialize(obj, 'EvidenceDefinition');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, version: Semver, status: PublishEvidenceStatusEnumDef, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, versionId?: UUID, versionValue?: number, preRelease?: boolean, packageCode?: string, domain?: string, code?: Nmtoken, category?: EvidenceDefinitionCategoryEnumDef, format?: EvidenceDefinitionFormatEnumDef, publishedBy?: UUID, artifactVersionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, version: Semver, status: PublishEvidenceStatusEnumDef, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, versionId?: UUID, versionValue?: number, preRelease?: boolean, packageCode?: string, domain?: string, code?: Nmtoken, category?: EvidenceDefinitionCategoryEnumDef, format?: EvidenceDefinitionFormatEnumDef, publishedBy?: UUID, artifactVersionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -4,7 +4,7 @@
 // ===============================================
 import { PropertyTypeEnumDef } from './PropertyTypeEnum.js';
 import { PropertyTypeEnum } from './PropertyTypeEnum.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -21,14 +21,14 @@ export class Property {
   'defaultValue'?: string | null;
   'description'?: string | null;
   'parentId'?: UUID | null;
-  'created'?: Date;
-  'updated'?: Date;
+  'created'?: DateTime;
+  'updated'?: DateTime;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
   'keywords'?: Array<string> | null;
   'example'?: string | null;
-  'deleted'?: Date | null;
+  'deleted'?: DateTime | null;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -127,18 +127,18 @@ export class Property {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -190,9 +190,9 @@ export class Property {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -204,7 +204,7 @@ export class Property {
     return ObjectSerializer.deserialize(obj, 'Property');
   }
 
-  constructor(id: UUID, fieldId: UUID, name: string, type: PropertyTypeEnumDef, ownerId: UUID, multi?: boolean, required?: boolean, defaultValue?: string, description?: string, parentId?: UUID, created?: Date, updated?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, example?: string, deleted?: Date) {
+  constructor(id: UUID, fieldId: UUID, name: string, type: PropertyTypeEnumDef, ownerId: UUID, multi?: boolean, required?: boolean, defaultValue?: string, description?: string, parentId?: UUID, created?: DateTime, updated?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, example?: string, deleted?: DateTime) {
     this.id = id;
     this.fieldId = fieldId;
     this.name = name;

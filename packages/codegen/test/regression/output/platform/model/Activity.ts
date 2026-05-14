@@ -8,7 +8,7 @@ import { Resource } from './Resource.js';
 import { ActivityTypeEnum } from './ActivityTypeEnum.js';
 import { ActivityAllOf } from './ActivityAllOf.js';
 import { ActivityOnTransition } from './ActivityOnTransition.js';
-import { Nmtoken, Duration, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Duration, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -34,11 +34,11 @@ export class Activity {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'workflowId': UUID;
   /**
   * The activity code
@@ -85,7 +85,7 @@ export class Activity {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -156,18 +156,18 @@ export class Activity {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -291,9 +291,9 @@ export class Activity {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -377,7 +377,7 @@ export class Activity {
     return ObjectSerializer.deserialize(obj, 'Activity');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, workflowId: UUID, code: string, packageCode: string, activityType: ActivityTypeEnumDef, estimatedTime: Duration, responsible: Array<string>, accountable: Array<string>, consulted: Array<string>, informed: Array<string>, links: Array<ActivityLink>, customFields: Array<string>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, activityGroup?: string, taskNameTemplate?: string, onTransition?: Array<ActivityOnTransition>, artifactVersionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, workflowId: UUID, code: string, packageCode: string, activityType: ActivityTypeEnumDef, estimatedTime: Duration, responsible: Array<string>, accountable: Array<string>, consulted: Array<string>, informed: Array<string>, links: Array<ActivityLink>, customFields: Array<string>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, activityGroup?: string, taskNameTemplate?: string, onTransition?: Array<ActivityOnTransition>, artifactVersionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

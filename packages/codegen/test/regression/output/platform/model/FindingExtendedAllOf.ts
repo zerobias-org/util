@@ -8,20 +8,20 @@ import { FindingTest } from './FindingTest.js';
 import { TestResultEnum } from './TestResultEnum.js';
 import { FindingExtendedVulnerability } from './FindingExtendedVulnerability.js';
 import { FindingTestCase } from './FindingTestCase.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
 * Finding extended schema
 */
 export class FindingExtendedAllOf {
-  'discoveredDate': Date;
+  'discoveredDate': DateTime;
   'result': TestResultEnumDef;
   'testCaseId': UUID;
   'testCase': FindingTestCase;
   'tests': Array<FindingTest>;
   'subjects': Array<FindingSubject>;
-  'resolvedDate'?: Date | null;
+  'resolvedDate'?: DateTime | null;
   'vulnerabilities'?: Array<FindingExtendedVulnerability>;
 
   static readonly discriminator: string | undefined = undefined;
@@ -31,9 +31,9 @@ export class FindingExtendedAllOf {
       "name": "discoveredDate",
       "baseName": "discoveredDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -85,9 +85,9 @@ export class FindingExtendedAllOf {
       "name": "resolvedDate",
       "baseName": "resolvedDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -108,7 +108,7 @@ export class FindingExtendedAllOf {
     return ObjectSerializer.deserialize(obj, 'FindingExtendedAllOf');
   }
 
-  constructor(discoveredDate: Date, result: TestResultEnumDef, testCaseId: UUID, testCase: FindingTestCase, tests: Array<FindingTest>, subjects: Array<FindingSubject>, resolvedDate?: Date, vulnerabilities?: Array<FindingExtendedVulnerability>) {
+  constructor(discoveredDate: DateTime, result: TestResultEnumDef, testCaseId: UUID, testCase: FindingTestCase, tests: Array<FindingTest>, subjects: Array<FindingSubject>, resolvedDate?: DateTime, vulnerabilities?: Array<FindingExtendedVulnerability>) {
     this.discoveredDate = discoveredDate;
     this.result = result;
     this.testCaseId = testCaseId;

@@ -5,7 +5,7 @@
 import { PipelineJobTarget } from './PipelineJobTarget.js';
 import { PipelineJobStatusEnumDef } from './PipelineJobStatusEnum.js';
 import { PipelineJobStatusEnum } from './PipelineJobStatusEnum.js';
-import { Duration, UUID } from '@zerobias-org/types-core-js';
+import { Duration, UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -15,11 +15,11 @@ export class PipelineJob {
   'id': UUID;
   'ownerId': UUID;
   'pipelineId': UUID;
-  'runDate': Date;
+  'runDate': DateTime;
   'status': PipelineJobStatusEnumDef;
   'previewMode': boolean;
   'instanceNumber'?: number | null;
-  'executionStartTime'?: Date | null;
+  'executionStartTime'?: DateTime | null;
   'duration'?: Duration | null;
   'jobError'?: object | null;
   'executionDetails'?: { [key: string]: any; } | null;
@@ -64,9 +64,9 @@ export class PipelineJob {
       "name": "runDate",
       "baseName": "runDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -100,9 +100,9 @@ export class PipelineJob {
       "name": "executionStartTime",
       "baseName": "executionStartTime",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -168,7 +168,7 @@ export class PipelineJob {
     return ObjectSerializer.deserialize(obj, 'PipelineJob');
   }
 
-  constructor(id: UUID, ownerId: UUID, pipelineId: UUID, runDate: Date, status: PipelineJobStatusEnumDef, previewMode: boolean, instanceNumber?: number, executionStartTime?: Date, duration?: Duration, jobError?: object, executionDetails?: { [key: string]: any; }, previewCount?: number, token?: string, target?: PipelineJobTarget) {
+  constructor(id: UUID, ownerId: UUID, pipelineId: UUID, runDate: DateTime, status: PipelineJobStatusEnumDef, previewMode: boolean, instanceNumber?: number, executionStartTime?: DateTime, duration?: Duration, jobError?: object, executionDetails?: { [key: string]: any; }, previewCount?: number, token?: string, target?: PipelineJobTarget) {
     this.id = id;
     this.ownerId = ownerId;
     this.pipelineId = pipelineId;

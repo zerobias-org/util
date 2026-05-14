@@ -5,7 +5,7 @@
 import { EvidenceRequestWithExtendedInfoAllOf } from './EvidenceRequestWithExtendedInfoAllOf.js';
 import { EvidenceRequest } from './EvidenceRequest.js';
 import { EvidenceRequestWithExtendedInfoAllOfEvidenceDefinitions } from './EvidenceRequestWithExtendedInfoAllOfEvidenceDefinitions.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class EvidenceRequestWithExtendedInfo {
@@ -17,13 +17,13 @@ export class EvidenceRequestWithExtendedInfo {
   'evidenceDefinitions': Array<EvidenceRequestWithExtendedInfoAllOfEvidenceDefinitions>;
   'description'?: string | null;
   'parentId'?: UUID | null;
-  'created'?: Date;
-  'updated'?: Date;
+  'created'?: DateTime;
+  'updated'?: DateTime;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
   'keywords'?: Array<string> | null;
-  'deleted'?: Date | null;
+  'deleted'?: DateTime | null;
   'evidenceRequestListId'?: UUID | null;
   'frameworkElementId'?: UUID | null;
   'subElementCode'?: string | null;
@@ -110,18 +110,18 @@ export class EvidenceRequestWithExtendedInfo {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -164,9 +164,9 @@ export class EvidenceRequestWithExtendedInfo {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -232,7 +232,7 @@ export class EvidenceRequestWithExtendedInfo {
     return ObjectSerializer.deserialize(obj, 'EvidenceRequestWithExtendedInfo');
   }
 
-  constructor(id: UUID, requestCode: string, name: string, ownerId: UUID, evidenceDefinitionIds: Array<UUID>, evidenceDefinitions: Array<EvidenceRequestWithExtendedInfoAllOfEvidenceDefinitions>, description?: string, parentId?: UUID, created?: Date, updated?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, deleted?: Date, evidenceRequestListId?: UUID, frameworkElementId?: UUID, subElementCode?: string, frameworkElementCode?: string, frameworkElementName?: string, frameworkElementType?: string) {
+  constructor(id: UUID, requestCode: string, name: string, ownerId: UUID, evidenceDefinitionIds: Array<UUID>, evidenceDefinitions: Array<EvidenceRequestWithExtendedInfoAllOfEvidenceDefinitions>, description?: string, parentId?: UUID, created?: DateTime, updated?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, deleted?: DateTime, evidenceRequestListId?: UUID, frameworkElementId?: UUID, subElementCode?: string, frameworkElementCode?: string, frameworkElementName?: string, frameworkElementType?: string) {
     this.id = id;
     this.requestCode = requestCode;
     this.name = name;

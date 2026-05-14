@@ -6,7 +6,7 @@ import { AssessmentResultTypeEnum } from './AssessmentResultTypeEnum.js';
 import { AssessmentResultTypeEnumDef } from './AssessmentResultTypeEnum.js';
 import { AssessmentResultRatingEnum } from './AssessmentResultRatingEnum.js';
 import { AssessmentResultRatingEnumDef } from './AssessmentResultRatingEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -18,7 +18,7 @@ export class AssessmentResult {
   'type': AssessmentResultTypeEnumDef;
   'details': string;
   'createdBy': UUID;
-  'created': Date;
+  'created': DateTime;
   'rating'?: AssessmentResultRatingEnumDef;
   'justification'?: string | null;
   'evidenceBotId'?: UUID | null;
@@ -75,9 +75,9 @@ export class AssessmentResult {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -116,7 +116,7 @@ export class AssessmentResult {
     return ObjectSerializer.deserialize(obj, 'AssessmentResult');
   }
 
-  constructor(id: UUID, evidenceAssessmentId: UUID, type: AssessmentResultTypeEnumDef, details: string, createdBy: UUID, created: Date, rating?: AssessmentResultRatingEnumDef, justification?: string, evidenceBotId?: UUID) {
+  constructor(id: UUID, evidenceAssessmentId: UUID, type: AssessmentResultTypeEnumDef, details: string, createdBy: UUID, created: DateTime, rating?: AssessmentResultRatingEnumDef, justification?: string, evidenceBotId?: UUID) {
     this.id = id;
     this.evidenceAssessmentId = evidenceAssessmentId;
     this.type = type;

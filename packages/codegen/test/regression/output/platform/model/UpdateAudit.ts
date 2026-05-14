@@ -6,7 +6,7 @@ import { AuditTypeEnumDef } from './AuditTypeEnum.js';
 import { AuditStatusEnumDef } from './AuditStatusEnum.js';
 import { AuditTypeEnum } from './AuditTypeEnum.js';
 import { AuditStatusEnum } from './AuditStatusEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -16,8 +16,8 @@ export class UpdateAudit {
   'status': AuditStatusEnumDef;
   'name'?: string | null;
   'description'?: string | null;
-  'plannedStartDate'?: Date | null;
-  'plannedEndDate'?: Date | null;
+  'plannedStartDate'?: DateTime | null;
+  'plannedEndDate'?: DateTime | null;
   'auditeeInitiated'?: boolean | null;
   'invitedOrgUserId'?: UUID | null;
   'invitedOrgUserEmail'?: string | null;
@@ -25,8 +25,8 @@ export class UpdateAudit {
   'auditingOrgUserId'?: UUID | null;
   'boundaryId'?: UUID | null;
   'evidenceRequestListId'?: UUID | null;
-  'lookbackPeriodStart'?: Date | null;
-  'lookbackPeriodEnd'?: Date | null;
+  'lookbackPeriodStart'?: DateTime | null;
+  'lookbackPeriodEnd'?: DateTime | null;
   'auditType'?: AuditTypeEnumDef;
   'frameworkVersionId'?: UUID | null;
   'reasonForRejectingInvitation'?: string | null;
@@ -66,18 +66,18 @@ export class UpdateAudit {
       "name": "plannedStartDate",
       "baseName": "plannedStartDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "plannedEndDate",
       "baseName": "plannedEndDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -147,18 +147,18 @@ export class UpdateAudit {
       "name": "lookbackPeriodStart",
       "baseName": "lookbackPeriodStart",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "lookbackPeriodEnd",
       "baseName": "lookbackPeriodEnd",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -206,7 +206,7 @@ export class UpdateAudit {
     return ObjectSerializer.deserialize(obj, 'UpdateAudit');
   }
 
-  constructor(status: AuditStatusEnumDef, name?: string, description?: string, plannedStartDate?: Date, plannedEndDate?: Date, auditeeInitiated?: boolean, invitedOrgUserId?: UUID, invitedOrgUserEmail?: string, auditingOrgId?: UUID, auditingOrgUserId?: UUID, boundaryId?: UUID, evidenceRequestListId?: UUID, lookbackPeriodStart?: Date, lookbackPeriodEnd?: Date, auditType?: AuditTypeEnumDef, frameworkVersionId?: UUID, reasonForRejectingInvitation?: string, folderId?: UUID) {
+  constructor(status: AuditStatusEnumDef, name?: string, description?: string, plannedStartDate?: DateTime, plannedEndDate?: DateTime, auditeeInitiated?: boolean, invitedOrgUserId?: UUID, invitedOrgUserEmail?: string, auditingOrgId?: UUID, auditingOrgUserId?: UUID, boundaryId?: UUID, evidenceRequestListId?: UUID, lookbackPeriodStart?: DateTime, lookbackPeriodEnd?: DateTime, auditType?: AuditTypeEnumDef, frameworkVersionId?: UUID, reasonForRejectingInvitation?: string, folderId?: UUID) {
     this.status = status;
     this.name = name;
     this.description = description;

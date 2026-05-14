@@ -4,6 +4,7 @@
 // ===============================================
 import { ErrorModelBase } from './ErrorModelBase.js';
 import { NotFoundErrorAllOf } from './NotFoundErrorAllOf.js';
+import { DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -21,7 +22,7 @@ export class NotFoundError {
   /**
   * Timestamp when this error was generated
   */
-  'timestamp': Date;
+  'timestamp': DateTime;
   /**
   * An HTTP status code to use for this error when transmitting it over HTTP
   */
@@ -60,9 +61,9 @@ export class NotFoundError {
       "name": "timestamp",
       "baseName": "timestamp",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -101,7 +102,7 @@ export class NotFoundError {
     return ObjectSerializer.deserialize(obj, 'NotFoundError');
   }
 
-  constructor(key: string, template: string, timestamp: Date, statusCode: number, obj: string, stack?: string) {
+  constructor(key: string, template: string, timestamp: DateTime, statusCode: number, obj: string, stack?: string) {
     this.key = key;
     this.template = template;
     this.timestamp = timestamp;

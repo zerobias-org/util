@@ -13,7 +13,7 @@ import { ComplianceFeatureSupportStub } from './ComplianceFeatureSupportStub.js'
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { ComplianceFeatureVersion } from './ComplianceFeatureVersion.js';
 import { ComplianceFeatureVersionExtendedAllOf } from './ComplianceFeatureVersionExtendedAllOf.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ComplianceFeatureVersionExtended {
@@ -36,11 +36,11 @@ export class ComplianceFeatureVersionExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'complianceFeatureId': UUID;
   'versionId': UUID;
   'versionSemver': Semver;
@@ -78,7 +78,7 @@ export class ComplianceFeatureVersionExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -147,18 +147,18 @@ export class ComplianceFeatureVersionExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -417,9 +417,9 @@ export class ComplianceFeatureVersionExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -512,7 +512,7 @@ export class ComplianceFeatureVersionExtended {
     return ObjectSerializer.deserialize(obj, 'ComplianceFeatureVersionExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, complianceFeatureId: UUID, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: number, status: CatalogPublishStatusEnumDef, scope: CatalogScopeDef, code: string, externalId: string, complianceFeatureTypes: Array<string>, createdBy: UUID, classOfferingIds: Array<UUID>, segmentOfferingIds: Array<UUID>, productEditionOfferingIds: Array<UUID>, elementIds: Array<UUID>, roleIds: Array<UUID>, implementationIds: Array<UUID>, standardIds: Array<UUID>, classOfferings: Array<ComplianceFeatureSupportStub>, productOfferings: Array<ComplianceFeatureSupportStub>, segmentOfferings: Array<ComplianceFeatureSupportStub>, productEditionOfferings: Array<ComplianceFeatureSupportStub>, elements: Array<ComplianceFeatureElement>, roles: Array<IdNameDescriptionObject>, implementations: Array<Implementation>, standards: Array<IdNameCodeExternalIdDescriptionImageUrlObject>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, artifactVersionId?: UUID, updatedBy?: UUID, logoFileVersionId?: UUID, taskId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, complianceFeatureId: UUID, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: number, status: CatalogPublishStatusEnumDef, scope: CatalogScopeDef, code: string, externalId: string, complianceFeatureTypes: Array<string>, createdBy: UUID, classOfferingIds: Array<UUID>, segmentOfferingIds: Array<UUID>, productEditionOfferingIds: Array<UUID>, elementIds: Array<UUID>, roleIds: Array<UUID>, implementationIds: Array<UUID>, standardIds: Array<UUID>, classOfferings: Array<ComplianceFeatureSupportStub>, productOfferings: Array<ComplianceFeatureSupportStub>, segmentOfferings: Array<ComplianceFeatureSupportStub>, productEditionOfferings: Array<ComplianceFeatureSupportStub>, elements: Array<ComplianceFeatureElement>, roles: Array<IdNameDescriptionObject>, implementations: Array<Implementation>, standards: Array<IdNameCodeExternalIdDescriptionImageUrlObject>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, artifactVersionId?: UUID, updatedBy?: UUID, logoFileVersionId?: UUID, taskId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

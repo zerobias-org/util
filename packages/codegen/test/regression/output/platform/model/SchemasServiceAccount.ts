@@ -9,7 +9,7 @@ import { SchemasPrincipalType } from './SchemasPrincipalType.js';
 import { SchemasPrincipalStatusDef } from './SchemasPrincipalStatus.js';
 import { SchemasPrincipalOriginDef } from './SchemasPrincipalOrigin.js';
 import { SchemasPrincipalOrigin } from './SchemasPrincipalOrigin.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -30,7 +30,7 @@ export class SchemasServiceAccount extends SchemasPrincipal {
     return ObjectSerializer.deserialize(obj, 'SchemasServiceAccount');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, created?: Date, deleted?: Date, updated?: Date, externalId?: string, ) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, ) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
   }
 }

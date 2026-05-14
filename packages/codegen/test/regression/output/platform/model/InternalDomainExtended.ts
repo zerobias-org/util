@@ -5,7 +5,7 @@
 import { InternalDomainExtendedAllOf } from './InternalDomainExtendedAllOf.js';
 import { InternalDomainExtendedPipeline } from './InternalDomainExtendedPipeline.js';
 import { InternalDomain } from './InternalDomain.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class InternalDomainExtended {
@@ -28,11 +28,11 @@ export class InternalDomainExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * A resource id which acts as a boundary/container for this resource.
   */
@@ -58,7 +58,7 @@ export class InternalDomainExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -126,18 +126,18 @@ export class InternalDomainExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -207,9 +207,9 @@ export class InternalDomainExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -320,7 +320,7 @@ export class InternalDomainExtended {
     return ObjectSerializer.deserialize(obj, 'InternalDomainExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, scfDomainCode: string, sourceIds: Array<UUID>, domainPolicyObjectCount: number, domainPolicyPipelines: Array<InternalDomainExtendedPipeline>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, team?: UUID, teamName?: string, intent?: string, designPrinciple?: string, domainPolicyId?: UUID, domainPolicyName?: string, domainPolicyEvidenceBotId?: UUID, domainPolicyQueryVersionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, scfDomainCode: string, sourceIds: Array<UUID>, domainPolicyObjectCount: number, domainPolicyPipelines: Array<InternalDomainExtendedPipeline>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, team?: UUID, teamName?: string, intent?: string, designPrinciple?: string, domainPolicyId?: UUID, domainPolicyName?: string, domainPolicyEvidenceBotId?: UUID, domainPolicyQueryVersionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

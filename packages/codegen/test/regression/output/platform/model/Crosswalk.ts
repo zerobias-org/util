@@ -8,7 +8,7 @@ import { Resource } from './Resource.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { CrosswalkAllOf } from './CrosswalkAllOf.js';
 import { CrosswalkVersion } from './CrosswalkVersion.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class Crosswalk {
@@ -31,11 +31,11 @@ export class Crosswalk {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'externalId': string;
   'code': string;
   'status': CatalogPublishStatusEnumDef;
@@ -52,7 +52,7 @@ export class Crosswalk {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -123,18 +123,18 @@ export class Crosswalk {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -204,9 +204,9 @@ export class Crosswalk {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -344,7 +344,7 @@ export class Crosswalk {
     return ObjectSerializer.deserialize(obj, 'Crosswalk');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, externalId: string, code: string, status: CatalogPublishStatusEnumDef, sourceStandardId: UUID, targetStandardId: UUID, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, publisherId?: UUID, categoryId?: UUID, productId?: UUID, packageCode?: string, artifactVersionId?: UUID, latestVersionId?: UUID, latestVersion?: CrosswalkVersion, vendor?: IdNameCodeDescriptionImageUrlObject, suite?: IdNameCodeDescriptionImageUrlObject, product?: IdNameCodeDescriptionImageUrlObject) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, externalId: string, code: string, status: CatalogPublishStatusEnumDef, sourceStandardId: UUID, targetStandardId: UUID, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, publisherId?: UUID, categoryId?: UUID, productId?: UUID, packageCode?: string, artifactVersionId?: UUID, latestVersionId?: UUID, latestVersion?: CrosswalkVersion, vendor?: IdNameCodeDescriptionImageUrlObject, suite?: IdNameCodeDescriptionImageUrlObject, product?: IdNameCodeDescriptionImageUrlObject) {
     this.id = id;
     this.name = name;
     this.type = type;

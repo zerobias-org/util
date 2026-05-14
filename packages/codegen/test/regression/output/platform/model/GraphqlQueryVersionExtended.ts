@@ -12,7 +12,7 @@ import { SchemasTag } from './SchemasTag.js';
 import { IdNameCodeDescriptionImageUrlObject } from './IdNameCodeDescriptionImageUrlObject.js';
 import { GraphqlQueryVersionExtendedParameter } from './GraphqlQueryVersionExtendedParameter.js';
 import { PublishQueryStatusEnum } from './PublishQueryStatusEnum.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class GraphqlQueryVersionExtended {
@@ -35,11 +35,11 @@ export class GraphqlQueryVersionExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'graphqlQueryId': UUID;
   'versionId': UUID;
   'versionSemver': Semver;
@@ -64,7 +64,7 @@ export class GraphqlQueryVersionExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -135,18 +135,18 @@ export class GraphqlQueryVersionExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -288,9 +288,9 @@ export class GraphqlQueryVersionExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -428,7 +428,7 @@ export class GraphqlQueryVersionExtended {
     return ObjectSerializer.deserialize(obj, 'GraphqlQueryVersionExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, graphqlQueryId: UUID, versionId: UUID, versionSemver: Semver, versionValue: number, template: string, createdBy: UUID, status: PublishQueryStatusEnumDef, classIds: Array<UUID>, createdByUsername: string, evidenceDefinitions: Array<IdNameCodeDescriptionImageUrlObject>, tags: Array<SchemasTag>, products: Array<SchemasIdNameDescriptionImageUrlObject>, parameters: Array<GraphqlQueryVersionExtendedParameter>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, updatedBy?: UUID, artifactVersionId?: UUID, elementIds?: Array<UUID>, evidenceDefinitionIds?: Array<UUID>, pagination?: GraphqlQueryVersionPagination, viewProperties?: { [key: string]: Array<{ [key: string]: any; }>; }, updatedByUsername?: string, elements?: Array<GraphqlQueryExtendedElement>, systemParameters?: Array<GraphqlQueryVersionExtendedParameter>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, graphqlQueryId: UUID, versionId: UUID, versionSemver: Semver, versionValue: number, template: string, createdBy: UUID, status: PublishQueryStatusEnumDef, classIds: Array<UUID>, createdByUsername: string, evidenceDefinitions: Array<IdNameCodeDescriptionImageUrlObject>, tags: Array<SchemasTag>, products: Array<SchemasIdNameDescriptionImageUrlObject>, parameters: Array<GraphqlQueryVersionExtendedParameter>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, updatedBy?: UUID, artifactVersionId?: UUID, elementIds?: Array<UUID>, evidenceDefinitionIds?: Array<UUID>, pagination?: GraphqlQueryVersionPagination, viewProperties?: { [key: string]: Array<{ [key: string]: any; }>; }, updatedByUsername?: string, elements?: Array<GraphqlQueryExtendedElement>, systemParameters?: Array<GraphqlQueryVersionExtendedParameter>) {
     this.id = id;
     this.name = name;
     this.type = type;

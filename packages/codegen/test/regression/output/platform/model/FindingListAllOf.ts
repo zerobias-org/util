@@ -6,19 +6,19 @@ import { FindingSubject } from './FindingSubject.js';
 import { TestResultEnumDef } from './TestResultEnum.js';
 import { TestResultEnum } from './TestResultEnum.js';
 import { FindingTestCase } from './FindingTestCase.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
 * Finding list schema
 */
 export class FindingListAllOf {
-  'discoveredDate': Date;
+  'discoveredDate': DateTime;
   'result': TestResultEnumDef;
   'testCaseId': UUID;
   'testCase': FindingTestCase;
   'subjects': Array<FindingSubject>;
-  'resolvedDate'?: Date;
+  'resolvedDate'?: DateTime;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -27,9 +27,9 @@ export class FindingListAllOf {
       "name": "discoveredDate",
       "baseName": "discoveredDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -72,9 +72,9 @@ export class FindingListAllOf {
       "name": "resolvedDate",
       "baseName": "resolvedDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -86,7 +86,7 @@ export class FindingListAllOf {
     return ObjectSerializer.deserialize(obj, 'FindingListAllOf');
   }
 
-  constructor(discoveredDate: Date, result: TestResultEnumDef, testCaseId: UUID, testCase: FindingTestCase, subjects: Array<FindingSubject>, resolvedDate?: Date) {
+  constructor(discoveredDate: DateTime, result: TestResultEnumDef, testCaseId: UUID, testCase: FindingTestCase, subjects: Array<FindingSubject>, resolvedDate?: DateTime) {
     this.discoveredDate = discoveredDate;
     this.result = result;
     this.testCaseId = testCaseId;

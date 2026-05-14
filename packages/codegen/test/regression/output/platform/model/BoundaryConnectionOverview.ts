@@ -10,7 +10,7 @@ import { ConnectionOperationalStatus } from './ConnectionOperationalStatus.js';
 import { SchemasTag } from './SchemasTag.js';
 import { ColorStatusEnumDef } from './ColorStatusEnum.js';
 import { SchemasOperationalStatusDef } from './SchemasOperationalStatus.js';
-import { Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BoundaryConnectionOverview {
@@ -37,9 +37,9 @@ export class BoundaryConnectionOverview {
   'connectionNodeStatus'?: SchemasOperationalStatusDef;
   'connectionNodeDescription'?: string | null;
   'productLogo'?: URL | null;
-  'pipelineLastRun'?: Date | null;
-  'pipelineLastRunSuccess'?: Date | null;
-  'pipelineLastRunError'?: Date | null;
+  'pipelineLastRun'?: DateTime | null;
+  'pipelineLastRunSuccess'?: DateTime | null;
+  'pipelineLastRunError'?: DateTime | null;
   'scopes'?: Array<HubScope>;
 
   static readonly discriminator: string | undefined = undefined;
@@ -256,27 +256,27 @@ export class BoundaryConnectionOverview {
       "name": "pipelineLastRun",
       "baseName": "pipelineLastRun",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "pipelineLastRunSuccess",
       "baseName": "pipelineLastRunSuccess",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "pipelineLastRunError",
       "baseName": "pipelineLastRunError",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -297,7 +297,7 @@ export class BoundaryConnectionOverview {
     return ObjectSerializer.deserialize(obj, 'BoundaryConnectionOverview');
   }
 
-  constructor(connectionId: UUID, connectionName: string, connectionStatus: ConnectionOperationalStatusDef, connectionTags: Array<SchemasTag>, boundaryProductTargetId: UUID, boundaryProductId: UUID, productId: UUID, productName: string, productDescription: string, productPackageCode: string, pipelineCount: number, pipelineJobStatus: ColorStatusEnumDef, pipelineScheduledStatus: ColorStatusEnumDef, recentActivity: Array<{ [key: string]: any; }>, connectionDescription?: string, connectionModuleId?: UUID, connectionModuleName?: string, connectionModuleVersion?: Semver, connectionNodeId?: UUID, connectionNodeName?: string, connectionNodeStatus?: SchemasOperationalStatusDef, connectionNodeDescription?: string, productLogo?: URL, pipelineLastRun?: Date, pipelineLastRunSuccess?: Date, pipelineLastRunError?: Date, scopes?: Array<HubScope>) {
+  constructor(connectionId: UUID, connectionName: string, connectionStatus: ConnectionOperationalStatusDef, connectionTags: Array<SchemasTag>, boundaryProductTargetId: UUID, boundaryProductId: UUID, productId: UUID, productName: string, productDescription: string, productPackageCode: string, pipelineCount: number, pipelineJobStatus: ColorStatusEnumDef, pipelineScheduledStatus: ColorStatusEnumDef, recentActivity: Array<{ [key: string]: any; }>, connectionDescription?: string, connectionModuleId?: UUID, connectionModuleName?: string, connectionModuleVersion?: Semver, connectionNodeId?: UUID, connectionNodeName?: string, connectionNodeStatus?: SchemasOperationalStatusDef, connectionNodeDescription?: string, productLogo?: URL, pipelineLastRun?: DateTime, pipelineLastRunSuccess?: DateTime, pipelineLastRunError?: DateTime, scopes?: Array<HubScope>) {
     this.connectionId = connectionId;
     this.connectionName = connectionName;
     this.connectionStatus = connectionStatus;

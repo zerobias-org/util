@@ -10,7 +10,7 @@ import { PipelineFormatEnumDef } from './PipelineFormatEnum.js';
 import { PipelineJobStatusEnumDef } from './PipelineJobStatusEnum.js';
 import { PipelineJobStatusEnum } from './PipelineJobStatusEnum.js';
 import { PipelineFrequencyEnum } from './PipelineFrequencyEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -26,7 +26,7 @@ export class BoundaryProductPipeline {
   'description'?: string | null;
   'frequency'?: PipelineFrequencyEnumDef;
   'nextScheduledRunMiliseconds'?: number | null;
-  'lastPipelineJobRunTime'?: Date | null;
+  'lastPipelineJobRunTime'?: DateTime | null;
   'lastPipelineJobRunStatus'?: PipelineJobStatusEnumDef;
 
   static readonly discriminator: string | undefined = undefined;
@@ -117,9 +117,9 @@ export class BoundaryProductPipeline {
       "name": "lastPipelineJobRunTime",
       "baseName": "lastPipelineJobRunTime",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -140,7 +140,7 @@ export class BoundaryProductPipeline {
     return ObjectSerializer.deserialize(obj, 'BoundaryProductPipeline');
   }
 
-  constructor(id: UUID, name: string, format: PipelineFormatEnumDef, pipelineJobCount: number, evidenceDefinitions: Array<IdNameObject>, tags: Array<SchemasTag>, description?: string, frequency?: PipelineFrequencyEnumDef, nextScheduledRunMiliseconds?: number, lastPipelineJobRunTime?: Date, lastPipelineJobRunStatus?: PipelineJobStatusEnumDef) {
+  constructor(id: UUID, name: string, format: PipelineFormatEnumDef, pipelineJobCount: number, evidenceDefinitions: Array<IdNameObject>, tags: Array<SchemasTag>, description?: string, frequency?: PipelineFrequencyEnumDef, nextScheduledRunMiliseconds?: number, lastPipelineJobRunTime?: DateTime, lastPipelineJobRunStatus?: PipelineJobStatusEnumDef) {
     this.id = id;
     this.name = name;
     this.format = format;

@@ -7,7 +7,7 @@ import { TagRuleCondition } from './TagRuleCondition.js';
 import { TagRule } from './TagRule.js';
 import { TagRuleExtendedAllOf } from './TagRuleExtendedAllOf.js';
 import { SchemasTag } from './SchemasTag.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class TagRuleExtended {
@@ -15,15 +15,15 @@ export class TagRuleExtended {
   'boundaryId': UUID;
   'classId': UUID;
   'name': string;
-  'created': Date;
-  'updated': Date;
+  'created': DateTime;
+  'updated': DateTime;
   'conditions': Array<TagRuleCondition>;
   'tagIds': Array<UUID>;
   'classInfo': SchemasIdNameDescriptionImageUrlObject;
   'boundary': SchemasIdNameDescriptionImageUrlObject;
   'tags': Array<SchemasTag>;
   'description'?: string | null;
-  'deleted'?: Date;
+  'deleted'?: DateTime;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -68,18 +68,18 @@ export class TagRuleExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -140,9 +140,9 @@ export class TagRuleExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -154,7 +154,7 @@ export class TagRuleExtended {
     return ObjectSerializer.deserialize(obj, 'TagRuleExtended');
   }
 
-  constructor(id: UUID, boundaryId: UUID, classId: UUID, name: string, created: Date, updated: Date, conditions: Array<TagRuleCondition>, tagIds: Array<UUID>, classInfo: SchemasIdNameDescriptionImageUrlObject, boundary: SchemasIdNameDescriptionImageUrlObject, tags: Array<SchemasTag>, description?: string, deleted?: Date) {
+  constructor(id: UUID, boundaryId: UUID, classId: UUID, name: string, created: DateTime, updated: DateTime, conditions: Array<TagRuleCondition>, tagIds: Array<UUID>, classInfo: SchemasIdNameDescriptionImageUrlObject, boundary: SchemasIdNameDescriptionImageUrlObject, tags: Array<SchemasTag>, description?: string, deleted?: DateTime) {
     this.id = id;
     this.boundaryId = boundaryId;
     this.classId = classId;

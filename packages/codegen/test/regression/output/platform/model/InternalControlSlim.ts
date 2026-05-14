@@ -6,7 +6,7 @@ import { InternalControlSlimAllOf } from './InternalControlSlimAllOf.js';
 import { CapabilityMaturityModelDef } from './CapabilityMaturityModel.js';
 import { InternalControl } from './InternalControl.js';
 import { CapabilityMaturityModel } from './CapabilityMaturityModel.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class InternalControlSlim {
@@ -29,11 +29,11 @@ export class InternalControlSlim {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * A resource id which acts as a boundary/container for this resource.
   */
@@ -58,7 +58,7 @@ export class InternalControlSlim {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -123,18 +123,18 @@ export class InternalControlSlim {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -195,9 +195,9 @@ export class InternalControlSlim {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -281,7 +281,7 @@ export class InternalControlSlim {
     return ObjectSerializer.deserialize(obj, 'InternalControlSlim');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, scfControlId: UUID, sourceIds: Array<UUID>, code: string, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, performed?: boolean, performedMaturity?: CapabilityMaturityModelDef, desiredMaturity?: CapabilityMaturityModelDef, standard?: string, guideline?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, scfControlId: UUID, sourceIds: Array<UUID>, code: string, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, performed?: boolean, performedMaturity?: CapabilityMaturityModelDef, desiredMaturity?: CapabilityMaturityModelDef, standard?: string, guideline?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -10,7 +10,7 @@ import { PrincipalOriginDef } from './PrincipalOrigin.js';
 import { OrgAllOf } from './OrgAllOf.js';
 import { PrincipalType } from './PrincipalType.js';
 import { Principal } from './Principal.js';
-import { Email, Nmtoken, Hostname, UUID, URL } from '@zerobias-org/types-core-js';
+import { Email, Nmtoken, Hostname, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -147,7 +147,7 @@ export class Org extends Principal {
     return ObjectSerializer.deserialize(obj, 'Org');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: PrincipalTypeDef, status: PrincipalStatusDef, enabled: boolean, origin: PrincipalOriginDef, hidden: boolean, selfRegistration: boolean, invitationsEnabled: boolean, adminGroupId: UUID, memberGroupId: UUID, slug: Nmtoken, created?: Date, deleted?: Date, updated?: Date, externalId?: string, supportEmail?: Email, avatarUrl?: URL, domains?: Array<Hostname>) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: PrincipalTypeDef, status: PrincipalStatusDef, enabled: boolean, origin: PrincipalOriginDef, hidden: boolean, selfRegistration: boolean, invitationsEnabled: boolean, adminGroupId: UUID, memberGroupId: UUID, slug: Nmtoken, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, supportEmail?: Email, avatarUrl?: URL, domains?: Array<Hostname>) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
     this.hidden = hidden;
     this.selfRegistration = selfRegistration;

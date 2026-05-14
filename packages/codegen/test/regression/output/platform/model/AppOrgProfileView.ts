@@ -20,7 +20,7 @@ import { AppOrgProfileViewAllOf } from './AppOrgProfileViewAllOf.js';
 import { SchemasPrincipalStatusDef } from './SchemasPrincipalStatus.js';
 import { AppOrgWorkspaceTypeEnum } from './AppOrgWorkspaceTypeEnum.js';
 import { SchemasPrincipalOrigin } from './SchemasPrincipalOrigin.js';
-import { Email, Nmtoken, Hostname, UUID, URL } from '@zerobias-org/types-core-js';
+import { Email, Nmtoken, Hostname, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class AppOrgProfileView extends SchemasOrg {
@@ -117,7 +117,7 @@ export class AppOrgProfileView extends SchemasOrg {
     return ObjectSerializer.deserialize(obj, 'AppOrgProfileView');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, hidden: boolean, selfRegistration: boolean, invitationsEnabled: boolean, adminGroupId: UUID, memberGroupId: UUID, slug: Nmtoken, engagementStage: AppOrgEngagementStageEnumDef, workspaceType: AppOrgWorkspaceTypeEnumDef, orgTypes: Array<AppOrgTypeEnumDef>, autoUpdate: boolean, adminGroupName: string, memberGroupName: string, created?: Date, deleted?: Date, updated?: Date, externalId?: string, supportEmail?: Email, avatarUrl?: URL, domains?: Array<Hostname>, vendorId?: UUID, vendorStatus?: VspStatusEnumDef) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, hidden: boolean, selfRegistration: boolean, invitationsEnabled: boolean, adminGroupId: UUID, memberGroupId: UUID, slug: Nmtoken, engagementStage: AppOrgEngagementStageEnumDef, workspaceType: AppOrgWorkspaceTypeEnumDef, orgTypes: Array<AppOrgTypeEnumDef>, autoUpdate: boolean, adminGroupName: string, memberGroupName: string, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, supportEmail?: Email, avatarUrl?: URL, domains?: Array<Hostname>, vendorId?: UUID, vendorStatus?: VspStatusEnumDef) {
     super(id, ownerId, name, type, status, enabled, origin, hidden, selfRegistration, invitationsEnabled, adminGroupId, memberGroupId, slug, created, deleted, updated, externalId, supportEmail, avatarUrl, domains);
     this.engagementStage = engagementStage;
     this.workspaceType = workspaceType;

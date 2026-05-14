@@ -10,7 +10,7 @@ import { RoleView } from './RoleView.js';
 import { SchemasRoleStatusDef } from './SchemasRoleStatus.js';
 import { IdNameOwnerIdTypeImageUrlObject } from './IdNameOwnerIdTypeImageUrlObject.js';
 import { SecurityRoleViewAllOf } from './SecurityRoleViewAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class SecurityRoleView {
@@ -33,11 +33,11 @@ export class SecurityRoleView {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * The source of this role
   */
@@ -56,7 +56,7 @@ export class SecurityRoleView {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -127,18 +127,18 @@ export class SecurityRoleView {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -199,9 +199,9 @@ export class SecurityRoleView {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -285,7 +285,7 @@ export class SecurityRoleView {
     return ObjectSerializer.deserialize(obj, 'SecurityRoleView');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, source: string, roleType: SchemasRoleTypeEnumDef, boundaryIds: Array<UUID>, principals: Array<IdNameOwnerIdTypeImageUrlObject>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, status?: SchemasRoleStatusDef, principalsCount?: number, accessRules?: Array<AccessRuleView>, accessRulesCount?: number) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, source: string, roleType: SchemasRoleTypeEnumDef, boundaryIds: Array<UUID>, principals: Array<IdNameOwnerIdTypeImageUrlObject>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, status?: SchemasRoleStatusDef, principalsCount?: number, accessRules?: Array<AccessRuleView>, accessRulesCount?: number) {
     this.id = id;
     this.name = name;
     this.type = type;

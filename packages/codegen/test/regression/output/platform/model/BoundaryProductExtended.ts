@@ -7,7 +7,7 @@ import { BoundaryProductExtendedAllOf } from './BoundaryProductExtendedAllOf.js'
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { BoundaryProductTarget } from './BoundaryProductTarget.js';
 import { BoundaryProduct } from './BoundaryProduct.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BoundaryProductExtended {
@@ -21,9 +21,9 @@ export class BoundaryProductExtended {
   'productName': string;
   'productPackage': string | null;
   'parentId'?: UUID | null;
-  'created'?: Date;
-  'updated'?: Date;
-  'deleted'?: Date | null;
+  'created'?: DateTime;
+  'updated'?: DateTime;
+  'deleted'?: DateTime | null;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
@@ -136,27 +136,27 @@ export class BoundaryProductExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -294,7 +294,7 @@ export class BoundaryProductExtended {
     return ObjectSerializer.deserialize(obj, 'BoundaryProductExtended');
   }
 
-  constructor(id: UUID, name: string, description: string, ownerId: UUID, boundaryId: UUID, suggested: boolean, evidenceBotCount: number, productName: string, productPackage: string, parentId?: UUID, created?: Date, updated?: Date, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, status?: CatalogPublishStatusEnumDef, productId?: UUID, suggestedProductId?: UUID, vendorCode?: string, vendorName?: string, suiteCode?: string, suiteName?: string, productLogo?: string, targetsLinked?: number, targets?: Array<BoundaryProductTarget>) {
+  constructor(id: UUID, name: string, description: string, ownerId: UUID, boundaryId: UUID, suggested: boolean, evidenceBotCount: number, productName: string, productPackage: string, parentId?: UUID, created?: DateTime, updated?: DateTime, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, status?: CatalogPublishStatusEnumDef, productId?: UUID, suggestedProductId?: UUID, vendorCode?: string, vendorName?: string, suiteCode?: string, suiteName?: string, productLogo?: string, targetsLinked?: number, targets?: Array<BoundaryProductTarget>) {
     this.id = id;
     this.name = name;
     this.description = description;

@@ -4,11 +4,12 @@
 // ===============================================
 import { PipelineJobStatusEnumDef } from './PipelineJobStatusEnum.js';
 import { PipelineJobStatusEnum } from './PipelineJobStatusEnum.js';
+import { DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class PipelineJobShortHand {
   'instanceNumber': number;
-  'timestamp': Date | null;
+  'timestamp': DateTime | null;
   'status': PipelineJobStatusEnumDef;
   'executionDetails'?: { [key: string]: any; };
   'jobError'?: { [key: string]: any; };
@@ -29,9 +30,9 @@ export class PipelineJobShortHand {
       "name": "timestamp",
       "baseName": "timestamp",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -70,7 +71,7 @@ export class PipelineJobShortHand {
     return ObjectSerializer.deserialize(obj, 'PipelineJobShortHand');
   }
 
-  constructor(instanceNumber: number, timestamp: Date, status: PipelineJobStatusEnumDef, executionDetails?: { [key: string]: any; }, jobError?: { [key: string]: any; }) {
+  constructor(instanceNumber: number, timestamp: DateTime, status: PipelineJobStatusEnumDef, executionDetails?: { [key: string]: any; }, jobError?: { [key: string]: any; }) {
     this.instanceNumber = instanceNumber;
     this.timestamp = timestamp;
     this.status = status;

@@ -9,7 +9,7 @@ import { ArtifactVersionAllOf } from './ArtifactVersionAllOf.js';
 import { ArtifactStatusEnumDef } from './ArtifactStatusEnum.js';
 import { ArtifactTypeEnumDef } from './ArtifactTypeEnum.js';
 import { ArtifactVersionAllOfPackages } from './ArtifactVersionAllOfPackages.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ArtifactVersion {
@@ -32,11 +32,11 @@ export class ArtifactVersion {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'status': ArtifactStatusEnumDef;
   'artifactType': ArtifactTypeEnumDef;
   'isLatestVersion': boolean;
@@ -58,7 +58,7 @@ export class ArtifactVersion {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -122,18 +122,18 @@ export class ArtifactVersion {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -248,9 +248,9 @@ export class ArtifactVersion {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -325,7 +325,7 @@ export class ArtifactVersion {
     return ObjectSerializer.deserialize(obj, 'ArtifactVersion');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, status: ArtifactStatusEnumDef, artifactType: ArtifactTypeEnumDef, isLatestVersion: boolean, preRelease: boolean, artifactName: string, artifactId: UUID, semver: Semver, value: number, floatValue: number, packages: Array<ArtifactVersionAllOfPackages>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, readMe?: string, changeLog?: string, versionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, status: ArtifactStatusEnumDef, artifactType: ArtifactTypeEnumDef, isLatestVersion: boolean, preRelease: boolean, artifactName: string, artifactId: UUID, semver: Semver, value: number, floatValue: number, packages: Array<ArtifactVersionAllOfPackages>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, readMe?: string, changeLog?: string, versionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

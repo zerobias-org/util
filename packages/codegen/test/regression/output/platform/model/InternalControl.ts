@@ -6,7 +6,7 @@ import { InternalControlAllOf } from './InternalControlAllOf.js';
 import { CapabilityMaturityModelDef } from './CapabilityMaturityModel.js';
 import { Resource } from './Resource.js';
 import { CapabilityMaturityModel } from './CapabilityMaturityModel.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class InternalControl {
@@ -29,11 +29,11 @@ export class InternalControl {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * A resource id which acts as a boundary/container for this resource.
   */
@@ -57,7 +57,7 @@ export class InternalControl {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -122,18 +122,18 @@ export class InternalControl {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -185,9 +185,9 @@ export class InternalControl {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -271,7 +271,7 @@ export class InternalControl {
     return ObjectSerializer.deserialize(obj, 'InternalControl');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, scfControlId: UUID, sourceIds: Array<UUID>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, performed?: boolean, performedMaturity?: CapabilityMaturityModelDef, desiredMaturity?: CapabilityMaturityModelDef, standard?: string, guideline?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, scfControlId: UUID, sourceIds: Array<UUID>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, performed?: boolean, performedMaturity?: CapabilityMaturityModelDef, desiredMaturity?: CapabilityMaturityModelDef, standard?: string, guideline?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -4,7 +4,7 @@
 // ===============================================
 import { BoundaryTypeEnum } from './BoundaryTypeEnum.js';
 import { BoundaryTypeEnumDef } from './BoundaryTypeEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -13,7 +13,7 @@ import { ObjectSerializer, RequestFile } from './index.js';
 export class AppOrgBoundaryMetric {
   'boundaryId': UUID;
   'name': string;
-  'updated': Date;
+  'updated': DateTime;
   'type': BoundaryTypeEnumDef;
   'frameworkVersion': string;
   /**
@@ -86,9 +86,9 @@ export class AppOrgBoundaryMetric {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -217,7 +217,7 @@ export class AppOrgBoundaryMetric {
     return ObjectSerializer.deserialize(obj, 'AppOrgBoundaryMetric');
   }
 
-  constructor(boundaryId: UUID, name: string, updated: Date, type: BoundaryTypeEnumDef, frameworkVersion: string, productCount: number, productCollectingDataCount: number, productNotCollectionDataCount: number, pipelineStartedCount: number, pipelineStartedOkCount: number, pipelineStartedWarningCount: number, pipelineStartedErrorCount: number, auditCount: number, auditNotStartedCount: number, auditActiveCount: number, auditEndedCount: number, ) {
+  constructor(boundaryId: UUID, name: string, updated: DateTime, type: BoundaryTypeEnumDef, frameworkVersion: string, productCount: number, productCollectingDataCount: number, productNotCollectionDataCount: number, pipelineStartedCount: number, pipelineStartedOkCount: number, pipelineStartedWarningCount: number, pipelineStartedErrorCount: number, auditCount: number, auditNotStartedCount: number, auditActiveCount: number, auditEndedCount: number, ) {
     this.boundaryId = boundaryId;
     this.name = name;
     this.updated = updated;

@@ -7,7 +7,7 @@ import { ProductComponentAllOf } from './ProductComponentAllOf.js';
 import { ProductComponentVersion } from './ProductComponentVersion.js';
 import { Resource } from './Resource.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ProductComponent {
@@ -30,11 +30,11 @@ export class ProductComponent {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'productId': UUID;
   'status': CatalogPublishStatusEnumDef;
   'latestVersionId': UUID;
@@ -50,7 +50,7 @@ export class ProductComponent {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -114,18 +114,18 @@ export class ProductComponent {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -186,9 +186,9 @@ export class ProductComponent {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -263,7 +263,7 @@ export class ProductComponent {
     return ObjectSerializer.deserialize(obj, 'ProductComponent');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, productId: UUID, status: CatalogPublishStatusEnumDef, latestVersionId: UUID, latestVersion: ProductComponentVersion, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, latestReleasedVersionId?: UUID, artifactId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, productId: UUID, status: CatalogPublishStatusEnumDef, latestVersionId: UUID, latestVersion: ProductComponentVersion, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, latestReleasedVersionId?: UUID, artifactId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

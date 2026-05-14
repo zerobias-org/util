@@ -16,7 +16,7 @@ import { NodeInfo } from './NodeInfo.js';
 import { NodeDownReason } from './NodeDownReason.js';
 import { NodeAllOf } from './NodeAllOf.js';
 import { Handshake } from './Handshake.js';
-import { Nmtoken, IpAddress, MacAddress, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, IpAddress, MacAddress, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -42,11 +42,11 @@ export class Node {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'status': OperationalStatusDef;
   /**
   * A flag indicating if this node is in lost and found mode waiting to be claimed
@@ -63,7 +63,7 @@ export class Node {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -87,7 +87,7 @@ export class Node {
   /**
   * The timestamp when the host system last started
   */
-  'systemStart'?: Date;
+  'systemStart'?: DateTime;
   /**
   * The remote IP address from which the node is connecting
   */
@@ -165,18 +165,18 @@ export class Node {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -219,9 +219,9 @@ export class Node {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -273,9 +273,9 @@ export class Node {
       "name": "systemStart",
       "baseName": "systemStart",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -395,7 +395,7 @@ export class Node {
     return ObjectSerializer.deserialize(obj, 'Node');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, status: OperationalStatusDef, lostAndFound: boolean, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, pid?: number, systemStart?: Date, remoteIp?: IpAddress, version?: Semver, lastHandshake?: Handshake, applianceInfo?: ApplianceInfo, adminStatus?: AdminStatusDef, downReason?: Array<NodeDownReasonDef>, degradedReason?: Array<NodeDegradedReasonDef>, machineId?: string, mac?: MacAddress, registrationId?: UUID, virtual?: boolean, tags?: Array<SchemasTag>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, status: OperationalStatusDef, lostAndFound: boolean, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, pid?: number, systemStart?: DateTime, remoteIp?: IpAddress, version?: Semver, lastHandshake?: Handshake, applianceInfo?: ApplianceInfo, adminStatus?: AdminStatusDef, downReason?: Array<NodeDownReasonDef>, degradedReason?: Array<NodeDegradedReasonDef>, machineId?: string, mac?: MacAddress, registrationId?: UUID, virtual?: boolean, tags?: Array<SchemasTag>) {
     this.id = id;
     this.name = name;
     this.type = type;

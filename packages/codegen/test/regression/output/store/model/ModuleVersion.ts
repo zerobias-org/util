@@ -6,7 +6,7 @@ import { ModuleConnectionProfile } from './ModuleConnectionProfile.js';
 import { Resource } from './Resource.js';
 import { ModuleRepository } from './ModuleRepository.js';
 import { ModuleVersionAllOf } from './ModuleVersionAllOf.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -32,11 +32,11 @@ export class ModuleVersion {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * The ID of the module to which this version belongs
   */
@@ -69,7 +69,7 @@ export class ModuleVersion {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -142,18 +142,18 @@ export class ModuleVersion {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -232,9 +232,9 @@ export class ModuleVersion {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -336,7 +336,7 @@ export class ModuleVersion {
     return ObjectSerializer.deserialize(obj, 'ModuleVersion');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, moduleId: UUID, version: Semver, repository: ModuleRepository, connector: boolean, fileSupport: boolean, dataSupport: boolean, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, connectionProfile?: ModuleConnectionProfile, operations?: number, packageNames?: Array<string>, productIds?: Array<UUID>, artifactVersionId?: UUID, implementsInterfaceIds?: Array<UUID>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, moduleId: UUID, version: Semver, repository: ModuleRepository, connector: boolean, fileSupport: boolean, dataSupport: boolean, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, connectionProfile?: ModuleConnectionProfile, operations?: number, packageNames?: Array<string>, productIds?: Array<UUID>, artifactVersionId?: UUID, implementsInterfaceIds?: Array<UUID>) {
     this.id = id;
     this.name = name;
     this.type = type;

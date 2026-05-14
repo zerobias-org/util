@@ -8,7 +8,7 @@ import { FindingStateEnumDef } from './FindingStateEnum.js';
 import { FindingStateEnum } from './FindingStateEnum.js';
 import { Resource } from './Resource.js';
 import { TestFindingSource } from './TestFindingSource.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class Finding {
@@ -25,11 +25,11 @@ export class Finding {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'externalId': string;
   'discoveredTestId': UUID;
   'state': FindingStateEnumDef;
@@ -45,7 +45,7 @@ export class Finding {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -112,18 +112,18 @@ export class Finding {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -184,9 +184,9 @@ export class Finding {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -288,7 +288,7 @@ export class Finding {
     return ObjectSerializer.deserialize(obj, 'Finding');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, externalId: string, discoveredTestId: UUID, state: FindingStateEnumDef, source: TestFindingSourceDef, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, resolvedTestId?: UUID, configRule?: string, localId?: UUID, objectId?: UUID, testIds?: Array<UUID>, subjectIds?: Array<UUID>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, externalId: string, discoveredTestId: UUID, state: FindingStateEnumDef, source: TestFindingSourceDef, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, resolvedTestId?: UUID, configRule?: string, localId?: UUID, objectId?: UUID, testIds?: Array<UUID>, subjectIds?: Array<UUID>) {
     this.id = id;
     this.name = name;
     this.type = type;

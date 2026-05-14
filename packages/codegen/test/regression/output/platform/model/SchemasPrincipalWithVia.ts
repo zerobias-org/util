@@ -11,7 +11,7 @@ import { PrincipalWithViaAllOf } from './PrincipalWithViaAllOf.js';
 import { PrincipalWithViaAllOfVia } from './PrincipalWithViaAllOfVia.js';
 import { SchemasPrincipalOriginDef } from './SchemasPrincipalOrigin.js';
 import { SchemasPrincipalOrigin } from './SchemasPrincipalOrigin.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -44,7 +44,7 @@ export class SchemasPrincipalWithVia extends ComponentsSchemasPrincipal {
     return ObjectSerializer.deserialize(obj, 'SchemasPrincipalWithVia');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, created?: Date, deleted?: Date, updated?: Date, externalId?: string, via?: Array<PrincipalWithViaAllOfVia>) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, via?: Array<PrincipalWithViaAllOfVia>) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
     this.via = via;
   }

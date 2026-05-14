@@ -10,7 +10,7 @@ import { GraphqlQueryVersionSystemParameters } from './GraphqlQueryVersionSystem
 import { SeverityDef } from './Severity.js';
 import { Severity } from './Severity.js';
 import { BoundaryAlertBotExtendedOn } from './BoundaryAlertBotExtendedOn.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BoundaryAlertBotExtended {
@@ -33,11 +33,11 @@ export class BoundaryAlertBotExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * A resource id which acts as a boundary/container for this resource.
   */
@@ -63,7 +63,7 @@ export class BoundaryAlertBotExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -129,18 +129,18 @@ export class BoundaryAlertBotExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -237,9 +237,9 @@ export class BoundaryAlertBotExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -359,7 +359,7 @@ export class BoundaryAlertBotExtended {
     return ObjectSerializer.deserialize(obj, 'BoundaryAlertBotExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, alertBotVersionId: UUID, alertBotId: UUID, graphqlQueryVersionId: UUID, alertBot: AlertBotExtended, enabled: boolean, alertCount: number, elements: Array<BoundaryAlertBotExtendedElement>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, cronId?: UUID, triggerId?: UUID, activityId?: UUID, parameters?: { [key: string]: any; }, systemParameters?: GraphqlQueryVersionSystemParameters, elementIds?: Array<UUID>, remediation?: string, on?: Array<BoundaryAlertBotExtendedOn>, severity?: SeverityDef) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, alertBotVersionId: UUID, alertBotId: UUID, graphqlQueryVersionId: UUID, alertBot: AlertBotExtended, enabled: boolean, alertCount: number, elements: Array<BoundaryAlertBotExtendedElement>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, cronId?: UUID, triggerId?: UUID, activityId?: UUID, parameters?: { [key: string]: any; }, systemParameters?: GraphqlQueryVersionSystemParameters, elementIds?: Array<UUID>, remediation?: string, on?: Array<BoundaryAlertBotExtendedOn>, severity?: SeverityDef) {
     this.id = id;
     this.name = name;
     this.type = type;

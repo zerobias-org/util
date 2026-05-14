@@ -9,7 +9,7 @@ import { ArtifactStatusEnumDef } from './ArtifactStatusEnum.js';
 import { ArtifactTypeEnumDef } from './ArtifactTypeEnum.js';
 import { ArtifactAllOf } from './ArtifactAllOf.js';
 import { ArtifactVersionAllOfPackages } from './ArtifactVersionAllOfPackages.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class Artifact {
@@ -32,11 +32,11 @@ export class Artifact {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'artifactType': ArtifactTypeEnumDef;
   'latestVersionId': UUID;
   'latestVersionSemver': string;
@@ -61,7 +61,7 @@ export class Artifact {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -125,18 +125,18 @@ export class Artifact {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -278,9 +278,9 @@ export class Artifact {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -355,7 +355,7 @@ export class Artifact {
     return ObjectSerializer.deserialize(obj, 'Artifact');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, artifactType: ArtifactTypeEnumDef, latestVersionId: UUID, latestVersionSemver: string, latestVersionValue: number, latestVersionStatus: ArtifactStatusEnumDef, latestVersionFloatValue: number, isRetired: boolean, preRelease: boolean, versionIds: Array<UUID>, versionSemvers: Array<string>, versionValues: Array<number>, versionFloatValues: Array<number>, packages: Array<ArtifactVersionAllOfPackages>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, latestReleasedVersionSemver?: string, latestReleasedVersionValue?: number, latestReleasedVersionStatus?: ArtifactStatusEnumDef) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, artifactType: ArtifactTypeEnumDef, latestVersionId: UUID, latestVersionSemver: string, latestVersionValue: number, latestVersionStatus: ArtifactStatusEnumDef, latestVersionFloatValue: number, isRetired: boolean, preRelease: boolean, versionIds: Array<UUID>, versionSemvers: Array<string>, versionValues: Array<number>, versionFloatValues: Array<number>, packages: Array<ArtifactVersionAllOfPackages>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, latestReleasedVersionSemver?: string, latestReleasedVersionValue?: number, latestReleasedVersionStatus?: ArtifactStatusEnumDef) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -6,7 +6,7 @@ import { ExternalControl } from './ExternalControl.js';
 import { ExternalControlOverrideEnum } from './ExternalControlOverrideEnum.js';
 import { ExternalControlExtendedAllOf } from './ExternalControlExtendedAllOf.js';
 import { ExternalControlOverrideEnumDef } from './ExternalControlOverrideEnum.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ExternalControlExtended {
@@ -29,11 +29,11 @@ export class ExternalControlExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * A resource id which acts as a boundary/container for this resource.
   */
@@ -70,7 +70,7 @@ export class ExternalControlExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -128,18 +128,18 @@ export class ExternalControlExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -227,9 +227,9 @@ export class ExternalControlExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -277,7 +277,7 @@ export class ExternalControlExtended {
     return ObjectSerializer.deserialize(obj, 'ExternalControlExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, controlId: UUID, sourceIds: Array<UUID>, controlCode: string, frameworkId: UUID, frameworkCode: string, frameworkName: string, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, override?: ExternalControlOverrideEnumDef) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, controlId: UUID, sourceIds: Array<UUID>, controlCode: string, frameworkId: UUID, frameworkCode: string, frameworkName: string, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, override?: ExternalControlOverrideEnumDef) {
     this.id = id;
     this.name = name;
     this.type = type;

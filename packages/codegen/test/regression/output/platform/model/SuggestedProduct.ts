@@ -6,7 +6,7 @@ import { HostingTypeEnum } from './HostingTypeEnum.js';
 import { FactoryTypeEnum } from './FactoryTypeEnum.js';
 import { HostingTypeEnumDef } from './HostingTypeEnum.js';
 import { FactoryTypeEnumDef } from './FactoryTypeEnum.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -16,7 +16,7 @@ export class SuggestedProduct {
   'id': UUID;
   'name': string;
   'ownerId': UUID;
-  'created': Date;
+  'created': DateTime;
   'createdBy': UUID;
   'description'?: string;
   'segmentIds'?: Array<UUID>;
@@ -59,9 +59,9 @@ export class SuggestedProduct {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -136,7 +136,7 @@ export class SuggestedProduct {
     return ObjectSerializer.deserialize(obj, 'SuggestedProduct');
   }
 
-  constructor(id: UUID, name: string, ownerId: UUID, created: Date, createdBy: UUID, description?: string, segmentIds?: Array<UUID>, factoryTypes?: Array<FactoryTypeEnumDef>, hostingTypes?: Array<HostingTypeEnumDef>, imageUrl?: URL, url?: URL) {
+  constructor(id: UUID, name: string, ownerId: UUID, created: DateTime, createdBy: UUID, description?: string, segmentIds?: Array<UUID>, factoryTypes?: Array<FactoryTypeEnumDef>, hostingTypes?: Array<HostingTypeEnumDef>, imageUrl?: URL, url?: URL) {
     this.id = id;
     this.name = name;
     this.ownerId = ownerId;

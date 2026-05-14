@@ -10,7 +10,7 @@ import { ConnectionOperationalStatus } from './ConnectionOperationalStatus.js';
 import { ConnectionDegradedReasonDef } from './ConnectionDegradedReason.js';
 import { ConnectionDownReason } from './ConnectionDownReason.js';
 import { SchemasAdminStatus } from './SchemasAdminStatus.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class HubScope {
@@ -31,7 +31,7 @@ export class HubScope {
   /**
   * Last time this deployment was used
   */
-  'lastUse'?: Date;
+  'lastUse'?: DateTime;
   /**
   * Whether or not the last use was successful
   */
@@ -91,9 +91,9 @@ export class HubScope {
       "name": "lastUse",
       "baseName": "lastUse",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -132,7 +132,7 @@ export class HubScope {
     return ObjectSerializer.deserialize(obj, 'HubScope');
   }
 
-  constructor(id: UUID, deploymentId: UUID, connectionId: UUID, status: ConnectionOperationalStatusDef, adminStatus: SchemasAdminStatusDef, lastUse?: Date, lastUseSuccess?: boolean, downReason?: Array<ConnectionDownReasonDef>, degradedReason?: Array<ConnectionDegradedReasonDef>) {
+  constructor(id: UUID, deploymentId: UUID, connectionId: UUID, status: ConnectionOperationalStatusDef, adminStatus: SchemasAdminStatusDef, lastUse?: DateTime, lastUseSuccess?: boolean, downReason?: Array<ConnectionDownReasonDef>, degradedReason?: Array<ConnectionDegradedReasonDef>) {
     this.id = id;
     this.deploymentId = deploymentId;
     this.connectionId = connectionId;

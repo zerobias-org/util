@@ -13,7 +13,7 @@ import { CatalogSource } from './CatalogSource.js';
 import { ElementExtended } from './ElementExtended.js';
 import { BaselineElement } from './BaselineElement.js';
 import { IdNameCodeDescriptionObject } from './IdNameCodeDescriptionObject.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BaselineBenchmarkElementExtended {
@@ -36,11 +36,11 @@ export class BaselineBenchmarkElementExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * The code of this benchmarkElement. derived from the element.
   */
@@ -75,7 +75,7 @@ export class BaselineBenchmarkElementExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -142,18 +142,18 @@ export class BaselineBenchmarkElementExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -331,9 +331,9 @@ export class BaselineBenchmarkElementExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -435,7 +435,7 @@ export class BaselineBenchmarkElementExtended {
     return ObjectSerializer.deserialize(obj, 'BaselineBenchmarkElementExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, code: string, externalId: string, standardName: string, standardExternalId: string, standardId: UUID, elementTypeId: UUID, source: CatalogSourceDef, elementType: ElementType, parameters: Array<ElementParameter>, baselineId: UUID, elementId: UUID, mandatory: boolean, benchmarkId: UUID, benchmark: IdNameCodeDescriptionImageUrlObject, baselineCodes: Array<string>, severity: string, baseline: IdNameCodeDescriptionObject, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, background?: string, objectId?: UUID, packageCode?: string, tagIds?: Array<UUID>, baselines?: Array<IdNameCodeDescriptionImageUrlObject>, tags?: Array<SchemasTag>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, code: string, externalId: string, standardName: string, standardExternalId: string, standardId: UUID, elementTypeId: UUID, source: CatalogSourceDef, elementType: ElementType, parameters: Array<ElementParameter>, baselineId: UUID, elementId: UUID, mandatory: boolean, benchmarkId: UUID, benchmark: IdNameCodeDescriptionImageUrlObject, baselineCodes: Array<string>, severity: string, baseline: IdNameCodeDescriptionObject, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, background?: string, objectId?: UUID, packageCode?: string, tagIds?: Array<UUID>, baselines?: Array<IdNameCodeDescriptionImageUrlObject>, tags?: Array<SchemasTag>) {
     this.id = id;
     this.name = name;
     this.type = type;

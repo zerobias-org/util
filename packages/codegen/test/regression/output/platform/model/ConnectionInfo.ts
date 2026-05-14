@@ -10,7 +10,7 @@ import { ConnectionOperationalStatus } from './ConnectionOperationalStatus.js';
 import { ConnectionDegradedReasonDef } from './ConnectionDegradedReason.js';
 import { ConnectionDownReason } from './ConnectionDownReason.js';
 import { AdminStatusDef } from './AdminStatus.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -30,7 +30,7 @@ export class ConnectionInfo {
   /**
   * Last time this deployment was used
   */
-  'lastUse'?: Date;
+  'lastUse'?: DateTime;
   /**
   * Whether or not the last use was successful
   */
@@ -38,7 +38,7 @@ export class ConnectionInfo {
   /**
   * Last time this connection had metadata called
   */
-  'lastMetadata'?: Date;
+  'lastMetadata'?: DateTime;
   'downReason'?: Array<ConnectionDownReasonDef>;
   'degradedReason'?: Array<ConnectionDegradedReasonDef>;
 
@@ -85,9 +85,9 @@ export class ConnectionInfo {
       "name": "lastUse",
       "baseName": "lastUse",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -103,9 +103,9 @@ export class ConnectionInfo {
       "name": "lastMetadata",
       "baseName": "lastMetadata",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -135,7 +135,7 @@ export class ConnectionInfo {
     return ObjectSerializer.deserialize(obj, 'ConnectionInfo');
   }
 
-  constructor(id: UUID, status: ConnectionOperationalStatusDef, adminStatus: AdminStatusDef, statusMessage?: string, lastUse?: Date, lastUseSuccess?: boolean, lastMetadata?: Date, downReason?: Array<ConnectionDownReasonDef>, degradedReason?: Array<ConnectionDegradedReasonDef>) {
+  constructor(id: UUID, status: ConnectionOperationalStatusDef, adminStatus: AdminStatusDef, statusMessage?: string, lastUse?: DateTime, lastUseSuccess?: boolean, lastMetadata?: DateTime, downReason?: Array<ConnectionDownReasonDef>, degradedReason?: Array<ConnectionDegradedReasonDef>) {
     this.id = id;
     this.status = status;
     this.adminStatus = adminStatus;

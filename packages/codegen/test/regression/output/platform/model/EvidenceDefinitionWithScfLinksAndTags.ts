@@ -12,7 +12,7 @@ import { SchemasTag } from './SchemasTag.js';
 import { IdNameCodeObject } from './IdNameCodeObject.js';
 import { EvidenceDefinition } from './EvidenceDefinition.js';
 import { EvidenceDefinitionWithScfLinksAndTagsAllOf } from './EvidenceDefinitionWithScfLinksAndTagsAllOf.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class EvidenceDefinitionWithScfLinksAndTags {
@@ -35,11 +35,11 @@ export class EvidenceDefinitionWithScfLinksAndTags {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'version': Semver;
   'status': PublishEvidenceStatusEnumDef;
   'domains': Array<IdNameCodeObject>;
@@ -56,7 +56,7 @@ export class EvidenceDefinitionWithScfLinksAndTags {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -127,18 +127,18 @@ export class EvidenceDefinitionWithScfLinksAndTags {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -208,9 +208,9 @@ export class EvidenceDefinitionWithScfLinksAndTags {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -348,7 +348,7 @@ export class EvidenceDefinitionWithScfLinksAndTags {
     return ObjectSerializer.deserialize(obj, 'EvidenceDefinitionWithScfLinksAndTags');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, version: Semver, status: PublishEvidenceStatusEnumDef, domains: Array<IdNameCodeObject>, controls: Array<IdNameCodeObject>, tags: Array<SchemasTag>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, versionId?: UUID, versionValue?: number, preRelease?: boolean, packageCode?: string, domain?: string, code?: Nmtoken, category?: EvidenceDefinitionCategoryEnumDef, format?: EvidenceDefinitionFormatEnumDef, publishedBy?: UUID, artifactVersionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, version: Semver, status: PublishEvidenceStatusEnumDef, domains: Array<IdNameCodeObject>, controls: Array<IdNameCodeObject>, tags: Array<SchemasTag>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, versionId?: UUID, versionValue?: number, preRelease?: boolean, packageCode?: string, domain?: string, code?: Nmtoken, category?: EvidenceDefinitionCategoryEnumDef, format?: EvidenceDefinitionFormatEnumDef, publishedBy?: UUID, artifactVersionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -10,7 +10,7 @@ import { UserAllOf } from './UserAllOf.js';
 import { PrincipalType } from './PrincipalType.js';
 import { Principal } from './Principal.js';
 import { PrincipalStatus } from './PrincipalStatus.js';
-import { Email, UUID, URL } from '@zerobias-org/types-core-js';
+import { Email, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -121,7 +121,7 @@ export class User extends Principal {
     return ObjectSerializer.deserialize(obj, 'User');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: PrincipalTypeDef, status: PrincipalStatusDef, enabled: boolean, origin: PrincipalOriginDef, emails: Array<Email>, social: boolean, created?: Date, deleted?: Date, updated?: Date, externalId?: string, email?: Email, avatarUrl?: URL, connection?: string, provider?: string, subjects?: Array<string>) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: PrincipalTypeDef, status: PrincipalStatusDef, enabled: boolean, origin: PrincipalOriginDef, emails: Array<Email>, social: boolean, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, email?: Email, avatarUrl?: URL, connection?: string, provider?: string, subjects?: Array<string>) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
     this.emails = emails;
     this.social = social;

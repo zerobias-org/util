@@ -4,7 +4,7 @@
 // ===============================================
 import { PipelineJobStatusEnumDef } from './PipelineJobStatusEnum.js';
 import { PipelineJobStatusEnum } from './PipelineJobStatusEnum.js';
-import { Duration, UUID } from '@zerobias-org/types-core-js';
+import { Duration, UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -18,7 +18,7 @@ export class UpdatePipelineJob {
   /**
   * The execution start time
   */
-  'executionStartTime'?: Date | null;
+  'executionStartTime'?: DateTime | null;
   /**
   * Time elapsed from when the execution started
   */
@@ -42,9 +42,9 @@ export class UpdatePipelineJob {
       "name": "executionStartTime",
       "baseName": "executionStartTime",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -83,7 +83,7 @@ export class UpdatePipelineJob {
     return ObjectSerializer.deserialize(obj, 'UpdatePipelineJob');
   }
 
-  constructor(pipelineId?: UUID, executionStartTime?: Date, duration?: Duration, status?: PipelineJobStatusEnumDef, jobError?: object) {
+  constructor(pipelineId?: UUID, executionStartTime?: DateTime, duration?: Duration, status?: PipelineJobStatusEnumDef, jobError?: object) {
     this.pipelineId = pipelineId;
     this.executionStartTime = executionStartTime;
     this.duration = duration;

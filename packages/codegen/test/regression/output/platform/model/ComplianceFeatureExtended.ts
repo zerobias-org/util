@@ -12,7 +12,7 @@ import { CatalogPublishStatusEnumDef } from './CatalogPublishStatusEnum.js';
 import { ComplianceFeatureSupportStub } from './ComplianceFeatureSupportStub.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { ComplianceFeatureVersion } from './ComplianceFeatureVersion.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ComplianceFeatureExtended {
@@ -35,11 +35,11 @@ export class ComplianceFeatureExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'status': CatalogPublishStatusEnumDef;
   'latestVersionId': UUID;
   'latestVersion': ComplianceFeatureVersion;
@@ -70,7 +70,7 @@ export class ComplianceFeatureExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -135,18 +135,18 @@ export class ComplianceFeatureExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -342,9 +342,9 @@ export class ComplianceFeatureExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -428,7 +428,7 @@ export class ComplianceFeatureExtended {
     return ObjectSerializer.deserialize(obj, 'ComplianceFeatureExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, status: CatalogPublishStatusEnumDef, latestVersionId: UUID, latestVersion: ComplianceFeatureVersion, latestVersionStatus: CatalogPublishStatusEnumDef, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: string, code: string, externalId: string, complianceFeatureTypes: Array<string>, classOfferings: Array<ComplianceFeatureSupportStub>, productOfferings: Array<ComplianceFeatureSupportStub>, segmentOfferings: Array<ComplianceFeatureSupportStub>, productEditionOfferings: Array<ComplianceFeatureSupportStub>, elements: Array<ComplianceFeatureElement>, roles: Array<IdNameDescriptionObject>, implementations: Array<Implementation>, standards: Array<IdNameCodeExternalIdDescriptionImageUrlObject>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, artifactId?: UUID, publishedArtifactName?: string, latestReleasedVersionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, status: CatalogPublishStatusEnumDef, latestVersionId: UUID, latestVersion: ComplianceFeatureVersion, latestVersionStatus: CatalogPublishStatusEnumDef, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: string, code: string, externalId: string, complianceFeatureTypes: Array<string>, classOfferings: Array<ComplianceFeatureSupportStub>, productOfferings: Array<ComplianceFeatureSupportStub>, segmentOfferings: Array<ComplianceFeatureSupportStub>, productEditionOfferings: Array<ComplianceFeatureSupportStub>, elements: Array<ComplianceFeatureElement>, roles: Array<IdNameDescriptionObject>, implementations: Array<Implementation>, standards: Array<IdNameCodeExternalIdDescriptionImageUrlObject>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, artifactId?: UUID, publishedArtifactName?: string, latestReleasedVersionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

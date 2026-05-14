@@ -4,7 +4,7 @@
 // ===============================================
 import { ComponentTypeEnum } from './ComponentTypeEnum.js';
 import { ComponentTypeEnumDef } from './ComponentTypeEnum.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ImplementationStatementComponentEvidence {
@@ -24,7 +24,7 @@ export class ImplementationStatementComponentEvidence {
   'suggestedEvidenceDefinitionId'?: UUID | null;
   'suggestedEvidenceDefinitionName'?: string | null;
   'description'?: string | null;
-  'deleted'?: Date | null;
+  'deleted'?: DateTime | null;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -177,9 +177,9 @@ export class ImplementationStatementComponentEvidence {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -191,7 +191,7 @@ export class ImplementationStatementComponentEvidence {
     return ObjectSerializer.deserialize(obj, 'ImplementationStatementComponentEvidence');
   }
 
-  constructor(id: UUID, suggested: boolean, hasPipeline: boolean, hasData: boolean, collectedFromComponentId?: UUID, collectedFromComponentName?: string, collectedFromComponentType?: ComponentTypeEnumDef, collectedFromComponentImageUrl?: URL, evidenceBotId?: UUID, evidenceBotName?: string, evidenceDefinitionId?: UUID, evidenceDefinitionName?: string, suggestedEvidenceBotId?: UUID, suggestedEvidenceDefinitionId?: UUID, suggestedEvidenceDefinitionName?: string, description?: string, deleted?: Date) {
+  constructor(id: UUID, suggested: boolean, hasPipeline: boolean, hasData: boolean, collectedFromComponentId?: UUID, collectedFromComponentName?: string, collectedFromComponentType?: ComponentTypeEnumDef, collectedFromComponentImageUrl?: URL, evidenceBotId?: UUID, evidenceBotName?: string, evidenceDefinitionId?: UUID, evidenceDefinitionName?: string, suggestedEvidenceBotId?: UUID, suggestedEvidenceDefinitionId?: UUID, suggestedEvidenceDefinitionName?: string, description?: string, deleted?: DateTime) {
     this.id = id;
     this.suggested = suggested;
     this.hasPipeline = hasPipeline;

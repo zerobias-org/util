@@ -6,7 +6,7 @@ import { ExternalControlOverrideEnum } from './ExternalControlOverrideEnum.js';
 import { ExternalControlOverrideEnumDef } from './ExternalControlOverrideEnum.js';
 import { Resource } from './Resource.js';
 import { ExternalControlAllOf } from './ExternalControlAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ExternalControl {
@@ -29,11 +29,11 @@ export class ExternalControl {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * A resource id which acts as a boundary/container for this resource.
   */
@@ -57,7 +57,7 @@ export class ExternalControl {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -115,18 +115,18 @@ export class ExternalControl {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -178,9 +178,9 @@ export class ExternalControl {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -228,7 +228,7 @@ export class ExternalControl {
     return ObjectSerializer.deserialize(obj, 'ExternalControl');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, controlId: UUID, sourceIds: Array<UUID>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, override?: ExternalControlOverrideEnumDef) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, controlId: UUID, sourceIds: Array<UUID>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, override?: ExternalControlOverrideEnumDef) {
     this.id = id;
     this.name = name;
     this.type = type;

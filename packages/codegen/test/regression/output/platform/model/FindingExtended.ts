@@ -14,7 +14,7 @@ import { TestResultEnumDef } from './TestResultEnum.js';
 import { Finding } from './Finding.js';
 import { TestFindingSource } from './TestFindingSource.js';
 import { FindingExtendedVulnerability } from './FindingExtendedVulnerability.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class FindingExtended {
@@ -31,16 +31,16 @@ export class FindingExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'externalId': string;
   'discoveredTestId': UUID;
   'state': FindingStateEnumDef;
   'source': TestFindingSourceDef;
-  'discoveredDate': Date;
+  'discoveredDate': DateTime;
   'result': TestResultEnumDef;
   'testCaseId': UUID;
   'testCase': FindingTestCase;
@@ -57,7 +57,7 @@ export class FindingExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -80,7 +80,7 @@ export class FindingExtended {
   'objectId'?: UUID | null;
   'testIds'?: Array<UUID>;
   'subjectIds'?: Array<UUID>;
-  'resolvedDate'?: Date | null;
+  'resolvedDate'?: DateTime | null;
   'vulnerabilities'?: Array<FindingExtendedVulnerability>;
 
   static readonly discriminator: string | undefined = undefined;
@@ -126,18 +126,18 @@ export class FindingExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -180,9 +180,9 @@ export class FindingExtended {
       "name": "discoveredDate",
       "baseName": "discoveredDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -252,9 +252,9 @@ export class FindingExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -351,9 +351,9 @@ export class FindingExtended {
       "name": "resolvedDate",
       "baseName": "resolvedDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -374,7 +374,7 @@ export class FindingExtended {
     return ObjectSerializer.deserialize(obj, 'FindingExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, externalId: string, discoveredTestId: UUID, state: FindingStateEnumDef, source: TestFindingSourceDef, discoveredDate: Date, result: TestResultEnumDef, testCaseId: UUID, testCase: FindingTestCase, tests: Array<FindingTest>, subjects: Array<FindingSubject>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, resolvedTestId?: UUID, configRule?: string, localId?: UUID, objectId?: UUID, testIds?: Array<UUID>, subjectIds?: Array<UUID>, resolvedDate?: Date, vulnerabilities?: Array<FindingExtendedVulnerability>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, externalId: string, discoveredTestId: UUID, state: FindingStateEnumDef, source: TestFindingSourceDef, discoveredDate: DateTime, result: TestResultEnumDef, testCaseId: UUID, testCase: FindingTestCase, tests: Array<FindingTest>, subjects: Array<FindingSubject>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, resolvedTestId?: UUID, configRule?: string, localId?: UUID, objectId?: UUID, testIds?: Array<UUID>, subjectIds?: Array<UUID>, resolvedDate?: DateTime, vulnerabilities?: Array<FindingExtendedVulnerability>) {
     this.id = id;
     this.name = name;
     this.type = type;

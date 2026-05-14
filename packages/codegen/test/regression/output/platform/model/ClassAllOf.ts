@@ -4,14 +4,14 @@
 // ===============================================
 import { ClassTypeEnum } from './ClassTypeEnum.js';
 import { ClassTypeEnumDef } from './ClassTypeEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
 * Storage Class Definition
 */
 export class ClassAllOf {
-  'updatedIndex': Date;
+  'updatedIndex': DateTime;
   'objectType': ClassTypeEnumDef;
   'shared': boolean;
   'schema'?: object;
@@ -30,9 +30,9 @@ export class ClassAllOf {
       "name": "updatedIndex",
       "baseName": "updatedIndex",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -107,7 +107,7 @@ export class ClassAllOf {
     return ObjectSerializer.deserialize(obj, 'ClassAllOf');
   }
 
-  constructor(updatedIndex: Date, objectType: ClassTypeEnumDef, shared: boolean, schema?: object, packageCode?: string, artifactVersionId?: UUID, dynamicExtendsId?: UUID, schemaId?: UUID) {
+  constructor(updatedIndex: DateTime, objectType: ClassTypeEnumDef, shared: boolean, schema?: object, packageCode?: string, artifactVersionId?: UUID, dynamicExtendsId?: UUID, schemaId?: UUID) {
     this.updatedIndex = updatedIndex;
     this.objectType = objectType;
     this.shared = shared;

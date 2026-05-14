@@ -5,7 +5,7 @@
 import { OpTypeEnum } from './OpTypeEnum.js';
 import { SchemasTag } from './SchemasTag.js';
 import { OpTypeEnumDef } from './OpTypeEnum.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class VersionByObjectMetadata {
@@ -17,7 +17,7 @@ export class VersionByObjectMetadata {
   'objectId': UUID;
   'batchId': UUID;
   'className': string;
-  'timestamp': Date;
+  'timestamp': DateTime;
   'tags': Array<SchemasTag>;
   'viewUrl'?: URL | null;
   'downloadUrl'?: URL | null;
@@ -104,9 +104,9 @@ export class VersionByObjectMetadata {
       "name": "timestamp",
       "baseName": "timestamp",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -172,7 +172,7 @@ export class VersionByObjectMetadata {
     return ObjectSerializer.deserialize(obj, 'VersionByObjectMetadata');
   }
 
-  constructor(isFile: boolean, operation: OpTypeEnumDef, groupId: string, boundaryId: UUID, versionId: UUID, objectId: UUID, batchId: UUID, className: string, timestamp: Date, tags: Array<SchemasTag>, viewUrl?: URL, downloadUrl?: URL, resourceId?: UUID, previousVersionId?: UUID, nextVersionId?: UUID) {
+  constructor(isFile: boolean, operation: OpTypeEnumDef, groupId: string, boundaryId: UUID, versionId: UUID, objectId: UUID, batchId: UUID, className: string, timestamp: DateTime, tags: Array<SchemasTag>, viewUrl?: URL, downloadUrl?: URL, resourceId?: UUID, previousVersionId?: UUID, nextVersionId?: UUID) {
     this.isFile = isFile;
     this.operation = operation;
     this.groupId = groupId;

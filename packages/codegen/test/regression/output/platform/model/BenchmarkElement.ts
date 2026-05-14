@@ -4,7 +4,7 @@
 // ===============================================
 import { BenchmarkElementAllOf } from './BenchmarkElementAllOf.js';
 import { Resource } from './Resource.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BenchmarkElement {
@@ -27,11 +27,11 @@ export class BenchmarkElement {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'standardId': UUID;
   'standardName': string;
   'standardExternalId': string;
@@ -52,7 +52,7 @@ export class BenchmarkElement {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -118,18 +118,18 @@ export class BenchmarkElement {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -208,9 +208,9 @@ export class BenchmarkElement {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -276,7 +276,7 @@ export class BenchmarkElement {
     return ObjectSerializer.deserialize(obj, 'BenchmarkElement');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, standardId: UUID, standardName: string, standardExternalId: string, benchmarkId: UUID, elementId: UUID, externalId: string, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, code?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, standardId: UUID, standardName: string, standardExternalId: string, benchmarkId: UUID, elementId: UUID, externalId: string, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, code?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

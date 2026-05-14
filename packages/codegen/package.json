@@ -29,7 +29,7 @@
     "build": "npm run compile && npm run copyDeps",
     "generate:test": "./bin/hub-generator.js generate -g hub-module -i ./api.yml -o generated -p modulePackage=../../src",
     "generate:server:test": "./bin/hub-generator.js generate -g hub-module-server -i ./api.yml -o generated/ -p modulePackage=../../src",
-    "test:regression": "npm run build && mocha --inline-diffs --reporter=list test/unit/**/*.ts",
+    "test:regression": "npm run build && mocha --inline-diffs --reporter=list test/regression/regression.spec.ts",
     "test": "npm run generate:test"
   },
   "files": [

@@ -12,7 +12,7 @@ import { OperationStatus } from './OperationStatus.js';
 import { ProductHierarchy } from './ProductHierarchy.js';
 import { OperationContentType } from './OperationContentType.js';
 import { OpenApiMethod } from './OpenApiMethod.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -38,11 +38,11 @@ export class OperationInfo {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'status': OperationStatusDef;
   /**
   * The product id this operation belongs to.
@@ -59,7 +59,7 @@ export class OperationInfo {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -201,18 +201,18 @@ export class OperationInfo {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -255,9 +255,9 @@ export class OperationInfo {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -458,7 +458,7 @@ export class OperationInfo {
     return ObjectSerializer.deserialize(obj, 'OperationInfo');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, status: OperationStatusDef, productId: UUID, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, method?: OpenApiMethodDef, apiMethod?: string, moduleId?: UUID, moduleKey?: string, packageNames?: Array<string>, relatedOperations?: Array<Operation>, catalogOperationIds?: Array<UUID>, catalogOperations?: Array<Operation>, apiOperations?: Array<Operation>, path?: string, api?: { [key: string]: any; }, moduleVersions?: Array<Semver>, product?: ProductHierarchy, contentType?: OperationContentTypeDef, example?: Example, packageName?: string, apiOperationIds?: Array<UUID>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, status: OperationStatusDef, productId: UUID, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, method?: OpenApiMethodDef, apiMethod?: string, moduleId?: UUID, moduleKey?: string, packageNames?: Array<string>, relatedOperations?: Array<Operation>, catalogOperationIds?: Array<UUID>, catalogOperations?: Array<Operation>, apiOperations?: Array<Operation>, path?: string, api?: { [key: string]: any; }, moduleVersions?: Array<Semver>, product?: ProductHierarchy, contentType?: OperationContentTypeDef, example?: Example, packageName?: string, apiOperationIds?: Array<UUID>) {
     this.id = id;
     this.name = name;
     this.type = type;

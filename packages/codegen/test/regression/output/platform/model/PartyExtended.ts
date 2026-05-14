@@ -7,7 +7,7 @@ import { PartyTypeEnumDef } from './PartyTypeEnum.js';
 import { PartyExtendedResponsibility } from './PartyExtendedResponsibility.js';
 import { PartyTypeEnum } from './PartyTypeEnum.js';
 import { PartyExtendedAllOf } from './PartyExtendedAllOf.js';
-import { Email, Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Email, Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class PartyExtended {
@@ -30,11 +30,11 @@ export class PartyExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'partyType': PartyTypeEnumDef;
   'assignable': boolean;
   'boundaryPartyId': UUID;
@@ -57,7 +57,7 @@ export class PartyExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   'imageUrl'?: URL;
   /**
   * An external URL to this resource in the outside world
@@ -129,18 +129,18 @@ export class PartyExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -264,9 +264,9 @@ export class PartyExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -359,7 +359,7 @@ export class PartyExtended {
     return ObjectSerializer.deserialize(obj, 'PartyExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, partyType: PartyTypeEnumDef, assignable: boolean, boundaryPartyId: UUID, responsibilities: Array<PartyExtendedResponsibility>, taskCount: number, backlogTaskCount: number, todoTaskCount: number, inProgressTaskCount: number, awaitingApprovalTaskCount: number, doneTaskCount: number, pastDueTaskCount: number, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, principalId?: UUID, teamId?: UUID, externalId?: string, contactName?: string, contactEmails?: Array<Email>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, partyType: PartyTypeEnumDef, assignable: boolean, boundaryPartyId: UUID, responsibilities: Array<PartyExtendedResponsibility>, taskCount: number, backlogTaskCount: number, todoTaskCount: number, inProgressTaskCount: number, awaitingApprovalTaskCount: number, doneTaskCount: number, pastDueTaskCount: number, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, principalId?: UUID, teamId?: UUID, externalId?: string, contactName?: string, contactEmails?: Array<Email>) {
     this.id = id;
     this.name = name;
     this.type = type;

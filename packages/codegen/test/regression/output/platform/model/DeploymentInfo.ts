@@ -10,7 +10,7 @@ import { DeploymentDegradedReason } from './DeploymentDegradedReason.js';
 import { OperationalStatusDef } from './OperationalStatus.js';
 import { OperationalStatus } from './OperationalStatus.js';
 import { AdminStatusDef } from './AdminStatus.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -25,7 +25,7 @@ export class DeploymentInfo {
   /**
   * Last time this deployment was used
   */
-  'lastUse'?: Date;
+  'lastUse'?: DateTime;
   /**
   * Whether or not the last use was successful
   */
@@ -59,9 +59,9 @@ export class DeploymentInfo {
       "name": "lastUse",
       "baseName": "lastUse",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -109,7 +109,7 @@ export class DeploymentInfo {
     return ObjectSerializer.deserialize(obj, 'DeploymentInfo');
   }
 
-  constructor(id: UUID, status: OperationalStatusDef, lastUse?: Date, lastUseSuccess?: boolean, adminStatus?: AdminStatusDef, downReason?: Array<DeploymentDownReasonDef>, degradedReason?: Array<DeploymentDegradedReasonDef>) {
+  constructor(id: UUID, status: OperationalStatusDef, lastUse?: DateTime, lastUseSuccess?: boolean, adminStatus?: AdminStatusDef, downReason?: Array<DeploymentDownReasonDef>, degradedReason?: Array<DeploymentDegradedReasonDef>) {
     this.id = id;
     this.status = status;
     this.lastUse = lastUse;

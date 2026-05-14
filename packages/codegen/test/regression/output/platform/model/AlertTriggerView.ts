@@ -5,7 +5,7 @@
 import { AlertTrigger } from './AlertTrigger.js';
 import { AlertTriggerViewAllOf } from './AlertTriggerViewAllOf.js';
 import { AlertTriggerSelector } from './AlertTriggerSelector.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -23,9 +23,9 @@ export class AlertTriggerView {
   */
   'description': string;
   'enabled': boolean;
-  'created': Date;
-  'updated': Date;
-  'deleted'?: Date;
+  'created': DateTime;
+  'updated': DateTime;
+  'deleted'?: DateTime;
   /**
   * Optional payload data provided to the handler when this trigger runs
   */
@@ -88,27 +88,27 @@ export class AlertTriggerView {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -147,7 +147,7 @@ export class AlertTriggerView {
     return ObjectSerializer.deserialize(obj, 'AlertTriggerView');
   }
 
-  constructor(id: UUID, ownerId: UUID, handler: string, description: string, enabled: boolean, created: Date, updated: Date, deleted?: Date, payload?: { [key: string]: any; }, remediation?: string, selectors?: Array<AlertTriggerSelector>) {
+  constructor(id: UUID, ownerId: UUID, handler: string, description: string, enabled: boolean, created: DateTime, updated: DateTime, deleted?: DateTime, payload?: { [key: string]: any; }, remediation?: string, selectors?: Array<AlertTriggerSelector>) {
     this.id = id;
     this.ownerId = ownerId;
     this.handler = handler;

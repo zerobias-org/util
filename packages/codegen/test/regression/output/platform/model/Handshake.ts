@@ -4,7 +4,7 @@
 // ===============================================
 import { HandshakeEnvironment } from './HandshakeEnvironment.js';
 import { NetworkInterface } from './NetworkInterface.js';
-import { Semver, UUID } from '@zerobias-org/types-core-js';
+import { Semver, UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -26,7 +26,7 @@ export class Handshake {
   /**
   * Timestamp when this node's host was last started
   */
-  'systemStartTime': Date;
+  'systemStartTime': DateTime;
   /**
   * A list of all network interfaces present on the host machine.
   */
@@ -83,9 +83,9 @@ export class Handshake {
       "name": "systemStartTime",
       "baseName": "systemStartTime",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -151,7 +151,7 @@ export class Handshake {
     return ObjectSerializer.deserialize(obj, 'Handshake');
   }
 
-  constructor(machineId: string, hostname: string, pid: number, systemStartTime: Date, networkInterfaces: Array<NetworkInterface>, environment: HandshakeEnvironment, version: Semver, nodeId?: UUID, registrationCode?: string, container?: boolean) {
+  constructor(machineId: string, hostname: string, pid: number, systemStartTime: DateTime, networkInterfaces: Array<NetworkInterface>, environment: HandshakeEnvironment, version: Semver, nodeId?: UUID, registrationCode?: string, container?: boolean) {
     this.machineId = machineId;
     this.hostname = hostname;
     this.pid = pid;

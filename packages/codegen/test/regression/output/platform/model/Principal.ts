@@ -8,7 +8,7 @@ import { PrincipalStatusDef } from './PrincipalStatus.js';
 import { PrincipalOriginDef } from './PrincipalOrigin.js';
 import { PrincipalType } from './PrincipalType.js';
 import { PrincipalStatus } from './PrincipalStatus.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -34,9 +34,9 @@ export class Principal {
   */
   'enabled': boolean;
   'origin': PrincipalOriginDef;
-  'created'?: Date | null;
-  'deleted'?: Date | null;
-  'updated'?: Date | null;
+  'created'?: DateTime | null;
+  'deleted'?: DateTime | null;
+  'updated'?: DateTime | null;
   /**
   * Identifier for this Principal in an external system, when available
   */
@@ -112,27 +112,27 @@ export class Principal {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -153,7 +153,7 @@ export class Principal {
     return ObjectSerializer.deserialize(obj, 'Principal');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: PrincipalTypeDef, status: PrincipalStatusDef, enabled: boolean, origin: PrincipalOriginDef, created?: Date, deleted?: Date, updated?: Date, externalId?: string) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: PrincipalTypeDef, status: PrincipalStatusDef, enabled: boolean, origin: PrincipalOriginDef, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string) {
     this.id = id;
     this.ownerId = ownerId;
     this.name = name;

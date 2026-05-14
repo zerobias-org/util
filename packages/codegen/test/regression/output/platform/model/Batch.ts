@@ -4,7 +4,7 @@
 // ===============================================
 import { ImportBatchStatusEnumDef } from './ImportBatchStatusEnum.js';
 import { ImportBatchStatusEnum } from './ImportBatchStatusEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -15,7 +15,7 @@ export class Batch {
   'requestorId': UUID;
   'ownerId': UUID;
   'classId': UUID;
-  'creationTime': Date;
+  'creationTime': DateTime;
   'status': ImportBatchStatusEnumDef;
   'custodyId': UUID;
   'jobId': UUID;
@@ -75,9 +75,9 @@ export class Batch {
       "name": "creationTime",
       "baseName": "creationTime",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -143,7 +143,7 @@ export class Batch {
     return ObjectSerializer.deserialize(obj, 'Batch');
   }
 
-  constructor(id: UUID, requestorId: UUID, ownerId: UUID, classId: UUID, creationTime: Date, status: ImportBatchStatusEnumDef, custodyId: UUID, jobId: UUID, groupId: string, deletesEnabled: boolean, batchItemCount?: number) {
+  constructor(id: UUID, requestorId: UUID, ownerId: UUID, classId: UUID, creationTime: DateTime, status: ImportBatchStatusEnumDef, custodyId: UUID, jobId: UUID, groupId: string, deletesEnabled: boolean, batchItemCount?: number) {
     this.id = id;
     this.requestorId = requestorId;
     this.ownerId = ownerId;

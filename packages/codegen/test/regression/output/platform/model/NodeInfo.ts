@@ -12,7 +12,7 @@ import { OperationalStatus } from './OperationalStatus.js';
 import { AdminStatusDef } from './AdminStatus.js';
 import { NodeDownReason } from './NodeDownReason.js';
 import { Handshake } from './Handshake.js';
-import { IpAddress, Semver, UUID } from '@zerobias-org/types-core-js';
+import { IpAddress, Semver, UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -31,7 +31,7 @@ export class NodeInfo {
   /**
   * The timestamp when the host system last started
   */
-  'systemStart'?: Date;
+  'systemStart'?: DateTime;
   /**
   * The remote IP address from which the node is connecting
   */
@@ -80,9 +80,9 @@ export class NodeInfo {
       "name": "systemStart",
       "baseName": "systemStart",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -157,7 +157,7 @@ export class NodeInfo {
     return ObjectSerializer.deserialize(obj, 'NodeInfo');
   }
 
-  constructor(id: UUID, status: OperationalStatusDef, pid?: number, systemStart?: Date, remoteIp?: IpAddress, version?: Semver, lastHandshake?: Handshake, applianceInfo?: ApplianceInfo, adminStatus?: AdminStatusDef, downReason?: Array<NodeDownReasonDef>, degradedReason?: Array<NodeDegradedReasonDef>) {
+  constructor(id: UUID, status: OperationalStatusDef, pid?: number, systemStart?: DateTime, remoteIp?: IpAddress, version?: Semver, lastHandshake?: Handshake, applianceInfo?: ApplianceInfo, adminStatus?: AdminStatusDef, downReason?: Array<NodeDownReasonDef>, degradedReason?: Array<NodeDegradedReasonDef>) {
     this.id = id;
     this.status = status;
     this.pid = pid;

@@ -6,7 +6,7 @@ import { ImplementationStatementAllOf } from './ImplementationStatementAllOf.js'
 import { ImplementationStatementScopeDef } from './ImplementationStatementScope.js';
 import { Resource } from './Resource.js';
 import { ImplementationStatementScope } from './ImplementationStatementScope.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ImplementationStatement {
@@ -29,11 +29,11 @@ export class ImplementationStatement {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'scope': ImplementationStatementScopeDef;
   'inherited': boolean;
   /**
@@ -47,7 +47,7 @@ export class ImplementationStatement {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -113,18 +113,18 @@ export class ImplementationStatement {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -167,9 +167,9 @@ export class ImplementationStatement {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -262,7 +262,7 @@ export class ImplementationStatement {
     return ObjectSerializer.deserialize(obj, 'ImplementationStatement');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, scope: ImplementationStatementScopeDef, inherited: boolean, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, implementsComponentId?: UUID, componentEvidenceId?: UUID, internalDomainId?: UUID, internalControlId?: UUID, internalAssertionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, scope: ImplementationStatementScopeDef, inherited: boolean, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, implementsComponentId?: UUID, componentEvidenceId?: UUID, internalDomainId?: UUID, internalControlId?: UUID, internalAssertionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

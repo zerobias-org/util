@@ -13,7 +13,7 @@ import { Severity } from './Severity.js';
 import { BoundaryAlertBot } from './BoundaryAlertBot.js';
 import { Alert } from './Alert.js';
 import { BoundaryAlertSubject } from './BoundaryAlertSubject.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BoundaryAlertExtended {
@@ -36,11 +36,11 @@ export class BoundaryAlertExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'boundaryId': UUID;
   /**
   * A reference to the trigger this alert was generated from
@@ -82,7 +82,7 @@ export class BoundaryAlertExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -160,18 +160,18 @@ export class BoundaryAlertExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -304,9 +304,9 @@ export class BoundaryAlertExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -453,7 +453,7 @@ export class BoundaryAlertExtended {
     return ObjectSerializer.deserialize(obj, 'BoundaryAlertExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, triggerId: UUID, impacts: Array<UUID>, causedBy: Array<Resource>, severity: SeverityDef, alertType: Nmtoken, body: { [key: string]: any; }, service: string, groupId: string, elementId: string, subjects: Array<BoundaryAlertSubject>, origin: BoundaryAlertOrigin, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, title?: string, remediation?: string, alertId?: UUID, extendsAlert?: Alert, graphqlQueryId?: UUID, graphqlQueryVersionId?: UUID, boundaryAlertBotId?: UUID, boundaryAlertBot?: BoundaryAlertBot, graphqlQuery?: BoundaryAlertEntityDetails, graphqlQueryVersion?: BoundaryAlertEntityDetails, tasks?: Array<BoundaryAlertEntityDetails>, elements?: Array<BoundaryAlertBotExtendedElement>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, triggerId: UUID, impacts: Array<UUID>, causedBy: Array<Resource>, severity: SeverityDef, alertType: Nmtoken, body: { [key: string]: any; }, service: string, groupId: string, elementId: string, subjects: Array<BoundaryAlertSubject>, origin: BoundaryAlertOrigin, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, title?: string, remediation?: string, alertId?: UUID, extendsAlert?: Alert, graphqlQueryId?: UUID, graphqlQueryVersionId?: UUID, boundaryAlertBotId?: UUID, boundaryAlertBot?: BoundaryAlertBot, graphqlQuery?: BoundaryAlertEntityDetails, graphqlQueryVersion?: BoundaryAlertEntityDetails, tasks?: Array<BoundaryAlertEntityDetails>, elements?: Array<BoundaryAlertBotExtendedElement>) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -5,7 +5,7 @@
 import { ProductVersionStatusDef } from './ProductVersionStatus.js';
 import { Resource } from './Resource.js';
 import { ProductVersionStatus } from './ProductVersionStatus.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -40,11 +40,11 @@ export class StoreProductVersion {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'artifactVersionId'?: UUID | null;
   /**
   * A long description
@@ -57,7 +57,7 @@ export class StoreProductVersion {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -145,18 +145,18 @@ export class StoreProductVersion {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -190,9 +190,9 @@ export class StoreProductVersion {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -240,7 +240,7 @@ export class StoreProductVersion {
     return ObjectSerializer.deserialize(obj, 'StoreProductVersion');
   }
 
-  constructor(productId: UUID, version: Semver, status: ProductVersionStatusDef, id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, artifactVersionId?: UUID, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID) {
+  constructor(productId: UUID, version: Semver, status: ProductVersionStatusDef, id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, artifactVersionId?: UUID, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID) {
     this.productId = productId;
     this.version = version;
     this.status = status;

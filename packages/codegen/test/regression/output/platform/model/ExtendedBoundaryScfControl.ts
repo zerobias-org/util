@@ -4,7 +4,7 @@
 // ===============================================
 import { BoundaryScfControl } from './BoundaryScfControl.js';
 import { ExtendedBoundaryScfControlAllOf } from './ExtendedBoundaryScfControlAllOf.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ExtendedBoundaryScfControl {
@@ -37,7 +37,7 @@ export class ExtendedBoundaryScfControl {
   /**
   * If set then this record was soft deleted
   */
-  'deleted'?: Date | null;
+  'deleted'?: DateTime | null;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -145,9 +145,9 @@ export class ExtendedBoundaryScfControl {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -159,7 +159,7 @@ export class ExtendedBoundaryScfControl {
     return ObjectSerializer.deserialize(obj, 'ExtendedBoundaryScfControl');
   }
 
-  constructor(id: UUID, boundaryId: UUID, scfControlId: UUID, frameworkVersionId: UUID, scfDomainCode: string, scfDomainName: string, scfControlExternalId: string, scfControlElementType: string, scfControlName: string, scfControlDescription: string, performed?: boolean, deleted?: Date) {
+  constructor(id: UUID, boundaryId: UUID, scfControlId: UUID, frameworkVersionId: UUID, scfDomainCode: string, scfDomainName: string, scfControlExternalId: string, scfControlElementType: string, scfControlName: string, scfControlDescription: string, performed?: boolean, deleted?: DateTime) {
     this.id = id;
     this.boundaryId = boundaryId;
     this.scfControlId = scfControlId;

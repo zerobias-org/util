@@ -5,13 +5,13 @@
 import { FunctionGroupingEnum } from './FunctionGroupingEnum.js';
 import { CapabilityMaturityModelDef } from './CapabilityMaturityModel.js';
 import { FunctionGroupingEnumDef } from './FunctionGroupingEnum.js';
-import { InternalControl } from './InternalControl.js';
-import { InternalControlExtendedAllOf } from './InternalControlExtendedAllOf.js';
 import { ControlCMM } from './ControlCMM.js';
-import { StatusObject } from './StatusObject.js';
 import { ExternalFrameworkControl } from './ExternalFrameworkControl.js';
 import { CapabilityMaturityModel } from './CapabilityMaturityModel.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { InternalControl } from './InternalControl.js';
+import { InternalControlExtendedAllOf } from './InternalControlExtendedAllOf.js';
+import { StatusObject } from './StatusObject.js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class InternalControlExtended {
@@ -34,11 +34,11 @@ export class InternalControlExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * A resource id which acts as a boundary/container for this resource.
   */
@@ -69,7 +69,7 @@ export class InternalControlExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -139,18 +139,18 @@ export class InternalControlExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -265,9 +265,9 @@ export class InternalControlExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -396,7 +396,7 @@ export class InternalControlExtended {
     return ObjectSerializer.deserialize(obj, 'InternalControlExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, boundaryId: UUID, scfControlId: UUID, sourceIds: Array<UUID>, internalDomainId: UUID, internalDomainCode: string, scfControlName: string, scfControlCode: string, relativeControlWeighting: number, status: StatusObject, frameworkControls: Array<ExternalFrameworkControl>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, performed?: boolean, performedMaturity?: CapabilityMaturityModelDef, desiredMaturity?: CapabilityMaturityModelDef, standard?: string, guideline?: string, scfControlDescription?: string, methodsToComply?: string, controlQuestion?: string, functionGrouping?: FunctionGroupingEnumDef, cmm?: Array<ControlCMM>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, boundaryId: UUID, scfControlId: UUID, sourceIds: Array<UUID>, internalDomainId: UUID, internalDomainCode: string, scfControlName: string, scfControlCode: string, relativeControlWeighting: number, status: StatusObject, frameworkControls: Array<ExternalFrameworkControl>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, performed?: boolean, performedMaturity?: CapabilityMaturityModelDef, desiredMaturity?: CapabilityMaturityModelDef, standard?: string, guideline?: string, scfControlDescription?: string, methodsToComply?: string, controlQuestion?: string, functionGrouping?: FunctionGroupingEnumDef, cmm?: Array<ControlCMM>) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -8,7 +8,7 @@ import { ComponentTypeEnum } from './ComponentTypeEnum.js';
 import { ComponentTypeEnumDef } from './ComponentTypeEnum.js';
 import { Component } from './Component.js';
 import { ComponentFormat } from './ComponentFormat.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ComponentExtended {
@@ -31,11 +31,11 @@ export class ComponentExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'externalId': string;
   'componentType': ComponentTypeEnumDef;
   'componentFormat': ComponentFormatDef;
@@ -50,7 +50,7 @@ export class ComponentExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -124,18 +124,18 @@ export class ComponentExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -187,9 +187,9 @@ export class ComponentExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -354,7 +354,7 @@ export class ComponentExtended {
     return ObjectSerializer.deserialize(obj, 'ComponentExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, externalId: string, componentType: ComponentTypeEnumDef, componentFormat: ComponentFormatDef, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, boundaryProductId?: UUID, objectId?: UUID, evidenceDefinitionId?: UUID, scfDomainCode?: string, suggestedComponentId?: UUID, boundaryProductName?: string, boundaryName?: string, productId?: UUID, productName?: string, suggestedProductId?: UUID, suggestedProductName?: string, objectName?: string, evidenceDefinitionName?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, externalId: string, componentType: ComponentTypeEnumDef, componentFormat: ComponentFormatDef, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, boundaryProductId?: UUID, objectId?: UUID, evidenceDefinitionId?: UUID, scfDomainCode?: string, suggestedComponentId?: UUID, boundaryProductName?: string, boundaryName?: string, productId?: UUID, productName?: string, suggestedProductId?: UUID, suggestedProductName?: string, objectName?: string, evidenceDefinitionName?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -7,7 +7,7 @@ import { Resource } from './Resource.js';
 import { TaskLink } from './TaskLink.js';
 import { TaskStatusEnum } from './TaskStatusEnum.js';
 import { TaskStatusEnumDef } from './TaskStatusEnum.js';
-import { Nmtoken, OID, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, OID, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -33,11 +33,11 @@ export class Task {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'activityId': UUID;
   'code': string;
   'status': TaskStatusEnumDef;
@@ -66,7 +66,7 @@ export class Task {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -138,18 +138,18 @@ export class Task {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -246,9 +246,9 @@ export class Task {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -341,7 +341,7 @@ export class Task {
     return ObjectSerializer.deserialize(obj, 'Task');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, activityId: UUID, code: string, status: TaskStatusEnumDef, priority: number, rank: OID, approvers: Array<UUID>, notified: Array<UUID>, links: Array<TaskLink>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, customFields?: { [key: string]: any; }, assigned?: UUID, accountable?: UUID, statusCode?: string, phaseCode?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, activityId: UUID, code: string, status: TaskStatusEnumDef, priority: number, rank: OID, approvers: Array<UUID>, notified: Array<UUID>, links: Array<TaskLink>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, customFields?: { [key: string]: any; }, assigned?: UUID, accountable?: UUID, statusCode?: string, phaseCode?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

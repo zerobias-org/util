@@ -14,7 +14,7 @@ import { BoundaryGroupType } from './BoundaryGroupType.js';
 import { PrincipalOriginDef } from './PrincipalOrigin.js';
 import { PrincipalType } from './PrincipalType.js';
 import { Principal } from './Principal.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -77,7 +77,7 @@ export class Group extends Principal {
     return ObjectSerializer.deserialize(obj, 'Group');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: PrincipalTypeDef, status: PrincipalStatusDef, enabled: boolean, origin: PrincipalOriginDef, groupType: GroupTypeDef, created?: Date, deleted?: Date, updated?: Date, externalId?: string, boundaryId?: UUID, boundaryGroupType?: BoundaryGroupTypeDef, avatarUrl?: URL) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: PrincipalTypeDef, status: PrincipalStatusDef, enabled: boolean, origin: PrincipalOriginDef, groupType: GroupTypeDef, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, boundaryId?: UUID, boundaryGroupType?: BoundaryGroupTypeDef, avatarUrl?: URL) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
     this.groupType = groupType;
     this.boundaryId = boundaryId;

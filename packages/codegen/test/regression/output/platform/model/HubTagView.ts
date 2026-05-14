@@ -4,7 +4,7 @@
 // ===============================================
 import { SchemasTag } from './SchemasTag.js';
 import { TagViewAllOf } from './TagViewAllOf.js';
-import { Nmtoken, UUID } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -31,9 +31,9 @@ export class HubTagView {
   * A longer description of the tag
   */
   'description'?: string;
-  'created'?: Date | null;
-  'deleted'?: Date | null;
-  'updated'?: Date | null;
+  'created'?: DateTime | null;
+  'deleted'?: DateTime | null;
+  'updated'?: DateTime | null;
   /**
   * Color as defined on the tag type.
   */
@@ -91,27 +91,27 @@ export class HubTagView {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -132,7 +132,7 @@ export class HubTagView {
     return ObjectSerializer.deserialize(obj, 'HubTagView');
   }
 
-  constructor(id: UUID, name: string, ownerId: UUID, type: Nmtoken, description?: string, created?: Date, deleted?: Date, updated?: Date, color?: string) {
+  constructor(id: UUID, name: string, ownerId: UUID, type: Nmtoken, description?: string, created?: DateTime, deleted?: DateTime, updated?: DateTime, color?: string) {
     this.id = id;
     this.name = name;
     this.ownerId = ownerId;

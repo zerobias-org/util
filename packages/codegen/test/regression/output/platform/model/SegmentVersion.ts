@@ -6,7 +6,7 @@ import { CatalogPublishStatusEnumDef } from './CatalogPublishStatusEnum.js';
 import { SegmentVersionAllOf } from './SegmentVersionAllOf.js';
 import { Resource } from './Resource.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class SegmentVersion {
@@ -29,11 +29,11 @@ export class SegmentVersion {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'code': string;
   'externalId': string;
   'segmentId': UUID;
@@ -56,7 +56,7 @@ export class SegmentVersion {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -130,18 +130,18 @@ export class SegmentVersion {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -265,9 +265,9 @@ export class SegmentVersion {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -405,7 +405,7 @@ export class SegmentVersion {
     return ObjectSerializer.deserialize(obj, 'SegmentVersion');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, code: string, externalId: string, segmentId: UUID, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: number, status: CatalogPublishStatusEnumDef, isService: boolean, segmentTypeId: UUID, createdBy: UUID, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, artifactVersionId?: UUID, updatedBy?: UUID, parentIds?: Array<UUID>, childIds?: Array<UUID>, productVersionIds?: Array<UUID>, productIds?: Array<UUID>, complianceFeatureIds?: Array<UUID>, logoFileVersionId?: UUID, taskId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, code: string, externalId: string, segmentId: UUID, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: number, status: CatalogPublishStatusEnumDef, isService: boolean, segmentTypeId: UUID, createdBy: UUID, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, artifactVersionId?: UUID, updatedBy?: UUID, parentIds?: Array<UUID>, childIds?: Array<UUID>, productVersionIds?: Array<UUID>, productIds?: Array<UUID>, complianceFeatureIds?: Array<UUID>, logoFileVersionId?: UUID, taskId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

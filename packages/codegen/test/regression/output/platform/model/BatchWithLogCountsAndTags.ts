@@ -5,7 +5,7 @@
 import { ImportBatchStatusEnumDef } from './ImportBatchStatusEnum.js';
 import { ImportBatchStatusEnum } from './ImportBatchStatusEnum.js';
 import { TagWithColor } from './TagWithColor.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -33,7 +33,7 @@ export class BatchWithLogCountsAndTags {
   /**
   * Date that the batch was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * Module name of the linked pipeline
   */
@@ -122,9 +122,9 @@ export class BatchWithLogCountsAndTags {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -208,7 +208,7 @@ export class BatchWithLogCountsAndTags {
     return ObjectSerializer.deserialize(obj, 'BatchWithLogCountsAndTags');
   }
 
-  constructor(id: UUID, ownerId: UUID, classId: UUID, custodyId: UUID, jobId: UUID, groupId: string, created: Date, moduleName: string, className: string, status: ImportBatchStatusEnumDef, tags: Array<TagWithColor>, batchItemCount: number, batchWarningsCount: number, batchErrorsCount: number, deletesEnabled: boolean, ) {
+  constructor(id: UUID, ownerId: UUID, classId: UUID, custodyId: UUID, jobId: UUID, groupId: string, created: DateTime, moduleName: string, className: string, status: ImportBatchStatusEnumDef, tags: Array<TagWithColor>, batchItemCount: number, batchWarningsCount: number, batchErrorsCount: number, deletesEnabled: boolean, ) {
     this.id = id;
     this.ownerId = ownerId;
     this.classId = classId;

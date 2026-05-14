@@ -9,7 +9,7 @@ import { ProductEditionExtendedAllOf } from './ProductEditionExtendedAllOf.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { ProductEditionVersion } from './ProductEditionVersion.js';
 import { ProductEdition } from './ProductEdition.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ProductEditionExtended {
@@ -32,11 +32,11 @@ export class ProductEditionExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'productId': UUID;
   'status': CatalogPublishStatusEnumDef;
   'latestVersionId': UUID;
@@ -58,7 +58,7 @@ export class ProductEditionExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -124,18 +124,18 @@ export class ProductEditionExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -250,9 +250,9 @@ export class ProductEditionExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -345,7 +345,7 @@ export class ProductEditionExtended {
     return ObjectSerializer.deserialize(obj, 'ProductEditionExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, productId: UUID, status: CatalogPublishStatusEnumDef, latestVersionId: UUID, latestVersion: ProductEditionVersion, code: string, externalId: string, versionId: UUID, semver: string, value: number, floatValue: number, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, latestReleasedVersionId?: UUID, artifactId?: UUID, productComponents?: Array<ProductEditionComponent>, complianceFeatures?: Array<ProductEditionComplianceFeature>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, productId: UUID, status: CatalogPublishStatusEnumDef, latestVersionId: UUID, latestVersion: ProductEditionVersion, code: string, externalId: string, versionId: UUID, semver: string, value: number, floatValue: number, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, latestReleasedVersionId?: UUID, artifactId?: UUID, productComponents?: Array<ProductEditionComponent>, complianceFeatures?: Array<ProductEditionComplianceFeature>) {
     this.id = id;
     this.name = name;
     this.type = type;

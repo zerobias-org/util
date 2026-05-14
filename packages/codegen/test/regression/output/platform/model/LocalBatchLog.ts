@@ -4,7 +4,7 @@
 // ===============================================
 import { BatchLogLevelEnumDef } from './BatchLogLevelEnum.js';
 import { BatchLogLevelEnum } from './BatchLogLevelEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -17,7 +17,7 @@ export class LocalBatchLog {
   */
   'message': string;
   'data': object;
-  'timestamp': Date;
+  'timestamp': DateTime;
   'batchId': UUID;
   'className': string;
   'moduleName': string;
@@ -56,9 +56,9 @@ export class LocalBatchLog {
       "name": "timestamp",
       "baseName": "timestamp",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -97,7 +97,7 @@ export class LocalBatchLog {
     return ObjectSerializer.deserialize(obj, 'LocalBatchLog');
   }
 
-  constructor(logLevel: BatchLogLevelEnumDef, message: string, data: object, timestamp: Date, batchId: UUID, className: string, moduleName: string, ) {
+  constructor(logLevel: BatchLogLevelEnumDef, message: string, data: object, timestamp: DateTime, batchId: UUID, className: string, moduleName: string, ) {
     this.logLevel = logLevel;
     this.message = message;
     this.data = data;

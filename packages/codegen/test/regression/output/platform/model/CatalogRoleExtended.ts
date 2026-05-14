@@ -7,7 +7,7 @@ import { AppOrgTypeEnum } from './AppOrgTypeEnum.js';
 import { CatalogRoleExtendedAllOf } from './CatalogRoleExtendedAllOf.js';
 import { AppOrgTypeEnumDef } from './AppOrgTypeEnum.js';
 import { RoleCategory } from './RoleCategory.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class CatalogRoleExtended {
@@ -30,11 +30,11 @@ export class CatalogRoleExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   /**
   * The source of this role
   */
@@ -53,7 +53,7 @@ export class CatalogRoleExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -115,18 +115,18 @@ export class CatalogRoleExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -187,9 +187,9 @@ export class CatalogRoleExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -246,7 +246,7 @@ export class CatalogRoleExtended {
     return ObjectSerializer.deserialize(obj, 'CatalogRoleExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, source: string, orgTypes: Array<AppOrgTypeEnumDef>, jobDuties: Array<string>, qualifications: Array<string>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, roleCategory?: RoleCategory) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, source: string, orgTypes: Array<AppOrgTypeEnumDef>, jobDuties: Array<string>, qualifications: Array<string>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, roleCategory?: RoleCategory) {
     this.id = id;
     this.name = name;
     this.type = type;

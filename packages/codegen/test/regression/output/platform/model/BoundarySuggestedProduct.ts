@@ -8,7 +8,7 @@ import { BoundarySuggestedProductAllOf } from './BoundarySuggestedProductAllOf.j
 import { NameDescriptionObject } from './NameDescriptionObject.js';
 import { IdNameCodeDescriptionImageUrlVersionObject } from './IdNameCodeDescriptionImageUrlVersionObject.js';
 import { BoundaryProduct } from './BoundaryProduct.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BoundarySuggestedProduct {
@@ -22,11 +22,11 @@ export class BoundarySuggestedProduct {
   'suggestedProductName': string;
   'suggestedProductDescription': string;
   'suggestedProductOwnerId': UUID;
-  'suggestedProductCreated': Date;
+  'suggestedProductCreated': DateTime;
   'parentId'?: UUID | null;
-  'created'?: Date;
-  'updated'?: Date;
-  'deleted'?: Date | null;
+  'created'?: DateTime;
+  'updated'?: DateTime;
+  'deleted'?: DateTime | null;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
@@ -136,9 +136,9 @@ export class BoundarySuggestedProduct {
       "name": "suggestedProductCreated",
       "baseName": "suggestedProductCreated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -154,27 +154,27 @@ export class BoundarySuggestedProduct {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -285,7 +285,7 @@ export class BoundarySuggestedProduct {
     return ObjectSerializer.deserialize(obj, 'BoundarySuggestedProduct');
   }
 
-  constructor(id: UUID, name: string, description: string, ownerId: UUID, boundaryId: UUID, suggestedProductId: UUID, suggested: boolean, suggestedProductName: string, suggestedProductDescription: string, suggestedProductOwnerId: UUID, suggestedProductCreated: Date, parentId?: UUID, created?: Date, updated?: Date, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, status?: CatalogPublishStatusEnumDef, productId?: UUID, suggestedProductSegments?: Array<IdNameCodeDescriptionImageUrlVersionObject>, suggestedProductFactoryTypes?: Array<NameDescriptionObject>, suggestedProductHostingTypes?: Array<NameDescriptionObject>, suggestedProductImageUrl?: URL, suggestedProductUrl?: URL) {
+  constructor(id: UUID, name: string, description: string, ownerId: UUID, boundaryId: UUID, suggestedProductId: UUID, suggested: boolean, suggestedProductName: string, suggestedProductDescription: string, suggestedProductOwnerId: UUID, suggestedProductCreated: DateTime, parentId?: UUID, created?: DateTime, updated?: DateTime, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, status?: CatalogPublishStatusEnumDef, productId?: UUID, suggestedProductSegments?: Array<IdNameCodeDescriptionImageUrlVersionObject>, suggestedProductFactoryTypes?: Array<NameDescriptionObject>, suggestedProductHostingTypes?: Array<NameDescriptionObject>, suggestedProductImageUrl?: URL, suggestedProductUrl?: URL) {
     this.id = id;
     this.name = name;
     this.description = description;

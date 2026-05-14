@@ -6,7 +6,7 @@ import { AuditTypeEnumDef } from './AuditTypeEnum.js';
 import { AuditStatusEnumDef } from './AuditStatusEnum.js';
 import { AuditTypeEnum } from './AuditTypeEnum.js';
 import { AuditStatusEnum } from './AuditStatusEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -17,7 +17,7 @@ export class BoundaryAuditMetrics {
   'name': string;
   'status': AuditStatusEnumDef;
   'auditType': AuditTypeEnumDef;
-  'plannedEndDate': Date;
+  'plannedEndDate': DateTime;
   'boundaryId': UUID;
   'frameworkVersionId': UUID;
   'frameworkVersionName': string;
@@ -101,9 +101,9 @@ export class BoundaryAuditMetrics {
       "name": "plannedEndDate",
       "baseName": "plannedEndDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -223,7 +223,7 @@ export class BoundaryAuditMetrics {
     return ObjectSerializer.deserialize(obj, 'BoundaryAuditMetrics');
   }
 
-  constructor(id: UUID, name: string, status: AuditStatusEnumDef, auditType: AuditTypeEnumDef, plannedEndDate: Date, boundaryId: UUID, frameworkVersionId: UUID, frameworkVersionName: string, evidenceAssessmentCount: number, awaitingReviewCount: number, onHoldCount: number, answeredCount: number, doneCount: number, satisfiedCount: number, notSatisfiedCount: number, needsEvidenceCount: number, pendingCount: number, ) {
+  constructor(id: UUID, name: string, status: AuditStatusEnumDef, auditType: AuditTypeEnumDef, plannedEndDate: DateTime, boundaryId: UUID, frameworkVersionId: UUID, frameworkVersionName: string, evidenceAssessmentCount: number, awaitingReviewCount: number, onHoldCount: number, answeredCount: number, doneCount: number, satisfiedCount: number, notSatisfiedCount: number, needsEvidenceCount: number, pendingCount: number, ) {
     this.id = id;
     this.name = name;
     this.status = status;

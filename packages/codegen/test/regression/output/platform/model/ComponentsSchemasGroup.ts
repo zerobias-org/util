@@ -14,7 +14,7 @@ import { ComponentsSchemasPrincipal } from './ComponentsSchemasPrincipal.js';
 import { BoundaryGroupType } from './BoundaryGroupType.js';
 import { SchemasPrincipalStatusDef } from './SchemasPrincipalStatus.js';
 import { SchemasPrincipalOrigin } from './SchemasPrincipalOrigin.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -77,7 +77,7 @@ export class ComponentsSchemasGroup extends ComponentsSchemasPrincipal {
     return ObjectSerializer.deserialize(obj, 'ComponentsSchemasGroup');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, groupType: GroupTypeDef, created?: Date, deleted?: Date, updated?: Date, externalId?: string, boundaryId?: UUID, boundaryGroupType?: BoundaryGroupTypeDef, avatarUrl?: URL) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, groupType: GroupTypeDef, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, boundaryId?: UUID, boundaryGroupType?: BoundaryGroupTypeDef, avatarUrl?: URL) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
     this.groupType = groupType;
     this.boundaryId = boundaryId;

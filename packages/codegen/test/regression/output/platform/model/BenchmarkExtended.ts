@@ -10,7 +10,7 @@ import { StandardCategoryDef } from './StandardCategory.js';
 import { SchemasTag } from './SchemasTag.js';
 import { StandardCategory } from './StandardCategory.js';
 import { StandardStatus } from './StandardStatus.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BenchmarkExtended {
@@ -33,11 +33,11 @@ export class BenchmarkExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'standardId': UUID;
   'status': StandardStatusDef;
   'hasElements': boolean;
@@ -55,7 +55,7 @@ export class BenchmarkExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -116,18 +116,18 @@ export class BenchmarkExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -206,9 +206,9 @@ export class BenchmarkExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -283,7 +283,7 @@ export class BenchmarkExtended {
     return ObjectSerializer.deserialize(obj, 'BenchmarkExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, standardId: UUID, status: StandardStatusDef, hasElements: boolean, elementCount: number, standardCategory: StandardCategoryDef, code: string, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, vspInfo?: VspInfo, tags?: Array<SchemasTag>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, standardId: UUID, status: StandardStatusDef, hasElements: boolean, elementCount: number, standardCategory: StandardCategoryDef, code: string, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, vspInfo?: VspInfo, tags?: Array<SchemasTag>) {
     this.id = id;
     this.name = name;
     this.type = type;

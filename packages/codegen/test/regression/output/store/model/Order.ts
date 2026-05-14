@@ -14,7 +14,7 @@ import { OrderStatus } from './OrderStatus.js';
 import { OrderType } from './OrderType.js';
 import { OperationOrderStatus } from './OperationOrderStatus.js';
 import { OrderAllOf } from './OrderAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class Order {
@@ -37,11 +37,11 @@ export class Order {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'orderType': OrderTypeDef;
   'priority': PriorityDef;
   'status': CatalogingOrderStatusDef | OperationOrderStatusDef | OrderStatusDef | null;
@@ -60,7 +60,7 @@ export class Order {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -77,11 +77,11 @@ export class Order {
   * A resource id which acts as a boundary/container for this resource.
   */
   'boundaryId'?: UUID;
-  'completed'?: Date;
+  'completed'?: DateTime;
   /**
   * The timestamp when the order is expected to be completed
   */
-  'expected'?: Date;
+  'expected'?: DateTime;
   /**
   * Additional details available for this orders
   */
@@ -134,18 +134,18 @@ export class Order {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -206,9 +206,9 @@ export class Order {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -251,18 +251,18 @@ export class Order {
       "name": "completed",
       "baseName": "completed",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "expected",
       "baseName": "expected",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -292,7 +292,7 @@ export class Order {
     return ObjectSerializer.deserialize(obj, 'Order');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, orderType: OrderTypeDef, priority: PriorityDef, status: CatalogingOrderStatusDef | OperationOrderStatusDef | OrderStatusDef, context: { [key: string]: any; }, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, completed?: Date, expected?: Date, additionalInformation?: { [key: string]: any; }, statusReason?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, orderType: OrderTypeDef, priority: PriorityDef, status: CatalogingOrderStatusDef | OperationOrderStatusDef | OrderStatusDef, context: { [key: string]: any; }, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, completed?: DateTime, expected?: DateTime, additionalInformation?: { [key: string]: any; }, statusReason?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

@@ -334,6 +334,7 @@ import { Vendor } from './Vendor.js';
 import { VendorAllOf } from './VendorAllOf.js';
 import { VendorChangeEvent } from './VendorChangeEvent.js';
 import { VspStatusEnum } from './VspStatusEnum.js';
+import { OrderApi } from '../api/OrderApi.js';
 
 /* tslint:disable:no-unused-variable */
 const primitives = [
@@ -400,7 +401,7 @@ let enumsMap: {[index: string]: any} = {
         'SortParamDesc': SortParamDesc,
         'UpdatableModerationStatus': UpdatableModerationStatus,
         'VspStatusEnum': VspStatusEnum,
-        'OrderApi.OrderByEnum': '../api/OrderApi',
+        'OrderApi.OrderByEnum': OrderApi.OrderByEnum,
   }
 
 const typeMap: {[index: string]: any} = {
@@ -742,7 +743,7 @@ const schemaMap: {[index: string]: string} = {
 
 export class ObjectSerializer {
     public static hasType(type: string): boolean {
-        return type === "Date" || enumsMap[type] || typeMap[type] || unionMap[type];
+        return type === "DateTime" || type === "DateFormat" || enumsMap[type] || typeMap[type] || unionMap[type];
     }
 
     public static findCorrectType(data: any, expectedType: string) {
@@ -750,7 +751,7 @@ export class ObjectSerializer {
             return expectedType;
         } else if (primitives.indexOf(expectedType.toLowerCase()) !== -1) {
             return expectedType;
-        } else if (expectedType === "Date") {
+        } else if (expectedType === "DateTime" || expectedType === "DateFormat") {
             return expectedType;
         } else {
             if (enumsMap[expectedType]) {
@@ -799,8 +800,6 @@ export class ObjectSerializer {
     public static serialize(data: any, type: string, format?: string) {
         if (data == undefined) {
             return data;
-        } else if (type === "Date") {
-            return data.toISOString();
         } else if (format && CoreType.allFormats().includes(format)) {
             // data *should* be an instance of the actual CoreType
             return Object.prototype.hasOwnProperty.call(data, 'toJSON')
@@ -857,8 +856,6 @@ export class ObjectSerializer {
             let subType: string = type.replace("PagedResults<", "");
             subType = subType.substring(0, subType.length - 1);
             return PagedResults.newInstance(data, ((obj: any) => ObjectSerializer.deserialize(obj, subType, format)));
-        } else if (type === "Date" && typeof data === 'string') {
-            return new Date(data);
         } else if (format && CoreType.allFormats().includes(format)) {
             let sanitizedData = data;
             if (data instanceof Date) {
@@ -876,12 +873,35 @@ export class ObjectSerializer {
             } else if (format === 'password') {
                 return data;
             }
+            // Canonicalize date-time variants to the strict RFC3339 Z form
+            // that the DateTime CoreType pattern requires. Variants we see
+            // at the deserialization boundary:
+            //   - no TZ designator (PG JSONB-embedded timestamps; pg-types
+            //     does NOT auto-cast nested JSONB values like top-level
+            //     TIMESTAMPTZ columns do)
+            //   - numeric offsets: +00:00, +0500, -08:00 (PG's default
+            //     to_jsonb(timestamptz) rendering, other ISO 8601 emitters)
+            //   - space separator instead of T (some PG drivers)
+            if (typeof sanitizedData === 'string'
+                && (format === 'date-time' || format === 'time' || format === 'timestamp')) {
+                if (format === 'date-time' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(sanitizedData)) {
+                    sanitizedData = sanitizedData.replace(' ', 'T');
+                }
+                if (!/(Z|[+-]\d{2}:?\d{2})$/.test(sanitizedData)) {
+                    sanitizedData = sanitizedData + 'Z';
+                } else if (format === 'date-time' && !/Z$/.test(sanitizedData)) {
+                    const d = new Date(sanitizedData);
+                    if (!isNaN(d.getTime())) {
+                        sanitizedData = d.toISOString();
+                    }
+                }
+            }
             const ct = CoreType.get(format)
             const ctInstance = ct.newInstance(sanitizedData);
             if (ctInstance instanceof NumberFormat) {
                 return ctInstance.toNumber();
             } else if (ctInstance instanceof DateTime || ctInstance instanceof DateFormat) {
-                return ctInstance.toDate();
+                return ctInstance;
             }
             return ctInstance;
         } else if (primitives.indexOf(type.toLowerCase()) !== -1) {
@@ -907,11 +927,6 @@ export class ObjectSerializer {
           return transformedData;
         } else {
             if (enumsMap[type]) {
-              if (typeof enumsMap[type] === 'string') {
-                let mod = require(enumsMap[type]);
-                type.split('.').forEach((k) => (mod = mod[k]));
-                enumsMap[type] = mod;
-              }
               // is Enum
               if (`${Number(data)}` === `${data}`) {
                 return enumsMap[type].from(Number(data));

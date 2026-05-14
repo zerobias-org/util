@@ -94,7 +94,23 @@ task stageBinJars(type: Copy) {
 }
 build.dependsOn += stageBinJars
 
-test.useTestNG()
+test {
+    useTestNG()
+    // src/test/java has a placeholder class with no @Test methods so the
+    // task has source (avoids state.noSource → gate "skipped"). The real
+    // unit tests run via mochaUnit (below). Property only exists on
+    // Gradle 9+; root invokes via Gradle 8.10, codegen-direct uses 9.3.
+    if (it.hasProperty('failOnNoDiscoveredTests')) {
+        failOnNoDiscoveredTests = false
+    }
+    dependsOn 'mochaUnit'
+}
+
+task mochaUnit(type: Exec) {
+    workingDir projectDir
+    commandLine 'node', '--import', 'tsx/esm', '../../node_modules/mocha/bin/mocha.js',
+                '--exit', '--extensions', 'ts', 'test/unit/dateNormalization.spec.ts'
+}
 
 // Vanniktech reads artifactId from project.name. codegen's
 // rootProject.name in settings.gradle is 'hub-module-codegen' — matches

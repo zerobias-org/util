@@ -4,7 +4,7 @@
 // ===============================================
 import { CatalogPublishStatusEnumDef } from './CatalogPublishStatusEnum.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
-import { URL } from '@zerobias-org/types-core-js';
+import { DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -13,7 +13,7 @@ import { ObjectSerializer, RequestFile } from './index.js';
 export class BoundaryProductAnyAnyOf {
   'productName': string;
   'status': CatalogPublishStatusEnumDef;
-  'productCreated': Date;
+  'productCreated': DateTime;
   'productDescription'?: string | null;
   'productLogo'?: URL | null;
   'productUrl'?: URL | null;
@@ -43,9 +43,9 @@ export class BoundaryProductAnyAnyOf {
       "name": "productCreated",
       "baseName": "productCreated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -84,7 +84,7 @@ export class BoundaryProductAnyAnyOf {
     return ObjectSerializer.deserialize(obj, 'BoundaryProductAnyAnyOf');
   }
 
-  constructor(productName: string, status: CatalogPublishStatusEnumDef, productCreated: Date, productDescription?: string, productLogo?: URL, productUrl?: URL) {
+  constructor(productName: string, status: CatalogPublishStatusEnumDef, productCreated: DateTime, productDescription?: string, productLogo?: URL, productUrl?: URL) {
     this.productName = productName;
     this.status = status;
     this.productCreated = productCreated;

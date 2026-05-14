@@ -12,7 +12,7 @@ import { FindingSubject } from './FindingSubject.js';
 import { TestResultEnumDef } from './TestResultEnum.js';
 import { Finding } from './Finding.js';
 import { TestFindingSource } from './TestFindingSource.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class FindingList {
@@ -29,16 +29,16 @@ export class FindingList {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'externalId': string;
   'discoveredTestId': UUID;
   'state': FindingStateEnumDef;
   'source': TestFindingSourceDef;
-  'discoveredDate': Date;
+  'discoveredDate': DateTime;
   'result': TestResultEnumDef;
   'testCaseId': UUID;
   'testCase': FindingTestCase;
@@ -54,7 +54,7 @@ export class FindingList {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -77,7 +77,7 @@ export class FindingList {
   'objectId'?: UUID | null;
   'testIds'?: Array<UUID>;
   'subjectIds'?: Array<UUID>;
-  'resolvedDate'?: Date;
+  'resolvedDate'?: DateTime;
 
   static readonly discriminator: string | undefined = undefined;
 
@@ -122,18 +122,18 @@ export class FindingList {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -176,9 +176,9 @@ export class FindingList {
       "name": "discoveredDate",
       "baseName": "discoveredDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -239,9 +239,9 @@ export class FindingList {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -338,9 +338,9 @@ export class FindingList {
       "name": "resolvedDate",
       "baseName": "resolvedDate",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     }  ];
 
@@ -352,7 +352,7 @@ export class FindingList {
     return ObjectSerializer.deserialize(obj, 'FindingList');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, externalId: string, discoveredTestId: UUID, state: FindingStateEnumDef, source: TestFindingSourceDef, discoveredDate: Date, result: TestResultEnumDef, testCaseId: UUID, testCase: FindingTestCase, subjects: Array<FindingSubject>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, resolvedTestId?: UUID, configRule?: string, localId?: UUID, objectId?: UUID, testIds?: Array<UUID>, subjectIds?: Array<UUID>, resolvedDate?: Date) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, externalId: string, discoveredTestId: UUID, state: FindingStateEnumDef, source: TestFindingSourceDef, discoveredDate: DateTime, result: TestResultEnumDef, testCaseId: UUID, testCase: FindingTestCase, subjects: Array<FindingSubject>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, resolvedTestId?: UUID, configRule?: string, localId?: UUID, objectId?: UUID, testIds?: Array<UUID>, subjectIds?: Array<UUID>, resolvedDate?: DateTime) {
     this.id = id;
     this.name = name;
     this.type = type;

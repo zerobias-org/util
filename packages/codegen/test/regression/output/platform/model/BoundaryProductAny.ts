@@ -6,7 +6,7 @@ import { CatalogPublishStatusEnumDef } from './CatalogPublishStatusEnum.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
 import { BoundaryProductAnyAnyOf } from './BoundaryProductAnyAnyOf.js';
 import { BoundaryProduct } from './BoundaryProduct.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class BoundaryProductAny {
@@ -18,11 +18,11 @@ export class BoundaryProductAny {
   'boundaryId': UUID;
   'suggested': boolean;
   'productName': string;
-  'productCreated': Date;
+  'productCreated': DateTime;
   'parentId'?: UUID | null;
-  'created'?: Date;
-  'updated'?: Date;
-  'deleted'?: Date | null;
+  'created'?: DateTime;
+  'updated'?: DateTime;
+  'deleted'?: DateTime | null;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
@@ -112,9 +112,9 @@ export class BoundaryProductAny {
       "name": "productCreated",
       "baseName": "productCreated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -130,27 +130,27 @@ export class BoundaryProductAny {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -243,7 +243,7 @@ export class BoundaryProductAny {
     return ObjectSerializer.deserialize(obj, 'BoundaryProductAny');
   }
 
-  constructor(id: UUID, name: string, description: string, ownerId: UUID, status: CatalogPublishStatusEnumDef, boundaryId: UUID, suggested: boolean, productName: string, productCreated: Date, parentId?: UUID, created?: Date, updated?: Date, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, productId?: UUID, suggestedProductId?: UUID, productDescription?: string, productLogo?: URL, productUrl?: URL) {
+  constructor(id: UUID, name: string, description: string, ownerId: UUID, status: CatalogPublishStatusEnumDef, boundaryId: UUID, suggested: boolean, productName: string, productCreated: DateTime, parentId?: UUID, created?: DateTime, updated?: DateTime, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, productId?: UUID, suggestedProductId?: UUID, productDescription?: string, productLogo?: URL, productUrl?: URL) {
     this.id = id;
     this.name = name;
     this.description = description;

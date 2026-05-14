@@ -10,7 +10,7 @@ import { SchemasPrincipal } from './SchemasPrincipal.js';
 import { OrgAllOf } from './OrgAllOf.js';
 import { SchemasPrincipalStatusDef } from './SchemasPrincipalStatus.js';
 import { SchemasPrincipalOrigin } from './SchemasPrincipalOrigin.js';
-import { Email, Nmtoken, Hostname, UUID, URL } from '@zerobias-org/types-core-js';
+import { Email, Nmtoken, Hostname, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -147,7 +147,7 @@ export class SchemasOrg extends SchemasPrincipal {
     return ObjectSerializer.deserialize(obj, 'SchemasOrg');
   }
 
-  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, hidden: boolean, selfRegistration: boolean, invitationsEnabled: boolean, adminGroupId: UUID, memberGroupId: UUID, slug: Nmtoken, created?: Date, deleted?: Date, updated?: Date, externalId?: string, supportEmail?: Email, avatarUrl?: URL, domains?: Array<Hostname>) {
+  constructor(id: UUID, ownerId: UUID, name: string, type: SchemasPrincipalTypeDef, status: SchemasPrincipalStatusDef, enabled: boolean, origin: SchemasPrincipalOriginDef, hidden: boolean, selfRegistration: boolean, invitationsEnabled: boolean, adminGroupId: UUID, memberGroupId: UUID, slug: Nmtoken, created?: DateTime, deleted?: DateTime, updated?: DateTime, externalId?: string, supportEmail?: Email, avatarUrl?: URL, domains?: Array<Hostname>) {
     super(id, ownerId, name, type, status, enabled, origin, created, deleted, updated, externalId);
     this.hidden = hidden;
     this.selfRegistration = selfRegistration;

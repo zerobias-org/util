@@ -21,7 +21,7 @@ import { ProductOrderChangeEventAllOfProducts } from './ProductOrderChangeEventA
 import { ModuleVersionChangeEvent } from './ModuleVersionChangeEvent.js';
 import { CatalogingOrderChangeEvent } from './CatalogingOrderChangeEvent.js';
 import { CatalogingOrderChangeEventAllOfProduct } from './CatalogingOrderChangeEventAllOfProduct.js';
-import { Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**

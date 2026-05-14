@@ -10,7 +10,7 @@ import { CatalogSource } from './CatalogSource.js';
 import { Element } from './Element.js';
 import { ElementExtendedAllOf } from './ElementExtendedAllOf.js';
 import { SchemasTag } from './SchemasTag.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ElementExtended {
@@ -33,11 +33,11 @@ export class ElementExtended {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'code': string;
   'standardName': string;
   'standardExternalId': string;
@@ -57,7 +57,7 @@ export class ElementExtended {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -122,18 +122,18 @@ export class ElementExtended {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -230,9 +230,9 @@ export class ElementExtended {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -343,7 +343,7 @@ export class ElementExtended {
     return ObjectSerializer.deserialize(obj, 'ElementExtended');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, code: string, standardName: string, standardExternalId: string, standardId: UUID, elementTypeId: UUID, source: CatalogSourceDef, elementType: ElementType, parameters: Array<ElementParameter>, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, externalId?: string, background?: string, objectId?: UUID, packageCode?: string, tagIds?: Array<UUID>, baselines?: Array<IdNameCodeDescriptionImageUrlObject>, tags?: Array<SchemasTag>) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, code: string, standardName: string, standardExternalId: string, standardId: UUID, elementTypeId: UUID, source: CatalogSourceDef, elementType: ElementType, parameters: Array<ElementParameter>, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, externalId?: string, background?: string, objectId?: UUID, packageCode?: string, tagIds?: Array<UUID>, baselines?: Array<IdNameCodeDescriptionImageUrlObject>, tags?: Array<SchemasTag>) {
     this.id = id;
     this.name = name;
     this.type = type;

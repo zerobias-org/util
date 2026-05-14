@@ -6,7 +6,7 @@ import { CatalogPublishStatusEnumDef } from './CatalogPublishStatusEnum.js';
 import { ProductEditionVersionAllOf } from './ProductEditionVersionAllOf.js';
 import { Resource } from './Resource.js';
 import { CatalogPublishStatusEnum } from './CatalogPublishStatusEnum.js';
-import { Nmtoken, Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class ProductEditionVersion {
@@ -29,11 +29,11 @@ export class ProductEditionVersion {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'productEditionId': UUID;
   'createdBy': UUID;
   'status': CatalogPublishStatusEnumDef;
@@ -53,7 +53,7 @@ export class ProductEditionVersion {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -123,18 +123,18 @@ export class ProductEditionVersion {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -231,9 +231,9 @@ export class ProductEditionVersion {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -362,7 +362,7 @@ export class ProductEditionVersion {
     return ObjectSerializer.deserialize(obj, 'ProductEditionVersion');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, productEditionId: UUID, createdBy: UUID, status: CatalogPublishStatusEnumDef, code: string, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: number, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, updatedBy?: UUID, externalId?: string, logoFileVersionId?: UUID, background?: string, taskId?: UUID, productComponentIds?: Array<UUID>, complianceFeatureIds?: Array<UUID>, artifactVersionId?: UUID) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, productEditionId: UUID, createdBy: UUID, status: CatalogPublishStatusEnumDef, code: string, versionId: UUID, versionSemver: Semver, versionValue: number, versionFloatValue: number, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, updatedBy?: UUID, externalId?: string, logoFileVersionId?: UUID, background?: string, taskId?: UUID, productComponentIds?: Array<UUID>, complianceFeatureIds?: Array<UUID>, artifactVersionId?: UUID) {
     this.id = id;
     this.name = name;
     this.type = type;

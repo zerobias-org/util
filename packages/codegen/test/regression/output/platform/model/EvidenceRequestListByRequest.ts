@@ -4,7 +4,7 @@
 // ===============================================
 import { PublishEvidenceStatusEnumDef } from './PublishEvidenceStatusEnum.js';
 import { PublishEvidenceStatusEnum } from './PublishEvidenceStatusEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -32,11 +32,11 @@ export class EvidenceRequestListByRequest {
   /**
   * The date the evidence request list was created
   */
-  'created'?: Date;
+  'created'?: DateTime;
   /**
   * The date the evidence request list was updated
   */
-  'updated'?: Date;
+  'updated'?: DateTime;
   /**
   * The name of the framework version
   */
@@ -111,18 +111,18 @@ export class EvidenceRequestListByRequest {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -188,7 +188,7 @@ export class EvidenceRequestListByRequest {
     return ObjectSerializer.deserialize(obj, 'EvidenceRequestListByRequest');
   }
 
-  constructor(id: UUID, name: string, description: string, status: PublishEvidenceStatusEnumDef, frameworkVersionId: UUID, tags: Array<any>, created?: Date, updated?: Date, frameworkVersionName?: string, frameworkElementType?: string, evidenceRequestListVersion?: string, frameworkElementCode?: string, frameworkElementName?: string, subElementCode?: string) {
+  constructor(id: UUID, name: string, description: string, status: PublishEvidenceStatusEnumDef, frameworkVersionId: UUID, tags: Array<any>, created?: DateTime, updated?: DateTime, frameworkVersionName?: string, frameworkElementType?: string, evidenceRequestListVersion?: string, frameworkElementCode?: string, frameworkElementName?: string, subElementCode?: string) {
     this.id = id;
     this.name = name;
     this.description = description;

@@ -11,7 +11,7 @@ import { CatalogingOrderStatusDef } from './CatalogingOrderStatus.js';
 import { OrderChangeEvent } from './OrderChangeEvent.js';
 import { CatalogingOrderChangeEventAllOfProduct } from './CatalogingOrderChangeEventAllOfProduct.js';
 import { PriorityDef } from './Priority.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -32,15 +32,15 @@ export class CatalogingOrderChangeEvent {
   /**
   * The timestamp when this order was created
   */
-  'created'?: Date;
+  'created'?: DateTime;
   /**
   * The timestamp when this order was last updated
   */
-  'updated'?: Date;
+  'updated'?: DateTime;
   /**
   * The timestamp when this order is expected to be completed
   */
-  'expected'?: Date;
+  'expected'?: DateTime;
   /**
   * A description for this order
   */
@@ -48,7 +48,7 @@ export class CatalogingOrderChangeEvent {
   /**
   * When the order was completed
   */
-  'completed'?: Date;
+  'completed'?: DateTime;
   /**
   * Customer created Custom properties.
   */
@@ -115,27 +115,27 @@ export class CatalogingOrderChangeEvent {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "expected",
       "baseName": "expected",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -151,9 +151,9 @@ export class CatalogingOrderChangeEvent {
       "name": "completed",
       "baseName": "completed",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -201,7 +201,7 @@ export class CatalogingOrderChangeEvent {
     return ObjectSerializer.deserialize(obj, 'CatalogingOrderChangeEvent');
   }
 
-  constructor(id: UUID, ownerId: UUID, orderType: OrderTypeDef, priority: PriorityDef, product: CatalogingOrderChangeEventAllOfProduct, created?: Date, updated?: Date, expected?: Date, description?: string, completed?: Date, context?: { [key: string]: any; }, additionalInformation?: { [key: string]: any; }, status?: CatalogingOrderStatusDef, businessAnalysis?: { [key: string]: any; }) {
+  constructor(id: UUID, ownerId: UUID, orderType: OrderTypeDef, priority: PriorityDef, product: CatalogingOrderChangeEventAllOfProduct, created?: DateTime, updated?: DateTime, expected?: DateTime, description?: string, completed?: DateTime, context?: { [key: string]: any; }, additionalInformation?: { [key: string]: any; }, status?: CatalogingOrderStatusDef, businessAnalysis?: { [key: string]: any; }) {
     this.id = id;
     this.ownerId = ownerId;
     this.orderType = orderType;

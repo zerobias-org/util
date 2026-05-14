@@ -4,7 +4,7 @@
 // ===============================================
 import { PublishEvidenceStatusEnumDef } from './PublishEvidenceStatusEnum.js';
 import { PublishEvidenceStatusEnum } from './PublishEvidenceStatusEnum.js';
-import { Semver, UUID, URL } from '@zerobias-org/types-core-js';
+import { Semver, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -24,13 +24,13 @@ export class EvidenceRequestList {
   'description'?: string | null;
   'parentId'?: UUID | null;
   'artifactVersionId'?: UUID | null;
-  'created'?: Date;
-  'updated'?: Date;
+  'created'?: DateTime;
+  'updated'?: DateTime;
   'imageUrl'?: URL | null;
   'url'?: URL | null;
   'aliases'?: Array<string> | null;
   'keywords'?: Array<string> | null;
-  'deleted'?: Date | null;
+  'deleted'?: DateTime | null;
   'publishedBy'?: UUID | null;
 
   static readonly discriminator: string | undefined = undefined;
@@ -157,18 +157,18 @@ export class EvidenceRequestList {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -211,9 +211,9 @@ export class EvidenceRequestList {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -234,7 +234,7 @@ export class EvidenceRequestList {
     return ObjectSerializer.deserialize(obj, 'EvidenceRequestList');
   }
 
-  constructor(id: UUID, version: Semver, status: PublishEvidenceStatusEnumDef, frameworkVersionId: UUID, name: string, ownerId: UUID, versionId?: UUID, versionValue?: number, preRelease?: boolean, packageCode?: string, description?: string, parentId?: UUID, artifactVersionId?: UUID, created?: Date, updated?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, deleted?: Date, publishedBy?: UUID) {
+  constructor(id: UUID, version: Semver, status: PublishEvidenceStatusEnumDef, frameworkVersionId: UUID, name: string, ownerId: UUID, versionId?: UUID, versionValue?: number, preRelease?: boolean, packageCode?: string, description?: string, parentId?: UUID, artifactVersionId?: UUID, created?: DateTime, updated?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, keywords?: Array<string>, deleted?: DateTime, publishedBy?: UUID) {
     this.id = id;
     this.version = version;
     this.status = status;

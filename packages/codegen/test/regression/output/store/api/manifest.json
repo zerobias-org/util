@@ -1,8 +1,8 @@
 {
   "serviceName": "StoreApi",
   "version": "0.8.0",
-  "codegenVersion": "1.0.12",
-  "generatedAt": "2025-12-03T13:25:02Z",
+  "codegenVersion": "3.0.6",
+  "generatedAt": "2026-05-14T11:19:31Z",
   "clientClass": "StoreApiClient",
   "factoryFunction": "newStoreApi",
   "operations": [
@@ -89,6 +89,13 @@
           "required": false,
           "type": "SortParam",
           "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Module&gt;"
@@ -189,6 +196,13 @@
           "required": false,
           "type": "SortParamDesc",
           "description": "The order in which to sort the results, defaults to &#x60;desc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Event&gt;"
@@ -371,6 +385,13 @@ Search terms may be separated by a space, in which case the search currently ass
           "required": false,
           "type": "SortParam",
           "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Operation&gt;"
@@ -456,6 +477,13 @@ Search terms may be separated by a space, in which case the search currently ass
           "required": false,
           "type": "SortParam",
           "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Operation&gt;"
@@ -502,6 +530,13 @@ Search terms may be separated by a space, in which case the search currently ass
           "required": false,
           "type": "boolean",
           "description": "List only modules data support active or inactive."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ModuleVersion&gt;"
@@ -570,6 +605,13 @@ Search terms may be separated by a space, in which case the search currently ass
           "required": false,
           "type": "SortParam",
           "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Module&gt;"
@@ -621,6 +663,13 @@ Search terms may be separated by a space, in which case the search currently ass
           "required": false,
           "type": "SortObject",
           "description": "Sort object"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ModuleSearch&gt;"
@@ -672,6 +721,13 @@ Search terms may be separated by a space, in which case the search currently ass
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ModuleVersionScope&gt;"
@@ -806,6 +862,13 @@ Search terms may be separated by a space, in which case the search currently ass
           "required": false,
           "type": "SortParam",
           "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Operation&gt;"
@@ -944,6 +1007,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "OrderApi.OrderByEnum",
           "description": "Order by the given property"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;Order&gt;"
@@ -1088,6 +1158,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "number",
           "description": "The number of items in each page of data."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StoreProductVersion&gt;"
@@ -1156,6 +1233,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "string",
           "description": "Filter by product resource tag"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StoreProduct&gt;"
@@ -1174,14 +1258,14 @@ All order types may be provided a custom json context that is set by the custome
           "name": "from",
           "in": "query",
           "required": false,
-          "type": "Date",
+          "type": "DateTime",
           "description": "the from date of the interval."
         },
         {
           "name": "to",
           "in": "query",
           "required": false,
-          "type": "Date",
+          "type": "DateTime",
           "description": "the to date of the interval."
         }
       ],
@@ -1295,6 +1379,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "ResourceSearchFilter",
           "description": "Filters to apply to the search."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ResourceView&gt;"
@@ -1349,6 +1440,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "boolean",
           "description": "Flag indicating whether or not the result set should be fully-inflated. This parameter has been deprecated and will be removed in a future release."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;ResourceView&gt;"
@@ -1505,6 +1603,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "string",
           "description": "Filter by product resource tag"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StoreProduct&gt;"
@@ -1566,6 +1671,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "SortParam",
           "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StoreSuite&gt;"
@@ -1663,6 +1775,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "string",
           "description": "Filter to apply to the &#x60;name&#x60; field. This will be &#x60;ORed&#x60; with other filters  and is case-insensitive."
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;TagView&gt;"
@@ -1756,6 +1875,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "string",
           "description": "Filter by product resource tag"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StoreProduct&gt;"
@@ -1823,6 +1949,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "SortParam",
           "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StoreSuite&gt;"
@@ -1884,6 +2017,13 @@ All order types may be provided a custom json context that is set by the custome
           "required": false,
           "type": "SortParam",
           "description": "The order in which to sort the results, defaults to &#x60;asc&#x60;"
+        },
+        {
+          "name": "pageToken",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Opaque cursor for cursor-based pagination. When provided, pageNumber is ignored. Use the token from the previous response&#39;s pageToken header to get the next page."
         }
       ],
       "returnType": "PagedResults&lt;StoreVendor&gt;"

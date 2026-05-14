@@ -7,7 +7,7 @@ import { OAuthProviderAllOf } from './OAuthProviderAllOf.js';
 import { Resource } from './Resource.js';
 import { Product } from './Product.js';
 import { Vendor } from './Vendor.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class OAuthProvider {
@@ -30,11 +30,11 @@ export class OAuthProvider {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'url': URL;
   'packageCode': string;
   'vspId': UUID;
@@ -49,7 +49,7 @@ export class OAuthProvider {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -109,18 +109,18 @@ export class OAuthProvider {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -172,9 +172,9 @@ export class OAuthProvider {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -240,7 +240,7 @@ export class OAuthProvider {
     return ObjectSerializer.deserialize(obj, 'OAuthProvider');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, url: URL, packageCode: string, vspId: UUID, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, aliases?: Array<string>, boundaryId?: UUID, vendor?: Vendor, suite?: Suite, product?: Product) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, url: URL, packageCode: string, vspId: UUID, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, aliases?: Array<string>, boundaryId?: UUID, vendor?: Vendor, suite?: Suite, product?: Product) {
     this.id = id;
     this.name = name;
     this.type = type;

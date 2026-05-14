@@ -4,7 +4,7 @@
 // ===============================================
 import { AuditTypeEnumDef } from './AuditTypeEnum.js';
 import { AuditTypeEnum } from './AuditTypeEnum.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -13,7 +13,7 @@ import { ObjectSerializer, RequestFile } from './index.js';
 export class AppOrgAuditEvidenceAssessmentMetric {
   'auditId': UUID;
   'name': string;
-  'updated': Date;
+  'updated': DateTime;
   'frameworkVersion': string;
   /**
   * Count of evidence assessment records for this audit
@@ -70,9 +70,9 @@ export class AppOrgAuditEvidenceAssessmentMetric {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -165,7 +165,7 @@ export class AppOrgAuditEvidenceAssessmentMetric {
     return ObjectSerializer.deserialize(obj, 'AppOrgAuditEvidenceAssessmentMetric');
   }
 
-  constructor(auditId: UUID, name: string, updated: Date, frameworkVersion: string, evidenceAssessmentCount: number, awaitingReviewCount: number, onHoldCount: number, answeredCount: number, doneCount: number, satisfiedCount: number, notSatisfiedCount: number, auditType: AuditTypeEnumDef, ) {
+  constructor(auditId: UUID, name: string, updated: DateTime, frameworkVersion: string, evidenceAssessmentCount: number, awaitingReviewCount: number, onHoldCount: number, answeredCount: number, doneCount: number, satisfiedCount: number, notSatisfiedCount: number, auditType: AuditTypeEnumDef, ) {
     this.auditId = auditId;
     this.name = name;
     this.updated = updated;

@@ -15,7 +15,7 @@ import { CreateProductHierarchy } from './CreateProductHierarchy.js';
 import { ProductOrderChangeEventAllOfProducts } from './ProductOrderChangeEventAllOfProducts.js';
 import { CatalogingOrderChangeEvent } from './CatalogingOrderChangeEvent.js';
 import { CatalogingOrderChangeEventAllOfProduct } from './CatalogingOrderChangeEventAllOfProduct.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**

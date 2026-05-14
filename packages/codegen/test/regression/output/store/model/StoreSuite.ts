@@ -6,7 +6,7 @@ import { Suite } from './Suite.js';
 import { VspStatusEnum } from './VspStatusEnum.js';
 import { VspStatusEnumDef } from './VspStatusEnum.js';
 import { StoreSuiteAllOf } from './StoreSuiteAllOf.js';
-import { Nmtoken, UUID, URL } from '@zerobias-org/types-core-js';
+import { Nmtoken, UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class StoreSuite {
@@ -29,11 +29,11 @@ export class StoreSuite {
   /**
   * The timestamp when this resource was created
   */
-  'created': Date;
+  'created': DateTime;
   /**
   * The timestamp when this resource was last updated
   */
-  'updated': Date;
+  'updated': DateTime;
   'status': VspStatusEnumDef;
   'code': string;
   /**
@@ -47,7 +47,7 @@ export class StoreSuite {
   /**
   * Timestamp when the link was deleted, if it has been soft-deleted
   */
-  'deleted'?: Date;
+  'deleted'?: DateTime;
   /**
   * A URL to an image representing this resource
   */
@@ -121,18 +121,18 @@ export class StoreSuite {
       "name": "created",
       "baseName": "created",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "updated",
       "baseName": "updated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -175,9 +175,9 @@ export class StoreSuite {
       "name": "deleted",
       "baseName": "deleted",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -288,7 +288,7 @@ export class StoreSuite {
     return ObjectSerializer.deserialize(obj, 'StoreSuite');
   }
 
-  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: Date, updated: Date, status: VspStatusEnumDef, code: string, description?: string, parentId?: UUID, deleted?: Date, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, logo?: URL, logoFileVersionId?: UUID, artifactVersionId?: UUID, vendorId?: UUID, vendorCode?: string, vendorName?: string) {
+  constructor(id: UUID, name: string, type: Nmtoken, ownerId: UUID, created: DateTime, updated: DateTime, status: VspStatusEnumDef, code: string, description?: string, parentId?: UUID, deleted?: DateTime, imageUrl?: URL, url?: URL, aliases?: Array<string>, boundaryId?: UUID, packageCode?: string, logo?: URL, logoFileVersionId?: UUID, artifactVersionId?: UUID, vendorId?: UUID, vendorCode?: string, vendorName?: string) {
     this.id = id;
     this.name = name;
     this.type = type;

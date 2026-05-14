@@ -4,7 +4,7 @@
 // ===============================================
 import { AuditMessageLevel } from './AuditMessageLevel.js';
 import { AuditMessageLevelDef } from './AuditMessageLevel.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -16,7 +16,7 @@ export class AuditMessage {
   'senderId': UUID;
   'messageLevel': AuditMessageLevelDef;
   'message': string;
-  'date': Date;
+  'date': DateTime;
   'evidenceAssessmentId'?: UUID | null;
 
   static readonly discriminator: string | undefined = undefined;
@@ -71,9 +71,9 @@ export class AuditMessage {
       "name": "date",
       "baseName": "date",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -94,7 +94,7 @@ export class AuditMessage {
     return ObjectSerializer.deserialize(obj, 'AuditMessage');
   }
 
-  constructor(id: UUID, auditId: UUID, senderId: UUID, messageLevel: AuditMessageLevelDef, message: string, date: Date, evidenceAssessmentId?: UUID) {
+  constructor(id: UUID, auditId: UUID, senderId: UUID, messageLevel: AuditMessageLevelDef, message: string, date: DateTime, evidenceAssessmentId?: UUID) {
     this.id = id;
     this.auditId = auditId;
     this.senderId = senderId;

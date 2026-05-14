@@ -12,7 +12,7 @@ import { CatalogingOrderStatusDef } from './CatalogingOrderStatus.js';
 import { OperationOrderStatusDef } from './OperationOrderStatus.js';
 import { PriorityDef } from './Priority.js';
 import { OrderStatusDef } from './OrderStatus.js';
-import { UUID } from '@zerobias-org/types-core-js';
+import { UUID, DateTime } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 export class OrderAllOf {
@@ -27,11 +27,11 @@ export class OrderAllOf {
   * The id of the principal that created this order
   */
   'ownerId'?: UUID;
-  'completed'?: Date;
+  'completed'?: DateTime;
   /**
   * The timestamp when the order is expected to be completed
   */
-  'expected'?: Date;
+  'expected'?: DateTime;
   /**
   * Additional details available for this orders
   */
@@ -93,18 +93,18 @@ export class OrderAllOf {
       "name": "completed",
       "baseName": "completed",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
       "name": "expected",
       "baseName": "expected",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -134,7 +134,7 @@ export class OrderAllOf {
     return ObjectSerializer.deserialize(obj, 'OrderAllOf');
   }
 
-  constructor(orderType: OrderTypeDef, priority: PriorityDef, status: CatalogingOrderStatusDef | OperationOrderStatusDef | OrderStatusDef, context: { [key: string]: any; }, ownerId?: UUID, completed?: Date, expected?: Date, additionalInformation?: { [key: string]: any; }, statusReason?: string) {
+  constructor(orderType: OrderTypeDef, priority: PriorityDef, status: CatalogingOrderStatusDef | OperationOrderStatusDef | OrderStatusDef, context: { [key: string]: any; }, ownerId?: UUID, completed?: DateTime, expected?: DateTime, additionalInformation?: { [key: string]: any; }, statusReason?: string) {
     this.orderType = orderType;
     this.priority = priority;
     this.status = status;

@@ -4,7 +4,7 @@
 // ===============================================
 import { NameDescriptionObject } from './NameDescriptionObject.js';
 import { IdNameCodeDescriptionImageUrlVersionObject } from './IdNameCodeDescriptionImageUrlVersionObject.js';
-import { UUID, URL } from '@zerobias-org/types-core-js';
+import { UUID, DateTime, URL } from '@zerobias-org/types-core-js';
 import { ObjectSerializer, RequestFile } from './index.js';
 
 /**
@@ -15,7 +15,7 @@ export class BoundarySuggestedProductAllOf {
   'suggestedProductName': string;
   'suggestedProductDescription': string;
   'suggestedProductOwnerId': UUID;
-  'suggestedProductCreated': Date;
+  'suggestedProductCreated': DateTime;
   'suggestedProductSegments'?: Array<IdNameCodeDescriptionImageUrlVersionObject>;
   'suggestedProductFactoryTypes'?: Array<NameDescriptionObject>;
   'suggestedProductHostingTypes'?: Array<NameDescriptionObject>;
@@ -65,9 +65,9 @@ export class BoundarySuggestedProductAllOf {
       "name": "suggestedProductCreated",
       "baseName": "suggestedProductCreated",
       // false
-      // Date
-      // Date
-      "type": "Date",
+      // DateTime
+      // DateTime
+      "type": "DateTime",
       "format": "date-time"
     },
     {
@@ -124,7 +124,7 @@ export class BoundarySuggestedProductAllOf {
     return ObjectSerializer.deserialize(obj, 'BoundarySuggestedProductAllOf');
   }
 
-  constructor(suggestedProductId: UUID, suggestedProductName: string, suggestedProductDescription: string, suggestedProductOwnerId: UUID, suggestedProductCreated: Date, suggestedProductSegments?: Array<IdNameCodeDescriptionImageUrlVersionObject>, suggestedProductFactoryTypes?: Array<NameDescriptionObject>, suggestedProductHostingTypes?: Array<NameDescriptionObject>, suggestedProductImageUrl?: URL, suggestedProductUrl?: URL) {
+  constructor(suggestedProductId: UUID, suggestedProductName: string, suggestedProductDescription: string, suggestedProductOwnerId: UUID, suggestedProductCreated: DateTime, suggestedProductSegments?: Array<IdNameCodeDescriptionImageUrlVersionObject>, suggestedProductFactoryTypes?: Array<NameDescriptionObject>, suggestedProductHostingTypes?: Array<NameDescriptionObject>, suggestedProductImageUrl?: URL, suggestedProductUrl?: URL) {
     this.suggestedProductId = suggestedProductId;
     this.suggestedProductName = suggestedProductName;
     this.suggestedProductDescription = suggestedProductDescription;
