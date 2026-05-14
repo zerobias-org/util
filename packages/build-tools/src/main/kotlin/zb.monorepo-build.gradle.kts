@@ -1086,10 +1086,22 @@ fun registerDockerTasksForPackage(
     val imageTag = "${dockerCfg.image}:dev"
 
     // Internal deps that need to be bundled into the Docker image as
-    // file:local_deps/*.tgz references. Resolved automatically from the
-    // workspace dep graph rather than a hand-maintained map.
-    val internalDepDirs: List<java.io.File> = pkg.internalDeps
-        .mapNotNull { depName -> packages[depName]?.dir }
+    // file:local_deps/*.tgz references. Resolved as the TRANSITIVE closure
+    // of workspace deps — prepublish-standalone.sh hoists transitive
+    // workspace deps into the packed package.json as strict version pins,
+    // so we must bundle them too or `npm install` inside the Docker image
+    // tries to resolve `pkg@2.0.0` from the registry and fails (those
+    // versions aren't on the real registry yet).
+    val internalDepDirs: List<java.io.File> = run {
+        val visited = mutableSetOf<String>()
+        val queue = ArrayDeque(pkg.internalDeps)
+        while (queue.isNotEmpty()) {
+            val depName = queue.removeFirst()
+            if (!visited.add(depName)) continue
+            packages[depName]?.internalDeps?.let { queue.addAll(it) }
+        }
+        visited.mapNotNull { depName -> packages[depName]?.dir }
+    }
 
     // ── npmPack ────────────────────────────────────────────────────────
     val npmPack = subproject.tasks.register("npmPack") {
@@ -1112,6 +1124,13 @@ fun registerDockerTasksForPackage(
 
         val packStamp = subproject.layout.buildDirectory.file("npm-pack.stamp")
         outputs.file(packStamp)
+        // Track the actual tarball produced in dockerContextDir as an output so
+        // Gradle's up-to-date check invalidates this task when the tarball is
+        // removed (e.g. by manual cleanup of image/<service>/). Without this,
+        // a stale stamp would let npmPack skip while downstream tasks fail
+        // with "No tarball found".
+        outputs.files(subproject.fileTree(dockerContextDir).matching { include("*.tgz") })
+            .withPropertyName("tarball")
 
         doFirst {
             // Clean any leftover tarballs in the docker context dir
@@ -1192,7 +1211,10 @@ fun registerDockerTasksForPackage(
                 command = listOf("tar", "-xzf", tarball.name),
                 workingDir = dockerContextDir
             )
-            tarball.delete()
+            // Keep the tarball in place — it's npmPack's declared output and
+            // serves as the fingerprint Gradle uses to detect when the work
+            // needs re-doing. npmPack's doFirst already cleans stale tgzs at
+            // the start of each pack, so leftover tarballs don't accumulate.
 
             // Bundle internal workspace deps into the docker context as
             // file:local_deps/*.tgz references. Auto-detected from the

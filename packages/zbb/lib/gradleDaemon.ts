@@ -76,11 +76,30 @@ export function refreshGradleDaemonEnv(
   }
   if (pids.length === 0) return { stopped: false };
 
+  // `pgrep -f GradleDaemon` is global — it returns daemons across every
+  // stack/slot on the host, plus any anonymous daemons spawned by a
+  // direct `./gradlew` invocation. Watched keys are scoped to THIS
+  // chain's `env:`, so they'll legitimately be unset on daemons that
+  // belong to a different stack (e.g. `HYDRA_SERVICE_PORT` is only
+  // declared by the hydra-service stack — the platform stack's daemon
+  // has no reason to carry it). Comparing watched keys against a
+  // foreign daemon always reports drift, even though nothing actually
+  // changed. Identify "our" daemons by matching ZB_STACK + ZB_SLOT
+  // against the current process.env — these are stamped by prepareSlot
+  // on every zbb spawn, so any daemon zbb itself launched will carry
+  // them. Anonymous daemons (vanilla `./gradlew` from a user shell)
+  // and foreign-stack daemons are skipped.
+  const ourStack = expectedEnv.ZB_STACK ?? '';
+  const ourSlot = expectedEnv.ZB_SLOT ?? '';
+  const isOurDaemon = (env: Record<string, string>) =>
+    (env.ZB_STACK ?? '') === ourStack && (env.ZB_SLOT ?? '') === ourSlot;
+
   // Walk daemons, compare each watched key.
   let drift: { pid: number; key: string } | null = null;
   for (const pid of pids) {
     const environ = readDaemonEnv(pid);
     if (!environ) continue; // daemon vanished or perms denied — skip
+    if (!isOurDaemon(environ)) continue; // foreign stack/slot — not our problem
     for (const key of watchedKeys) {
       const expected = expectedEnv[key] ?? '';
       const actual = environ[key] ?? '';
