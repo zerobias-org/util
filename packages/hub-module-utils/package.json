@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/util-hub-module-utils",
   "description": "Hub Module utils",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "type": "module",
   "main": "dist/src/index.js",
   "exports": {
@@ -35,7 +35,7 @@
     "dist"
   ],
   "dependencies": {
-    "@zerobias-org/util-codegen": "^3.0.7",
+    "@zerobias-org/util-codegen": "^3.0.8",
     "@zerobias-org/util-connector": "^2.0.1"
   }
 }
