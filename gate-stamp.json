@@ -287,9 +287,9 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "3.0.6",
-      "sourceHash": "9c1b1217d04e32823af45e485d8849dbfc929ad442e9cb010a8ddcb11a0cbabb",
-      "testHash": "54a75d9f7f97620aa75e238413d2afc8bbad67f6b5f0764415fa56b2d728f85f",
+      "version": "3.0.7",
+      "sourceHash": "235093295c842507544d127c238bceb329019454655eb3ff8566451261cbf24c",
+      "testHash": "dbc3ac58a6c47fcea56d30c85a157fcb45f41f9ba1176104cc32a9773b8e57bc",
       "tasks": {
         "lint": "skipped",
         "compile": "skipped",
@@ -326,7 +326,7 @@
       }
     },
     "@zerobias-org/util-connector": {
-      "version": "2.0.0",
+      "version": "2.0.1",
       "sourceHash": "c671037ff558b812272c815b102fa159c3f1cd4786696aa8bc564e74897b3940",
       "testHash": "2bb646e7472ba501356498be2c59c152821649ad5150cf4ec3dbfe38df0167d6",
       "tasks": {
@@ -404,8 +404,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "3.0.1",
-      "sourceHash": "917d6f3f0e492dcd8bffd3f37b7384baef7be26074cfc6b3506fdc9ff86a794e",
+      "version": "3.0.2",
+      "sourceHash": "c8050840dcefb46504e372c809e417a6b68e2076256916cdfa5b5795864a9ced",
       "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
       "tasks": {
         "lint": "passed",
@@ -449,8 +449,8 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.1",
-      "sourceHash": "bfe537c150684e680032f91c932454217255d5402c0babb7194afeff20bbf906",
+      "version": "2.0.2",
+      "sourceHash": "bda6be2088c154eb91bf626feb8825fb55cb630b59ff6fb2c83749279e53c1f5",
       "testHash": "446a47d1dd07ac1e455431e782def2a601d5b98974da834216c139be3258be97",
       "tasks": {
         "lint": "passed",
@@ -535,7 +535,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.70",
+      "version": "0.3.71",
       "sourceHash": "9885e1b04844049c1cf18d1de60cd93194b79a579a14d77dce011ec8c42f4149",
       "testHash": "767d4eaa2c64ef46b33cb05bc621f2ee61a0bc64da6e5dd704e6b4bf0a3ff4e8",
       "tasks": {
