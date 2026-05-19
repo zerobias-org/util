@@ -10,6 +10,7 @@ import com.zerobias.buildtools.module.ServerEntryPointGenerator
 import com.zerobias.buildtools.module.DockerRunner
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.tasks.registerDataloader
+import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 
 plugins {
@@ -1718,12 +1719,15 @@ val testHub by tasks.registering {
 // All Neon orchestration lives in NeonDataloaderTask. The shared
 // `registerDataloader` helper handles the common conventions
 // (packageDir, log-path naming). This block only carries the
-// typescript-module-specific bits: force=true (to defeat parent-branch
-// snapshot no-op skips), task-graph ordering for gradle 8 strict
-// validation, and the spec-symlink doFirst that lets the dataloader
-// CLI find the generated distribution YAML at the project root.
+// typescript-module-specific bits: env-aware force selection (see
+// resolveDataloaderForceMode for CI/local defaults and the -P escape
+// hatches), task-graph ordering for gradle 8 strict validation, and
+// the spec-symlink doFirst that lets the dataloader CLI find the
+// generated distribution YAML at the project root.
 
-val dataloaderExec = registerDataloader(force = true) {
+val (useForce, useForceDirect) = resolveDataloaderForceMode()
+
+val dataloaderExec = registerDataloader(force = useForce, forceDirect = useForceDirect) {
     dependsOn(tasks.named("compile"))
     // Tasks that write into projectDir / generated/ — gradle 8 strict
     // validation treats unrelated tasks reading the same paths as

@@ -5,6 +5,7 @@ import com.github.gradle.node.npm.task.NpxTask
 import com.zerobias.buildtools.collectorbot.CollectorbotEntryPointGenerator
 import com.zerobias.buildtools.module.ZbExtension
 import com.zerobias.buildtools.tasks.registerDataloader
+import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 
 plugins {
@@ -279,7 +280,10 @@ tasks.named("testDirect") {
 // list is shorter than zb.typescript's. No spec-symlink either: bots
 // don't ship a distribution YAML.
 
-val dataloaderExec = registerDataloader(force = true) {
+// Env-aware force/force-direct selection — see resolveDataloaderForceMode.
+val (useForce, useForceDirect) = resolveDataloaderForceMode()
+
+val dataloaderExec = registerDataloader(force = useForce, forceDirect = useForceDirect) {
     dependsOn(tasks.named("compile"))
     // Tasks that write into projectDir / generated/ — gradle 8 strict
     // validation treats unrelated tasks reading the same paths as
