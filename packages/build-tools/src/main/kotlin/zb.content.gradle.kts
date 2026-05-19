@@ -2,6 +2,7 @@
 
 import com.github.gradle.node.npm.task.NpmTask
 import com.zerobias.buildtools.tasks.registerDataloader
+import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
 
 /**
  * zb.content — leaf plugin for content-catalog NPM packages that ship
@@ -181,7 +182,15 @@ val npmInstallContent by tasks.registering(NpmTask::class) {
 // gate runs without vault credentials from blowing up.
 // ════════════════════════════════════════════════════════════
 
-val dataloaderExec = registerDataloader {
+// Env-aware force selection — see resolveDataloaderForceMode.
+// Previously content used no-force (skip on name@version cache hit), which
+// meant a content change without a version bump would stamp the gate green
+// without ever re-validating. Adopting the same default as typescript /
+// collectorbot closes that hole while keeping local runs fast via
+// --force-direct (top-level reload only, transitive cache hits skip).
+val (useForce, useForceDirect) = resolveDataloaderForceMode()
+
+val dataloaderExec = registerDataloader(force = useForce, forceDirect = useForceDirect) {
     // Dataloader resolves the artifact's dependencies from node_modules; without
     // an explicit dep on npmInstallContent gradle 8+ flags the implicit input
     // and fails the build (validation-type problem on parallel runs).

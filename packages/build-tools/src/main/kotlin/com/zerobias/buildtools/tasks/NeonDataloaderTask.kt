@@ -74,10 +74,38 @@ abstract class NeonDataloaderTask : DefaultTask() {
      * snapshot may already contain the artifact at the same version — without
      * `-f` the loader exits 0 after a no-op skip and the gate stamps green
      * without ever validating the new bits.
+     *
+     * `-f` forces a reload of the top-level package AND every transitive
+     * dependency, regardless of whether the DB already has them at the same
+     * `name@version`. Use this when the parent branch may be stale or
+     * corrupted (typical for CI's fresh-branch model).
+     *
+     * For most local iteration prefer [forceDirect] instead — it forces the
+     * top-level reload (preserving the no-op-skip safety net) but lets
+     * transitive deps short-circuit when their version is already loaded,
+     * which avoids the multi-minute walk of every schema/vendor dep.
+     *
+     * If both [force] and [forceDirect] are set, [force] wins.
      */
     @get:Input
     @get:Optional
     abstract val force: Property<Boolean>
+
+    /**
+     * Pass `--force-direct` to the dataloader CLI. Forces a reload of the
+     * top-level package only — transitive deps fall through to the normal
+     * "is this name@version already loaded?" check and are skipped on hit.
+     *
+     * Preserves the safety net that motivates [force] (top-level is still
+     * always re-loaded, so a no-op skip can't stamp the gate green without
+     * validation), while skipping the per-transitive load that dominates
+     * runtime when the DB already has the full dep graph.
+     *
+     * Ignored when [force] is also set.
+     */
+    @get:Input
+    @get:Optional
+    abstract val forceDirect: Property<Boolean>
 
     /**
      * Optional path to write the captured dataloader output to. When set,
@@ -253,7 +281,10 @@ abstract class NeonDataloaderTask : DefaultTask() {
             )
 
             val cmd = mutableListOf("dataloader")
-            if (force.getOrElse(false)) cmd.add("-f")
+            when {
+                force.getOrElse(false) -> cmd.add("-f")
+                forceDirect.getOrElse(false) -> cmd.add("--force-direct")
+            }
             cmd.addAll(listOf("-d", pkgDir.absolutePath))
 
             logger.lifecycle("${name}: Running ${cmd.joinToString(" ")}")
@@ -623,11 +654,13 @@ abstract class NeonDataloaderTask : DefaultTask() {
  */
 fun Project.registerDataloader(
     force: Boolean = false,
+    forceDirect: Boolean = false,
     configure: NeonDataloaderTask.() -> Unit = {},
 ): TaskProvider<NeonDataloaderTask> =
     tasks.register(DATALOADER_TASK_NAME, NeonDataloaderTask::class.java) {
         packageDir.set(layout.projectDirectory)
         this.force.set(force)
+        this.forceDirect.set(forceDirect)
         val safeProjectName = path.removePrefix(":").replace(":", "-")
         displayLogPath.set(
             rootProject.layout.projectDirectory
@@ -635,5 +668,36 @@ fun Project.registerDataloader(
         )
         configure()
     }
+
+/**
+ * Resolve the dataloader force mode for the current build, returning
+ * `(force, forceDirect)` to pass into [registerDataloader].
+ *
+ * Precedence (first match wins):
+ *
+ *   1. `-Pdataloader.force=true`        → `-f`              (panic: reload everything)
+ *   2. `-Pdataloader.forceDirect=true`  → `--force-direct`  (reload top-level only)
+ *   3. `CI=true`                        → `-f`              (fresh-branch CI safety —
+ *                                                            matches zbb's CI rule)
+ *   4. otherwise (local dev)            → `--force-direct`  (skip transitive deps that
+ *                                                            already match name@version)
+ *
+ * Either way, the top-level package is always re-loaded — preserving the
+ * "no-op skip can't stamp gate green" safety net documented on
+ * [NeonDataloaderTask.force]. The difference is whether every transitive
+ * schema/vendor also gets re-walked.
+ *
+ * Used by zb.typescript / zb.typescript-collectorbot / zb.content so all
+ * three pipelines pick up the same env-aware default and the same `-P`
+ * escape hatches.
+ */
+fun Project.resolveDataloaderForceMode(): Pair<Boolean, Boolean> {
+    val forceProp = providers.gradleProperty("dataloader.force").orNull?.toBoolean() ?: false
+    val forceDirectProp = providers.gradleProperty("dataloader.forceDirect").orNull?.toBoolean() ?: false
+    val isCi = System.getenv("CI") == "true"
+    val useForce = forceProp || (isCi && !forceDirectProp)
+    val useForceDirect = !useForce && (forceDirectProp || !isCi)
+    return useForce to useForceDirect
+}
 
 const val DATALOADER_TASK_NAME = "dataloaderExec"
