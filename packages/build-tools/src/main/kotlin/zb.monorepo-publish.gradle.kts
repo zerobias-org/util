@@ -847,6 +847,32 @@ gradle.projectsEvaluated {
             }
         }
 
+        // ── prepublishLocalOnly ──
+        // Side-effect-free counterpart of prepublishPackage. Calls the SAME
+        // `Prepublish.resolve()` helper to inject root-hoisted deps + overrides
+        // into the package's package.json, but with NONE of the prod-publish
+        // wiring: no `publishPlan` dependency, no `commitVersionBumps`, no
+        // version bumping, no git commit. Intended for `zbb registry publish`
+        // so a local-only publish carries the same resolved deps a prod publish
+        // would without rewriting the source version or touching git history.
+        //
+        // Reuses the same `.prepublish-backup` location so `restorePackage`
+        // (defined below) can roll back either flow's mutations identically.
+        @Suppress("UNUSED_VARIABLE")
+        val prepublishLocalOnlyTask = taskOwner.tasks.register("prepublishLocalOnly$nameSuffix") {
+            group = "monorepo"
+            description = "Resolve root deps into $pkgName package.json (no bump, no commit, no plan)"
+            doLast {
+                logger.lifecycle("[prepublishLocalOnly] $pkgName")
+                val opts = Prepublish.Options(dryRun = false, targetDir = publishSubdir)
+                val result = Prepublish.resolve(pkg.dir, rootDir, opts)
+                logger.lifecycle(
+                    "[prepublishLocalOnly] resolved ${result.dependencies.size} deps " +
+                        "(${result.addedDeps.size} newly added, ${result.missingDeps.size} missing)"
+                )
+            }
+        }
+
         // ── restorePackage (idempotent) ──
         // When `publishConfig.directory` is set, Prepublish writes to that
         // subdir and skips backup creation (the source package.json is never

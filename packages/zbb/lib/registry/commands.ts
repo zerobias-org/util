@@ -3,7 +3,7 @@
  * Manages the local Verdaccio npm registry stack.
  */
 
-import { resolve as resolvePath, join } from 'node:path';
+import { resolve as resolvePath, join, dirname, relative } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { readFile, writeFile, unlink, mkdir, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
@@ -188,6 +188,120 @@ async function handleStop(slot: Slot): Promise<void> {
 
 // ── Publish ──────────────────────────────────────────────────
 
+/**
+ * Result of a successful prepublish — calling `restore()` puts the
+ * package.json back to its pre-prepublish state and cleans up any
+ * `.prepublish-backup` files left behind.
+ */
+interface PrepublishHandle {
+  restore: () => Promise<void>;
+}
+
+/**
+ * Find the nearest ancestor directory whose `package.json` declares a
+ * `workspaces` field. Returns null when `targetPath` isn't inside a
+ * workspace (standalone package — no root deps to hoist from).
+ */
+function findWorkspaceRoot(targetPath: string): string | null {
+  let dir = targetPath;
+  // Walk up until / (or up to 8 levels to bound; nfa-repos tree is shallow).
+  for (let i = 0; i < 16; i += 1) {
+    const pkgPath = join(dir, 'package.json');
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+        if (Array.isArray(pkg.workspaces) || (pkg.workspaces && typeof pkg.workspaces === 'object')) {
+          return dir;
+        }
+      } catch { /* ignore malformed package.json */ }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * Run build-tools' Kotlin `Prepublish.resolve()` against the target
+ * package via gradle, so the local-publish tarball carries the same
+ * hoisted root deps a full monorepo publish would. Returns a handle
+ * whose `restore()` puts the source package.json back (idempotent).
+ *
+ * No-op when the target isn't inside a gradle-aware workspace —
+ * standalone packages keep their package.json untouched and we go
+ * straight to `npm pack`.
+ */
+async function tryPrepublish(targetPath: string): Promise<PrepublishHandle | null> {
+  const workspaceRoot = findWorkspaceRoot(targetPath);
+  if (!workspaceRoot) {
+    console.log('  [prepublish] target not in a workspace — skipping dep resolution');
+    return null;
+  }
+
+  const gradlew = join(workspaceRoot, 'gradlew');
+  if (!existsSync(gradlew)) {
+    console.log('  [prepublish] no gradlew at workspace root — skipping dep resolution');
+    return null;
+  }
+
+  // Map the package dir to a gradle project path. For util-events
+  // at `<root>/packages/events`, gradle registers it as `:packages:events`.
+  // The relative path's separators become `:` in the task selector.
+  const rel = relative(workspaceRoot, targetPath);
+  if (rel.startsWith('..') || rel === '') {
+    // targetPath is outside or AT the workspace root — no leaf package
+    // for prepublish to operate on.
+    console.log('  [prepublish] target equals workspace root — skipping');
+    return null;
+  }
+  const projectPath = ':' + rel.split(/[\\/]+/).join(':');
+  // `prepublishLocalOnly` is the no-bump / no-commit / no-publishPlan
+  // counterpart of the existing `prepublishPackage` task — it reuses the
+  // same `Prepublish.resolve()` Kotlin component but skips the
+  // commitVersionBumps + publishPlan chain that the prod-publish path
+  // wires in. Local-registry publishes need the resolved-deps mutation
+  // without the auto-bump-on-already-published behavior (which would
+  // rewrite the source version and commit a `chore(release): …` to git
+  // every time a user iterates on a local publish).
+  const prepublishTask = `${projectPath}:prepublishLocalOnly`;
+  const restoreTask = `${projectPath}:restorePackage`;
+
+  console.log(`  [prepublish] running ${prepublishTask}`);
+  const code = await exec(`./gradlew ${prepublishTask}`, workspaceRoot);
+  if (code !== 0) {
+    // Gradle exit codes other than 0 are typically real failures (the
+    // dep map couldn't be built, root package.json was malformed, etc.)
+    // — surface them so the user sees the prepublish problem rather
+    // than getting a confusing downstream npm-pack issue.
+    throw new Error(`prepublish task ${prepublishTask} failed (exit ${code})`);
+  }
+
+  let restored = false;
+  return {
+    restore: async () => {
+      if (restored) return;
+      restored = true;
+      console.log(`  [prepublish] restoring ${restoreTask}`);
+      const restoreCode = await exec(`./gradlew ${restoreTask}`, workspaceRoot);
+      if (restoreCode !== 0) {
+        // Don't throw — the publish itself may have already succeeded
+        // and the caller can recover with `git checkout package.json`.
+        // We just warn so the lingering edits are visible.
+        console.warn(
+          `  [prepublish] WARNING: restorePackage task ${restoreTask} exited ${restoreCode}; ` +
+          'source package.json may still carry the resolved deps. Recover with: git checkout -- package.json',
+        );
+      }
+      // Belt-and-braces: drop any leftover `.prepublish-backup` file if
+      // restorePackage didn't clean it up. The backup is regenerated on
+      // next prepublish, so leaving it around just causes confusion.
+      const backupPath = join(targetPath, 'package.json.prepublish-backup');
+      try { await unlink(backupPath); } catch { /* ignore — already cleaned up or never created */ }
+    },
+  };
+}
+
 async function handlePublish(args: string[], slot: Slot): Promise<void> {
   const healthy = await isRegistryHealthy(slot);
   if (!healthy) {
@@ -225,68 +339,86 @@ async function handlePublish(args: string[], slot: Slot): Promise<void> {
     }
   }
 
-  // Pack the package
-  const { code: packCode, stdout: packOutput } = await execCapture('npm pack --json 2>/dev/null || npm pack', targetPath);
-  if (packCode !== 0) {
-    console.error('  npm pack failed');
-    process.exit(packCode);
-  }
+  // Prepublish — resolve root deps + scanned imports into the package's
+  // package.json BEFORE npm pack reads it. Without this the local tarball
+  // ships with whatever `dependencies` happens to be in source (often
+  // `{}` for hoisted-deps workspaces), causing consumers that install the
+  // local-published version to be missing transitives at runtime. We
+  // delegate to build-tools' Kotlin `Prepublish.resolve()` via gradle so
+  // local and CI publishes produce identical tarballs.
+  const prepublish = await tryPrepublish(targetPath);
 
-  // Find the tarball filename
-  let tarballFile = packOutput.trim().split('\n').pop()?.trim() ?? '';
   try {
-    const parsed = JSON.parse(packOutput);
-    if (Array.isArray(parsed) && parsed[0]?.filename) tarballFile = parsed[0].filename;
-  } catch { /* use raw */ }
+    // Pack the package
+    const { code: packCode, stdout: packOutput } = await execCapture('npm pack --json 2>/dev/null || npm pack', targetPath);
+    if (packCode !== 0) {
+      console.error('  npm pack failed');
+      process.exit(packCode);
+    }
 
-  const tarballPath = join(targetPath, tarballFile);
+    // Find the tarball filename
+    let tarballFile = packOutput.trim().split('\n').pop()?.trim() ?? '';
+    try {
+      const parsed = JSON.parse(packOutput);
+      if (Array.isArray(parsed) && parsed[0]?.filename) tarballFile = parsed[0].filename;
+    } catch { /* use raw */ }
 
-  // Repack with publishConfig removed.
-  // npm publish reads publishConfig.registry from the tarball's package.json,
-  // overriding --registry and --userconfig. We strip it to force local publish.
-  const tmpDir = join(targetPath, '.zbb-publish-tmp');
-  await mkdir(tmpDir, { recursive: true });
+    const tarballPath = join(targetPath, tarballFile);
 
-  await exec(`tar xzf "${tarballPath}" -C "${tmpDir}"`, targetPath);
-  const innerPkgPath = join(tmpDir, 'package', 'package.json');
-  const innerPkg = JSON.parse(await readFile(innerPkgPath, 'utf-8'));
-  delete innerPkg.publishConfig;
-  await writeFile(innerPkgPath, JSON.stringify(innerPkg, null, 2) + '\n');
+    // Repack with publishConfig removed.
+    // npm publish reads publishConfig.registry from the tarball's package.json,
+    // overriding --registry and --userconfig. We strip it to force local publish.
+    const tmpDir = join(targetPath, '.zbb-publish-tmp');
+    await mkdir(tmpDir, { recursive: true });
 
-  // Repack
-  const { stdout: repackOut } = await execCapture('npm pack --json 2>/dev/null || npm pack', join(tmpDir, 'package'));
-  let repackTarball = repackOut.trim().split('\n').pop()?.trim() ?? '';
-  try {
-    const parsed = JSON.parse(repackOut);
-    if (Array.isArray(parsed) && parsed[0]?.filename) repackTarball = parsed[0].filename;
-  } catch { /* use raw */ }
-  const repackPath = join(tmpDir, 'package', repackTarball);
+    await exec(`tar xzf "${tarballPath}" -C "${tmpDir}"`, targetPath);
+    const innerPkgPath = join(tmpDir, 'package', 'package.json');
+    const innerPkg = JSON.parse(await readFile(innerPkgPath, 'utf-8'));
+    delete innerPkg.publishConfig;
+    await writeFile(innerPkgPath, JSON.stringify(innerPkg, null, 2) + '\n');
 
-  // Write temp .npmrc to bypass scoped registry config
-  const tmpNpmrc = await writeTmpNpmrc(tmpDir, registryUrl);
+    // Repack
+    const { stdout: repackOut } = await execCapture('npm pack --json 2>/dev/null || npm pack', join(tmpDir, 'package'));
+    let repackTarball = repackOut.trim().split('\n').pop()?.trim() ?? '';
+    try {
+      const parsed = JSON.parse(repackOut);
+      if (Array.isArray(parsed) && parsed[0]?.filename) repackTarball = parsed[0].filename;
+    } catch { /* use raw */ }
+    const repackPath = join(tmpDir, 'package', repackTarball);
 
-  // Unpublish cached upstream version first, then publish local copy
-  await exec(
-    `npm unpublish "${name}@${version}" --userconfig "${tmpNpmrc}" --force 2>/dev/null`,
-    join(tmpDir, 'package'),
-  );
+    // Write temp .npmrc to bypass scoped registry config
+    const tmpNpmrc = await writeTmpNpmrc(tmpDir, registryUrl);
 
-  const publishCode = await exec(
-    `npm publish "${repackPath}" --userconfig "${tmpNpmrc}"`,
-    join(tmpDir, 'package'),
-  );
+    // Unpublish cached upstream version first, then publish local copy
+    await exec(
+      `npm unpublish "${name}@${version}" --userconfig "${tmpNpmrc}" --force 2>/dev/null`,
+      join(tmpDir, 'package'),
+    );
 
-  // Clean up
-  try { await rm(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
-  try { await unlink(tarballPath); } catch { /* ignore */ }
+    const publishCode = await exec(
+      `npm publish "${repackPath}" --userconfig "${tmpNpmrc}"`,
+      join(tmpDir, 'package'),
+    );
 
-  if (publishCode !== 0) {
-    console.error(`  Failed to publish ${name}@${version}`);
-    process.exit(publishCode);
+    // Clean up
+    try { await rm(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try { await unlink(tarballPath); } catch { /* ignore */ }
+
+    if (publishCode !== 0) {
+      console.error(`  Failed to publish ${name}@${version}`);
+      process.exit(publishCode);
+    }
+
+    await trackPublish(slot, name, version);
+    console.log(`Published ${name}@${version} to local registry (${registryUrl})`);
+  } finally {
+    // Always restore the source package.json — prepublish mutated it in
+    // place and we don't want those resolved-dep changes lingering on
+    // disk, even when publish fails partway through.
+    if (prepublish) {
+      await prepublish.restore();
+    }
   }
-
-  await trackPublish(slot, name, version);
-  console.log(`Published ${name}@${version} to local registry (${registryUrl})`);
 }
 
 // ── Install ──────────────────────────────────────────────────

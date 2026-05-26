@@ -1187,9 +1187,17 @@ val gateCheck by tasks.registering {
 //   4. INVALID or TESTS_CHANGED → preflight hard-fails (handled in preflight check)
 //   5. VALID → skip gate entirely
 gradle.taskGraph.whenReady {
+    // Include `publishOrg` so the org-private publish path gets the same
+    // "gate stamp valid → skip test/validation/build" treatment that
+    // `publish` / `publishAll` already get. Without this, running
+    // `./gradlew :foo:publishOrg` after a successful `gate` would re-run
+    // dataloaderExec (and friends) even though the stamp says nothing has
+    // changed. `findByName` returns null (no throw) for projects that
+    // don't register publishOrg — keeps non-content plugins unaffected.
     val publishInGraph = try {
         hasTask(tasks.named("publish").get()) ||
-        hasTask(tasks.named("publishAll").get())
+        hasTask(tasks.named("publishAll").get()) ||
+        (tasks.findByName("publishOrg")?.let { hasTask(it) } == true)
     } catch (_: Exception) { false }
 
     if (!publishInGraph) return@whenReady

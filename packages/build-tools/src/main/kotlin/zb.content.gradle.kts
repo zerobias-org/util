@@ -1,8 +1,10 @@
 @file:OptIn(ExperimentalStdlibApi::class)
 
 import com.github.gradle.node.npm.task.NpmTask
+import com.zerobias.buildtools.tasks.PublishOrgTask
 import com.zerobias.buildtools.tasks.registerDataloader
 import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
+import com.zerobias.buildtools.util.PackageJsonReader
 
 /**
  * zb.content — leaf plugin for content-catalog NPM packages that ship
@@ -195,6 +197,12 @@ val dataloaderExec = registerDataloader(force = useForce, forceDirect = useForce
     // an explicit dep on npmInstallContent gradle 8+ flags the implicit input
     // and fails the build (validation-type problem on parallel runs).
     dependsOn(npmInstallContent)
+    // Content validation must complete before we spend time provisioning a
+    // Neon branch + running the dataloader — a structurally invalid artifact
+    // would burn ~30s of branch + load before hitting the same validator.
+    // dependsOn (not mustRunAfter) so the order also holds when someone
+    // runs `:foo:dataloaderExec` directly without going through `gate`.
+    dependsOn(validateContent)
 }
 
 tasks.named("testIntegration") {
@@ -278,16 +286,8 @@ val cleanupShrinkwrapAfterPublish by tasks.registering {
     }
 }
 
-fun readPackageNameVersion(): Pair<String, String> {
-    val pkgJson = project.file("package.json")
-    require(pkgJson.exists()) { "package.json not found in ${project.projectDir}" }
-    val content = pkgJson.readText()
-    val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-        ?: throw GradleException("Cannot find 'name' in package.json")
-    val version = Regex(""""version"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.get(1)
-        ?: throw GradleException("Cannot find 'version' in package.json")
-    return name to version
-}
+fun readPackageNameVersion(): Pair<String, String> =
+    PackageJsonReader.readNameVersion(project.file("package.json"))
 
 fun isAlreadyPublished(name: String, version: String, workDir: java.io.File): Boolean {
     return try {
@@ -339,6 +339,17 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
 
 tasks.named("publishNpm") {
     dependsOn(publishNpmExec)
+}
+
+// ── publishOrg: brand-new org-private artifact publish + dataloader load ──
+//
+// Distinct from the standard `publish` flow above: requires only ZB_TOKEN,
+// refuses any artifact name that already has catalog versions (or versions
+// owned by another org), and drives the post-publish load via
+// dataloader-service /jobs. Gate-validates the artifact first (against an
+// ephemeral Neon branch via dataloader-service /branches).
+val publishOrg by tasks.registering(PublishOrgTask::class) {
+    dependsOn(tasks.named("gate"))
 }
 
 // ── Promotion: move from 'next' tag to correct dist-tags ──

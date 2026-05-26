@@ -318,6 +318,13 @@ export function formatPreflightResults(results: CheckResult[]): string {
     const status = r.ok ? 'ok' : 'FAIL';
     const constraint = r.ok ? `(${r.required})` : `(need ${r.required})`;
     lines.push(`  ${tool} ${ver} ${status}   ${constraint}`);
+    // Surface the specific reason for the failure — otherwise the user
+    // can't tell whether the check command crashed, the parse regex
+    // didn't match, or the version was semver-rejected. Indented under
+    // the row that owns it so the visual grouping reads naturally.
+    if (!r.ok && r.error) {
+      lines.push(`      ${r.error}`);
+    }
   }
 
   const failed = results.filter(r => !r.ok);
