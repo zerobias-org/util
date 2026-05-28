@@ -1,0 +1,33 @@
+{
+  "name": "@auditlogic/hub-sdk-<%= moduleName %>",
+  "version": "0.0.0",
+  "description": "Hub SDK for <%= className %> module",
+  "type": "module",
+  "main": "dist/api/index.js",
+  "types": "dist/api/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.js"
+    },
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.js"
+    },
+    "./model": {
+      "types": "./dist/model/index.d.ts",
+      "import": "./dist/model/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "@zerobias-org/types-core-js": "^1.2.19",
+    "@zerobias-org/util-connector": "^1.0.32",
+    "axios": "^1.0.0"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  }
+}

@@ -1,0 +1,20 @@
+openapi: 3.0.3
+info:
+  version: <%= packageVersion %>
+  title: '<%= modulePackage %>'
+  description: <%= description %>
+  x-impl-name: <%= apiName %>
+  x-product-infos:
+    # Array of external references to Products (versions of products) involved in the module.
+    - $ref: "./node_modules/<%= productPackage %>/catalog.yml#/Product"
+paths: {}
+  # TODO: add your operations here, e.g.:
+  # /example:
+  #   get:
+  #     tags:
+  #     - <%= apiName %>
+  #     summary: Example operation
+  #     operationId: getExample
+  #     responses:
+  #       '204':
+  #         description: Successful response
