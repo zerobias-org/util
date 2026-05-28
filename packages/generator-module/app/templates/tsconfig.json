@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "noImplicitAny": false,
+        "target": "ES2022",
+        "strict": true,
+        "removeComments": true,
+        "sourceMap": true,
+        "noLib": false,
+        "allowJs": true,
+        "declaration": true,
+        "lib": ["ES2022"],
+        "outDir": "dist",
+        "typeRoots": [
+            "node_modules/@types"
+        ],
+        "esModuleInterop": true,
+        "useUnknownInCatchVariables": false
+    },
+    "include": [
+        "src/**/*",
+        "test/**/*",
+        "generated/**/*"
+    ],
+    "exclude": [
+        "dist",
+        "node_modules"
+    ]
+}

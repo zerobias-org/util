@@ -1,0 +1,36 @@
+{
+  "name": "@zerobias-org/generator-module",
+  "version": "0.25.2",
+  "description": "Yeoman generator for creating a new Hub module",
+  "type": "module",
+  "author": "team@zerobias.com",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/generator-module"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "scripts": {
+    "test": "node test/run-sandbox.js"
+  },
+  "files": [
+    "app/"
+  ],
+  "keywords": [
+    "yeoman-generator"
+  ],
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "dependencies": {
+    "yeoman-generator": "^8.2.2"
+  },
+  "devDependencies": {
+    "yeoman-environment": "^6.1.0",
+    "yeoman-test": "^11.5.2"
+  }
+}
