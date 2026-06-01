@@ -56,14 +56,34 @@ object DockerRunner {
     /**
      * Start a module container.
      * Always runs with SSL (self-signed certs). No insecure mode.
+     *
+     * Daemon modules (DESIGN: `runtimeConfig.listenerPorts`) bind extra TCP ports
+     * beyond the 8888 operations port and require the resolved port injected as a
+     * `LISTENER_PORT_<NAME>` env var. [listenerPorts] (name -> port) are mapped 1:1
+     * (host == container, no NAT); [env] is passed through as `-e` vars. Both default
+     * empty, so non-daemon modules are unaffected. Mirrors the live Hub Node's
+     * `Container.ts` (PLATFORM_UPDATES §5.1).
      */
-    fun start(imageName: String, containerName: String, hostPort: Int): ContainerInfo {
+    fun start(
+        imageName: String,
+        containerName: String,
+        hostPort: Int,
+        listenerPorts: Map<String, Int> = emptyMap(),
+        env: Map<String, String> = emptyMap()
+    ): ContainerInfo {
         // Remove any existing container with this name (idempotent restart)
         ExecUtils.execIgnoreErrors(listOf("docker", "rm", "-f", containerName))
 
         val cmd = buildList {
             add("docker"); add("run"); add("-d")
             add("-p"); add("$hostPort:8888")
+            // Extra listener ports (daemon modules), mapped 1:1 — no NAT.
+            for ((_, p) in listenerPorts) {
+                add("-p"); add("$p:$p")
+            }
+            for ((k, v) in env) {
+                add("-e"); add("$k=$v")
+            }
             add("--name"); add(containerName)
             // Tag with slot for cleanup by zbb destroy
             val slotName = System.getenv("ZB_SLOT")

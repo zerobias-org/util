@@ -1014,7 +1014,34 @@ val startModuleExec by tasks.registering {
             project.property("port").toString().toInt()
         else DockerRunner.findFreePort()
 
-        val info = DockerRunner.start(imageName, containerName, hostPort)
+        // Daemon modules declare runtimeConfig.listenerPorts (e.g. HL7 MLLP). Map each
+        // 1:1, inject LISTENER_PORT_<NAME>, and pass the opaque `config` as MODULE_CONFIG,
+        // so the container can boot. Mirrors the live Hub Node (PLATFORM_UPDATES §5.1).
+        // No-op for modules without a runtimeConfig.yml / listenerPorts.
+        val listenerPorts = linkedMapOf<String, Int>()
+        val moduleEnv = linkedMapOf<String, String>()
+        val rcFile = project.file("runtimeConfig.yml")
+        if (rcFile.exists()) {
+            @Suppress("UNCHECKED_CAST")
+            val rc = org.yaml.snakeyaml.Yaml().load<Map<String, Any?>>(rcFile.readText())
+                ?: emptyMap()
+            (rc["listenerPorts"] as? List<*>)?.forEach { entry ->
+                val lp = entry as? Map<*, *> ?: return@forEach
+                val name = lp["name"]?.toString() ?: return@forEach
+                val port = (lp["port"] as? Int) ?: DockerRunner.findFreePort()
+                listenerPorts[name] = port
+                moduleEnv["LISTENER_PORT_${name.uppercase()}"] = port.toString()
+            }
+            (rc["config"] as? Map<*, *>)?.let { cfg ->
+                moduleEnv["MODULE_CONFIG"] =
+                    com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(cfg)
+            }
+            if (listenerPorts.isNotEmpty()) {
+                logger.lifecycle("Daemon module: injecting listener ports $listenerPorts")
+            }
+        }
+
+        val info = DockerRunner.start(imageName, containerName, hostPort, listenerPorts, moduleEnv)
 
         try {
             DockerRunner.waitForHealthy(info.port)
