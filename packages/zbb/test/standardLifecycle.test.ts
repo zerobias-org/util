@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { resolveCommandForCwd } from '../lib/standardLifecycle.js';
+import { loadProjectCache } from '../lib/gradle.js';
 
 /**
  * Tests for the non-monorepo lifecycle dispatcher. Focused on
@@ -97,11 +98,17 @@ async function makeRepo(opts: {
   // statting the file we just wrote.
   const { statSync } = await import('node:fs');
   const settingsMtime = statSync(join(repoRoot, 'settings.gradle.kts')).mtimeMs;
+  // buildFiles must match buildFileFingerprint(repoRoot): sorted, root-relative
+  // paths of the build.gradle.kts files materialized below. A mismatch (or
+  // omission) invalidates the cache and forces a real gradlew run.
+  const buildFiles = (opts.buildFileDirs ?? [])
+    .map(dir => `${dir}/build.gradle.kts`)
+    .sort();
   const cacheDir = join(repoRoot, '.gradle');
   await mkdir(cacheDir, { recursive: true });
   await writeFile(
     join(cacheDir, 'zbb-projects.json'),
-    JSON.stringify({ settingsMtime, projects: opts.projects }, null, 2),
+    JSON.stringify({ settingsMtime, buildFiles, projects: opts.projects }, null, 2),
     'utf-8',
   );
 
@@ -277,5 +284,45 @@ describe('resolveCommandForCwd — gradle root mismatch', () => {
     // should detect that cwd's nearest gradlew is somewhere else and bail.
     const cmd = './gradlew build';
     assert.equal(resolveCommandForCwd(outerRepo, cmd), cmd);
+  });
+});
+
+describe('loadProjectCache — build-file fingerprint invalidation', () => {
+  // Regression: repos that auto-discover subprojects via settings.gradle.kts
+  // `walkTopDown` never touch settings.gradle.kts when a module is added, so
+  // a cache keyed only on settings.gradle.kts's mtime stays stale forever and
+  // `zbb <task>` from the new module wrongly reports "isn't registered". The
+  // cache must also fingerprint the discovered build.gradle.kts set.
+
+  it('serves the cache when the build-file set is unchanged', async () => {
+    const repoRoot = await makeRepo({
+      projects: { ':a:a': 'package/a/a' },
+      buildFileDirs: ['package/a/a'],
+    });
+    const projects = loadProjectCache(repoRoot);
+    assert.deepEqual(projects, { ':a:a': 'package/a/a' });
+  });
+
+  it('invalidates the cache when a module is added without touching settings.gradle.kts', async () => {
+    const repoRoot = await makeRepo({
+      projects: { ':a:a': 'package/a/a' },
+      buildFileDirs: ['package/a/a'],
+    });
+    // New module appears on disk; settings.gradle.kts (and its mtime) is
+    // untouched — exactly how `walkTopDown` discovery adds a module.
+    await mkdir(join(repoRoot, 'package/b/b'), { recursive: true });
+    await writeFile(join(repoRoot, 'package/b/b/build.gradle.kts'), '// stub\n', 'utf-8');
+
+    assert.equal(loadProjectCache(repoRoot), null);
+  });
+
+  it('invalidates the cache when a module is removed', async () => {
+    const repoRoot = await makeRepo({
+      projects: { ':a:a': 'package/a/a', ':b:b': 'package/b/b' },
+      buildFileDirs: ['package/a/a', 'package/b/b'],
+    });
+    await rm(join(repoRoot, 'package/b/b'), { recursive: true, force: true });
+
+    assert.equal(loadProjectCache(repoRoot), null);
   });
 });
