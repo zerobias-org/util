@@ -6,7 +6,7 @@ import java.net.URI
 /**
  * Resolves the next available patch version for a Maven coordinate by
  * checking what's already published to Maven Central, GitHub Packages,
- * the developer's local Maven repository (`~/.m2`), and local git tags.
+ * and local git tags.
  *
  * Intended usage from a consumer's build.gradle(.kts):
  *
@@ -14,21 +14,24 @@ import java.net.URI
  *   group = "com.zerobias"
  *   version = VersionResolver.autoBumpPatch("com.zerobias", "lite-filter", "1.0")
  *
- * All four sources are queried because:
+ * The three remote-ish sources are queried because:
  *   - The repo historically published to GitHub Packages and has since
  *     pivoted to Maven Central — taking max across both avoids reusing
  *     a version that already exists on one side.
- *   - mavenLocal is included so `publishToMavenLocal` always ratchets
- *     above whatever was last published anywhere. Without it, an offline
- *     dev (no `*_TOKEN` env var) would emit `<baseVersion>.0` on every
- *     publish and never beat the latest GitHub version, leaving root
- *     builds resolving the stale GitHub jar instead of local edits.
  *   - Git tags (`<artifact>-v<base>.<patch>`) are the only source that
  *     reflects a successful publish *immediately* — Sonatype Central can
  *     take 10–30 min to propagate to repo1.maven.org, and during that
  *     window the registries return a stale max. The publish flow tags
  *     in the same run as the registry push, so the tag list is the
  *     fast-path source of truth.
+ *
+ * `mavenLocal` is deliberately NOT consulted. Including it caused
+ * `publishToMavenLocal` to ratchet versions forward on the developer's
+ * machine indefinitely (each invocation read the previous local install
+ * and emitted max+1), silently diverging from what was actually in the
+ * registry. Consumers already prefer `mavenLocal()` in their resolution
+ * order, so a dev's local jar overrides the registry one at the SAME
+ * coordinate — no version bump needed to win.
  *
  * GitHub Packages requires a token. The credential chain matches
  * settings.gradle.kts's github maven repo block:
@@ -65,10 +68,9 @@ object VersionResolver {
             -1
         }
 
-        val localMax = queryMavenLocal(groupPath, artifact, baseVersion)
         val gitTagMax = queryGitTags(artifact, baseVersion)
 
-        val max = maxOf(centralMax, githubMax, localMax, gitTagMax)
+        val max = maxOf(centralMax, githubMax, gitTagMax)
         return if (max < 0) "$baseVersion.0" else "$baseVersion.${max + 1}"
     }
 
@@ -90,12 +92,6 @@ object VersionResolver {
         } catch (_: Exception) {
             -1
         }
-    }
-
-    private fun queryMavenLocal(groupPath: String, artifact: String, baseVersion: String): Int {
-        val home = System.getProperty("user.home") ?: return -1
-        val metadata = java.io.File("$home/.m2/repository/$groupPath/$artifact/maven-metadata-local.xml")
-        return if (metadata.exists()) parseMaxPatch(metadata.readText(), baseVersion) else -1
     }
 
     /**

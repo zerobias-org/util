@@ -4,7 +4,8 @@
  * Detects Gradle subproject from cwd, prefixes task names, manages cache.
  */
 
-import { existsSync, readFileSync, writeFileSync, statSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, statSync, mkdirSync, readdirSync } from 'node:fs';
+import type { Dirent } from 'node:fs';
 import { join, resolve, relative, sep } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { platform } from 'node:os';
@@ -61,6 +62,12 @@ export function findGradleRoot(startDir: string): GradleRepo | null {
 
 const CACHE_FILE = 'zbb-projects.json';
 
+// Directories that never hold first-class gradle subprojects and are
+// expensive (or self-referential) to walk while fingerprinting the repo.
+const PRUNE_DIRS = new Set([
+  'node_modules', '.git', '.gradle', 'build', 'dist', 'out', '.idea', '.vscode',
+]);
+
 function settingsMtime(root: string): number {
   const candidates = ['settings.gradle.kts', 'settings.gradle'];
   let newest = 0;
@@ -74,13 +81,61 @@ function settingsMtime(root: string): number {
   return newest;
 }
 
+/**
+ * Sorted, root-relative paths of every build.gradle.kts / build.gradle in
+ * the repo (pruning node_modules/.git/.gradle/build/…). This is the set the
+ * settings.gradle.kts `walkTopDown` auto-discovery turns into subprojects,
+ * so it — not settings.gradle.kts's mtime — is what determines the project
+ * map. Adding a module never touches settings.gradle.kts, so an mtime-only
+ * cache key goes stale silently; fingerprinting the build-file set catches
+ * adds/removes that dynamic discovery would pick up.
+ */
+function buildFileFingerprint(root: string): string[] {
+  const found: string[] = [];
+  const walk = (dir: string): void => {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // unreadable dir — skip rather than abort the whole scan
+    }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (PRUNE_DIRS.has(e.name)) continue;
+        walk(join(dir, e.name));
+      } else if (e.name === 'build.gradle.kts' || e.name === 'build.gradle') {
+        found.push(relative(root, join(dir, e.name)).split(sep).join('/'));
+      }
+    }
+  };
+  walk(root);
+  found.sort();
+  return found;
+}
+
+function fingerprintsEqual(a: string[] | undefined, b: string[]): boolean {
+  if (!a || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export function loadProjectCache(root: string): Record<string, string> | null {
   const cachePath = join(root, '.gradle', CACHE_FILE);
   if (!existsSync(cachePath)) return null;
 
   try {
     const data = JSON.parse(readFileSync(cachePath, 'utf-8'));
-    if (data.settingsMtime === settingsMtime(root)) {
+    // Valid only when BOTH the settings file is unchanged AND the discovered
+    // build-file set matches. The latter is what catches modules added since
+    // the cache was written (dynamic `walkTopDown` discovery). Caches written
+    // by older zbb lack `buildFiles` → fingerprintsEqual returns false →
+    // forced rebuild, which is the safe outcome.
+    if (
+      data.settingsMtime === settingsMtime(root) &&
+      fingerprintsEqual(data.buildFiles, buildFileFingerprint(root))
+    ) {
       return data.projects;
     }
   } catch {
@@ -119,7 +174,11 @@ export function buildProjectCache(root: string, wrapper: string): Record<string,
   if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
   writeFileSync(
     join(cacheDir, CACHE_FILE),
-    JSON.stringify({ settingsMtime: settingsMtime(root), projects }, null, 2),
+    JSON.stringify(
+      { settingsMtime: settingsMtime(root), buildFiles: buildFileFingerprint(root), projects },
+      null,
+      2,
+    ),
     'utf-8',
   );
 

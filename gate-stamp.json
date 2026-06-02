@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "migrate-generator-hub-module",
+  "branch": "fix/zbb-dynamic-discovery-cache",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.40",
@@ -576,8 +576,8 @@
     },
     "@zerobias-org/zbb": {
       "version": "0.3.72",
-      "sourceHash": "1d01942fab745c5e16771d9d325959b6bd64f9f5d6914bf84d6cbefb6d967e27",
-      "testHash": "767d4eaa2c64ef46b33cb05bc621f2ee61a0bc64da6e5dd704e6b4bf0a3ff4e8",
+      "sourceHash": "1cd3059c96af16244aabff250f40ee6ec762ac5638b1152a91489b6e8f6d0482",
+      "testHash": "3ebf79eb93150959c17368ef608e6e3de74165bb8bc2baa68b710505eafda760",
       "tasks": {
         "lint": "passed",
         "compile": "passed",

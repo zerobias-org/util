@@ -55,6 +55,13 @@ beforeEach(async () => {
     JSON.stringify(
       {
         settingsMtime,
+        // Must match buildFileFingerprint(tmpRoot): sorted, root-relative
+        // paths of every build.gradle.kts created below. A mismatch (or a
+        // missing field) invalidates the cache, forcing a real gradlew run.
+        buildFiles: [
+          'packages/gradle-pkg/build.gradle.kts',
+          'packages/unregistered/build.gradle.kts',
+        ],
         projects: { ':packages:gradle-pkg': 'packages/gradle-pkg' },
       },
       null,
