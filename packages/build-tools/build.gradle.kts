@@ -53,11 +53,13 @@ version = run {
         }
     } catch (_: Exception) { -1 }
 
-    fun queryMavenLocal(): Int {
-        val home = System.getProperty("user.home") ?: return -1
-        val metadata = file("$home/.m2/repository/$groupPath/$artifact/maven-metadata-local.xml")
-        return if (metadata.exists()) parseMaxPatch(metadata.readText()) else -1
-    }
+    // mavenLocal is deliberately NOT consulted — including it caused
+    // publishToMavenLocal to ratchet versions forward indefinitely on the
+    // dev's machine (each invocation read the previous local install and
+    // emitted max+1), silently diverging from the registry. Consumers
+    // already prefer mavenLocal() in resolution order, so dev jars at the
+    // same coordinate override the registry one — no version bump needed
+    // to win. Keep VersionResolver.kt in sync.
 
     // Tags are the fast-path registry-equivalent source: a successful publish
     // creates `<artifact>-v<base>.<patch>` in the same run, well before
@@ -94,10 +96,9 @@ version = run {
         "https://maven.pkg.github.com/zerobias-org/util/$groupPath/$artifact/maven-metadata.xml",
         "Bearer $token",
     ) else -1
-    val localMax = queryMavenLocal()
     val gitTagMax = queryGitTags()
 
-    val max = maxOf(centralMax, githubMax, localMax, gitTagMax)
+    val max = maxOf(centralMax, githubMax, gitTagMax)
     if (max < 0) "$baseVersion.0" else "$baseVersion.${max + 1}"
 }
 
