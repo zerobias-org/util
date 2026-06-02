@@ -1,0 +1,10 @@
+type: object
+title: ConnectionProfile
+description: Connection profile for <%= className %>
+properties:
+  # TODO: define credential fields
+  apiToken:
+    type: string
+    description: API token
+required:
+  - apiToken

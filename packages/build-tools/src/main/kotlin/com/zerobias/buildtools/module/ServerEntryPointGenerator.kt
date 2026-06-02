@@ -267,7 +267,40 @@ async function main() {
 
     try {
       const result = await meth.call(api, ...args);
-      res.status(200).send(result);
+      // Wire-protocol responses must be JSON-serializable. Binary ops
+      // (downloadBinary/downloadBucketObject) return AWS SDK v3 response
+      // streams that carry circular references to the underlying Node
+      // TLSSocket — Express's res.send() JSON-stringifies the stream
+      // object directly and trips on the cycle with
+      // "TypeError: Converting circular structure to JSON".
+      //
+      // The OpenAPI binary route (BinaryApiController) handles streams
+      // by piping; this wire-protocol path is for the test client and
+      // Hub Node, which both expect JSON. Detect stream/Buffer/RequestFile
+      // shapes and drain to a base64 envelope so callers still get a
+      // well-formed JSON response.
+      // Detect Node Readable streams specifically: pipe() is the Readable
+      // marker. Don't match on Symbol.asyncIterator alone — PagedResults
+      // and other paginated wrappers are async-iterable but JSON-safe.
+      const looksLikeStream = (v: any) => v && typeof v === 'object'
+        && typeof v.pipe === 'function';
+      const isDetailedFile = result && typeof result === 'object'
+        && (result as any).value !== undefined
+        && (result as any).options !== undefined;
+      const inner = isDetailedFile ? (result as any).value : result;
+      if (Buffer.isBuffer(inner) || looksLikeStream(inner)) {
+        const { buffer } = await import('node:stream/consumers');
+        const buf: Buffer = Buffer.isBuffer(inner) ? inner : await buffer(inner as any);
+        res.status(200).json({
+          __binary: true,
+          contentType: isDetailedFile
+            ? ((result as any).options?.contentType || 'application/octet-stream')
+            : 'application/octet-stream',
+          base64: buf.toString('base64'),
+        });
+      } else {
+        res.status(200).send(result);
+      }
     } catch (e: any) {
       const status = e.statusCode || 500;
       res.writeHead(status, { 'Content-Type': 'application/json' });

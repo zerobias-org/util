@@ -1,0 +1,23 @@
+node_modules/
+dist/
+generated/
+hub-sdk/generated/
+hub-sdk/dist/
+hub-sdk/tsconfig.json
+docs/
+build/
+
+# Ephemeral build artifacts
+eslint.config.js
+eslint.config.mjs
+module-*.yml
+full.yml
+redoc-static.html
+test-results.json
+
+# OpenAPI generator artifacts
+.openapi-generator
+.openapi-generator-ignore
+
+# Editor
+*.swp
