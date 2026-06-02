@@ -83,7 +83,12 @@ val dockerSemaphore = gradle.sharedServices.registerIfAbsent(
 val prepublishLock = gradle.sharedServices.registerIfAbsent(
     "prepublishLock",
     PrepublishLockService::class.java
-) {}
+) {
+    // max-1 so the in-place prepublish-standalone window (backup → prepublish
+    // → npm pack → restore) never overlaps across subprojects. Without an
+    // explicit limit a BuildService is unconstrained, leaving the lock inert.
+    maxParallelUsages.set(1)
+}
 
 // ── RegistryInjectionService — look up the existing shared registration ──
 //
@@ -1194,6 +1199,12 @@ fun registerDockerTasksForPackage(
         group = "docker"
         description = "Extract npm pack tarball into Docker build context for ${pkg.name}"
         dependsOn(npmPack)
+        // The bundle-workspace-deps loop below runs prepublish-standalone
+        // in-place on each shared dep's package.json (cp → mutate → pack → mv
+        // restore). Acquire the same max-1 lock npmPack uses so parallel
+        // services bundling a shared dep (e.g. query-builder) don't race on
+        // its package.json / .gradle-bak and strand a mutated copy on disk.
+        usesService(prepublishLock)
 
         inputs.file(subproject.layout.buildDirectory.file("npm-pack.stamp"))
         outputs.dir(packageDir)
