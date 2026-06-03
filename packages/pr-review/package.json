@@ -1,0 +1,37 @@
+{
+  "name": "@zerobias-org/pr-review",
+  "version": "0.0.1",
+  "description": "Agentic PR review for ZeroBias repos — diff analysis, context gathering, and AI-assisted review.",
+  "type": "module",
+  "bin": {
+    "pr-review": "bin/pr-review.mjs"
+  },
+  "scripts": {
+    "transpile": "tsc -b",
+    "build": "npm run transpile",
+    "lint": "eslint 'lib/**/*.ts'",
+    "test": "node --import tsx/esm --test test/**/*.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/pr-review"
+  },
+  "author": "team@zerobias.com",
+  "license": "ISC",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}

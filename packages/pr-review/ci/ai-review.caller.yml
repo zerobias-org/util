@@ -1,0 +1,21 @@
+# Caller workflow — drop this in a consuming repo's .github/workflows/.
+#
+# Update the `uses:` ref to wherever the reusable ai-review.reusable.yml is
+# hosted (e.g. the devops repo). Add ANTHROPIC_API_KEY, ZB_TOKEN, READ_TOKEN
+# (and optionally the knowledge secrets) to the repo/org secrets first.
+name: AI Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  ai-review:
+    uses: zerobias-org/devops/.github/workflows/ai-review.reusable.yml@main
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+      READ_TOKEN: ${{ secrets.READ_TOKEN }}
+      PR_REVIEW_KNOWLEDGE_ENDPOINT: ${{ secrets.PR_REVIEW_KNOWLEDGE_ENDPOINT }}
+      PR_REVIEW_KNOWLEDGE_HEADERS: ${{ secrets.PR_REVIEW_KNOWLEDGE_HEADERS }}

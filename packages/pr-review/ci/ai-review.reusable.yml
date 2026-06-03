@@ -1,0 +1,70 @@
+# Reusable "ai-review" workflow.
+#
+# Deploy this to a central repo's .github/workflows/ (e.g. the devops repo),
+# then have each repo call it via ai-review.caller.yml. It installs the
+# published pr-review package and runs it against the PR; pr-review auto-detects
+# ci mode (GITHUB_ACTIONS=true) and posts the result as a PR comment.
+name: AI Review
+
+on:
+  workflow_call:
+    inputs:
+      base:
+        description: Git ref to diff against
+        required: false
+        type: string
+        default: origin/main
+      provider:
+        description: 'Model backend: anthropic | local'
+        required: false
+        type: string
+        default: anthropic
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      ZB_TOKEN:
+        required: true
+      READ_TOKEN:
+        required: true
+      PR_REVIEW_KNOWLEDGE_ENDPOINT:
+        required: false
+      PR_REVIEW_KNOWLEDGE_HEADERS:
+        required: false
+
+# pull-requests: write lets the GITHUB_TOKEN post the review comment.
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0 # full history so `git diff <base>...HEAD` works
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Configure registry auth + install pr-review
+        run: |
+          cp .npmrc $HOME/.npmrc
+          npm install -g @zerobias-org/pr-review
+        env:
+          NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+          ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+
+      - name: Run review
+        run: pr-review review --base "${{ inputs.base }}" --provider "${{ inputs.provider }}"
+        env:
+          # Auto-provided by Actions; used to post the PR comment.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Cross-repo knowledge — optional; omit to run a repo-local review.
+          PR_REVIEW_KNOWLEDGE_ENDPOINT: ${{ secrets.PR_REVIEW_KNOWLEDGE_ENDPOINT }}
+          PR_REVIEW_KNOWLEDGE_HEADERS: ${{ secrets.PR_REVIEW_KNOWLEDGE_HEADERS }}
