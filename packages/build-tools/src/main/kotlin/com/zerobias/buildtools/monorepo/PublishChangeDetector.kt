@@ -50,7 +50,13 @@ object PublishChangeDetector {
         registry: String? = null,
     ): PublishPlan {
         val changed = mutableSetOf<String>()
-        val headRootDeps = getRootDepsAt(repoRoot, "HEAD")
+        // Use the WORKING TREE root package.json as the "current" baseline, not
+        // `git show HEAD:package.json`. Mirrors getChangedFilesSinceRef, which
+        // intentionally diffs the working tree so `zbb gate` reflects what you'd
+        // publish if you committed now. Reading HEAD here made uncommitted root
+        // dep/override bumps (e.g. a hydra-* version) invisible to the
+        // root-deps-drift cascade, so hydra consumers never got marked changed.
+        val headRootDeps = getRootDepsFromWorkingTree(repoRoot)
 
         for ((name, pkg) in graph.packages) {
             if (pkg.private) continue
@@ -331,20 +337,40 @@ object PublishChangeDetector {
             if (!finished || proc.exitValue() != 0 || output.isEmpty()) {
                 return RootDepsSnapshot(emptyMap(), emptyMap())
             }
-            val pkg: Map<String, Any?> = rootDepsMapper.readValue(output)
-            val deps = mutableMapOf<String, String>()
-            (pkg["dependencies"] as? Map<*, *>)?.forEach { (k, v) ->
-                if (k is String && v is String) deps[k] = v
-            }
-            (pkg["devDependencies"] as? Map<*, *>)?.forEach { (k, v) ->
-                if (k is String && v is String) deps[k] = v
-            }
-            @Suppress("UNCHECKED_CAST")
-            val overrides = (pkg["overrides"] as? Map<String, Any?>) ?: emptyMap()
-            RootDepsSnapshot(deps, overrides)
+            parseRootDeps(output)
         } catch (_: Exception) {
             RootDepsSnapshot(emptyMap(), emptyMap())
         }
+    }
+
+    /**
+     * Read the root `package.json` from the working tree (uncommitted state).
+     * Used for the "current" baseline so gate reflects in-flight dep/override
+     * bumps, consistent with getChangedFilesSinceRef's working-tree diff.
+     */
+    private fun getRootDepsFromWorkingTree(repoRoot: File): RootDepsSnapshot {
+        return try {
+            val file = File(repoRoot, "package.json")
+            if (!file.exists()) return RootDepsSnapshot(emptyMap(), emptyMap())
+            parseRootDeps(file.readText())
+        } catch (_: Exception) {
+            RootDepsSnapshot(emptyMap(), emptyMap())
+        }
+    }
+
+    /** Parse a root package.json's deps+devDeps (flattened) and overrides. */
+    private fun parseRootDeps(json: String): RootDepsSnapshot {
+        val pkg: Map<String, Any?> = rootDepsMapper.readValue(json)
+        val deps = mutableMapOf<String, String>()
+        (pkg["dependencies"] as? Map<*, *>)?.forEach { (k, v) ->
+            if (k is String && v is String) deps[k] = v
+        }
+        (pkg["devDependencies"] as? Map<*, *>)?.forEach { (k, v) ->
+            if (k is String && v is String) deps[k] = v
+        }
+        @Suppress("UNCHECKED_CAST")
+        val overrides = (pkg["overrides"] as? Map<String, Any?>) ?: emptyMap()
+        return RootDepsSnapshot(deps, overrides)
     }
 
     /**
