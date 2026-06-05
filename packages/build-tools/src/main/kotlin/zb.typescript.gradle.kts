@@ -1961,11 +1961,28 @@ val ensureEcrRepo by tasks.registering(Exec::class) {
     }
 }
 
+// Step 1b: Set org-wide read policy so all accounts in the org can pull
+val setEcrRepoPolicy by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Set ECR repository policy for org-wide read access"
+    dependsOn(ensureEcrRepo)
+    onlyIf { !isInterface && zb.hasConnectionProfile.get() && !isDryRun }
+    workingDir(project.projectDir)
+    commandLine("echo", "placeholder")
+    isIgnoreExitValue = true
+    doFirst {
+        val imageName = zb.dockerImageName.get()
+        commandLine("aws", "ecr", "set-repository-policy",
+            "--repository-name", imageName,
+            "--policy-text", """{"Version":"2012-10-17","Statement":[{"Sid":"OrgReadAccess","Effect":"Allow","Principal":{"AWS":"*"},"Action":["ecr:BatchCheckLayerAvailability","ecr:BatchGetImage","ecr:DescribeImageScanFindings","ecr:DescribeImages","ecr:DescribeRepositories","ecr:GetAuthorizationToken","ecr:GetDownloadUrlForLayer","ecr:GetRepositoryPolicy","ecr:ListImages"],"Condition":{"StringLike":{"aws:PrincipalOrgID":"o-dppyp34ws8"}}}]}""")
+    }
+}
+
 // Step 2: Multi-arch push to ECR
 val publishImageEcr by tasks.registering(Exec::class) {
     group = "publish"
     description = "Build and push multi-arch Docker image to ECR"
-    dependsOn(tasks.named("buildImage"), ensureEcrRepo, preflightChecks)
+    dependsOn(tasks.named("buildImage"), setEcrRepoPolicy, preflightChecks)
     onlyIf { !isInterface && zb.hasConnectionProfile.get() }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")

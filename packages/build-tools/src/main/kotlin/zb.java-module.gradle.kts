@@ -141,10 +141,27 @@ val ensureJavaEcrRepo by tasks.registering(Exec::class) {
     }
 }
 
+val setJavaEcrRepoPolicy by tasks.registering(Exec::class) {
+    group = "publish"
+    description = "Set ECR repository policy for org-wide read access (Java module)"
+    dependsOn(ensureJavaEcrRepo)
+    onlyIf { zb.hasConnectionProfile.get() && !javaIsDryRun }
+    workingDir(project.projectDir)
+    commandLine("echo", "placeholder")
+    isIgnoreExitValue = true
+    doFirst {
+        val ecrRepoName = System.getenv("ECR_REPO_NAME")?.takeIf { it.isNotBlank() }
+            ?: zb.dockerImageName.get()
+        commandLine("aws", "ecr", "set-repository-policy",
+            "--repository-name", ecrRepoName,
+            "--policy-text", """{"Version":"2012-10-17","Statement":[{"Sid":"OrgReadAccess","Effect":"Allow","Principal":{"AWS":"*"},"Action":["ecr:BatchCheckLayerAvailability","ecr:BatchGetImage","ecr:DescribeImageScanFindings","ecr:DescribeImages","ecr:DescribeRepositories","ecr:GetAuthorizationToken","ecr:GetDownloadUrlForLayer","ecr:GetRepositoryPolicy","ecr:ListImages"],"Condition":{"StringLike":{"aws:PrincipalOrgID":"o-dppyp34ws8"}}}]}""")
+    }
+}
+
 val publishJavaImageEcr by tasks.registering(Exec::class) {
     group = "publish"
     description = "Build and push multi-arch Java module Docker image to ECR"
-    dependsOn(tasks.named("buildImage"), ensureJavaEcrRepo, javaPreflightChecks)
+    dependsOn(tasks.named("buildImage"), setJavaEcrRepoPolicy, javaPreflightChecks)
     onlyIf { zb.hasConnectionProfile.get() }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
