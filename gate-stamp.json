@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/zbb-dynamic-discovery-cache",
+  "branch": "fix/branch-prerelease-base-bump",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.40",
@@ -575,7 +575,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "0.3.72",
+      "version": "0.3.73",
       "sourceHash": "1cd3059c96af16244aabff250f40ee6ec762ac5638b1152a91489b6e8f6d0482",
       "testHash": "3ebf79eb93150959c17368ef608e6e3de74165bb8bc2baa68b710505eafda760",
       "tasks": {

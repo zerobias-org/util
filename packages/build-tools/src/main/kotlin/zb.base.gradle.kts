@@ -218,23 +218,21 @@ fun resolvePreReleaseVersion(base: String, suffix: String, startCounter: Int): S
     val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(pkgJson.readText())?.groupValues?.get(1)
         ?: return "${base}-${suffix}.${startCounter}"
 
-    var counter = startCounter
-    var candidate = "${base}-${suffix}.${counter}"
-    // Check up to 50 increments (safety limit)
-    repeat(50) {
-        val exists = try {
-            val output = providers.exec {
-                commandLine("npm", "view", "${name}@${candidate}", "version")
-                isIgnoreExitValue = true
-            }.standardOutput.asText.get().trim()
-            output == candidate
-        } catch (e: Exception) { false }
+    fun isPublished(v: String): Boolean = try {
+        val output = providers.exec {
+            commandLine("npm", "view", "${name}@${v}", "version")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim()
+        output == v
+    } catch (e: Exception) { false }
 
-        if (!exists) return candidate
-        counter++
-        candidate = "${base}-${suffix}.${counter}"
-    }
-    return candidate // fallback — use whatever we landed on
+    // Delegate the actual version arithmetic to the pure, unit-tested resolver.
+    // It advances the base past any already-published release before appending
+    // the branch suffix (so a post-release dev push cuts 2.0.3-dev.0, not
+    // 2.0.2-dev.0, which would sort BELOW 2.0.2 and move the dist-tag backwards),
+    // and otherwise just walks the suffix counter past collisions.
+    return com.zerobias.buildtools.util.VersionBumper
+        .resolvePreRelease(base, suffix, startCounter) { isPublished(it) }
 }
 
 val gitCounter = preReleaseCounter.toIntOrNull() ?: 0
@@ -242,9 +240,11 @@ val fullVersion = readFullVersion()
 
 // If package.json already has the correct branch suffix, use it directly.
 // Only re-resolve if the suffix doesn't match the current branch.
+// Standard lifecycle: dev → qa → uat → latest. The pre-release suffix matches
+// the branch/dist-tag (the legacy "qa -> rc" mapping is gone).
 val branchSuffix: String? = when (branch) {
     "main" -> null
-    "qa"   -> "rc"
+    "qa"   -> "qa"
     "dev"  -> "dev"
     "uat"  -> "uat"
     else   -> "uat"
