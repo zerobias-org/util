@@ -54,19 +54,74 @@ object VersionBumper {
         // working-tree pre-release tag.
         val currentVersion = rawVersion.replace(Regex("-.*"), "")
 
-        if (!isPublished(name, currentVersion, packageDir)) {
-            return Decision(name, currentVersion, currentVersion, bumped = false)
-        }
+        val newVersion = firstUnpublishedPatch(currentVersion) { isPublished(name, it, packageDir) }
+        return Decision(name, currentVersion, newVersion, bumped = newVersion != currentVersion)
+    }
 
+    /**
+     * Returns the first patch version at or above [currentVersion] that
+     * [isPublished] reports as NOT on the registry. If [currentVersion] itself
+     * is unpublished it is returned unchanged; otherwise the patch component is
+     * walked forward until an unpublished version is found.
+     *
+     * This is also what keeps a branch pre-release sorting ABOVE the latest
+     * release: a branch build off an already-published base (e.g. main shipped
+     * 2.0.2 while the branch is still on 2.0.2) must target 2.0.3, so the cut
+     * `2.0.3-dev.0` sorts above `2.0.2` — instead of `2.0.2-dev.0`, which sorts
+     * BELOW it and drags the branch dist-tag backwards relative to `latest`.
+     *
+     * Bounded at 100 iterations so a permanently registry-broken state can't
+     * spin forever. Pure — the registry check is injected as [isPublished] — so
+     * the walk can be unit-tested without hitting npm.
+     */
+    fun firstUnpublishedPatch(currentVersion: String, isPublished: (String) -> Boolean): String {
         var candidate = currentVersion
         var iterations = 0
-        while (isPublished(name, candidate, packageDir)) {
+        while (isPublished(candidate)) {
             val parts = candidate.split(".")
             candidate = "${parts[0]}.${parts[1]}.${parts[2].toInt() + 1}"
             iterations += 1
             if (iterations >= 100) break
         }
-        return Decision(name, currentVersion, candidate, bumped = true)
+        return candidate
+    }
+
+    /**
+     * Resolve the full pre-release version a branch publish should use.
+     *
+     * @param base        the package's release version with no suffix (e.g. "2.0.2")
+     * @param suffix      the branch pre-release label (e.g. "dev", "rc", "uat")
+     * @param startCounter the counter to begin numbering from (normally 0)
+     * @param isPublished registry check — true if that exact version exists
+     *
+     * Rules, all driven purely by what [isPublished] reports:
+     *  - The result never sorts below an already-published release. If [base] is
+     *    itself published, the base is advanced to the first unpublished patch
+     *    first (so a dev push AFTER main shipped 2.0.2 cuts `2.0.3-dev.0`, not
+     *    `2.0.2-dev.0`, which would sort below 2.0.2 and move the dist-tag back).
+     *  - While the release is still unpublished the patch is preserved and only
+     *    the counter advances on a collision:
+     *      • another dev push on an unreleased 2.0.2 → `2.0.2-dev.1`, `…dev.2`
+     *      • promoting dev→qa swaps the suffix and restarts the counter, so
+     *        `2.0.2-dev.2` becomes `2.0.2-qa.0` (the patch is untouched).
+     *  - The counter walk is bounded at 50 increments.
+     */
+    fun resolvePreRelease(
+        base: String,
+        suffix: String,
+        startCounter: Int,
+        isPublished: (String) -> Boolean,
+    ): String {
+        val effectiveBase = firstUnpublishedPatch(base, isPublished)
+        var counter = startCounter
+        var candidate = "$effectiveBase-$suffix.$counter"
+        var iterations = 0
+        while (isPublished(candidate) && iterations < 50) {
+            counter += 1
+            candidate = "$effectiveBase-$suffix.$counter"
+            iterations += 1
+        }
+        return candidate
     }
 
     /**
