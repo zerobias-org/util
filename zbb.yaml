@@ -42,6 +42,20 @@ env:
     required: true
     mask: true
     description: "GitHub PAT with write:packages scope."
+  # Read tokens for installing private @zerobias-com/@auditlogic deps from
+  # GitHub Packages during builds/tests — e.g. generator-module's sandbox,
+  # which auths Gradle's GitHub Packages repo via
+  # `READ_TOKEN ?: NPM_TOKEN ?: GITHUB_TOKEN`. Declared so they survive the
+  # hermetic seal; not required, since the chain falls through (an empty one
+  # is simply not injected, so getenv() returns null and the `?:` advances).
+  READ_TOKEN:
+    source: env
+    mask: true
+    description: "Preferred read:packages token for GitHub Packages."
+  NPM_TOKEN:
+    source: env
+    mask: true
+    description: "read:packages token for installing private deps from GitHub Packages."
   # Gradle reads ORG_GRADLE_PROJECT_* from the environment before any
   # settings or build scripts run — the only reliable injection path for
   # providers.gradleProperty() used by Vanniktech maven-publish + signing.

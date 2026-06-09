@@ -199,8 +199,30 @@ class StampValidator(
         val entry = stamp.packages[packageName]
             ?: return StampValidation(GateStampResult.MISSING, "no stamp entry for $packageName (run a full `zbb gate`)")
 
-        // 1. Source hash check
-        val currentSourceHash = SourceHasher.hashSources(packageDir, sourceFiles, sourceDirs)
+        // 0. Untracked-published guard. A package about to ship files listed in
+        // package.json `files` that git neither tracks nor ignores can't be
+        // vouched for by any committed stamp — the gate cannot see their
+        // content (hashing is git-tracked only). Force a gate so unvalidated,
+        // never-committed content can't skip through. Gitignored build output
+        // (dist) is correctly excluded.
+        val untrackedPublished = SourceHasher.findUntrackedPublishedFiles(
+            packageDir, SourceHasher.readFilesPatterns(packageDir),
+        )
+        if (untrackedPublished.isNotEmpty()) {
+            return StampValidation(
+                GateStampResult.INVALID,
+                "untracked published file(s) — in package.json `files` but not git-tracked: " +
+                "${untrackedPublished.joinToString(", ")}. Commit/stage them so the gate can validate what ships.",
+            )
+        }
+
+        // 1. Source hash check. Fold in the package's own package.json `files`
+        // (the published payload) so content packages track index.yml/logo.*
+        // and service packages track root-level spec files — read here from
+        // packageDir so compute and validate derive the identical set.
+        val currentSourceHash = SourceHasher.hashSources(
+            packageDir, sourceFiles, sourceDirs, SourceHasher.readFilesPatterns(packageDir),
+        )
         if (entry.sourceHash != currentSourceHash) {
             return StampValidation(
                 GateStampResult.INVALID,

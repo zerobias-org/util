@@ -47,10 +47,20 @@ object CurlUtils {
         onRetry: ((String) -> Unit)? = null,
     ): String {
         val command = mutableListOf(baseCommand[0])
+        // --show-error: callers pass `-s` (silent), which also suppresses
+        // curl's own error text — so a connection failure surfaces as a bare
+        // `exit=7` with no hint. `-sS` keeps the progress meter quiet but lets
+        // the "Failed to connect to host:port: Connection refused" message
+        // reach stderr, which we capture below.
         // Plain --retry (no --retry-all-errors) so curl only retries transient
         // 5xx/408/429/connection errors and lets 4xx fail fast.
-        command.addAll(listOf("--retry", "5", "--retry-delay", "2"))
+        command.addAll(listOf("--show-error", "--retry", "5", "--retry-delay", "2"))
         command.addAll(baseCommand.drop(1))
+
+        // The request URL (last http(s) arg) — surfaced in every error so the
+        // log shows WHAT it tried to reach, not just that it failed. Makes a
+        // stale/misconfigured base URL (e.g. a dead localhost port) obvious.
+        val url = baseCommand.lastOrNull { it.startsWith("http://") || it.startsWith("https://") }
 
         var lastErr: String? = null
         for (attempt in 1..attempts) {
@@ -73,6 +83,8 @@ object CurlUtils {
 
             lastErr = buildString {
                 append("exit=").append(exit)
+                curlExitMeaning(exit)?.let { append(" (").append(it).append(")") }
+                if (url != null) append("\n  url:           ").append(url)
                 if (stdout.isNotBlank()) append("\n  response body: ").append(stdout.trim().take(2000))
                 if (stderr.isNotBlank()) append("\n  curl stderr:   ").append(stderr.trim().take(500))
             }
@@ -98,5 +110,25 @@ object CurlUtils {
             Thread.sleep(backoffMs)
         }
         throw GradleException("$label failed after $attempts attempts:\n$lastErr")
+    }
+
+    /**
+     * Plain-English meaning for the curl exit codes most likely to show up
+     * when talking to platform services. Returns null for codes we don't
+     * have a specific hint for (the raw `exit=N` still prints).
+     * Ref: https://curl.se/libcurl/c/libcurl-errors.html
+     */
+    private fun curlExitMeaning(code: Int): String? = when (code) {
+        3 -> "malformed URL"
+        6 -> "couldn't resolve host — DNS failure, check the hostname"
+        7 -> "couldn't connect to host — nothing is listening at that address/port " +
+            "(service down, or a stale/wrong base URL such as a dead localhost port)"
+        22 -> "server returned an HTTP error >= 400 (curl --fail/--fail-with-body)"
+        28 -> "operation timed out — service unreachable or too slow"
+        35 -> "TLS connect error — likely wrong scheme (http vs https) or a cert issue"
+        52 -> "empty reply from server"
+        56 -> "failure receiving network data — connection reset by peer"
+        60 -> "TLS certificate problem (untrusted/expired/hostname mismatch)"
+        else -> null
     }
 }

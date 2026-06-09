@@ -113,9 +113,32 @@ export class StackManager {
       );
     }
 
-    const stackName = options?.as ?? this.extractShortName(manifest.name);
+    let stackName = options?.as ?? this.extractShortName(manifest.name);
 
-    // Check for existing stack with same name
+    // Collision-aware naming. If the default short name is already taken by a
+    // stack with a DIFFERENT identity (e.g. com/util's 'util' when adding
+    // org/util), don't collide — qualify this one with its scope ('org-util')
+    // so both coexist. The identity-based cwd resolver binds each repo to the
+    // right stack regardless of dir name, so this is transparent from each
+    // repo. An explicit `--as` is always respected; a same-identity hit is a
+    // genuine "already added" and falls through to the error below.
+    if (!options?.as) {
+      const defaultPath = join(this.stacksDir, stackName);
+      if (existsSync(defaultPath)) {
+        const existingIdentity = await this.readStackIdentity(defaultPath);
+        if (existingIdentity && existingIdentity !== manifest.name) {
+          const scoped = this.extractScopedName(manifest.name);
+          console.log(
+            `Stack name '${stackName}' is already taken by '${existingIdentity}'. ` +
+            `Adding '${manifest.name}' as '${scoped}' to avoid the collision ` +
+            `(zbb resolves stacks by identity, so it's transparent from the repo).`,
+          );
+          stackName = scoped;
+        }
+      }
+    }
+
+    // Check for existing stack with the same (final) name
     const stackPath = join(this.stacksDir, stackName);
     if (existsSync(stackPath)) {
       throw new Error(`Stack '${stackName}' already exists in slot '${this.slot.name}'`);
@@ -297,28 +320,43 @@ export class StackManager {
     stack?: Stack | null;
   } = {}): Promise<import('./refresh.js').RefreshResult> {
     // ── Pass 1: external re-fetch ──
-    let result: import('./refresh.js').RefreshResult;
-    if (!opts.repoRoot) {
-      // Without a repoRoot we can only do per-stack file/env refresh.
-      const refreshed: string[] = [];
-      const errors: Array<{ name: string; error: string }> = [];
-      try {
-        for (const s of await this.list()) {
-          try {
-            const r = await s.env.refreshSourcedVars();
-            for (const n of r.refreshed) refreshed.push(`${s.name}.${n}`);
-            for (const e of r.errors) errors.push({ name: `${s.name}.${e.name}`, error: e.error });
-          } catch (e: unknown) {
-            errors.push({ name: s.name, error: e instanceof Error ? e.message : String(e) });
-          }
+    //
+    // file/env-sourced vars and vault-sourced vars are INDEPENDENT sources,
+    // so refresh BOTH. Always run the per-stack file/env refresh (reads the
+    // live shell / files), and ADDITIONALLY refresh vault vars when a
+    // repoRoot is available to scan. Previously these were either/or keyed on
+    // repoRoot, so every lifecycle command (which passes repoRoot) silently
+    // skipped source:env capture — leaving vars like NPM_TOKEN/GITHUB_TOKEN
+    // unmaterialized, and under hermetic dispatch they then stripped to empty.
+    const refreshed: string[] = [];
+    const errors: Array<{ name: string; error: string }> = [];
+
+    // (a) per-stack file/env refresh — always.
+    try {
+      for (const s of await this.list()) {
+        try {
+          const r = await s.env.refreshSourcedVars();
+          for (const n of r.refreshed) refreshed.push(`${s.name}.${n}`);
+          for (const e of r.errors) errors.push({ name: `${s.name}.${e.name}`, error: e.error });
+        } catch (e: unknown) {
+          errors.push({ name: s.name, error: e instanceof Error ? e.message : String(e) });
         }
-      } catch (e: unknown) {
-        errors.push({ name: 'stacks-list', error: e instanceof Error ? e.message : String(e) });
       }
-      result = { refreshed, errors };
-    } else {
+    } catch (e: unknown) {
+      errors.push({ name: 'stacks-list', error: e instanceof Error ? e.message : String(e) });
+    }
+
+    let result: import('./refresh.js').RefreshResult = { refreshed, errors };
+
+    // (b) vault refresh — only when a repoRoot is available to scan the
+    //     repo-root zbb.yaml for vault-declared vars.
+    if (opts.repoRoot) {
       const { refreshStackEnv } = await import('./refresh.js');
-      result = await refreshStackEnv(this.slot, opts.repoRoot, opts.stack ?? null);
+      const vaultResult = await refreshStackEnv(this.slot, opts.repoRoot, opts.stack ?? null);
+      result = {
+        refreshed: [...result.refreshed, ...vaultResult.refreshed],
+        errors: [...result.errors, ...vaultResult.errors],
+      };
     }
 
     // ── Pass 2: import re-eval across stacks ──
@@ -774,6 +812,27 @@ export class StackManager {
     // "@zerobias-com/dana" → "dana"
     const parts = fullName.split('/');
     return parts[parts.length - 1];
+  }
+
+  /**
+   * Scope-qualified short name, used to disambiguate a short-name collision
+   * between stacks from different scopes:
+   *   "@zerobias-org/util" → "org-util"
+   *   "@zerobias-com/util" → "com-util"
+   *   "@auditlogic/foo"     → "auditlogic-foo"
+   */
+  private extractScopedName(fullName: string): string {
+    const short = this.extractShortName(fullName);
+    const scopeMatch = fullName.match(/^@([^/]+)\//);
+    if (!scopeMatch) return short;
+    const scope = scopeMatch[1].replace(/^zerobias-/, '');
+    return scope ? `${scope}-${short}` : short;
+  }
+
+  /** Read an added stack's identity (its stack.yaml `name`). Null if unreadable. */
+  private async readStackIdentity(stackPath: string): Promise<string | null> {
+    const id = await loadYamlOrDefault<{ name?: string }>(join(stackPath, 'stack.yaml'), {});
+    return id.name ?? null;
   }
 
   /**

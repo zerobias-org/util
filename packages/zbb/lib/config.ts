@@ -210,6 +210,15 @@ export interface RepoConfig {
   tools?: Record<string, ToolDefinition>;
   ports?: { range: [number, number] };
   cleanse?: string[];
+  /**
+   * Explicit allowlist of ambient shell env vars that may pass through to
+   * dispatched commands under hermetic dispatch (in addition to the
+   * built-in SYSTEM_BASE and zbb's own namespace). Use sparingly for a var
+   * a command genuinely needs forwarded that isn't a declared zbb env var.
+   * Being committed config, it stays identical for everyone — unlike an
+   * ambient leak. See lib/env/effective.ts.
+   */
+  shell_passthrough?: string[];
   monorepo?: MonorepoConfig;
   /**
    * Optional lifecycle delegation. When present, zbb commands like `zbb build`,

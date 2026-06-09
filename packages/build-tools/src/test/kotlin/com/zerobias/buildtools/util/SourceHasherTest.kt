@@ -292,4 +292,116 @@ class SourceHasherTest {
         val after = SourceHasher.hashSources(pkg, listOf("package.json"), listOf("src"))
         assertNotEquals(before, after) { "raw-byte fallback still tracks changes" }
     }
+
+    // ── package.json `files` payload hashing (content packages) ──────────
+
+    @Test
+    fun `content package — editing a files-listed index_yml invalidates the hash`(@TempDir tmp: Path) {
+        // A content package: no src/, no tsconfig — exactly the case where the
+        // src-based defaults produced a constant empty hash and never re-gated.
+        val pkg = setupGitRepo(tmp)
+        File(pkg, "index.yml").writeText("name: scarola\nversion: 1\n")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "init")
+
+        val files = listOf("index.yml", "logo.*")
+        val before = SourceHasher.hashSources(pkg, listOf("tsconfig.json"), listOf("src"), files)
+
+        File(pkg, "index.yml").writeText("name: scarola\nversion: 2\n")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "edit index")
+
+        val after = SourceHasher.hashSources(pkg, listOf("tsconfig.json"), listOf("src"), files)
+        assertNotEquals(before, after) { "editing the published index.yml must re-gate" }
+    }
+
+    @Test
+    fun `files glob resolves — editing a tracked logo invalidates the hash`(@TempDir tmp: Path) {
+        val pkg = setupGitRepo(tmp)
+        File(pkg, "index.yml").writeText("x")
+        File(pkg, "logo.svg").writeText("<svg>a</svg>")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "init")
+
+        val files = listOf("index.yml", "logo.*")
+        val before = SourceHasher.hashSources(pkg, listOf(), listOf(), files)
+
+        File(pkg, "logo.svg").writeText("<svg>b</svg>")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "edit logo")
+
+        val after = SourceHasher.hashSources(pkg, listOf(), listOf(), files)
+        assertNotEquals(before, after) { "logo.* glob must resolve and track the tracked logo" }
+    }
+
+    @Test
+    fun `gitignored build output listed in files is a no-op`(@TempDir tmp: Path) {
+        // Typical TS service package: files: ["dist"], dist gitignored. Folding
+        // files must contribute nothing so existing stamps stay byte-identical.
+        val pkg = setupGitRepo(tmp)
+        File(pkg, ".gitignore").writeText("dist/\n")
+        File(pkg, "tsconfig.json").writeText("{}")
+        File(pkg, "src").mkdirs()
+        File(pkg, "src/index.ts").writeText("export const x = 1;")
+        runGit(pkg, "add", ".")
+        runGit(pkg, "commit", "-q", "-m", "init")
+
+        val sourceOnly = SourceHasher.hashSources(pkg, listOf("tsconfig.json"), listOf("src"))
+        val withFiles = SourceHasher.hashSources(pkg, listOf("tsconfig.json"), listOf("src"), listOf("dist"))
+        assertEquals(sourceOnly, withFiles) {
+            "gitignored dist in `files` must not change the hash — keeps existing TS stamps valid"
+        }
+
+        // And a locally-built dist file (untracked, gitignored) stays a no-op.
+        File(pkg, "dist").mkdirs()
+        File(pkg, "dist/index.js").writeText("var x = 1;")
+        val afterBuild = SourceHasher.hashSources(pkg, listOf("tsconfig.json"), listOf("src"), listOf("dist"))
+        assertEquals(sourceOnly, afterBuild) { "untracked built output must never affect the hash" }
+    }
+
+    @Test
+    fun `readFilesPatterns reads the files array, empty when absent`(@TempDir tmp: Path) {
+        val pkg = tmp.toFile()
+        assertEquals(emptyList<String>(), SourceHasher.readFilesPatterns(pkg)) // no package.json
+
+        File(pkg, "package.json").writeText("{ \"name\": \"x\", \"files\": [\"index.yml\", \"logo.*\"] }")
+        assertEquals(listOf("index.yml", "logo.*"), SourceHasher.readFilesPatterns(pkg))
+
+        File(pkg, "package.json").writeText("{ \"name\": \"x\" }")
+        assertEquals(emptyList<String>(), SourceHasher.readFilesPatterns(pkg)) // no files field
+    }
+
+    // ── untracked-published guard (airtight gate for new content) ────────
+
+    @Test
+    fun `findUntrackedPublishedFiles flags a never-committed published file`(@TempDir tmp: Path) {
+        val pkg = setupGitRepo(tmp)
+        File(pkg, "package.json").writeText("{ \"name\": \"x\", \"files\": [\"index.yml\", \"logo.*\"] }")
+        File(pkg, "index.yml").writeText("name: scarola")  // exists on disk, never `git add`ed
+        val files = SourceHasher.readFilesPatterns(pkg)
+
+        val untracked = SourceHasher.findUntrackedPublishedFiles(pkg, files)
+        assertTrue(untracked.contains("index.yml")) {
+            "a published file git doesn't track must be flagged so the gate can't silently pass it"
+        }
+
+        // Staging makes it git-tracked → no longer flagged.
+        runGit(pkg, "add", "index.yml")
+        assertTrue(SourceHasher.findUntrackedPublishedFiles(pkg, files).isEmpty()) {
+            "staged (tracked) file must not be flagged"
+        }
+    }
+
+    @Test
+    fun `findUntrackedPublishedFiles ignores gitignored build output`(@TempDir tmp: Path) {
+        val pkg = setupGitRepo(tmp)
+        File(pkg, ".gitignore").writeText("dist/\n")
+        File(pkg, "dist").mkdirs()
+        File(pkg, "dist/index.js").writeText("var x = 1;")  // built, gitignored, untracked
+
+        val untracked = SourceHasher.findUntrackedPublishedFiles(pkg, listOf("dist"))
+        assertTrue(untracked.isEmpty()) {
+            "gitignored build output is intentionally untracked — must NOT trip the guard"
+        }
+    }
 }

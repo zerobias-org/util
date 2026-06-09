@@ -38,6 +38,10 @@ export class StackEnvironment extends EventEmitter {
    */
   private static resolvers = new Map<string, (env: StackEnvironment) => string | undefined>();
 
+  // Stacks already warned (non-strict) about undeclared manifest vars, so
+  // the migration hint prints at most once per stack per process.
+  private static warnedUndeclared = new Set<string>();
+
   static registerResolver(key: string, fn: (env: StackEnvironment) => string | undefined): void {
     StackEnvironment.resolvers.set(key, fn);
   }
@@ -188,6 +192,18 @@ export class StackEnvironment extends EventEmitter {
   // ── Setting (overrides) ─────────────────────────────────────
 
   async set(key: string, value: string): Promise<void> {
+    // Lock-down: you may only override DECLARED vars — you can't introduce
+    // an undeclared one via `env set` (that's how ad-hoc, undeclared vars
+    // leaked into commands before). Declare it in zbb.yaml first. resolve()
+    // loads the schema, so it's populated here.
+    const isDeclared = this.schema.has(key)
+      || this.imports.some(i => (i.alias ?? i.varName) === key);
+    if (!isDeclared) {
+      throw new Error(
+        `Cannot set '${key}' — it is not declared in this stack's zbb.yaml ` +
+        `(neither env: nor imports:). Add it under env: in zbb.yaml first, then set it.`,
+      );
+    }
     const existing = this.manifest.get(key);
     this.manifest.set(key, {
       ...existing,
@@ -267,6 +283,38 @@ export class StackEnvironment extends EventEmitter {
     await this.saveManifest();
     await this.computeEnv();
     this.emit('change', { key, value: undefined });
+  }
+
+  /**
+   * Clear ALL user overrides in this stack at once — each var reverts to
+   * its next resolution (derived if it has a `default_formula`, otherwise
+   * removed so the schema default / import / computed value takes over).
+   * The stack-layer mirror of SlotEnvironment.reset. Batches a single
+   * manifest write + computeEnv. Returns the keys that were reverted.
+   */
+  async reset(): Promise<string[]> {
+    const reverted: string[] = [];
+    for (const [key, entry] of this.manifest) {
+      if (entry.resolution !== 'override') continue;
+      if (entry.default_formula) {
+        this.manifest.set(key, {
+          ...entry,
+          resolution: 'derived',
+          formula: entry.default_formula,
+          value: undefined,
+          set_by: undefined,
+          set_at: undefined,
+        } as StackManifestEntry);
+      } else {
+        this.manifest.delete(key);
+      }
+      reverted.push(key);
+    }
+    if (reverted.length === 0) return reverted;
+    await this.saveManifest();
+    await this.computeEnv();
+    for (const key of reverted) this.emit('change', { key, value: undefined });
+    return reverted;
   }
 
   /**
@@ -702,6 +750,44 @@ export class StackEnvironment extends EventEmitter {
         manifestChanged = true;
       }
     }
+    // 3c. Lock-down prune (unconditional — the one resolution behavior).
+    // A stack's env must trace to its zbb.yaml: declared under `env:`
+    // (schema), pulled via `imports:`, a framework slot var, or
+    // DNS-provisioned. Anything else is an orphan — a declaration that was
+    // removed, or an ad-hoc value never declared — and is PRUNED so the
+    // effective env can never drift from the zbb.yaml.
+    const importLocalNames = new Set(this.imports.map(i => i.alias ?? i.varName));
+    const pruned: string[] = [];
+    for (const [name, entry] of this.manifest) {
+      if (this.schema.has(name)) continue;                              // declared in env:
+      if (importLocalNames.has(name)) continue;                         // explicit import
+      if (entry.source === 'slot' || entry.source === 'zbb') continue;  // framework slot vars
+      if (entry.resolution === 'dns' || entry.source === 'dns') continue; // dynamic provisioning
+      // Actively external/cross-sourced — NOT an orphan. `inherited` =
+      // materialized from vault/file/env by refresh; `imported` = pulled from
+      // a dep stack. These are declared elsewhere (vault config / dep) and
+      // get re-sourced every run, so pruning them just churns (vault adds it,
+      // we delete it, repeat). Only truly orphaned override/default/derived
+      // entries — values nothing declares anymore — should be pruned.
+      if (entry.resolution === 'inherited' || entry.resolution === 'imported') continue;
+      this.manifest.delete(name);
+      pruned.push(name);
+    }
+    if (pruned.length > 0) {
+      manifestChanged = true;
+      // resolve() runs many times per command; once pruned the manifest is
+      // clean so later resolves are silent. Dedup per stack per process as
+      // belt-and-suspenders against any in-process repeat.
+      if (!StackEnvironment.warnedUndeclared.has(this.stackDir)) {
+        StackEnvironment.warnedUndeclared.add(this.stackDir);
+        console.error(
+          `[zbb] stack '${this.stackDir.split('/').pop()}': pruned ${pruned.length} ` +
+          `undeclared env var(s) not in zbb.yaml: ${pruned.sort().join(', ')}. ` +
+          `Declare under env: (or import) what the stack actually needs.`,
+        );
+      }
+    }
+
     if (manifestChanged) await this.saveManifest();
 
     // 4. DNS provisioning

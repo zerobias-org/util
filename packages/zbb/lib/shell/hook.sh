@@ -18,6 +18,24 @@ _ZBB_CURRENT_STACK_FULL=""
 # updated AFTER the subshell entered the stack stays invisible until
 # the user manually `source ~/.bashrc` or exits/re-enters the slot.
 _ZBB_CURRENT_STACK_ENV_MTIME=""
+# Every key zbb has ever exported into this shell (across all stacks). On
+# each scope change we reconcile against this set: any tracked key no
+# longer present in the new stack's .env is unset, so the live shell
+# matches disk (a removed override disappears) instead of only ever adding
+# vars. Plain indexed array for bash 3.2 (macOS) portability.
+_ZBB_ALL_EXPORTED_VARS=()
+
+# ── Helpers ──────────────────────────────────────────────────────────
+
+# Membership test against a space-separated list (avoids bash-4 assoc
+# arrays so the hook keeps working on macOS's stock bash 3.2).
+_zbb_in_list() {
+  local needle="$1" hay="$2" item
+  for item in $hay; do
+    [ "$item" = "$needle" ] && return 0
+  done
+  return 1
+}
 
 # ── Load a stack's .env into the current shell ───────────────────────
 
@@ -27,21 +45,42 @@ _zbb_load_stack_env() {
   local stacks_dir="${ZB_STACKS_DIR:-$slot_dir/stacks}"
   local env_file="$stacks_dir/$stack_name/.env"
 
-  # Unset previous stack's vars (but preserve slot-level vars)
-  if [ ${#_ZBB_CURRENT_STACK_VARS[@]} -gt 0 ]; then
-    for var in "${_ZBB_CURRENT_STACK_VARS[@]}"; do
-      # Never unset slot-level vars — they must persist across stack changes
+  # Collect the keys the new stack .env defines (space-separated).
+  local new_keys=""
+  if [ -n "$stack_name" ] && [ -f "$env_file" ]; then
+    local k v
+    while IFS='=' read -r k v; do
+      [ -z "$k" ] && continue
+      [[ "$k" =~ ^[[:space:]]*# ]] && continue
+      k=$(echo "$k" | xargs)
+      new_keys="$new_keys $k"
+    done < "$env_file"
+  fi
+
+  # Reconcile: unset every previously-exported zbb var that is NOT in the
+  # new set (slot-level vars always persist). Superset of the old "unset
+  # the previous stack's vars" pass — robust across stack hops and
+  # external .env edits (e.g. another terminal running `zbb env unset`).
+  if [ ${#_ZBB_ALL_EXPORTED_VARS[@]} -gt 0 ]; then
+    local kept=()
+    local var
+    for var in "${_ZBB_ALL_EXPORTED_VARS[@]}"; do
       case "$var" in
-        ZB_SLOT|ZB_SLOT_DIR|ZB_SLOT_CONFIG|ZB_SLOT_LOGS|ZB_SLOT_STATE|ZB_SLOT_TMP|ZB_STACKS_DIR) ;;
-        *) unset "$var" 2>/dev/null ;;
+        ZB_SLOT|ZB_SLOT_DIR|ZB_SLOT_CONFIG|ZB_SLOT_LOGS|ZB_SLOT_STATE|ZB_SLOT_TMP|ZB_STACKS_DIR) continue ;;
       esac
+      if _zbb_in_list "$var" "$new_keys"; then
+        kept+=("$var")
+      else
+        unset "$var" 2>/dev/null
+      fi
     done
-    _ZBB_CURRENT_STACK_VARS=()
+    _ZBB_ALL_EXPORTED_VARS=("${kept[@]}")
   fi
 
   _ZBB_CURRENT_STACK="$stack_name"
+  _ZBB_CURRENT_STACK_VARS=()
 
-  # If no stack, we're done (just cleared vars)
+  # If no stack, we're done (just reconciled vars)
   [ -z "$stack_name" ] && return
 
   # Source the stack's .env if it exists
@@ -57,6 +96,9 @@ _zbb_load_stack_env() {
       value="${value//\\\\/\\}"
       export "$key=$value"
       _ZBB_CURRENT_STACK_VARS+=("$key")
+      if ! _zbb_in_list "$key" "${_ZBB_ALL_EXPORTED_VARS[*]}"; then
+        _ZBB_ALL_EXPORTED_VARS+=("$key")
+      fi
     done < "$env_file"
   fi
 }
@@ -86,12 +128,21 @@ _zbb_scope_env() {
       local name
       name=$(grep -m1 '^name:' "$dir/zbb.yaml" 2>/dev/null | sed 's/^name:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
       if [ -n "$name" ]; then
-        local candidate="${name##*/}"
-        if [ -d "$stacks_dir/$candidate" ]; then
-          stack_name="$candidate"
-          stack_full="$name"
-          break
-        fi
+        # Match by IDENTITY: find the added stack whose stack.yaml `name`
+        # equals this repo's full scoped name. Collision-proof and works with
+        # scope-qualified dirs (e.g. 'org-util') — the dir name may differ
+        # from the short name, but the identity is exact. Mirrors the TS
+        # resolveStackForCwd.
+        local sd sid
+        for sd in "$stacks_dir"/*/; do
+          [ -f "${sd}stack.yaml" ] || continue
+          sid=$(grep -m1 '^name:' "${sd}stack.yaml" 2>/dev/null | sed 's/^name:[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
+          if [ "$sid" = "$name" ]; then
+            stack_name=$(basename "$sd")
+            stack_full="$name"
+            break 2
+          fi
+        done
       fi
     fi
     dir=$(dirname "$dir")
