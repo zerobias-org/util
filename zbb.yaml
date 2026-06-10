@@ -56,6 +56,18 @@ env:
     source: env
     mask: true
     description: "read:packages token for installing private deps from GitHub Packages."
+  # Post-publish release announcement (Slack webhook + Lambda event). These
+  # are CI-provided ambient vars; declared source:env so the hermetic seal
+  # doesn't strip them from `zbb publish` (the announce step silently skips
+  # when absent, so they are not required).
+  SLACK_RELEASES_WEBHOOK:
+    source: env
+    mask: true
+    description: "Slack incoming-webhook URL for #releases announcements."
+  SLACK_DEVOPS_NOTIFICATIONS:
+    source: env
+    mask: true
+    description: "Slack incoming-webhook URL for devops notifications."
   # Gradle reads ORG_GRADLE_PROJECT_* from the environment before any
   # settings or build scripts run — the only reliable injection path for
   # providers.gradleProperty() used by Vanniktech maven-publish + signing.
