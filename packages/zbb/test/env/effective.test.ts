@@ -64,6 +64,28 @@ describe('effective env', () => {
       assert.equal(process.env.ZB_TOKEN, 'declared-token');
     });
 
+    it('passes through LIFECYCLE_PASSTHROUGH (build-tools/zbb internal vars), still strips publish overrides', () => {
+      reset({
+        PATH: '/usr/bin',
+        NPM_TOKEN: 'ci-npm',                    // lifecycle passthrough — keep
+        SLACK_RELEASES_WEBHOOK: 'https://hook', // lifecycle passthrough — keep
+        GITHUB_TOKEN: 'ci-gh',                  // lifecycle passthrough — keep
+        DATALOADER_SERVICE_URL: 'http://localhost:15003', // prod-default override — STRIP
+        SOME_PERSONAL: 'junk',                  // undeclared personal — strip
+      });
+      const stripped = applyEffectiveEnv({ ZB_SLOT: 'local' }, new Set());
+
+      assert.equal(process.env.NPM_TOKEN, 'ci-npm');
+      assert.equal(process.env.SLACK_RELEASES_WEBHOOK, 'https://hook');
+      assert.equal(process.env.GITHUB_TOKEN, 'ci-gh');
+      // the publish-endpoint override stays strippable so it never silently
+      // redirects a prod publish from a stale shell value
+      assert.equal(process.env.DATALOADER_SERVICE_URL, undefined);
+      assert.equal(process.env.SOME_PERSONAL, undefined);
+      assert.ok(stripped.includes('DATALOADER_SERVICE_URL'));
+      assert.ok(stripped.includes('SOME_PERSONAL'));
+    });
+
     it('ZBB_HERMETIC=0 falls back to additive-only (no stripping)', () => {
       reset({ ZBB_HERMETIC: '0', LEFTOVER: 'kept' });
       const stripped = applyEffectiveEnv({ ZB_SLOT: 'local' }, new Set());

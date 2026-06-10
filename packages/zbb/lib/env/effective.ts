@@ -54,6 +54,37 @@ const SYSTEM_BASE_PREFIXES = ['LC_'] as const;
  */
 const ZBB_INTERNAL_PREFIXES = ['ZBB_', '_ZBB_'] as const;
 
+/**
+ * Env vars that zbb itself and build-tools READ internally (System.getenv /
+ * process.env) along their own publish / gate / docker / release-announce
+ * code paths, but that are NOT surfaced in any repo's zbb.yaml — so a repo
+ * author has no way to declare them and the seal would otherwise strip them.
+ *
+ * These are a known, committed contract (CI context, publish/install creds,
+ * docker registries, release webhooks): present in CI from secrets, the same
+ * for everyone, so they pass the seal GLOBALLY rather than being declared in
+ * every repo. Determinism is preserved — this is a fixed, in-source list, not
+ * arbitrary ambient leakage.
+ *
+ * Keep in sync with build-tools' reads: `grep -rho 'System.getenv("[A-Z_]*")'
+ * packages/build-tools/src`. Deliberately EXCLUDED: the publish-endpoint
+ * OVERRIDES (PUBLISH_ORG_*, ZB_PLATFORM_URL, DATALOADER_SERVICE_URL) — those
+ * default to prod and are opt-in-only, so they stay strippable (a stale shell
+ * value must never silently redirect a prod publish).
+ */
+export const LIFECYCLE_PASSTHROUGH: ReadonlySet<string> = new Set([
+  // CI context (release announce + lambda events)
+  'CI', 'GITHUB_ACTOR', 'GITHUB_RUN_ID', 'GITHUB_SHA', 'GITHUB_SERVER_URL', 'GITHUB_REPOSITORY',
+  // publish / install credentials
+  'GITHUB_TOKEN', 'NPM_TOKEN', 'READ_TOKEN', 'VAULT_TOKEN', 'ZB_TOKEN',
+  // docker registries / build
+  'ECR_REGISTRY', 'ECR_REPO_NAME', 'GHCR_REGISTRY', 'DOCKER_BUILD_CONCURRENCY',
+  // aws (lambda release events / deploy)
+  'AWS_REGION', 'SECRET_NAME',
+  // release announcements
+  'SLACK_RELEASES_WEBHOOK', 'SLACK_DEVOPS_NOTIFICATIONS',
+]);
+
 export function isSystemBaseVar(key: string): boolean {
   if (SYSTEM_BASE_VARS.has(key)) return true;
   return SYSTEM_BASE_PREFIXES.some(p => key.startsWith(p));
@@ -129,7 +160,7 @@ export function applyEffectiveEnv(
   if (hermetic) {
     for (const key of Object.keys(process.env)) {
       if (key in effectiveEnv) continue;
-      if (isSystemBaseVar(key) || isZbbInternalVar(key) || passthrough.has(key)) continue;
+      if (isSystemBaseVar(key) || isZbbInternalVar(key) || LIFECYCLE_PASSTHROUGH.has(key) || passthrough.has(key)) continue;
       delete process.env[key];
       stripped.push(key);
     }

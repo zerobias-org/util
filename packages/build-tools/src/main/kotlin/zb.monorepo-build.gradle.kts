@@ -532,7 +532,15 @@ gradle.projectsEvaluated {
         // FileTree wrappers handle missing-dir cases (empty tree). For
         // single FILES, Gradle's input validation requires them to exist
         // even with .optional(), so we only declare them if they're present.
-        fun fileTreeOf(dir: java.io.File) = subproject.fileTree(dir).matching { include("**/*") }
+        // Exclude ephemeral / regenerated content so a task that writes into
+        // its own input tree (e.g. generator-module's test scaffolds
+        // test/sandbox/ and npm-installs node_modules there) doesn't
+        // perpetually invalidate its own up-to-date check. None of these are
+        // source — they're build output / installed deps / scaffolded fixtures.
+        fun fileTreeOf(dir: java.io.File) = subproject.fileTree(dir).matching {
+            include("**/*")
+            exclude("**/node_modules/**", "**/sandbox/**", "**/dist/**", "**/build/**", "**/.gradle/**")
+        }
 
         for (phase in phases) {
             val action = resolvePhaseAction(pkg.dir, phase, pkg.scripts)
