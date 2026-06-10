@@ -1,6 +1,6 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { isSystemBaseVar, applyEffectiveEnv } from '../../lib/env/effective.js';
+import { isSystemBaseVar, applyEffectiveEnv, commandPassthrough } from '../../lib/env/effective.js';
 
 describe('effective env', () => {
   const saved = { ...process.env };
@@ -64,26 +64,35 @@ describe('effective env', () => {
       assert.equal(process.env.ZB_TOKEN, 'declared-token');
     });
 
-    it('passes through LIFECYCLE_PASSTHROUGH (build-tools/zbb internal vars), still strips publish overrides', () => {
+    it('publish contract passes publish creds; still strips overrides + personal', () => {
       reset({
         PATH: '/usr/bin',
-        NPM_TOKEN: 'ci-npm',                    // lifecycle passthrough — keep
-        SLACK_RELEASES_WEBHOOK: 'https://hook', // lifecycle passthrough — keep
-        GITHUB_TOKEN: 'ci-gh',                  // lifecycle passthrough — keep
+        NPM_TOKEN: 'ci-npm',                    // publish contract — keep
+        SLACK_RELEASES_WEBHOOK: 'https://hook', // publish contract — keep
+        GH_TOKEN: 'pat',                        // publish contract — keep
         DATALOADER_SERVICE_URL: 'http://localhost:15003', // prod-default override — STRIP
         SOME_PERSONAL: 'junk',                  // undeclared personal — strip
       });
-      const stripped = applyEffectiveEnv({ ZB_SLOT: 'local' }, new Set());
+      const stripped = applyEffectiveEnv({ ZB_SLOT: 'local' }, commandPassthrough('publish'));
 
       assert.equal(process.env.NPM_TOKEN, 'ci-npm');
       assert.equal(process.env.SLACK_RELEASES_WEBHOOK, 'https://hook');
-      assert.equal(process.env.GITHUB_TOKEN, 'ci-gh');
-      // the publish-endpoint override stays strippable so it never silently
-      // redirects a prod publish from a stale shell value
-      assert.equal(process.env.DATALOADER_SERVICE_URL, undefined);
+      assert.equal(process.env.GH_TOKEN, 'pat');
+      assert.equal(process.env.DATALOADER_SERVICE_URL, undefined); // override stays strippable
       assert.equal(process.env.SOME_PERSONAL, undefined);
       assert.ok(stripped.includes('DATALOADER_SERVICE_URL'));
       assert.ok(stripped.includes('SOME_PERSONAL'));
+    });
+
+    it('gate contract is base creds only — it does NOT carry publish vars', () => {
+      reset({
+        PATH: '/usr/bin',
+        NPM_TOKEN: 'ci-npm',                    // base cred — keep (gate installs deps)
+        SLACK_RELEASES_WEBHOOK: 'https://hook', // publish-only — STRIP for gate
+      });
+      applyEffectiveEnv({ ZB_SLOT: 'local' }, commandPassthrough('gate'));
+      assert.equal(process.env.NPM_TOKEN, 'ci-npm');
+      assert.equal(process.env.SLACK_RELEASES_WEBHOOK, undefined);
     });
 
     it('ZBB_HERMETIC=0 falls back to additive-only (no stripping)', () => {
@@ -91,6 +100,17 @@ describe('effective env', () => {
       const stripped = applyEffectiveEnv({ ZB_SLOT: 'local' }, new Set());
       assert.equal(process.env.LEFTOVER, 'kept');
       assert.equal(process.env.ZB_SLOT, 'local');
+      assert.deepEqual(stripped, []);
+    });
+
+    it('in CI the seal is OFF — nothing is stripped (controlled env, no per-dev variance)', () => {
+      // CI's env is the workflow's secrets/runner; the long tail of
+      // subprocess-read vars (gh GH_TOKEN, docker, aws, …) must pass through.
+      reset({ CI: 'true', GH_TOKEN: 'pat', DOCKER_HOST: 'tcp://x', WHATEVER: 'keep' });
+      const stripped = applyEffectiveEnv({ ZB_SLOT: 'local' }, new Set());
+      assert.equal(process.env.GH_TOKEN, 'pat');
+      assert.equal(process.env.DOCKER_HOST, 'tcp://x');
+      assert.equal(process.env.WHATEVER, 'keep');
       assert.deepEqual(stripped, []);
     });
   });

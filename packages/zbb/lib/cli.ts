@@ -39,7 +39,7 @@ import {
   type ZbbChainEntry,
 } from './config.js';
 import { derivePackageScope, type PackageScope } from './monorepo/scope.js';
-import { resolveEffectiveEnv, loadShellPassthrough, applyEffectiveEnv } from './env/effective.js';
+import { resolveEffectiveEnv, loadShellPassthrough, applyEffectiveEnv, commandPassthrough } from './env/effective.js';
 import { spawn } from 'node:child_process';
 import { isLifecycleCommand, parseLifecycleArgs } from './lifecycle.js';
 import {
@@ -88,7 +88,7 @@ import type { Stack } from './stack/Stack.js';
  */
 async function prepareSlot(
   slot: Slot,
-  options?: { fatal?: boolean; stack?: Stack | null; hermetic?: boolean },
+  options?: { fatal?: boolean; stack?: Stack | null; hermetic?: boolean; command?: string },
 ): Promise<string | null> {
   const repoRoot = findRepoRoot(process.cwd());
 
@@ -146,7 +146,13 @@ async function prepareSlot(
   // stack value, a sourced token, or a leftover from another stack are all
   // dropped — what you see in `env list` is what runs. CI is unaffected:
   // prepareSlot only runs inside a loaded slot, which CI never has.
-  const passthrough = await loadShellPassthrough(repoRoot);
+  // Allowlist for the local seal = repo shell_passthrough ∪ the dispatched
+  // command's env contract (e.g. `zbb publish` gets the publish creds/registries,
+  // `zbb gate` only the base install creds).
+  const passthrough = new Set([
+    ...await loadShellPassthrough(repoRoot),
+    ...commandPassthrough(options?.command),
+  ]);
   const stripped = applyEffectiveEnv(effective, passthrough, { hermetic: options?.hermetic !== false });
   if (stripped.length > 0 && process.env.ZBB_ENV_DEBUG === '1') {
     console.error(
@@ -660,7 +666,7 @@ async function _main(argv: string[]): Promise<void> {
     //
     // Without the stack parameter, only slot ZB_* vars would be applied —
     // the user's tests would have no PG/AWS/port vars at all.
-    await prepareSlot(slot, { fatal: false, stack });
+    await prepareSlot(slot, { fatal: false, stack, command });
 
     // Run preflight from `require:`
     //

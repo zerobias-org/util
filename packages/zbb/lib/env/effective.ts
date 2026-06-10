@@ -55,35 +55,81 @@ const SYSTEM_BASE_PREFIXES = ['LC_'] as const;
 const ZBB_INTERNAL_PREFIXES = ['ZBB_', '_ZBB_'] as const;
 
 /**
- * Env vars that zbb itself and build-tools READ internally (System.getenv /
- * process.env) along their own publish / gate / docker / release-announce
- * code paths, but that are NOT surfaced in any repo's zbb.yaml — so a repo
- * author has no way to declare them and the seal would otherwise strip them.
+ * Per-command env contracts. zbb and build-tools READ these vars internally
+ * (System.getenv / process.env, or via subprocesses like `gh`/docker) along a
+ * command's code path, but they're not surfaced in any zbb.yaml — so the LOCAL
+ * seal would strip them. Each lifecycle command carries its OWN contract: when
+ * you dispatch `zbb publish`, publish's vars pass; `zbb gate` only gets the
+ * base install/auth creds (it never needs Slack/registry). In CI the seal is
+ * off entirely, so these are a no-op there.
  *
- * These are a known, committed contract (CI context, publish/install creds,
- * docker registries, release webhooks): present in CI from secrets, the same
- * for everyone, so they pass the seal GLOBALLY rather than being declared in
- * every repo. Determinism is preserved — this is a fixed, in-source list, not
- * arbitrary ambient leakage.
+ * Deliberately NOT in any contract: the publish-endpoint OVERRIDES
+ * (PUBLISH_ORG_*, ZB_PLATFORM_URL, DATALOADER_SERVICE_URL) — they default to
+ * prod and stay strippable so a stale shell value can't silently redirect a
+ * prod publish (use ZBB_HERMETIC=0 for local-verdaccio testing).
  *
- * Keep in sync with build-tools' reads: `grep -rho 'System.getenv("[A-Z_]*")'
- * packages/build-tools/src`. Deliberately EXCLUDED: the publish-endpoint
- * OVERRIDES (PUBLISH_ORG_*, ZB_PLATFORM_URL, DATALOADER_SERVICE_URL) — those
- * default to prod and are opt-in-only, so they stay strippable (a stale shell
- * value must never silently redirect a prod publish).
+ * KEEP IN SYNC with build-tools' env reads — enforced by EnvContractCoverageTest
+ * in packages/build-tools (it fails if a new System.getenv isn't covered here).
  */
-export const LIFECYCLE_PASSTHROUGH: ReadonlySet<string> = new Set([
-  // CI context (release announce + lambda events)
-  'CI', 'GITHUB_ACTOR', 'GITHUB_RUN_ID', 'GITHUB_SHA', 'GITHUB_SERVER_URL', 'GITHUB_REPOSITORY',
-  // publish / install credentials
-  'GITHUB_TOKEN', 'NPM_TOKEN', 'READ_TOKEN', 'VAULT_TOKEN', 'ZB_TOKEN',
-  // docker registries / build
+
+// Every lifecycle command needs the install/auth creds (private-dep installs
+// from GitHub Packages, vault resolution).
+const BASE_CREDS = ['NPM_TOKEN', 'READ_TOKEN', 'GITHUB_TOKEN', 'VAULT_TOKEN'] as const;
+
+// publish / publishRemote: npm publish + docker push + release announce + the
+// `gh workflow run` image dispatch. GH_TOKEN holds the privileged dispatch PAT
+// (stripping it makes gh fall back to the default GITHUB_TOKEN → 403
+// "Resource not accessible by integration"); DISPATCH_TOKEN drives generate-kb.
+const PUBLISH_CONTRACT = [
+  ...BASE_CREDS,
+  'GH_TOKEN', 'DISPATCH_TOKEN', 'ZB_TOKEN',
   'ECR_REGISTRY', 'ECR_REPO_NAME', 'GHCR_REGISTRY', 'DOCKER_BUILD_CONCURRENCY',
-  // aws (lambda release events / deploy)
   'AWS_REGION', 'SECRET_NAME',
-  // release announcements
   'SLACK_RELEASES_WEBHOOK', 'SLACK_DEVOPS_NOTIFICATIONS',
+  'GITHUB_ACTOR', 'GITHUB_RUN_ID', 'GITHUB_SHA', 'GITHUB_SERVER_URL', 'GITHUB_REPOSITORY', 'CI',
+] as const;
+
+const COMMAND_ENV_CONTRACTS: Record<string, readonly string[]> = {
+  publish: PUBLISH_CONTRACT,
+  publishRemote: PUBLISH_CONTRACT,
+  publishOrg: [...BASE_CREDS, 'ZB_TOKEN'],
+  // validate/generate/compile/lint/test/build/gate → BASE_CREDS (default below)
+};
+
+// Build-verb commands that need only the base creds.
+const KNOWN_BUILD_VERBS = new Set([
+  'validate', 'generate', 'compile', 'lint', 'test', 'testIntegration',
+  'build', 'gate', 'gateCheck', 'clean',
 ]);
+
+// Union of every contract var — the safe default for unknown/raw commands
+// (gradle-wrapper fallback, run/exec) so we never strip a cred they might need.
+const ALL_CONTRACT_VARS: ReadonlySet<string> = new Set([
+  ...BASE_CREDS,
+  ...Object.values(COMMAND_ENV_CONTRACTS).flat(),
+]);
+
+/**
+ * Build-tools env reads intentionally NOT passed through any contract, listed
+ * so EnvContractCoverageTest treats them as "covered" without leaking them:
+ * the prod-default OVERRIDES (must stay strippable) and framework vars handled
+ * by the effective env / ZBB_ prefix. (PATH/HOME/NVM_DIR are in SYSTEM_BASE.)
+ */
+export const ENV_CONTRACT_IGNORED: ReadonlySet<string> = new Set([
+  'PUBLISH_ORG_NPM_TOKEN', 'PUBLISH_ORG_REGISTRY_URL', 'ZB_PLATFORM_URL', 'DATALOADER_SERVICE_URL',
+  'ZB_SLOT', 'ZB_SLOT_DIR', 'ZB_STACK', 'ZBB_MONOREPO_EVENT_FILE',
+]);
+
+/**
+ * The env vars a given lifecycle command may receive through the LOCAL seal.
+ * Known commands get their precise contract; unknown/raw commands get the
+ * union of all contracts (broad-safe).
+ */
+export function commandPassthrough(command?: string): ReadonlySet<string> {
+  if (command && COMMAND_ENV_CONTRACTS[command]) return new Set(COMMAND_ENV_CONTRACTS[command]);
+  if (command && KNOWN_BUILD_VERBS.has(command)) return new Set(BASE_CREDS);
+  return ALL_CONTRACT_VARS;
+}
 
 export function isSystemBaseVar(key: string): boolean {
   if (SYSTEM_BASE_VARS.has(key)) return true;
@@ -150,17 +196,30 @@ export function applyEffectiveEnv(
   passthrough: ReadonlySet<string>,
   options?: { hermetic?: boolean },
 ): string[] {
-  // hermetic stripping is the default for COMMAND dispatch; callers that
-  // prepare the interactive subshell (slot load) pass hermetic:false so the
-  // operator keeps their personal env (KUBECONFIG, AWS_PROFILE, …). The
-  // ZBB_HERMETIC=0 env kill-switch disables it everywhere.
-  const hermetic = options?.hermetic !== false && process.env.ZBB_HERMETIC !== '0';
+  // The seal exists for LOCAL determinism — stopping one developer's personal
+  // shell vars (stale overrides, personal tokens) from leaking into commands
+  // ("works for me, breaks for you"). CI has none of that: its env is the
+  // workflow's committed secrets + runner — a single controlled environment,
+  // identical every run. So the seal gives NO benefit in CI and only breaks
+  // the long tail of vars the toolchain reads via SUBPROCESSES (gh's
+  // GH_TOKEN, docker's DOCKER_*, aws's AWS_*, vault's VAULT_*, npm_config_*, …)
+  // that no whitelist can fully enumerate. → strip LOCALLY only; in CI the
+  // env passes through untouched, exactly as before the seal.
+  //
+  // hermetic also off for: callers preparing the interactive subshell (slot
+  // load passes hermetic:false so the operator keeps KUBECONFIG/AWS_PROFILE/…),
+  // and the ZBB_HERMETIC=0 kill-switch.
+  const inCI = process.env.CI === 'true' || process.env.CI === '1'
+    || process.env.GITHUB_ACTIONS === 'true';
+  const hermetic = options?.hermetic !== false
+    && process.env.ZBB_HERMETIC !== '0'
+    && !inCI;
   const stripped: string[] = [];
 
   if (hermetic) {
     for (const key of Object.keys(process.env)) {
       if (key in effectiveEnv) continue;
-      if (isSystemBaseVar(key) || isZbbInternalVar(key) || LIFECYCLE_PASSTHROUGH.has(key) || passthrough.has(key)) continue;
+      if (isSystemBaseVar(key) || isZbbInternalVar(key) || passthrough.has(key)) continue;
       delete process.env[key];
       stripped.push(key);
     }
