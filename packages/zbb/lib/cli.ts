@@ -39,6 +39,7 @@ import {
   type ZbbChainEntry,
 } from './config.js';
 import { derivePackageScope, type PackageScope } from './monorepo/scope.js';
+import { resolveEffectiveEnv, loadShellPassthrough, applyEffectiveEnv } from './env/effective.js';
 import { spawn } from 'node:child_process';
 import { isLifecycleCommand, parseLifecycleArgs } from './lifecycle.js';
 import {
@@ -87,7 +88,7 @@ import type { Stack } from './stack/Stack.js';
  */
 async function prepareSlot(
   slot: Slot,
-  options?: { fatal?: boolean; stack?: Stack | null },
+  options?: { fatal?: boolean; stack?: Stack | null; hermetic?: boolean },
 ): Promise<string | null> {
   const repoRoot = findRepoRoot(process.cwd());
 
@@ -118,19 +119,11 @@ async function prepareSlot(
     }
   }
 
-  // Layer 1: apply slot-level vars (ZB_SLOT, paths, etc). Filtered by
-  // SlotEnvironment.getAll() to only return ZBB_SLOT_VARS.
-  const slotEnv = slot.env.getAll();
-  for (const [k, v] of Object.entries(slotEnv)) {
-    if (v) process.env[k] = v;
-  }
-
-  // Layer 2: if a stack context is available, recursively resolve the
-  // stack's full dep chain and apply its composed env. Stack.load() is
-  // recursive — it walks manifest.depends + manifest.imports keys,
-  // resolving each dep stack first, so by the time we call env.getAll()
-  // here every imported value is fresh on disk.
-  const stack = options?.stack;
+  // If a stack context is available, recursively resolve its full dep
+  // chain so imported values are fresh on disk before we compose. Stack
+  // .load() walks manifest.depends + manifest.imports, resolving each dep
+  // stack first.
+  const stack = options?.stack ?? null;
   if (stack) {
     try {
       await stack.load();
@@ -140,22 +133,25 @@ async function prepareSlot(
       // message — the user needs to fix their zbb.yaml.
       throw new Error(`Failed to resolve stack '${stack.name}':\n${e.message}`);
     }
-    // Pass showHidden=true so `hidden: true` vars still reach child
-    // processes. `hidden` is a UI concern (suppresses from `zbb env list`) —
-    // it must NOT filter env injection into subprocess env. Without this,
-    // derived vars like `ORG_GRADLE_PROJECT_mavenCentralUsername` (used to
-    // pass Sonatype + signing creds to gradle via its env-to-property
-    // convention) are declared `hidden: true` to keep `env list` tidy and
-    // end up stripped out here — gradle then reads them as NULL and
-    // signing/publishing fails.
-    const stackEnv = stack.env.getAll(true);
-    for (const [k, v] of Object.entries(stackEnv)) {
-      if (v) process.env[k] = v;
-    }
-    // ZB_STACK carries the current stack's short name. The cd hook
-    // sources each stack .env (which contains ZB_STACK) on directory
-    // change; here we stamp it for the zbb subprocess path.
-    process.env.ZB_STACK = stack.name;
+  }
+
+  // Single source of truth: the effective env (slot identity/paths + the
+  // active stack's resolved env). This is EXACTLY what `zbb env list/get`
+  // renders — display and injection share resolveEffectiveEnv, so they
+  // cannot diverge.
+  const effective = resolveEffectiveEnv(slot, stack);
+
+  // Hermetic dispatch: apply the effective env authoritatively, deleting
+  // any undeclared shell var so it never reaches the command. A stale
+  // stack value, a sourced token, or a leftover from another stack are all
+  // dropped — what you see in `env list` is what runs. CI is unaffected:
+  // prepareSlot only runs inside a loaded slot, which CI never has.
+  const passthrough = await loadShellPassthrough(repoRoot);
+  const stripped = applyEffectiveEnv(effective, passthrough, { hermetic: options?.hermetic !== false });
+  if (stripped.length > 0 && process.env.ZBB_ENV_DEBUG === '1') {
+    console.error(
+      `[zbb] hermetic env: stripped ${stripped.length} undeclared shell var(s): ${stripped.sort().join(', ')}`,
+    );
   }
 
   return repoRoot;
@@ -243,10 +239,13 @@ async function resolveStackForCwd(slot: Slot, hint?: string): Promise<Stack | nu
   while (true) {
     const manifest = await loadStackManifest(dir);
     if (manifest) {
-      const shortName = manifest.name.split('/').pop() ?? manifest.name;
-      const match = addedStacks.find(
-        s => s.name === shortName || s.identity.name === manifest.name,
-      );
+      // Match by exact identity (full scoped npm name), NOT bare short name.
+      // Short-name matching let a collision win — e.g. cwd org/util
+      // (@zerobias-org/util) binding to the com/util 'util' stack
+      // (@zerobias-com/util), so its env resolved from the wrong repo's
+      // (empty) schema. Identity matching is collision-proof and still covers
+      // `--as` (which changes the dir/short name but never the identity).
+      const match = addedStacks.find(s => s.identity.name === manifest.name);
       if (match) return match;
     }
     const parent = resolvePath(dir, '..');
@@ -875,8 +874,12 @@ async function handleSlot(args: string[]): Promise<void> {
 
       const slot = await SlotManager.load(slotName);
 
-      // Extend + resolve (DNS + vault) + re-export env
-      const repoRoot = await prepareSlot(slot);
+      // Extend + resolve (DNS + vault) + re-export env. hermetic:false —
+      // slot load prepares the operator's INTERACTIVE subshell (its
+      // shellEnv is built from process.env below), so we must NOT strip the
+      // operator's personal env here. Hermetic stripping applies only to
+      // commands zbb dispatches (gradle/run/exec), not the shell itself.
+      const repoRoot = await prepareSlot(slot, { hermetic: false });
       if (!repoRoot) {
         if (isReload) {
           console.error('No zbb.yaml or .zbb.yaml found. Run from inside a project directory.');
@@ -1192,15 +1195,24 @@ async function handleEnv(args: string[]): Promise<void> {
     case 'list': {
       const unmask = args.includes('--unmask');
       const slotOnly = args.includes('--slot');
+      const plain = args.includes('--plain');
 
-      // Default: stack env when a stack context exists; slot env otherwise
-      // (e.g. when the user hasn't cd'd into a stack yet). `--slot` forces
-      // the slot view — useful for inspecting the 7 framework path vars
-      // without cd'ing out of a stack.
+      // Default in a stack: render the EFFECTIVE env — exactly what a
+      // dispatched command receives (slot identity vars + the active
+      // stack's resolved env, hidden vars included). `--plain` trims the
+      // slot path vars + hidden/derived machinery for a readable view;
+      // `--slot` forces the slot-only view.
       if (stackCtx && !slotOnly) {
-        const manifest = stackCtx.env.getManifest();
+        if (!plain) {
+          console.log(`  [slot: ${slot.name}]`);
+          for (const key of slot.env.list()) {
+            const value = unmask ? slot.env.get(key)! : slot.env.getMasked(key)!;
+            console.log(`  ${key}=${value}`);
+          }
+        }
+        const manifest = stackCtx.env.getManifest(true);
         console.log(`  [stack: ${stackCtx.name}]`);
-        for (const key of stackCtx.env.list()) {
+        for (const key of stackCtx.env.list(!plain)) {
           const value = unmask ? stackCtx.env.get(key)! : (stackCtx.env.shouldMask(key) ? '***' : stackCtx.env.getMasked(key)!);
           const entry = manifest[key];
           const resolution = entry?.resolution ?? '';
@@ -1286,20 +1298,40 @@ async function handleEnv(args: string[]): Promise<void> {
     }
 
     case 'reset': {
-      // Slot-only operation — clears the 7 framework-var overrides.
-      // Requires an explicit --slot flag so a user inside a stack
-      // context doesn't accidentally wipe their intended target.
-      // (There's no per-stack reset yet — use `zbb env unset <VAR>`
-      // on individual stack overrides.)
-      if (!args.includes('--slot')) {
+      // --slot: clear the 7 framework-var overrides. Explicit flag so a
+      // user inside a stack doesn't wipe the wrong target.
+      if (args.includes('--slot')) {
+        await slot.env.reset();
+        console.log('Slot overrides cleared.');
+        break;
+      }
+      // Otherwise reset the ACTIVE stack's overrides. Destructive, so it
+      // requires explicit --yes confirmation (mirrors how --slot gates the
+      // slot reset).
+      if (!stackCtx) {
         console.error(
-          'zbb env reset clears SLOT-level overrides (the 7 ZB_SLOT_* path vars). ' +
-          'Pass --slot to confirm. For stack-level overrides, use `zbb env unset <VAR>`.',
+          'zbb env reset: no active stack. Pass --slot to clear the 7 slot-level ' +
+          'overrides, or cd into a stack to reset its overrides.',
         );
         process.exit(1);
       }
-      await slot.env.reset();
-      console.log('Slot overrides cleared.');
+      if (!args.includes('--yes') && !args.includes('-y')) {
+        console.error(
+          `zbb env reset clears ALL user overrides in stack '${stackCtx.name}', ` +
+          `reverting each var to its declared/computed value. This cannot be undone.\n` +
+          `Re-run with --yes to confirm. (For the slot's framework vars, use --slot.)`,
+        );
+        process.exit(1);
+      }
+      const reverted = await stackCtx.env.reset();
+      if (reverted.length === 0) {
+        console.log(`No overrides to clear in stack '${stackCtx.name}'.`);
+      } else {
+        console.log(
+          `Cleared ${reverted.length} override(s) in stack '${stackCtx.name}': ` +
+          `${reverted.sort().join(', ')}`,
+        );
+      }
       break;
     }
 

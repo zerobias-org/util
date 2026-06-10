@@ -280,20 +280,40 @@ abstract class NeonDataloaderTask : DefaultTask() {
             }
         } finally {
             // ── 3: Best-effort delete via dataloader-service ──
-            //   On failure the branch will still self-clean at expiresAt.
-            logger.lifecycle("${name}: Deleting branch ${creds.branchId}")
+            //   DELETE is idempotent: a 404 means the branch is already gone —
+            //   exactly the desired end state — so treat it as success instead
+            //   of dumping the service's raw error body (the old `--fail-with-body`
+            //   streamed a scary 404 JSON + stack trace for a harmless cleanup).
+            //   Any other failure is non-fatal: the branch self-cleans at
+            //   expiresAt. We capture only the HTTP status (-o /dev/null) so no
+            //   response body reaches the console.
             try {
-                ExecUtils.exec(
+                val httpCode = ExecUtils.execCapture(
                     command = listOf(
-                        "curl", "-s", "--fail-with-body", "-X", "DELETE",
+                        "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                        "-X", "DELETE",
                         "-H", "Authorization: APIKey $token",
                         "${serviceBaseUrl()}/branches/${creds.branchId}"
                     ),
                     workingDir = workingDir,
                     throwOnError = false
-                )
+                ).trim()
+                when {
+                    httpCode.startsWith("2") ->
+                        logger.lifecycle("${name}: deleted branch ${creds.branchId}")
+                    httpCode == "404" ->
+                        logger.lifecycle("${name}: branch ${creds.branchId} already gone — nothing to delete")
+                    else ->
+                        logger.warn(
+                            "${name}: branch ${creds.branchId} delete returned HTTP $httpCode " +
+                            "— leaving it to self-clean at expiresAt"
+                        )
+                }
             } catch (e: Exception) {
-                logger.warn("${name}: Failed to delete branch ${creds.branchId}: ${e.message}")
+                logger.warn(
+                    "${name}: failed to delete branch ${creds.branchId}: ${e.message} " +
+                    "— it self-cleans at expiresAt"
+                )
             }
         }
     }

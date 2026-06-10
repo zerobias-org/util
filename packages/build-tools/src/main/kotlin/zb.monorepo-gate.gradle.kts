@@ -283,8 +283,13 @@ val monorepoGate = tasks.register("monorepoGate") {
             val gradlePath = ":" + pkg.relDir.replace("/", ":")
             val subproject = rootProject.findProject(gradlePath)
 
-            // Always fresh — pure functions of the current tree.
-            val sourceHash = SourceHasher.hashSources(pkg.dir, sourceFiles, sourceDirs)
+            // Always fresh — pure functions of the current tree. Fold in the
+            // package's package.json `files` so the stamp tracks the published
+            // payload (content index.yml/logo.*, service spec files); read from
+            // pkg.dir so it matches the validate side exactly.
+            val sourceHash = SourceHasher.hashSources(
+                pkg.dir, sourceFiles, sourceDirs, SourceHasher.readFilesPatterns(pkg.dir),
+            )
             val testHash = SourceHasher.hashTests(pkg.dir)
             val rootDeps = try {
                 Prepublish.resolveRootDeps(pkg.dir, rootProject.projectDir)

@@ -959,7 +959,10 @@ fun resolvedTestDirs(): List<String> =
     (project.extra.properties["testDirs"] as? List<String>) ?: defaultTestDirs
 
 fun computeSourceHash(): String =
-    SourceHasher.hashSources(project.projectDir, resolvedSourceFiles(), resolvedSourceDirs())
+    SourceHasher.hashSources(
+        project.projectDir, resolvedSourceFiles(), resolvedSourceDirs(),
+        SourceHasher.readFilesPatterns(project.projectDir),
+    )
 
 fun computeTestHash(): String =
     SourceHasher.hashTests(project.projectDir, resolvedTestDirs())
@@ -1004,21 +1007,35 @@ fun checkGateStamp(): GateStampResult {
         val suiteCounts = testSuiteDirs.map { (name, dir) ->
             StandardGateStampValidator.SuiteCount(name, countExpectedTests(dir))
         }
-        val outcome = StandardGateStampValidator.validate(
-            stampContent = content,
-            currentSourceHash = computeSourceHash(),
-            currentTestHash = computeTestHash(),
-            currentTestCounts = suiteCounts,
+        val untrackedPublished = SourceHasher.findUntrackedPublishedFiles(
+            project.projectDir, SourceHasher.readFilesPatterns(project.projectDir),
         )
-        when (outcome.result) {
-            StandardGateStampValidator.Result.INVALID ->
-                logger.lifecycle("Gate stamp invalid — ${outcome.reason}")
-            StandardGateStampValidator.Result.TESTS_CHANGED ->
-                logger.lifecycle("Gate stamp: ${outcome.reason} — rerunning tests")
-            StandardGateStampValidator.Result.VALID ->
-                logger.lifecycle("Gate stamp valid — skipping gate tasks")
+        if (untrackedPublished.isNotEmpty()) {
+            // The package would ship files git neither tracks nor ignores — the
+            // gate can't see their content (hashing is git-tracked only), so
+            // force a gate instead of silently passing never-committed content.
+            logger.lifecycle(
+                "Gate stamp invalid — untracked published file(s) in package.json `files`: " +
+                "${untrackedPublished.joinToString(", ")} (commit/stage them so the gate can validate what ships)",
+            )
+            GateStampResult.INVALID
+        } else {
+            val outcome = StandardGateStampValidator.validate(
+                stampContent = content,
+                currentSourceHash = computeSourceHash(),
+                currentTestHash = computeTestHash(),
+                currentTestCounts = suiteCounts,
+            )
+            when (outcome.result) {
+                StandardGateStampValidator.Result.INVALID ->
+                    logger.lifecycle("Gate stamp invalid — ${outcome.reason}")
+                StandardGateStampValidator.Result.TESTS_CHANGED ->
+                    logger.lifecycle("Gate stamp: ${outcome.reason} — rerunning tests")
+                StandardGateStampValidator.Result.VALID ->
+                    logger.lifecycle("Gate stamp valid — skipping gate tasks")
+            }
+            outcome.result
         }
-        outcome.result
     } catch (e: Exception) {
         logger.warn("Gate stamp unreadable: ${e.message}")
         GateStampResult.INVALID
