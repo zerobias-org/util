@@ -612,6 +612,22 @@ fun needsGeneratedServer(): Boolean {
 // installed together in one invocation.
 // Must run after compile (which depends on npmInstallModule) to avoid race
 // condition where the module npm install removes server deps from node_modules.
+//
+// Pin a server-runtime platform package to the version already resolved in the
+// module's node_modules, so the generated server matches the types-core major
+// the module compiles against. Falls back to @latest when the package isn't a
+// module dependency. Blindly installing @latest broke every pre-migration
+// module the moment @zerobias-org/types-core-js 2.x published: those modules'
+// interfaces still peer types-core-js 1.x, so @latest (2.x) → npm ERESOLVE.
+fun moduleResolvedSpec(pkg: String): String {
+    val pj = project.file("node_modules/$pkg/package.json")
+    if (pj.exists()) {
+        val v = Regex(""""version"\s*:\s*"([^"]+)"""").find(pj.readText())?.groupValues?.get(1)
+        if (v != null) return "$pkg@$v"
+    }
+    return "$pkg@latest"
+}
+
 val installServerDeps by tasks.registering(NpmTask::class) {
     group = "lifecycle"
     description = "Install server runtime and dev dependencies for Docker image (--no-save)"
@@ -632,11 +648,13 @@ val installServerDeps by tasks.registering(NpmTask::class) {
             add("pem@1.14.6")
             // Dev types for tsc
             add("@types/express@4.17.13")
-            // Platform packages (latest from registry)
-            add("@zerobias-org/types-core-js@latest")
-            add("@zerobias-org/logger@latest")
-            add("@zerobias-org/util-hub-module-utils@latest")
-            add("@zerobias-com/hub-core@latest")
+            // Platform packages — pin to the version the module already resolved
+            // (not @latest) so the server runtime stays on the module's types-core
+            // major instead of jumping to a newer major the module can't satisfy.
+            add(moduleResolvedSpec("@zerobias-org/types-core-js"))
+            add(moduleResolvedSpec("@zerobias-org/logger"))
+            add(moduleResolvedSpec("@zerobias-org/util-hub-module-utils"))
+            add(moduleResolvedSpec("@zerobias-com/hub-core"))
         }
     })
     onlyIf { needsGeneratedServer() }

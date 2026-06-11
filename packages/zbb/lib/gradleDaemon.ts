@@ -13,11 +13,19 @@
  *
  * Strategy: enumerate live gradle daemons, read each one's
  * `/proc/<pid>/environ`, compare against `process.env` for the union
- * of all `env:` keys declared in the chain's zbb.yaml files. If any
- * watched key differs (including unset-vs-set), run `./gradlew --stop`
- * — the next invocation will respawn a fresh daemon with the right
- * env. The check is cheap (pgrep + small reads) and fires at most
- * once per zbb invocation.
+ * of all `env:` keys declared in the chain's zbb.yaml files. If a
+ * daemon belonging to THIS stack/slot has a watched key that differs
+ * (including unset-vs-set), kill that daemon by PID — the next
+ * invocation will respawn a fresh daemon with the right env. The check
+ * is cheap (pgrep + small reads) and fires at most once per zbb
+ * invocation.
+ *
+ * Why kill by PID and not `./gradlew --stop`: `--stop` is global per
+ * gradle-version-and-user, so it tears down EVERY daemon on the host —
+ * including ones a concurrent `zbb gate` on a different stack is
+ * actively building on, which dies with "stop command received". We
+ * only ever want to restart our own stale daemon, so we signal the
+ * specific PID(s) we identified as ours.
  *
  * Linux only — `/proc/<pid>/environ` doesn't exist on macOS/Windows.
  * Callers get a no-op return on other platforms.
@@ -27,30 +35,30 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 export interface DaemonRefreshResult {
-  /** Whether `./gradlew --stop` ran. */
+  /** Whether at least one daemon was signalled to stop. */
   stopped: boolean;
   /** First key whose value drifted (for logging). */
   driftedKey?: string;
   /** Daemon PID where drift was first observed. */
   driftedPid?: number;
+  /** Every daemon PID we signalled to stop. */
+  stoppedPids?: number[];
 }
 
 /**
- * If any running gradle daemon's env disagrees with `expectedEnv` for
- * any of `watchedKeys`, stop all daemons via `./gradlew --stop`.
+ * If a running gradle daemon belonging to THIS stack/slot disagrees
+ * with `expectedEnv` for any of `watchedKeys`, kill that daemon by PID
+ * so the next gradle invocation respawns with fresh env. Daemons owned
+ * by other stacks/slots (or anonymous `./gradlew` runs) are left alone.
  *
- * @param repoRoot directory from which to invoke `./gradlew --stop`.
- *   Should be a dir with a gradlew wrapper. `--stop` is global per
- *   gradle-version-and-user, so the exact dir mostly doesn't matter
- *   as long as gradlew exists there.
  * @param expectedEnv reference env map (typically `process.env` after
- *   `prepareSlot` has populated stack values).
+ *   `prepareSlot` has populated stack values). `ZB_STACK` + `ZB_SLOT`
+ *   identify which daemons count as ours.
  * @param watchedKeys env var names whose drift triggers a stop. Should
  *   be the union of `env:` keys declared in the chain's zbb.yaml
  *   files — i.e., everything zbb itself promises to track.
  */
 export function refreshGradleDaemonEnv(
-  repoRoot: string,
   expectedEnv: NodeJS.ProcessEnv,
   watchedKeys: string[],
   log?: (msg: string) => void,
@@ -94,8 +102,11 @@ export function refreshGradleDaemonEnv(
   const isOurDaemon = (env: Record<string, string>) =>
     (env.ZB_STACK ?? '') === ourStack && (env.ZB_SLOT ?? '') === ourSlot;
 
-  // Walk daemons, compare each watched key.
-  let drift: { pid: number; key: string } | null = null;
+  // Walk daemons, collecting every one of OURS whose env has drifted.
+  // We can't break at the first hit and `--stop` the world: that would
+  // also kill other stacks' daemons. Instead gather each drifted PID
+  // and signal them individually below.
+  const drifted: { pid: number; key: string }[] = [];
   for (const pid of pids) {
     const environ = readDaemonEnv(pid);
     if (!environ) continue; // daemon vanished or perms denied — skip
@@ -104,32 +115,38 @@ export function refreshGradleDaemonEnv(
       const expected = expectedEnv[key] ?? '';
       const actual = environ[key] ?? '';
       if (expected !== actual) {
-        drift = { pid, key };
+        drifted.push({ pid, key });
         break;
       }
     }
-    if (drift) break;
   }
 
-  if (!drift) return { stopped: false };
+  if (drifted.length === 0) return { stopped: false };
 
-  log?.(
-    `[zbb] gradle daemon ${drift.pid} env stale on ${drift.key} — ` +
-      `restarting (next gradle invocation will respawn with fresh env)`,
-  );
-
-  try {
-    execSync('./gradlew --stop', {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 30_000,
-    });
-  } catch (e) {
-    log?.(`[zbb] gradle --stop failed: ${(e as Error).message}`);
+  // SIGTERM lets the daemon run its JVM shutdown hooks and deregister
+  // from the gradle daemon registry cleanly; a stale registry entry is
+  // harmless anyway since gradle reconnects/respawns on the next run.
+  const stoppedPids: number[] = [];
+  for (const { pid, key } of drifted) {
+    log?.(
+      `[zbb] gradle daemon ${pid} env stale on ${key} — ` +
+        `stopping (next gradle invocation will respawn with fresh env)`,
+    );
+    try {
+      process.kill(pid, 'SIGTERM');
+      stoppedPids.push(pid);
+    } catch (e) {
+      log?.(`[zbb] failed to stop gradle daemon ${pid}: ${(e as Error).message}`);
+    }
   }
 
-  return { stopped: true, driftedKey: drift.key, driftedPid: drift.pid };
+  const first = drifted[0];
+  return {
+    stopped: stoppedPids.length > 0,
+    driftedKey: first.key,
+    driftedPid: first.pid,
+    stoppedPids,
+  };
 }
 
 /**

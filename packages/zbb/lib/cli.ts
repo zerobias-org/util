@@ -758,7 +758,7 @@ async function _main(argv: string[]): Promise<void> {
       const { refreshGradleDaemonEnv } = await import('./gradleDaemon.js');
       const { collectChainEnvKeys } = await import('./config.js');
       const watched = collectChainEnvKeys(chain);
-      refreshGradleDaemonEnv(ownerDir, process.env, watched, console.log);
+      refreshGradleDaemonEnv(process.env, watched, console.log);
     }
 
     // Spawn — canonical verbs (clean/build/test/gate/version/publish/dockerBuild)
