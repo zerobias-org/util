@@ -10,6 +10,7 @@ import { join, resolve, relative, sep } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { platform } from 'node:os';
 import { findDefaultJavaHome } from './java-home.js';
+import { stopGradleDaemonsForStack } from './gradleDaemon.js';
 
 // ── Environment Setup ────────────────────────────────────────────────
 
@@ -271,8 +272,8 @@ export function runGradle(args: string[]): void {
   //
   // On Ctrl+C we:
   //   1. kill(-child.pid, SIGINT)  — sends SIGINT to the whole group
-  //   2. run `./gradlew --stop` — kills any still-alive gradle daemon
-  //      that ducked out of the process group (the daemon intentionally
+  //   2. stopGradleDaemonsForStack — SIGTERMs this stack's gradle daemon
+  //      if it ducked out of the process group (the daemon intentionally
   //      detaches itself on startup for reuse across invocations).
   const child = spawn(wrapper, gradleArgs, {
     cwd: root,
@@ -292,17 +293,11 @@ export function runGradle(args: string[]): void {
     try {
       if (child.pid) process.kill(-child.pid, sig);
     } catch {}
-    // Best-effort: ask the gradle daemon to stop so orphaned java
-    // daemons don't keep building after gradlew exits. Run async,
-    // don't block the signal handler.
-    try {
-      spawn(wrapper, ['--stop'], {
-        cwd: root,
-        stdio: 'ignore',
-        env: prepareGradleEnv(),
-        detached: true,
-      }).unref();
-    } catch {}
+    // Best-effort: stop the gradle daemon for THIS stack so orphaned
+    // java daemons don't keep building after gradlew exits. Targets our
+    // stack's daemon by PID rather than a global `./gradlew --stop`,
+    // which would also kill a concurrent build on another stack.
+    stopGradleDaemonsForStack(root, wrapper, process.env);
   };
   process.on('SIGINT', () => forwardSignal('SIGINT'));
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));

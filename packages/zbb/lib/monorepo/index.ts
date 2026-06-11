@@ -19,6 +19,7 @@ import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { ZBB_GRADLE_DIR } from '../paths.js';
 import { findGradleRoot } from '../gradle.js';
+import { stopGradleDaemonsForStack } from '../gradleDaemon.js';
 
 // Sync `require` for use in ESM — we lazy-load Display.js without making
 // the whole call chain async.
@@ -273,8 +274,9 @@ export async function spawnLifecycleAndExit(
   }
 
   // Signal forwarding mirrors lib/gradle.ts:runGradle and Display.ts:
-  // first Ctrl-C → SIGINT to the whole group + ./gradlew --stop;
-  // second Ctrl-C → SIGKILL.
+  // first Ctrl-C → SIGINT to the whole group + stop of this stack's
+  // daemon (targeted, not a global ./gradlew --stop that would kill
+  // other stacks' concurrent builds); second Ctrl-C → SIGKILL.
   let signalForwarded = false;
   const forwardSignal = (sig: NodeJS.Signals) => {
     if (signalForwarded) {
@@ -284,13 +286,7 @@ export async function spawnLifecycleAndExit(
     signalForwarded = true;
     try { if (child.pid) process.kill(-child.pid, sig); } catch {}
     if (isGradleCommand) {
-      try {
-        spawn('./gradlew', ['--stop'], {
-          cwd: repoRoot,
-          stdio: 'ignore',
-          detached: true,
-        }).unref();
-      } catch {}
+      stopGradleDaemonsForStack(repoRoot, './gradlew', process.env);
     }
   };
   process.on('SIGINT', () => forwardSignal('SIGINT'));

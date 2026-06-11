@@ -37,6 +37,7 @@ import {
   detectProject,
 } from './gradle.js';
 import type { ParsedLifecycleArgs } from './lifecycle.js';
+import { stopGradleDaemonsForStack } from './gradleDaemon.js';
 
 // Sync `require` for use in ESM — lazy-load Display.js without making the
 // whole call chain async. Same pattern used by the monorepo dispatcher.
@@ -207,9 +208,10 @@ export async function spawnStandardLifecycleAndExit(
   });
 
   // Signal forwarding mirrors lib/gradle.ts:runGradle. First Ctrl-C
-  // sends the signal to the whole process group + best-effort
-  // ./gradlew --stop for any detached daemon. Second Ctrl-C escalates
-  // to SIGKILL.
+  // sends the signal to the whole process group + best-effort stop of
+  // this stack's detached daemon (NOT a global `./gradlew --stop`,
+  // which would kill a concurrent build on another stack). Second
+  // Ctrl-C escalates to SIGKILL.
   let signalForwarded = false;
   const forwardSignal = (sig: NodeJS.Signals) => {
     if (signalForwarded) {
@@ -219,13 +221,7 @@ export async function spawnStandardLifecycleAndExit(
     signalForwarded = true;
     try { if (child.pid) process.kill(-child.pid, sig); } catch {}
     if (isGradleCommand) {
-      try {
-        spawn('./gradlew', ['--stop'], {
-          cwd: repoRoot,
-          stdio: 'ignore',
-          detached: true,
-        }).unref();
-      } catch {}
+      stopGradleDaemonsForStack(repoRoot, './gradlew', process.env);
     }
   };
   process.on('SIGINT', () => forwardSignal('SIGINT'));

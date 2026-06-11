@@ -41,6 +41,7 @@ import {
 import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { ZBB_GRADLE_DIR } from '../paths.js';
+import { stopGradleDaemonsForStack } from '../gradleDaemon.js';
 
 // ── Event types (must match MonorepoEventEmitter.kt) ────────────────
 
@@ -1209,9 +1210,10 @@ function runWithDisplayBody(
   //   1. First Ctrl-C → forward SIGINT to the whole process group via
   //      kill(-pid). Pid-of-process-group works because detached:true
   //      put the child at the head of a new group whose pgid == pid.
-  //   2. Best-effort `./gradlew --stop` to kill any daemon that
-  //      detached itself out of the group on startup (Gradle does
-  //      this intentionally for daemon reuse).
+  //   2. Best-effort stop of THIS stack's daemon if it detached itself
+  //      out of the group on startup (Gradle does this intentionally
+  //      for daemon reuse). Targeted by PID — not a global
+  //      `./gradlew --stop` that would kill other stacks' builds.
   //   3. Second Ctrl-C → SIGKILL the group and exit immediately.
   let signalForwarded = false;
   const forwardSignal = (sig: NodeJS.Signals) => {
@@ -1221,13 +1223,7 @@ function runWithDisplayBody(
     }
     signalForwarded = true;
     try { if (child.pid) process.kill(-child.pid, sig); } catch {}
-    try {
-      spawn(command, ['--stop'], {
-        cwd: repoRoot,
-        stdio: 'ignore',
-        detached: true,
-      }).unref();
-    } catch {}
+    stopGradleDaemonsForStack(repoRoot, command, process.env);
   };
   process.on('SIGINT', () => forwardSignal('SIGINT'));
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));

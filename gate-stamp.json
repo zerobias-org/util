@@ -575,8 +575,8 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.2",
-      "sourceHash": "a62ca93020c1a3ae826f8ca3e7c7d22eeee3e095fa0c01da52606308008add65",
+      "version": "1.0.3",
+      "sourceHash": "a6f37e2aa9877dc240eecb3ed589b8237f6df35294420ec74ed08fe60a424a5e",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {
         "lint": "passed",

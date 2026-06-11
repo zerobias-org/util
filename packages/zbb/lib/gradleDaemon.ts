@@ -31,7 +31,7 @@
  * Callers get a no-op return on other platforms.
  */
 
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 export interface DaemonRefreshResult {
@@ -66,22 +66,7 @@ export function refreshGradleDaemonEnv(
   if (process.platform !== 'linux') return { stopped: false };
   if (watchedKeys.length === 0) return { stopped: false };
 
-  // Find live gradle daemons.
-  let pids: number[] = [];
-  try {
-    const out = execSync('pgrep -f GradleDaemon', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    pids = out
-      .trim()
-      .split('\n')
-      .map(s => parseInt(s, 10))
-      .filter(n => Number.isFinite(n));
-  } catch {
-    // Non-zero exit from pgrep means "no matches" — not an error.
-    return { stopped: false };
-  }
+  const pids = listGradleDaemonPids();
   if (pids.length === 0) return { stopped: false };
 
   // `pgrep -f GradleDaemon` is global — it returns daemons across every
@@ -97,10 +82,6 @@ export function refreshGradleDaemonEnv(
   // on every zbb spawn, so any daemon zbb itself launched will carry
   // them. Anonymous daemons (vanilla `./gradlew` from a user shell)
   // and foreign-stack daemons are skipped.
-  const ourStack = expectedEnv.ZB_STACK ?? '';
-  const ourSlot = expectedEnv.ZB_SLOT ?? '';
-  const isOurDaemon = (env: Record<string, string>) =>
-    (env.ZB_STACK ?? '') === ourStack && (env.ZB_SLOT ?? '') === ourSlot;
 
   // Walk daemons, collecting every one of OURS whose env has drifted.
   // We can't break at the first hit and `--stop` the world: that would
@@ -110,7 +91,7 @@ export function refreshGradleDaemonEnv(
   for (const pid of pids) {
     const environ = readDaemonEnv(pid);
     if (!environ) continue; // daemon vanished or perms denied — skip
-    if (!isOurDaemon(environ)) continue; // foreign stack/slot — not our problem
+    if (!ownsDaemon(environ, expectedEnv)) continue; // foreign stack/slot — not our problem
     for (const key of watchedKeys) {
       const expected = expectedEnv[key] ?? '';
       const actual = environ[key] ?? '';
@@ -147,6 +128,95 @@ export function refreshGradleDaemonEnv(
     driftedPid: first.pid,
     stoppedPids,
   };
+}
+
+/**
+ * Halt the gradle daemon(s) for THIS stack/slot after an interrupt
+ * (Ctrl-C), WITHOUT a global `./gradlew --stop`. A bare `--stop` tears
+ * down every daemon on the host, so interrupting one `zbb` build would
+ * kill a concurrent build running a different stack ("Gradle build
+ * daemon has been stopped: stop command received"). We only want to
+ * stop our own build's daemon.
+ *
+ * On linux: SIGTERM each daemon whose ZB_STACK + ZB_SLOT match
+ * `expectedEnv` (typically `process.env` — the daemon inherited these
+ * from the gradle launch). Daemons owned by other stacks/slots, and
+ * anonymous `./gradlew` daemons, are left running. If none of ours are
+ * found there's nothing to stop — we do NOT fall back to a global stop,
+ * since that would hit foreign daemons we deliberately spared.
+ *
+ * On non-linux (`/proc` unavailable, so we can't identify daemons by
+ * env): fall back to a detached, best-effort global `./gradlew --stop`
+ * from `repoRoot` — the pre-existing behaviour on those platforms.
+ *
+ * Safe to call from a signal handler: the linux path is a quick
+ * pgrep + small reads + signals; the non-linux path is fire-and-forget.
+ */
+export function stopGradleDaemonsForStack(
+  repoRoot: string,
+  wrapper: string,
+  expectedEnv: NodeJS.ProcessEnv,
+): void {
+  if (process.platform === 'linux') {
+    for (const pid of listGradleDaemonPids()) {
+      const environ = readDaemonEnv(pid);
+      if (!environ) continue;
+      if (!ownsDaemon(environ, expectedEnv)) continue;
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        // already gone — fine
+      }
+    }
+    return;
+  }
+
+  try {
+    spawn(wrapper, ['--stop'], {
+      cwd: repoRoot,
+      stdio: 'ignore',
+      detached: true,
+    }).unref();
+  } catch {
+    // best-effort cleanup — never let it mask the original interrupt
+  }
+}
+
+/**
+ * List PIDs of live gradle daemons across the whole host. A non-zero
+ * pgrep exit ("no matches") and any other failure both yield [].
+ */
+function listGradleDaemonPids(): number[] {
+  try {
+    const out = execSync('pgrep -f GradleDaemon', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    return out
+      .trim()
+      .split('\n')
+      .map(s => parseInt(s, 10))
+      .filter(n => Number.isFinite(n));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Whether a daemon (by its /proc environ) belongs to the same
+ * stack/slot as `expectedEnv`. ZB_STACK + ZB_SLOT are stamped by
+ * prepareSlot on every zbb spawn, so any daemon zbb launched carries
+ * them; anonymous `./gradlew` daemons match only when we ourselves have
+ * no stack/slot set.
+ */
+function ownsDaemon(
+  environ: Record<string, string>,
+  expectedEnv: NodeJS.ProcessEnv,
+): boolean {
+  return (
+    (environ.ZB_STACK ?? '') === (expectedEnv.ZB_STACK ?? '') &&
+    (environ.ZB_SLOT ?? '') === (expectedEnv.ZB_SLOT ?? '')
+  );
 }
 
 /**
