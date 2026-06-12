@@ -165,10 +165,18 @@ async function main() {
   });
 
   app.put('/connections/:connectionId/refresh', async (req: express.Request, res: express.Response) => {
-    const impl = connections[req.params.connectionId];
+    // A cold/passivated container has no in-memory connection. Do NOT 404: refresh()
+    // re-establishes the session from the OAuth refresh token and does not require a
+    // prior validated connect (a plain connect would fail on the expired access token,
+    // and the re-seed-via-connect recovery then deletes the connection — the cold-start
+    // chicken-and-egg that left refresh() never running). Create the impl so refresh can
+    // execute; clean it up if refresh isn't supported or fails.
+    const cid = req.params.connectionId;
+    const created = !connections[cid];
+    let impl = connections[cid];
     if (!impl) {
-      res.status(404).send({ error: 'No active connection' });
-      return;
+      impl = new ${pascal}Impl();
+      connections[cid] = impl;
     }
     // Stateless connectors don't declare `refresh` at all (the base class
     // omits the property entirely when hasState=false). The cast lets us
@@ -176,6 +184,7 @@ async function main() {
     // it's absent.
     const refreshable = impl as any;
     if (typeof refreshable.refresh !== 'function') {
+      if (created) delete connections[cid];
       res.status(501).send({ error: 'refresh not implemented' });
       return;
     }
@@ -184,6 +193,7 @@ async function main() {
       const state = await refreshable.refresh(connectionProfile, connectionState, oauthDetails);
       res.send(state);
     } catch (e: any) {
+      if (created) delete connections[cid];
       sendError(res, e);
     }
   });
