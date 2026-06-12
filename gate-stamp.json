@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "main",
+  "branch": "fix/connector-error-normalization",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.40",
@@ -367,7 +367,7 @@
     },
     "@zerobias-org/util-connector": {
       "version": "2.0.1",
-      "sourceHash": "927d1fbef6c6be04839be8db12a4c84b6ad592767c22233ea4ee29acd5f8191c",
+      "sourceHash": "d5df6dfe1a4ff63bfc970d5ab2d4063a93e3729f0b1c0a076cc368b792c51974",
       "testHash": "2bb646e7472ba501356498be2c59c152821649ad5150cf4ec3dbfe38df0167d6",
       "tasks": {
         "lint": "passed",
@@ -575,7 +575,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.3",
+      "version": "1.0.4",
       "sourceHash": "a6f37e2aa9877dc240eecb3ed589b8237f6df35294420ec74ed08fe60a424a5e",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {
