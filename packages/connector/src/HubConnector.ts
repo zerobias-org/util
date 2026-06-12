@@ -70,31 +70,19 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
       return config;
     }, (error) => {
       this._metadata.status = ConnectionStatus.Error;
+      // Only ever touch the response body / message — never serialize or reject the
+      // raw axios error, response, or request, which carry circular
+      // ClientRequest/IncomingMessage refs that crash JSON serialization downstream.
       if (error.response) {
-        try {
-          JSON.stringify(error.response);
-          return Promise.reject(error.response);
-        } catch {
-          // We had a circular error response cant do this.
-          logger.info(error.response.data);
-          return Promise.reject(CoreError.deserialize(error.response.data));
-        }
+        return Promise.reject(CoreError.from(error.response.data));
       }
-
       if (error.request) {
-        try {
-          JSON.stringify(error.request);
-          return Promise.reject(error.request);
-        } catch {
-          // We had a circular error response cant do this.
-          logger.info('Most likely was a network error');
-          return Promise.reject(new Error(`Most likely was a network error - ${error.message}`));
-        }
+        logger.info('Most likely was a network error');
+        return Promise.reject(CoreError.from(error));
       }
-
       logger.info('Either we had bad error.response/request or just a different error: '
         + `${error.message}`);
-      return Promise.reject(error);
+      return Promise.reject(CoreError.from(error));
     });
 
     this._client.interceptors.response.use((response) => {
@@ -108,37 +96,25 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
       }
       if (response.headers['hub-error'] === 'true') {
         this._metadata.status = ConnectionStatus.Error;
-        return Promise.reject(CoreError.deserialize(response.data));
+        return Promise.reject(CoreError.from(response.data));
       }
       this._metadata.status = ConnectionStatus.On;
       return response;
     }, (error) => {
       this._metadata.status = ConnectionStatus.Error;
+      // Only ever touch the response body / message — never serialize or reject the
+      // raw axios error, response, or request, which carry circular
+      // ClientRequest/IncomingMessage refs that crash JSON serialization downstream.
       if (error.response) {
-        try {
-          JSON.stringify(error.response);
-          return Promise.reject(error.response);
-        } catch {
-          // We had a circular error response cant do this.
-          logger.info(error.response.data);
-          return Promise.reject(CoreError.deserialize(error.response.data));
-        }
+        return Promise.reject(CoreError.from(error.response.data));
       }
-
       if (error.request) {
-        try {
-          JSON.stringify(error.request);
-          return Promise.reject(error.request);
-        } catch {
-          // We had a circular error response cant do this.
-          logger.info('Most likely was a network error');
-          return Promise.reject(new Error(`Most likely was a network error - ${error.message}`));
-        }
+        logger.info('Most likely was a network error');
+        return Promise.reject(CoreError.from(error));
       }
-
       logger.info('Either we had bad error.response/request or just a different error: '
         + `${error.message}`);
-      return Promise.reject(error);
+      return Promise.reject(CoreError.from(error));
     });
 
     // fetch all remote metadata - side-effect of updating _metadata
