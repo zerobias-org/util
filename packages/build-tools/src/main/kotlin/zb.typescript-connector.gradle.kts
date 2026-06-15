@@ -52,9 +52,14 @@ val stagedPackagesKb = extra["stagedPackages"] as MutableList<Pair<String, java.
 val dispatchGenerateKb by tasks.registering {
     group = "publish"
     description = "Dispatch generate-kb to the kb repo so the module's 'Connect to' KB is regenerated"
-    // Fire only after the module is fully published, promoted, tagged and
-    // announced — same point in the pipeline as the release event.
-    mustRunAfter(tasks.named("publishReleaseEvent"))
+    // Order after the actual publish+promote, NOT after publishReleaseEvent:
+    // in the CI `-PversionAlreadyCommitted=true` flow, publishReleaseEvent is
+    // only ordered after tagVersion/pushVersion/pushTag (all skipped in that
+    // mode), so it runs early and skips — anchoring on it made this task fire
+    // BEFORE publishNpmExec, leaving `stagedPackages` empty. promoteAll
+    // transitively runs after publishNpmExec (which populates stagedPackages),
+    // so by the time this runs the module is staged and the guard below sees it.
+    mustRunAfter(tasks.named("promoteAll"))
     onlyIf {
         when {
             isDryRunKb -> {
@@ -118,7 +123,7 @@ val dispatchGenerateKb by tasks.registering {
 }
 
 // Graft onto the publish graph. The top-level `publish` aggregate (zb.base)
-// pulls this in; `mustRunAfter(publishReleaseEvent)` keeps it last.
+// pulls this in; `mustRunAfter(promoteAll)` keeps it after the npm publish.
 tasks.named("publish") {
     dependsOn(dispatchGenerateKb)
 }
