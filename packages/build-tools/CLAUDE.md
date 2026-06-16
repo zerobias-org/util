@@ -164,10 +164,16 @@ dependencies {
 
 ## Build Commands
 
+build-tools is a standalone Gradle build (`settings.gradle.kts` →
+`rootProject.name = "build-tools"`) with its own wrapper. The util root
+build (`includeBuild` + `pluginManagement`) resolves the plugins from
+`mavenLocal` first, so after editing any `.gradle.kts` / Kotlin source you
+must republish to Maven local for consumers to pick up the change.
+
 ```bash
-# From build-tools directory
-../../auditlogic/module-gradle/gradlew build     # Compile + validate plugins
-../../auditlogic/module-gradle/gradlew compileKotlin  # Compile only
+# From packages/build-tools
+./gradlew publishToMavenLocal   # compile + publish plugins to ~/.m2 (run after every edit)
+./gradlew compileKotlin         # compile only (fast sanity check, no publish)
 ```
 
 ## Adding a New Convention Plugin

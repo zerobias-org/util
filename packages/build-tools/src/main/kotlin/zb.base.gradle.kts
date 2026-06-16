@@ -1565,6 +1565,13 @@ val publishReleaseEvent by tasks.registering {
             pkgs.add(com.zerobias.buildtools.util.ReleaseAnnouncement.PublishedPackage(name, ver, location))
         }
         val githubRepo = com.zerobias.buildtools.util.ReleaseAnnouncement.detectGithubRepo(project.rootDir)
+        // Emit /tmp/published-packages.json with the actually-published
+        // name+version so the CI workflow's release-announcement step uses
+        // these values instead of its raw-package.json fallback (which can
+        // report a pre-release suffix zbb already stripped on main).
+        com.zerobias.buildtools.util.ReleaseAnnouncement.writePackagesFile(
+            pkgs, project.rootDir, java.io.File("/tmp/published-packages.json"), logger
+        )
         com.zerobias.buildtools.util.ReleaseAnnouncement.announce(pkgs, project.rootDir, branch, githubRepo, logger)
     }
 }

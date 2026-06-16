@@ -63,6 +63,48 @@ object ReleaseAnnouncement {
         sendLambdaEvents(packages, repoRoot, branch, githubRepo, logger)
     }
 
+    /**
+     * Write the published-package manifest consumed by the CI publish
+     * workflow's release-announcement step (default `/tmp/published-packages.json`).
+     *
+     * The workflow (zbb-publish-reusable.yml) prefers this file over its
+     * `node -p "require('./package.json').version"` fallback. That fallback
+     * reads the RAW package.json version — which can still carry a pre-release
+     * suffix (e.g. `1.0.0-rc.1`) that zbb stripped before publishing on `main`.
+     * The result is a Slack announcement whose version doesn't match what npm
+     * actually received. Emitting the real published name+version here keeps
+     * the announcement in sync with the publish.
+     *
+     * Format matches the action's expectation: `[{name, version, location}]`.
+     * `location` is written as an ABSOLUTE path to match the workflow fallback
+     * (`"location":"$(pwd)"`); the action resolves it via
+     * `realpath --relative-to=.` when building the changelog URL.
+     *
+     * Best-effort: a write failure logs a warning and never fails the build —
+     * the workflow's fallback still produces a (less accurate) file.
+     */
+    fun writePackagesFile(
+        packages: List<PublishedPackage>,
+        repoRoot: File,
+        outFile: File,
+        logger: Logger,
+    ) {
+        if (packages.isEmpty()) return
+        try {
+            val entries = packages.map { pkg ->
+                mapOf(
+                    "name" to pkg.name,
+                    "version" to pkg.version,
+                    "location" to File(repoRoot, pkg.location).absolutePath,
+                )
+            }
+            outFile.writeText(mapper.writeValueAsString(entries))
+            logger.lifecycle("[announce] wrote ${packages.size} package(s) to ${outFile.absolutePath}")
+        } catch (e: Exception) {
+            logger.warn("[announce] failed to write ${outFile.absolutePath}: ${e.message}")
+        }
+    }
+
     // ── Slack ───────────────────────────────────────────────────────────
 
     /**
