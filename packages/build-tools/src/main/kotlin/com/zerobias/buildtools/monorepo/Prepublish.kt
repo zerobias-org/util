@@ -52,6 +52,18 @@ object Prepublish {
         "@zerobias-org/util-api-client-base" to listOf("qs"),
     )
 
+    /**
+     * Runtime hydra deps whose presence means this package should be stamped
+     * with the resolved `@zerobias-com/hydra-schema` version (see resolve()).
+     */
+    private val HYDRA_STAMP_TRIGGERS = listOf(
+        "@zerobias-com/hydra-core",
+        "@zerobias-com/hydra-dao",
+    )
+
+    /** The hydra-schema package whose locked version is stamped as `schemaVersion`. */
+    private const val HYDRA_SCHEMA_PACKAGE = "@zerobias-com/hydra-schema"
+
     /** Node.js builtin modules that must NEVER appear in published deps. */
     private val NODE_BUILTINS = setOf(
         "fs", "path", "http", "https", "crypto", "stream", "url", "util", "os",
@@ -275,6 +287,17 @@ object Prepublish {
         outputPackageJson.remove("devDependencies")
         if (rootOverrides.isNotEmpty()) {
             outputPackageJson["overrides"] = rootOverrides
+        }
+
+        // Stamp the resolved hydra-schema version for packages that consume the
+        // hydra runtime (hydra-core / hydra-dao). Lets downstream tooling know
+        // which schema version this package was published against. Read from the
+        // root package-lock.json so it reflects the actually-installed version.
+        // Parity: prepublish-standalone.js does the same.
+        if (HYDRA_STAMP_TRIGGERS.any { sortedDependencies.containsKey(it) }) {
+            readHydraSchemaVersion(rootDir)?.let { schemaVersion ->
+                outputPackageJson["schemaVersion"] = schemaVersion
+            }
         }
 
         writeJson(outputPackageJsonPath, outputPackageJson)
@@ -718,6 +741,31 @@ object Prepublish {
     private fun writeJson(file: File, value: Map<String, Any?>) {
         val json = mapper.writeValueAsString(value)
         file.writeText(json + "\n")
+    }
+
+    /**
+     * Extract the resolved `@zerobias-com/hydra-schema` version from the root
+     * `package-lock.json`. Returns null when there is no lock file or no
+     * hydra-schema entry ("if there is one"). Supports lockfileVersion 2/3
+     * (`packages["node_modules/<pkg>"]`) with a v1 fallback (`dependencies`).
+     * Mirrors `readHydraSchemaVersion` in prepublish-standalone.js.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun readHydraSchemaVersion(rootDir: File): String? {
+        val lockFile = File(rootDir, "package-lock.json")
+        if (!lockFile.exists()) return null
+        val lock = try {
+            readJson(lockFile)
+        } catch (_: Exception) {
+            return null
+        }
+        val packages = lock["packages"] as? Map<String, Any?>
+        (packages?.get("node_modules/$HYDRA_SCHEMA_PACKAGE") as? Map<String, Any?>)
+            ?.get("version")?.let { return it as? String }
+        val deps = lock["dependencies"] as? Map<String, Any?>
+        (deps?.get(HYDRA_SCHEMA_PACKAGE) as? Map<String, Any?>)
+            ?.get("version")?.let { return it as? String }
+        return null
     }
 
     @Suppress("UNCHECKED_CAST")
