@@ -290,10 +290,11 @@ abstract class PublishOrgTask : DefaultTask() {
         val npmrc = writeTempNpmrc(resolveNpmToken(token))
         try {
             pkgJson.writeText(bumped)
-            // No --tag — npm doesn't auto-promote prerelease versions to latest.
+            // npm 11 requires --tag for prereleases; use a non-latest tag so the org-private prerelease is never promoted to 'latest' (the dataloader fetches by exact version, not by tag).
             ExecUtils.exec(
                 command = listOf(
                     "npm", "publish",
+                    "--tag", "rc",
                     "--registry", registryUrl(),
                     "--userconfig", npmrc.absolutePath
                 ),
