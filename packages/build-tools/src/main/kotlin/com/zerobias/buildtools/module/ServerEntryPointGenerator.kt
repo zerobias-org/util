@@ -277,21 +277,23 @@ async function main() {
 
     try {
       const result = await meth.call(api, ...args);
-      // Wire-protocol responses must be JSON-serializable. Binary ops
-      // (downloadBinary/downloadBucketObject) return AWS SDK v3 response
-      // streams that carry circular references to the underlying Node
-      // TLSSocket — Express's res.send() JSON-stringifies the stream
-      // object directly and trips on the cycle with
-      // "TypeError: Converting circular structure to JSON".
+      // Binary ops (downloadBinary / downloadBucketObject) return Node Readable
+      // streams or Buffers. They must reach the Hub Node as
+      // application/octet-stream so it streams the bytes over the WebSocket:
+      // ContainerDeployment.execute returns the raw stream when
+      // content-type === 'application/octet-stream', and WSHubNode.respond()
+      // pipes the Readable chunk-by-chunk (the FileProducer-era contract).
       //
-      // The OpenAPI binary route (BinaryApiController) handles streams
-      // by piping; this wire-protocol path is for the test client and
-      // Hub Node, which both expect JSON. Detect stream/Buffer/RequestFile
-      // shapes and drain to a base64 envelope so callers still get a
-      // well-formed JSON response.
-      // Detect Node Readable streams specifically: pipe() is the Readable
-      // marker. Don't match on Symbol.asyncIterator alone — PagedResults
-      // and other paginated wrappers are async-iterable but JSON-safe.
+      // Pipe the stream straight through — do NOT res.send()/res.json() it.
+      // Serializing the object is what tripped the AWS-SDK-v3 circular-reference
+      // -to-TLSSocket error ("Converting circular structure to JSON") that an
+      // earlier base64-envelope workaround patched; piping never serializes it,
+      // so the cycle is a non-issue, and it streams rather than buffering the
+      // whole payload into memory.
+      //
+      // Detect Node Readable streams via pipe(); don't match on
+      // Symbol.asyncIterator alone — PagedResults and other paginated wrappers
+      // are async-iterable but JSON-safe.
       const looksLikeStream = (v: any) => v && typeof v === 'object'
         && typeof v.pipe === 'function';
       const isDetailedFile = result && typeof result === 'object'
@@ -299,15 +301,12 @@ async function main() {
         && (result as any).options !== undefined;
       const inner = isDetailedFile ? (result as any).value : result;
       if (Buffer.isBuffer(inner) || looksLikeStream(inner)) {
-        const { buffer } = await import('node:stream/consumers');
-        const buf: Buffer = Buffer.isBuffer(inner) ? inner : await buffer(inner as any);
-        res.status(200).json({
-          __binary: true,
-          contentType: isDetailedFile
-            ? ((result as any).options?.contentType || 'application/octet-stream')
-            : 'application/octet-stream',
-          base64: buf.toString('base64'),
-        });
+        res.status(200).set('Content-Type', 'application/octet-stream');
+        if (Buffer.isBuffer(inner)) {
+          res.end(inner);
+        } else {
+          (inner as NodeJS.ReadableStream).pipe(res);
+        }
       } else {
         res.status(200).send(result);
       }
