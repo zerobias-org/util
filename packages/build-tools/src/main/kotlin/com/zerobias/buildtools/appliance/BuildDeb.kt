@@ -94,6 +94,21 @@ abstract class ApplianceDebExtension {
      * Example: `"node-manager.service"` → `systemctl try-restart node-manager.service`.
      */
     abstract val systemdUnit: Property<String>
+
+    /**
+     * Optional flag-file path. When set AND that file exists at configure time,
+     * the postinst SKIPS the [systemdUnit] `try-restart` and logs that it
+     * deferred instead. Generic mechanism for "some longer-running package
+     * operation owns the restart/reboot boundary right now, so don't self-
+     * restart mid-transaction." The path and the policy are the CONSUMER's —
+     * build-tools only implements the `[ -e <path> ]` guard; it does not define
+     * or write the flag. Unset = always restart (the default).
+     *
+     * Example: com/node sets `"/run/zerobias-lockstep-update"`, which its
+     * whole-release update primitive writes for the life of an `apt-get upgrade`
+     * that reboots at the end.
+     */
+    abstract val deferRestartWhilePresent: Property<String>
 }
 
 /**
@@ -213,13 +228,32 @@ fun Project.registerBuildDeb() {
     // `journalctl -t postinst-<pkgName>`. Optional systemd try-restart;
     // optional zerobias-write-update-status (provided by zerobias-node-os).
     val unit: String? = ext.systemdUnit.orNull
+    val deferFlag: String? = ext.deferRestartWhilePresent.orNull
     val tryRestartBlock: String = if (unit != null) {
+        // Optional consumer-owned guard: when a flag file is present, some
+        // longer-running package operation owns the restart boundary, so skip
+        // the self-restart. build-tools only implements the `[ -e ]` check; the
+        // path/policy comes from the module's applianceDeb { deferRestartWhilePresent }.
+        val restartStanza: String = if (deferFlag != null) {
+            """
+            |      if [ -e "$deferFlag" ]; then
+            |        log "restart deferred while $deferFlag present"
+            |      else
+            |        log "systemctl try-restart $unit"
+            |        systemctl try-restart $unit 2>/dev/null || true
+            |      fi
+            """.trimMargin()
+        } else {
+            """
+            |      log "systemctl try-restart $unit"
+            |      systemctl try-restart $unit 2>/dev/null || true
+            """.trimMargin()
+        }
         """
         |    if command -v systemctl >/dev/null 2>&1; then
         |      log "systemctl daemon-reload"
         |      systemctl daemon-reload || true
-        |      log "systemctl try-restart $unit"
-        |      systemctl try-restart $unit 2>/dev/null || true
+        |$restartStanza
         |    fi
         """.trimMargin()
     } else {
