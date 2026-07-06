@@ -143,10 +143,17 @@ public class RFC4515Parser {
      * Parse a comparison clause.
      */
     private static Expression parseClause(String clause) {
-        // Try to find operator
-        // First check for custom extensions (contain colons)
-        int colonIndex = clause.indexOf(':');
-        if (colonIndex > 0) {
+        // Determine the operator type positionally rather than by "does a colon appear
+        // anywhere". Scan the property up to the first operator-significant character; a
+        // custom extension (property:function:value) is present only when that character
+        // is a colon sitting in the operator slot. A colon inside the value -- ISO
+        // timestamps like 2026-07-04T13:00:00Z, or schema:table: style ids -- must not
+        // route to extension parsing (which would slice ":00:" out as a bogus operator).
+        int i = 0;
+        while (i < clause.length() && "=<>!~:".indexOf(clause.charAt(i)) < 0) {
+            i++;
+        }
+        if (i > 0 && i < clause.length() && clause.charAt(i) == ':') {
             return parseCustomExtension(clause);
         }
 
