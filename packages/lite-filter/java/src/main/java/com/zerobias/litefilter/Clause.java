@@ -125,14 +125,22 @@ class Clause implements Expression {
                 return evaluateEquals(propValue, compareValue, options);
             case NOT_EQUALS:
                 return !evaluateEquals(propValue, compareValue, options);
-            case GREATER_THAN:
-                return compareNumbers(propValue, compareValue) > 0;
-            case GREATER_THAN_OR_EQUAL:
-                return compareNumbers(propValue, compareValue) >= 0;
-            case LESS_THAN:
-                return compareNumbers(propValue, compareValue) < 0;
-            case LESS_THAN_OR_EQUAL:
-                return compareNumbers(propValue, compareValue) <= 0;
+            case GREATER_THAN: {
+                Integer c = compareValues(propValue, compareValue);
+                return c != null && c > 0;
+            }
+            case GREATER_THAN_OR_EQUAL: {
+                Integer c = compareValues(propValue, compareValue);
+                return c != null && c >= 0;
+            }
+            case LESS_THAN: {
+                Integer c = compareValues(propValue, compareValue);
+                return c != null && c < 0;
+            }
+            case LESS_THAN_OR_EQUAL: {
+                Integer c = compareValues(propValue, compareValue);
+                return c != null && c <= 0;
+            }
             case APPROX_MATCH:
                 return evaluateApproxMatch(propValue, compareValue);
             case PRESENCE_CHECK:
@@ -253,24 +261,31 @@ class Clause implements Expression {
     }
 
     /**
-     * Compare numbers with coercion.
+     * Compare two values for relational operators ({@code >}, {@code >=}, {@code <},
+     * {@code <=}), with coercion. Returns a negative/zero/positive Integer like
+     * {@link Comparable#compareTo}, or {@code null} when the values cannot be compared
+     * (so callers evaluate to {@code false} rather than throwing).
+     *
+     * <p>Numbers are compared numerically. Otherwise both sides are compared
+     * lexicographically as strings -- ISO-8601 timestamps order correctly this way,
+     * which lets date-range filters such as {@code (receivedAt>=2026-07-04T13:00:00Z)}
+     * work without a dedicated temporal type. This mirrors the TypeScript
+     * implementation's behaviour.
      */
-    private int compareNumbers(Object propValue, Object compareValue) {
+    private Integer compareValues(Object propValue, Object compareValue) {
         if (propValue == null || compareValue == null) {
-            throw new IllegalArgumentException("Cannot compare null values");
+            return null;
         }
 
-        // Coerce to numbers
-        propValue = coerceValue(propValue, compareValue);
-        compareValue = coerceValue(compareValue, propValue);
-
-        if (!(propValue instanceof Number) || !(compareValue instanceof Number)) {
-            throw new IllegalArgumentException("Cannot compare non-numeric values");
+        // Numeric comparison after coercion (e.g. "18" vs 18)
+        Object left = coerceValue(propValue, compareValue);
+        Object right = coerceValue(compareValue, propValue);
+        if (left instanceof Number && right instanceof Number) {
+            return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue());
         }
 
-        double d1 = ((Number) propValue).doubleValue();
-        double d2 = ((Number) compareValue).doubleValue();
-        return Double.compare(d1, d2);
+        // Fallback: lexicographic string comparison (handles ISO-8601 dates/times)
+        return String.valueOf(propValue).compareTo(String.valueOf(compareValue));
     }
 
     /**

@@ -266,4 +266,54 @@ public class ExpressionTest {
         obj.put("status", "Active");
         assertTrue(expr.matches(obj));
     }
+
+    @Test
+    public void testParseTimestampValueWithColons() {
+        // Regression: an ISO-8601 timestamp value contains colons (13:00:00) which must
+        // not be mistaken for a custom-extension operator (previously threw
+        // "Unknown operator: :00:").
+        Expression expr = Expression.parse("(receivedAt>=2026-07-04T13:00:00Z)");
+
+        Map<String, Object> obj = new HashMap<>();
+        obj.put("receivedAt", "2026-07-04T13:00:00Z");
+        assertTrue(expr.matches(obj));
+
+        Map<String, Object> before = new HashMap<>();
+        before.put("receivedAt", "2026-07-04T12:59:59Z");
+        assertFalse(expr.matches(before));
+    }
+
+    @Test
+    public void testParseTimestampRangeAnd() {
+        Expression expr = Expression.parse(
+            "(&(receivedAt>=2026-07-04T13:00:00Z)(receivedAt<2026-07-05T00:00:00Z))");
+
+        Map<String, Object> obj = new HashMap<>();
+        obj.put("receivedAt", "2026-07-04T13:00:00Z");
+        assertTrue(expr.matches(obj));
+    }
+
+    @Test
+    public void testParseEqualsValueWithColons() {
+        // A colon in the value of a standard equality clause must be kept whole.
+        Expression expr = Expression.parse("(objectId=schema:table:hl7v2)");
+
+        Map<String, Object> obj = new HashMap<>();
+        obj.put("objectId", "schema:table:hl7v2");
+        assertTrue(expr.matches(obj));
+    }
+
+    @Test
+    public void testParseCustomExtensionStillWorks() {
+        // The operator-slot colon still routes to the custom extension.
+        Expression expr = Expression.parse("(name:startsWith:Rob)");
+
+        Map<String, Object> obj = new HashMap<>();
+        obj.put("name", "Robert");
+        assertTrue(expr.matches(obj));
+
+        Map<String, Object> obj2 = new HashMap<>();
+        obj2.put("name", "Alice");
+        assertFalse(expr.matches(obj2));
+    }
 }
