@@ -473,10 +473,10 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/types-amazon-js": "^2.0.1",
-        "@zerobias-org/types-core": "^2.0.1",
+        "@zerobias-org/types-amazon-js": "^2.0.4",
+        "@zerobias-org/types-core": "^2.0.2",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "@zerobias-org/types-microsoft-js": "^2.0.1",
+        "@zerobias-org/types-microsoft-js": "^2.0.4",
         "axios": "\"^1.16.0\"",
         "change-case": "^5.0.0",
         "jsonata": "^2.0.0",
@@ -564,7 +564,7 @@
       },
       "rootDeps": {
         "@stoplight/json-ref-resolver": "^3.1.6",
-        "@zerobias-org/types-format-spectral-ruleset": "^2.0.1",
+        "@zerobias-org/types-format-spectral-ruleset": "^2.0.4",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
         "axios": "\"^1.16.0\"",
         "diff": "\"^8.0.4\"",
@@ -575,7 +575,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.4",
+      "version": "1.0.5",
       "sourceHash": "d616329deeec258a4fd09fb7c93d867519fa87d0fe5afaa1dd559ee310c9d2c6",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {
