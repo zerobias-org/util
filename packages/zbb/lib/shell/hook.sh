@@ -24,6 +24,15 @@ _ZBB_CURRENT_STACK_ENV_MTIME=""
 # matches disk (a removed override disappears) instead of only ever adding
 # vars. Plain indexed array for bash 3.2 (macOS) portability.
 _ZBB_ALL_EXPORTED_VARS=()
+# Keys a stack manifest declares as `source: env` — borrowed from the ambient
+# shell (e.g. NPM_TOKEN, ZB_TOKEN exported by the user's .bashrc), not created
+# by zbb. The reconcile pass below must never unset these: zbb didn't put them
+# there, and clearing them breaks tooling that outlives the stack scope. Losing
+# NPM_TOKEN, for instance, silently kills ~/.npmrc's ${NPM_TOKEN} auth, so the
+# next `zbb stack add` fails to pull a dependency with an opaque E401.
+# Accumulates across every stack visited and is never pruned, so the protection
+# survives dropping to no-stack scope.
+_ZBB_INHERITED_VARS=()
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -35,6 +44,18 @@ _zbb_in_list() {
     [ "$item" = "$needle" ] && return 0
   done
   return 1
+}
+
+# Emit the keys a stack manifest marks `source: env`. The manifest is a flat
+# map of VAR → metadata, so a column-0 `KEY:` opens a block and a two-space
+# indented `source: env` inside it tags that key as inherited.
+_zbb_inherited_keys() {
+  local manifest="$1"
+  [ -f "$manifest" ] || return 0
+  awk '
+    /^[A-Za-z_][A-Za-z0-9_]*:[[:space:]]*$/ { key = substr($0, 1, index($0, ":") - 1); next }
+    /^[[:space:]]+source:[[:space:]]*env[[:space:]]*$/ { if (key != "") print key }
+  ' "$manifest"
 }
 
 # ── Load a stack's .env into the current shell ───────────────────────
@@ -57,10 +78,21 @@ _zbb_load_stack_env() {
     done < "$env_file"
   fi
 
+  # Record which of the new stack's keys are borrowed from the ambient shell,
+  # so the reconcile pass below leaves them alone from here on.
+  if [ -n "$stack_name" ]; then
+    local inherited
+    for inherited in $(_zbb_inherited_keys "$stacks_dir/$stack_name/manifest.yaml"); do
+      if ! _zbb_in_list "$inherited" "${_ZBB_INHERITED_VARS[*]}"; then
+        _ZBB_INHERITED_VARS+=("$inherited")
+      fi
+    done
+  fi
+
   # Reconcile: unset every previously-exported zbb var that is NOT in the
-  # new set (slot-level vars always persist). Superset of the old "unset
-  # the previous stack's vars" pass — robust across stack hops and
-  # external .env edits (e.g. another terminal running `zbb env unset`).
+  # new set (slot-level and shell-inherited vars always persist). Superset
+  # of the old "unset the previous stack's vars" pass — robust across stack
+  # hops and external .env edits (e.g. another terminal running `zbb env unset`).
   if [ ${#_ZBB_ALL_EXPORTED_VARS[@]} -gt 0 ]; then
     local kept=()
     local var
@@ -68,6 +100,11 @@ _zbb_load_stack_env() {
       case "$var" in
         ZB_SLOT|ZB_SLOT_DIR|ZB_SLOT_CONFIG|ZB_SLOT_LOGS|ZB_SLOT_STATE|ZB_SLOT_TMP|ZB_STACKS_DIR) continue ;;
       esac
+      # Borrowed from the parent shell — zbb never owned it, so never clear it.
+      if _zbb_in_list "$var" "${_ZBB_INHERITED_VARS[*]}"; then
+        kept+=("$var")
+        continue
+      fi
       if _zbb_in_list "$var" "$new_keys"; then
         kept+=("$var")
       else

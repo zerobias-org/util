@@ -753,12 +753,32 @@ export class StackManager {
     const cacheDir = join(getZbbDir(), 'cache', 'stacks');
     await mkdir(cacheDir, { recursive: true });
 
-    // Use npm pack to download the tarball, then extract
-    // npm pack writes a .tgz to cwd and prints the filename
-    const tgzName = execSync(`npm pack ${spec} --pack-destination ${cacheDir} 2>/dev/null`, {
-      encoding: 'utf-8',
-      cwd: cacheDir,
-    }).trim().split('\n').pop()!;
+    // Use npm pack to download the tarball, then extract.
+    // npm pack prints the filename on stdout and its progress notices on stderr.
+    // Capture stderr instead of discarding it: a registry auth failure (E401 from
+    // an unexpanded ${NPM_TOKEN} in .npmrc) otherwise surfaces as a bare
+    // "Command failed", with the one line that explains it thrown away.
+    let packOutput: string;
+    try {
+      packOutput = execSync(`npm pack ${spec} --pack-destination ${cacheDir}`, {
+        encoding: 'utf-8',
+        cwd: cacheDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      const { stderr } = err as { stderr?: string };
+      const detail = stderr?.trim() || (err instanceof Error ? err.message : String(err));
+      const hint = /\b401\b|unauthenticated/i.test(detail)
+        ? '\n\nRegistry auth failed. If ~/.npmrc authenticates with ${NPM_TOKEN} / ${ZB_TOKEN}, ' +
+          'check they are still set in this shell.'
+        : '';
+      throw new Error(`npm pack ${spec} failed:\n${detail}${hint}`);
+    }
+
+    const tgzName = packOutput.trim().split('\n').pop();
+    if (!tgzName) {
+      throw new Error(`npm pack ${spec} succeeded but printed no tarball name.`);
+    }
 
     const tgzPath = join(cacheDir, tgzName);
 
