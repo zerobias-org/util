@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/logger",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "ZeroBias Logger - standard logging for all services.",
   "type": "module",
   "main": "dist/src/index.js",
@@ -40,6 +40,6 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
-    "@zerobias-org/util-api-client-base": "^2.0.0"
+    "@zerobias-org/util-api-client-base": "^2.0.1"
   }
 }
