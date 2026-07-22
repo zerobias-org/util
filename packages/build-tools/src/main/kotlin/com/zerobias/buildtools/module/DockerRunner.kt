@@ -99,9 +99,20 @@ object DockerRunner {
             containerId = containerId,
             port = hostPort,
             image = imageName,
-            baseUrl = "https://localhost:$hostPort"
+            baseUrl = "https://$moduleHost:$hostPort"
         )
     }
+
+    /**
+     * Host used to reach a started module container — defaults to `localhost`,
+     * which is correct whenever the Gradle process and the Docker daemon share a
+     * network namespace (the normal case: local dev, most CI runners). Override
+     * with `MODULE_HOST` when they don't — e.g. a sandbox where the Docker socket
+     * is mounted in from a sibling container, so published ports land on the
+     * daemon host's bridge-gateway IP instead of this process's own loopback.
+     */
+    private val moduleHost: String
+        get() = System.getenv("MODULE_HOST") ?: "localhost"
 
     /**
      * Poll the module's health endpoint until it responds.
@@ -109,7 +120,7 @@ object DockerRunner {
      */
     fun waitForHealthy(port: Int, timeoutMs: Long = 60_000, intervalMs: Long = 1_000) {
         val deadline = System.currentTimeMillis() + timeoutMs
-        val url = "https://localhost:$port/"
+        val url = "https://$moduleHost:$port/"
         var lastError: String? = null
 
         // Trust all certs (modules use self-signed)
