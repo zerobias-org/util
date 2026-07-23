@@ -450,6 +450,24 @@ gradle.taskGraph.whenReady {
     val gateInGraph = allTasks.any { it.path == ":monorepoGate" }
     if (!gateInGraph) return@whenReady
 
+    // Gate resolves ONLY from the public registry — never a slot's local
+    // Verdaccio. RegistryInjectionService already supports this: forcePublic
+    // makes getEnvOverrides() return an empty map, so workspaceInstall's
+    // `npm install` skips injection and resolves from the public registry.
+    // It was previously set only under `-Pcleanlocalregistry`, so a normal
+    // `zbb gate` left injection active: workspaceInstall re-resolved @scope
+    // packages through localhost:15001 and wrote those URLs into
+    // package-lock.json. verifyNoLocalRegistry runs BEFORE that install, so it
+    // validated the still-clean committed lock and passed — the install
+    // poisoned the lock afterwards and the stamp blessed it, producing a lock
+    // that only resolves on a box running that Verdaccio (cold `npm ci` in CI
+    // then fails with ECONNREFUSED localhost:15001). whenReady fires after the
+    // graph is built but before any task executes, so setting it here
+    // guarantees workspaceInstall's doFirst observes forcePublic=true. Keyed on
+    // :monorepoGate being in the graph, so ad-hoc build/install dev runs keep
+    // the local-registry loop untouched — only the gate is forced public.
+    registryInjection.get().forcePublic = true
+
     val logsDir = rootProject.file("$ZBB_GRADLE_DIR/logs")
     if (logsDir.exists()) {
         logsDir.deleteRecursively()
