@@ -205,7 +205,16 @@ val dataloaderExec = registerDataloader(force = useForce, forceDirect = useForce
     dependsOn(validateContent)
 }
 
+// Wire the content-master dataloader load into BOTH `testIntegration` (so
+// `zbb test` exercises it — content has no other in-process test) and
+// `testDataloader` (a direct `gate` dependency in zb.base, mirroring
+// zb.typescript-collectorbot). The `testDataloader` edge is what makes the
+// load a REQUIRED step of `gate`; the `testIntegration` edge alone did not
+// reliably run under gate for content, and left `zbb testDataloader` a no-op.
 tasks.named("testIntegration") {
+    dependsOn(dataloaderExec)
+}
+tasks.named("testDataloader") {
     dependsOn(dataloaderExec)
 }
 

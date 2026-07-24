@@ -247,7 +247,11 @@ abstract class NeonDataloaderTask : DefaultTask() {
             // DATALOADER_SPEC (e.g. a version, @latest, or a local `file:` path).
             val loaderSpec = System.getenv("DATALOADER_SPEC")?.takeIf { it.isNotBlank() }
                 ?: "@zerobias-com/platform-dataloader@prod"
-            val cmd = mutableListOf("npx", "--yes", "--package", loaderSpec, "dataloader")
+            // --ignore-scripts: the published loader ships pre-built (no build/prepare
+            // needed), and a transitive dep (ip-num) has a `preinstall` (`npx only-allow
+            // npm`) that exits 127 and would otherwise fail npx's on-demand install.
+            // Mirrors the `--ignore-scripts` on the CI global install of the loader.
+            val cmd = mutableListOf("npx", "--yes", "--ignore-scripts", "--package", loaderSpec, "dataloader")
             when {
                 force.getOrElse(false) -> cmd.add("-f")
                 forceDirect.getOrElse(false) -> cmd.add("--force-direct")
