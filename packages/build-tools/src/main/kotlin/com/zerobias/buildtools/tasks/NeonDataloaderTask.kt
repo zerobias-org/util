@@ -40,6 +40,11 @@ import java.io.File
  * Optional env:
  *   DATALOADER_SERVICE_URL — override the dataloader-service base URL.
  *                            Defaults to `https://app.zerobias.com/api/dataloader`.
+ *   DATALOADER_SPEC        — npm spec the loader is run from via `npx` for this
+ *                            content-master gate. Defaults to
+ *                            `@zerobias-com/platform-dataloader@prod` (the version in
+ *                            prod). Override for loader dev (a version, @latest, or a
+ *                            local `file:` path).
  *
  * Skips cleanly (no failure) when ZB_TOKEN is not set — lets local dev
  * without vault proceed without blowing up gate. CI jobs that require
@@ -232,7 +237,17 @@ abstract class NeonDataloaderTask : DefaultTask() {
                 seedOrgIntoBranch(orgId, pgEnv, workingDir)
             }
 
-            val cmd = mutableListOf("dataloader")
+            // This is the content-master gate: it loads against a branch forked from
+            // content-master, so it MUST run the loader version deployed in prod — the
+            // SDLC-gated one bundled in platform-dataloader-service, published under the
+            // `prod` npm dist-tag (moved by prod-apply on each promotion). Invoke it via
+            // npx so this task is pinned to @prod independently of whatever `dataloader`
+            // is globally installed on PATH (which the local `dataloader` task uses and
+            // must NOT be forced to prod). Override for loader development via
+            // DATALOADER_SPEC (e.g. a version, @latest, or a local `file:` path).
+            val loaderSpec = System.getenv("DATALOADER_SPEC")?.takeIf { it.isNotBlank() }
+                ?: "@zerobias-com/platform-dataloader@prod"
+            val cmd = mutableListOf("npx", "--yes", "--package", loaderSpec, "dataloader")
             when {
                 force.getOrElse(false) -> cmd.add("-f")
                 forceDirect.getOrElse(false) -> cmd.add("--force-direct")
