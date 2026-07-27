@@ -302,6 +302,12 @@ object ChangeDetector {
         if (changedDeps.isEmpty()) return emptySet()
 
         val affected = mutableSetOf<String>()
+        // hydra-schema is DDL that no service imports, so it never appears in any
+        // package's resolved deps below — yet its version is stamped into the
+        // published manifest of every package carrying hydra-core/hydra-dao.
+        // Those packages are affected by a bump even though the containsKey test
+        // below can never see it.
+        val hydraSchemaChanged = changedDeps.contains(Prepublish.HYDRA_SCHEMA_PACKAGE)
         for ((name, pkg) in graph.packages) {
             // Use in-process Kotlin Prepublish to resolve this package's root deps
             val resolved = try {
@@ -309,11 +315,17 @@ object ChangeDetector {
             } catch (_: Exception) {
                 emptyMap()
             }
-            for (dep in changedDeps) {
-                if (resolved.containsKey(dep)) {
-                    affected.add(name)
-                    break
+            if (changedDeps.any { resolved.containsKey(it) }) {
+                affected.add(name)
+                continue
+            }
+            if (hydraSchemaChanged) {
+                val isStamped = try {
+                    Prepublish.resolveSchemaVersion(pkg.dir, repoRoot) != null
+                } catch (_: Exception) {
+                    false
                 }
+                if (isStamped) affected.add(name)
             }
         }
         return affected

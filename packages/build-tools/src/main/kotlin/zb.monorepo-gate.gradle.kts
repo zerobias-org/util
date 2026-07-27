@@ -194,6 +194,7 @@ tasks.register("monorepoGateCheck") {
                 packageName = name,
                 stamp = stamp,
                 rootPackageJson = rootPkg,
+                rootDir = rootProject.projectDir,
             )
 
             val shortName = name.replace(Regex("^@[^/]+/"), "")
@@ -296,6 +297,14 @@ val monorepoGate = tasks.register("monorepoGate") {
             } catch (_: Exception) {
                 emptyMap()
             }
+            // Publish input that sourceHash and rootDeps cannot see — hydra-schema
+            // is DDL nothing imports, so record it explicitly or a bump ships a
+            // stale schemaVersion behind a VALID gate. Null for non-hydra packages.
+            val schemaVersion = try {
+                Prepublish.resolveSchemaVersion(pkg.dir, rootProject.projectDir)
+            } catch (_: Exception) {
+                null
+            }
 
             // Did this gate run actually touch this package's build/test
             // tasks? If none were scheduled, the package wasn't affected — so
@@ -393,6 +402,7 @@ val monorepoGate = tasks.register("monorepoGate") {
                 tasks = priorEntry?.tasks ?: tasksMap,
                 tests = priorEntry?.tests ?: tests,
                 rootDeps = rootDeps.takeIf { it.isNotEmpty() },
+                schemaVersion = schemaVersion,
             )
         }
 

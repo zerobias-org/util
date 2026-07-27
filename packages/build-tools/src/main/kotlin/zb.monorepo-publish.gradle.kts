@@ -120,7 +120,7 @@ val publishGuard = tasks.register("publishGuard") {
             for ((name, pkg) in service.graph.packages) {
                 if (pkg.private) continue
                 if (service.config.skipPublish.contains(name)) continue
-                val v = validator.validateDetailed(pkg.dir, name, stamp, rootPkg)
+                val v = validator.validateDetailed(pkg.dir, name, stamp, rootPkg, rootProject.projectDir)
                 if (v.result != GateStampResult.VALID) {
                     invalid.add("$name: ${v.result}${v.reason?.let { " — $it" } ?: ""}")
                 }

@@ -64,9 +64,11 @@ const ZBB_INTERNAL_PREFIXES = ['ZBB_', '_ZBB_'] as const;
  * off entirely, so these are a no-op there.
  *
  * Deliberately NOT in any contract: the publish-endpoint OVERRIDES
- * (PUBLISH_ORG_*, ZB_PLATFORM_URL, DATALOADER_SERVICE_URL) — they default to
- * prod and stay strippable so a stale shell value can't silently redirect a
- * prod publish (use ZBB_HERMETIC=0 for local-verdaccio testing).
+ * (PUBLISH_ORG_*, ZB_PLATFORM_URL, DATALOADER_SERVICE_URL, DATALOADER_SPEC) —
+ * they default to prod and stay strippable so a stale shell value can't
+ * silently redirect a prod publish, or swap which loader build the
+ * content-master gate validates against (use ZBB_HERMETIC=0 for
+ * local-verdaccio / loader-dev testing).
  *
  * KEEP IN SYNC with build-tools' env reads — enforced by EnvContractCoverageTest
  * in packages/build-tools (it fails if a new System.getenv isn't covered here).
@@ -116,7 +118,8 @@ const ALL_CONTRACT_VARS: ReadonlySet<string> = new Set([
  * by the effective env / ZBB_ prefix. (PATH/HOME/NVM_DIR are in SYSTEM_BASE.)
  */
 export const ENV_CONTRACT_IGNORED: ReadonlySet<string> = new Set([
-  'PUBLISH_ORG_NPM_TOKEN', 'PUBLISH_ORG_REGISTRY_URL', 'ZB_PLATFORM_URL', 'DATALOADER_SERVICE_URL',
+  'PUBLISH_ORG_NPM_TOKEN', 'PUBLISH_ORG_REGISTRY_URL', 'ZB_PLATFORM_URL',
+  'DATALOADER_SERVICE_URL', 'DATALOADER_SPEC',
   'ZB_SLOT', 'ZB_SLOT_DIR', 'ZB_STACK', 'ZBB_MONOREPO_EVENT_FILE',
 ]);
 

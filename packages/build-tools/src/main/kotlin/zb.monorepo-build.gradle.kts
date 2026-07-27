@@ -1003,7 +1003,8 @@ gradle.projectsEvaluated {
             .filterNot { (_, pkg) -> pkg.private }
             .filter { (name, _) -> gateScopeFilter == null || name == gateScopeFilter }
             .filter { (name, pkg) ->
-                validator.validate(pkg.dir, name, stamp, rootPkg) != com.zerobias.buildtools.monorepo.GateStampResult.VALID
+                validator.validate(pkg.dir, name, stamp, rootPkg, rootProject.projectDir) !=
+                    com.zerobias.buildtools.monorepo.GateStampResult.VALID
             }
             .map { it.key }
             .toSet()

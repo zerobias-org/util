@@ -24,7 +24,9 @@ import java.io.File
  */
 class StampValidatorIntegrationTest {
 
-    private val comUtilRoot = File("/root/nfa-repos/com/util")
+    // Resolved against the actual checkout — a hardcoded /root/nfa-repos path
+    // meant this skipped everywhere else, so it guarded nothing locally.
+    private val comUtilRoot = MetaRepo.repo("com/util") ?: File("/root/nfa-repos/com/util")
     private val isAvailable = comUtilRoot.exists() && File(comUtilRoot, "gate-stamp.json").exists()
 
     @Test
@@ -70,17 +72,27 @@ class StampValidatorIntegrationTest {
     }
 
     @Test
-    fun `aws-common testHash matches TS path hash`() {
+    fun `aws-common testHash matches the committed stamp`() {
         assumeTrue(isAvailable, "com/util not present")
         val pkgDir = File(comUtilRoot, "packages/aws-common")
         assumeTrue(pkgDir.exists())
 
+        // Compare against the testHash recorded in com/util's committed
+        // gate-stamp.json rather than a literal frozen in this file. The old
+        // literal was captured from one particular aws-common tree, so it went
+        // stale the first time those tests changed — and because this class was
+        // pinned to a hardcoded /root/nfa-repos path it never ran to reveal it.
+        // Reading the stamp keeps the check honest at whatever commit is out.
+        val stamp = GateStampIO.read(File(comUtilRoot, "gate-stamp.json"))
+        assertNotNull(stamp)
+        val expected = stamp!!.packages["@zerobias-com/aws-common"]?.testHash
+        assumeTrue(expected != null, "@zerobias-com/aws-common not in com/util gate-stamp")
+
         val computed = com.zerobias.buildtools.util.SourceHasher.hashTests(pkgDir)
-        // Known good hash from TS path (verified via dist/monorepo/GateStamp.js)
-        val expected = "4fe808281f438edd8fd93fb193e880aa3a9861ecde9aff6f359024a9c4384512"
         assertEquals(expected, computed) {
-            "Kotlin hashTests diverges from TS computeTestHash for aws-common.\n" +
-            "  expected: $expected\n  kotlin:   $computed"
+            "Kotlin hashTests diverges from the hash recorded in com/util's gate-stamp for " +
+            "aws-common.\n  stamp:  $expected\n  kotlin: $computed\n" +
+            "If com/util's test files changed without a re-gate, re-run `zbb gate` there."
         }
     }
 

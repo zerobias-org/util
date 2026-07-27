@@ -75,6 +75,29 @@ object PublishChangeDetector {
                 continue
             }
 
+            // schemaVersion drift: prepublish stamps the lock-resolved
+            // hydra-schema version into the published manifest, but hydra-schema
+            // is DDL that no service imports, so it never enters
+            // resolveRootDeps' import-scanned set — and the package.json-only
+            // diff below cannot see a lock-only move under a caret range. Both
+            // blind spots let a hydra-schema bump republish nothing, shipping a
+            // stale schemaVersion. Compare what this package would be stamped
+            // with now against what the lock held at its own last publish tag.
+            val stampedSchemaVersion = try {
+                Prepublish.resolveSchemaVersion(pkg.dir, repoRoot)
+            } catch (_: Exception) {
+                null
+            }
+            if (stampedSchemaVersion != null) {
+                // Unreadable ref (shallow clone missing the tag) → skip rather
+                // than over-publish, matching getRootDepsAt's fallback.
+                val atTag = getSchemaVersionAt(repoRoot, lastTag)
+                if (atTag.readable && atTag.version != stampedSchemaVersion) {
+                    changed.add(name)
+                    continue
+                }
+            }
+
             // Root-deps drift: if any root dep/override this package resolves
             // against has changed since the package's last publish tag, mark
             // it changed. Mirrors ChangeDetector.findPackagesAffectedByRootDeps,
@@ -340,6 +363,36 @@ object PublishChangeDetector {
             parseRootDeps(output)
         } catch (_: Exception) {
             RootDepsSnapshot(emptyMap(), emptyMap())
+        }
+    }
+
+    /**
+     * Lock-resolved hydra-schema version at a git ref. [readable] distinguishes
+     * "the ref had no hydra-schema" (readable=true, version=null) from "could
+     * not read the ref at all" (readable=false) — a shallow clone missing the
+     * tag must not be mistaken for a version change and trigger a republish.
+     */
+    private data class SchemaVersionAtRef(val readable: Boolean, val version: String?)
+
+    /**
+     * Read `package-lock.json` at a git ref and resolve the hydra-schema
+     * version from it, via the same lookup Prepublish uses when stamping.
+     */
+    private fun getSchemaVersionAt(repoRoot: File, ref: String): SchemaVersionAtRef {
+        return try {
+            val proc = ProcessBuilder("git", "show", "$ref:package-lock.json")
+                .directory(repoRoot)
+                .redirectErrorStream(false)
+                .start()
+            val output = proc.inputStream.bufferedReader().readText()
+            val finished = proc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+            if (!finished || proc.exitValue() != 0 || output.isEmpty()) {
+                return SchemaVersionAtRef(readable = false, version = null)
+            }
+            val lock: Map<String, Any?> = rootDepsMapper.readValue(output)
+            SchemaVersionAtRef(readable = true, version = Prepublish.hydraSchemaVersionFromLock(lock))
+        } catch (_: Exception) {
+            SchemaVersionAtRef(readable = false, version = null)
         }
     }
 

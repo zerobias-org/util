@@ -23,14 +23,17 @@ import java.io.File
  */
 class PrepublishParityTest {
 
+    // Resolved against the actual checkout — see MetaRepo. Hardcoded absolute
+    // paths here used to skip this whole suite on any machine not laid out as
+    // /root/nfa-repos.
     private val repos = listOf(
-        "/root/nfa-repos/com/util",
-        "/root/nfa-repos/com/hub",
-        "/root/nfa-repos/com/dana",
-        "/root/nfa-repos/com/hydra-service",
-        "/root/nfa-repos/com/fileservice",
-        "/root/nfa-repos/com/platform",
-    )
+        "com/util",
+        "com/hub",
+        "com/dana",
+        "com/hydra-service",
+        "com/fileservice",
+        "com/platform",
+    ).mapNotNull { MetaRepo.repo(it)?.path }
 
     private val mapper = ObjectMapper().registerKotlinModule()
 

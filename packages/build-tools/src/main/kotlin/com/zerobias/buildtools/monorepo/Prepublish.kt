@@ -52,17 +52,25 @@ object Prepublish {
         "@zerobias-org/util-api-client-base" to listOf("qs"),
     )
 
+    /** The hydra-schema package whose locked version is stamped as `schemaVersion`. */
+    const val HYDRA_SCHEMA_PACKAGE = "@zerobias-com/hydra-schema"
+
     /**
      * Runtime hydra deps whose presence means this package should be stamped
      * with the resolved `@zerobias-com/hydra-schema` version (see resolve()).
+     *
+     * hydra-schema itself is a trigger: a package depending on the DDL directly
+     * is the clearest case of "built against a specific schema", yet it was
+     * originally excluded — so the one package in platform that declares
+     * hydra-schema as a real dependency (platform-content) was the only one the
+     * gate noticed on a bump and the only one never stamped. Keep in sync with
+     * HYDRA_STAMP_TRIGGERS in prepublish-standalone.js.
      */
     private val HYDRA_STAMP_TRIGGERS = listOf(
         "@zerobias-com/hydra-core",
         "@zerobias-com/hydra-dao",
+        HYDRA_SCHEMA_PACKAGE,
     )
-
-    /** The hydra-schema package whose locked version is stamped as `schemaVersion`. */
-    private const val HYDRA_SCHEMA_PACKAGE = "@zerobias-com/hydra-schema"
 
     /** Node.js builtin modules that must NEVER appear in published deps. */
     private val NODE_BUILTINS = setOf(
@@ -293,11 +301,14 @@ object Prepublish {
         // hydra runtime (hydra-core / hydra-dao). Lets downstream tooling know
         // which schema version this package was published against. Read from the
         // root package-lock.json so it reflects the actually-installed version.
-        // Parity: prepublish-standalone.js does the same.
-        if (HYDRA_STAMP_TRIGGERS.any { sortedDependencies.containsKey(it) }) {
-            readHydraSchemaVersion(rootDir)?.let { schemaVersion ->
-                outputPackageJson["schemaVersion"] = schemaVersion
-            }
+        // Parity: prepublish-standalone.js `readHydraSchemaVersion`.
+        //
+        // Whatever this writes MUST also be recorded in the gate stamp via
+        // [resolveSchemaVersion] — it is a publish input the source hash and the
+        // rootDeps snapshot cannot see. Both paths go through [schemaVersionFor]
+        // so they can't drift apart.
+        schemaVersionFor(sortedDependencies.keys, rootDir)?.let { schemaVersion ->
+            outputPackageJson["schemaVersion"] = schemaVersion
         }
 
         writeJson(outputPackageJsonPath, outputPackageJson)
@@ -340,6 +351,39 @@ object Prepublish {
         }
         return resolved
     }
+
+    /**
+     * The `schemaVersion` [resolve] would stamp into this package's published
+     * manifest, or null when this package isn't stamped. Pure — writes nothing.
+     *
+     * Exists because `schemaVersion` is a publish input that nothing else in the
+     * gate's cache key can see. [resolveRootDeps] derives its snapshot from
+     * import-scanned dependencies, and `@zerobias-com/hydra-schema` is DDL/SQL
+     * that no service ever `import`s — so bumping hydra-schema changes the
+     * published output while leaving sourceHash and rootDeps identical. Without
+     * this the gate marks every stamped package VALID, `prepublishPackage` is
+     * skipped, and the artifact ships the previous schemaVersion.
+     *
+     * Read from the lock (not the root package.json range) because that is what
+     * [resolve] stamps: a caret range can stay `^2.0.50` while the lock moves
+     * 2.0.50 → 2.0.51, which must still invalidate the gate.
+     */
+    fun resolveSchemaVersion(serviceDir: File, rootDir: File): String? {
+        val result = resolve(serviceDir, rootDir, Options(dryRun = true))
+        return schemaVersionFor(result.dependencies.keys, rootDir)
+    }
+
+    /**
+     * Single source of truth for "does this dependency set get a schemaVersion,
+     * and what is it". Shared by [resolve]'s write path and [resolveSchemaVersion]
+     * so the stamped value and the gate's recorded value cannot diverge.
+     */
+    internal fun schemaVersionFor(dependencyNames: Set<String>, rootDir: File): String? =
+        if (HYDRA_STAMP_TRIGGERS.any { dependencyNames.contains(it) }) {
+            readHydraSchemaVersion(rootDir)
+        } else {
+            null
+        }
 
     // ── Scanners ─────────────────────────────────────────────────────
 
@@ -749,9 +793,11 @@ object Prepublish {
      * hydra-schema entry ("if there is one"). Supports lockfileVersion 2/3
      * (`packages["node_modules/<pkg>"]`) with a v1 fallback (`dependencies`).
      * Mirrors `readHydraSchemaVersion` in prepublish-standalone.js.
+     *
+     * Public so the gate can record the same value it stamps — see
+     * [resolveSchemaVersion].
      */
-    @Suppress("UNCHECKED_CAST")
-    private fun readHydraSchemaVersion(rootDir: File): String? {
+    fun readHydraSchemaVersion(rootDir: File): String? {
         val lockFile = File(rootDir, "package-lock.json")
         if (!lockFile.exists()) return null
         val lock = try {
@@ -759,6 +805,17 @@ object Prepublish {
         } catch (_: Exception) {
             return null
         }
+        return hydraSchemaVersionFromLock(lock)
+    }
+
+    /**
+     * [readHydraSchemaVersion] against an already-parsed lock. Split out so
+     * callers holding lock JSON from somewhere other than the working tree —
+     * e.g. `git show <ref>:package-lock.json` in PublishChangeDetector — resolve
+     * the version identically instead of reimplementing the lookup.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun hydraSchemaVersionFromLock(lock: Map<String, Any?>): String? {
         val packages = lock["packages"] as? Map<String, Any?>
         (packages?.get("node_modules/$HYDRA_SCHEMA_PACKAGE") as? Map<String, Any?>)
             ?.get("version")?.let { return it as? String }

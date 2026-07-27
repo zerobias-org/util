@@ -60,7 +60,7 @@ data class TestSuiteEntry(
 )
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder("version", "sourceHash", "testHash", "tasks", "tests", "rootDeps")
+@JsonPropertyOrder("version", "sourceHash", "testHash", "tasks", "tests", "rootDeps", "schemaVersion")
 data class PackageStampEntry(
     val version: String,
     val sourceHash: String,
@@ -79,6 +79,23 @@ data class PackageStampEntry(
      * Field order: written AFTER `tests` to match the TS path's stamp output.
      */
     val rootDeps: Map<String, String>? = null,
+
+    /**
+     * The `schemaVersion` that `prepublishPackage` will stamp into this
+     * package's published manifest (`Prepublish.resolveSchemaVersion`), or null
+     * for packages that aren't stamped.
+     *
+     * Tracked separately from [rootDeps] because it is a publish input neither
+     * the source hash nor the rootDeps snapshot can observe:
+     * `@zerobias-com/hydra-schema` is DDL that no service imports, so it never
+     * enters the import-scanned dependency set, yet its version is written into
+     * the published package.json. Recording it here is what makes a hydra-schema
+     * bump invalidate the gate for exactly the packages it changes.
+     *
+     * Compared against the lock-resolved version, not the root package.json
+     * range — see the drift check in [StampValidator.validateDetailed].
+     */
+    val schemaVersion: String? = null,
 )
 
 // ignoreUnknown=true so older stamps that still have a "timestamp" field
@@ -175,13 +192,16 @@ class StampValidator(
      * @param stamp the loaded stamp file (null if missing)
      * @param rootPackageJson parsed root package.json (used for rootDeps drift check),
      *                       or null to skip rootDeps validation
+     * @param rootDir repo root, used to re-read the lock for the schemaVersion
+     *                drift check, or null to skip that check
      */
     fun validate(
         packageDir: File,
         packageName: String,
         stamp: GateStamp?,
         rootPackageJson: Map<String, Any?>? = null,
-    ): GateStampResult = validateDetailed(packageDir, packageName, stamp, rootPackageJson).result
+        rootDir: File? = null,
+    ): GateStampResult = validateDetailed(packageDir, packageName, stamp, rootPackageJson, rootDir).result
 
     /**
      * Like [validate], but also returns a reason identifying the exact check
@@ -194,6 +214,7 @@ class StampValidator(
         packageName: String,
         stamp: GateStamp?,
         rootPackageJson: Map<String, Any?>? = null,
+        rootDir: File? = null,
     ): StampValidation {
         if (stamp == null) return StampValidation(GateStampResult.MISSING, "no gate-stamp.json on disk")
         val entry = stamp.packages[packageName]
@@ -247,6 +268,30 @@ class StampValidator(
                         "root package.json dep drift: '$depName' stamp=$stampVersion now=$now",
                     )
                 }
+            }
+        }
+
+        // 1c. schemaVersion drift. `prepublishPackage` stamps the lock-resolved
+        // @zerobias-com/hydra-schema version into the published manifest, but
+        // hydra-schema is DDL that no service imports, so it never appears in
+        // sourceHash or the rootDeps snapshot above. Without this check a
+        // hydra-schema bump leaves every stamped package VALID, prepublish is
+        // skipped, and the artifact ships the previous schemaVersion — silently
+        // pinning deployments to a schema that is no longer current.
+        //
+        // Compared against the lock, matching what Prepublish stamps: a caret
+        // range can hold at `^2.0.50` while the lock moves 2.0.50 → 2.0.51, and
+        // that must still invalidate.
+        if (entry.schemaVersion != null && rootDir != null) {
+            val currentSchemaVersion = Prepublish.readHydraSchemaVersion(rootDir)
+            if (entry.schemaVersion != currentSchemaVersion) {
+                return StampValidation(
+                    GateStampResult.INVALID,
+                    "schemaVersion drift: '${Prepublish.HYDRA_SCHEMA_PACKAGE}' " +
+                    "stamp=${entry.schemaVersion} now=${currentSchemaVersion ?: "<absent>"} " +
+                    "— the published manifest would be stamped with a different schema version " +
+                    "than the one this stamp was gated against; republish is required",
+                )
             }
         }
 
