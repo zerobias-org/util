@@ -76,6 +76,25 @@ describe('Mappers test', () => {
       expect(enumValue).instanceOf(EnumValue);
     });
 
+    [undefined, null, ''].forEach((absent) => {
+      it(`Should return undefined for ${JSON.stringify(absent)}`, () => {
+        const enumValue = toEnum(Enum, absent as unknown as string);
+        expect(enumValue).to.be.undefined;
+      });
+    });
+
+    // Module mappers are @ts-nocheck, so a vendor SDK returning a non-string
+    // where the spec models an enum reaches toEnum untyped. `true` used to
+    // throw `input.slice is not a function` from snakeCase and `false` was
+    // silently swallowed by the old truthiness guard.
+    [true, false, 0, 42].forEach((notAString) => {
+      it(`Should throw IllegalArgumentError for ${JSON.stringify(notAString)}`, () => {
+        expect(() => toEnum(Enum, notAString as unknown as string))
+          .to.throw(IllegalArgumentError)
+          .with.property('msg', `Expected a string enum value, got ${typeof notAString}: ${notAString}`);
+      });
+    });
+
   });
 
   describe('#mapArray', () => {
