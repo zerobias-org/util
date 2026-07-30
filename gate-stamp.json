@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "main",
+  "branch": "fix/to-enum-non-string-guard",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.41",
@@ -445,8 +445,8 @@
     },
     "@zerobias-org/util-hub-module-utils": {
       "version": "3.0.5",
-      "sourceHash": "699323bdb1773bb83aeeca2c688393b61643ba800d41aaf3edfd63bfb1ca27ab",
-      "testHash": "647231224f7fa2ca8b52a4bd88b1a90dc8f4de2b457f22991a37e35de33aa41d",
+      "sourceHash": "86ce60b7006b474a7c75087eb98bfcda2192070a553b7e83427821ecba154c4d",
+      "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -457,8 +457,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 38,
-          "ran": 38,
+          "expected": 40,
+          "ran": 40,
           "status": "passed"
         },
         "integration": {
@@ -575,7 +575,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.6",
+      "version": "1.0.7",
       "sourceHash": "f4cdb886568d88c8ad5f640f39ee4e5860bebe93ca747b7b23628777fe067175",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {

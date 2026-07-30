@@ -3,6 +3,7 @@ import {
   CloudRegion,
   CloudRegionDef,
   EnumValue,
+  IllegalArgumentError,
   InvalidInputError,
   UnexpectedError
 } from '@zerobias-org/types-core-js';
@@ -41,10 +42,19 @@ export function map<I, O>(
 
 /**
  * Transforms the input and returns the enum value matching the result.
+ *
+ * `undefined`, `null` and the empty string are treated as "absent" and return
+ * `undefined`. Any other non-string input is a mapping bug — module mappers are
+ * `@ts-nocheck`, so a vendor SDK returning a boolean or a number where the spec
+ * models an enum reaches here untyped. Previously `true` blew up inside
+ * `snakeCase` with `input.slice is not a function` while `false` was silently
+ * dropped; both now fail the same, diagnosable way.
+ *
  * @param Enum The enum to convert to.
  * @param value The string value for the enum.
  * @param transformFunction Override transform function. The default transform function is `snakeCase`.
  * @returns The enum value that matches the transformed input value.
+ * @throws IllegalArgumentError when `value` is neither absent nor a string.
   */
 export function toEnum<T extends { from: (val: string | number) => EnumValue; }>(
   Enum: T,
@@ -62,10 +72,20 @@ export function toEnum<T extends {
   ) => EnumValue;
 }>(
   Enum: T,
-  value?: string,
+  value?: unknown,
   transformFunction: (arg: string) => string = snakeCase
 ): EnumValue | undefined {
-  return value ? Enum.from(transformFunction(value)) : undefined;
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new IllegalArgumentError(
+      `Expected a string enum value, got ${typeof value}: ${String(value)}`
+    );
+  }
+
+  return Enum.from(transformFunction(value));
 }
 
 /**
