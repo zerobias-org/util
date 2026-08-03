@@ -157,7 +157,7 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
   async isSupported(operationId: string): Promise<OperationSupportStatusDef> {
     if (this._client) {
       logger.info(`Checking if supported: ${operationId}...`);
-      this._client.get(`/${operationId}/supported`)
+      return await this._client.get(`/${operationId}/supported`)
         .then((resp) => ObjectSerializer.deserialize(resp.data, 'OperationSupportStatus'))
         .catch(() => OperationSupportStatus.Maybe);
     }
