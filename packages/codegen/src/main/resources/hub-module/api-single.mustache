@@ -548,8 +548,10 @@ export class {{classname}}HubImpl implements {{producerName}} {
     })
   {{/vendorExtensions.x-use-spec-http-methods}}
     .then((response) => {
-      // BaseApiClient uses validateStatus: () => true, so we must check status manually
       {{#vendorExtensions.x-use-spec-http-methods}}
+      // This client is the HubConnector's axios instance, which keeps axios' default
+      // validateStatus and therefore already rejects on >= 400. This guard is defensive:
+      // it only fires if the injected instance is configured to resolve error statuses.
       if (response.status >= 400) {
         throw CoreError.deserialize(response.data);
       }
