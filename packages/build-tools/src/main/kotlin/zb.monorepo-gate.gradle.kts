@@ -541,4 +541,36 @@ gradle.projectsEvaluated {
     // checks.
     rootProject.tasks.findByName("monorepoPublishDryRun")?.dependsOn(verifyNoLocalRegistry)
     rootProject.tasks.findByName("monorepoPublishDryRun")?.dependsOn(verifyNoPrepublishLeftover)
+
+    // The docker and publish pipelines legitimately mutate a workspace
+    // package.json in place — prepublish-standalone injects hoisted root deps +
+    // an `overrides` block and writes `package.json.prepublish-backup`, undone
+    // in a `finally`. That transient on-disk state is byte-for-byte what
+    // verifyNoPrepublishLeftover flags, and nothing ordered the guard against
+    // it: monorepoGate declares verifyNoPrepublishLeftover and
+    // monorepoDockerBuild as sibling dependsOn entries, so under --parallel the
+    // guard is free to scan mid-mutation and fail a perfectly clean tree.
+    // (com/platform PR gate, 2026-08-03: :api:npmPack had already written
+    // api/package.json.prepublish-backup and 22 overrides when the guard ran —
+    // two consecutive runs failed identically on a branch with nothing
+    // committed.) prepublishLock only serializes the mutators against each
+    // other, not against the guard, so order every mutator after it instead.
+    //
+    // mustRunAfter (not dependsOn) — the guard must precede these tasks when
+    // both are in the graph, but must not drag the docker/publish pipeline into
+    // builds that only asked for the guard. Cycle-free by construction:
+    // verifyNoPrepublishLeftover has no dependencies of its own.
+    val prepublishMutatorTasks = setOf("npmPack", "prepareDockerContext")
+    rootProject.allprojects.forEach { p ->
+        // `tasks.names` avoids realizing every task just to match on name.
+        p.tasks.names
+            .filter {
+                it in prepublishMutatorTasks ||
+                    // Registered per package with a suffix for orphan packages
+                    // (prepublishPackage_some_dir), so match on prefix.
+                    it.startsWith("prepublishPackage") ||
+                    it.startsWith("prepublishLocalOnly")
+            }
+            .forEach { name -> p.tasks.named(name) { mustRunAfter(verifyNoPrepublishLeftover) } }
+    }
 }
