@@ -24,9 +24,24 @@ const HUB_TRANSIENT_MESSAGE = new RegExp([
   'is no longer connected',
   // Waiter.ts - node accepted the message and never answered within the waiter timeout.
   'exceeded \\d+ second timeout',
-  // Node still bringing the module container up (start/create races under burst load).
-  'container .{0,40}(is not running|failed to start|not found)',
-  'image pull',
+  // Node still bringing the module container up - the start races seen under burst load.
+  //
+  // These are copied from the node's actual throw sites, not guessed:
+  //   `Deployment [id]: no port in state - not running`  (node ContainerDeployment.ts)
+  //   `Container failed to start: <state>`               (node lib/docker/Container.ts)
+  //
+  // Both arrive as a hub-error 500, which is not in retryStatuses, so this message gate is the
+  // only thing that makes them retryable - the text has to be right rather than plausible. An
+  // earlier version of this list guessed at `container ... is not running` and `image pull`,
+  // neither of which the node ever emits, so the container-start race - the trigger of the
+  // production incident this retry layer exists for - was silently not retried.
+  //
+  // Kept deliberately in sync with hub-client's copy in `com/hub/client/src/HttpRetry.ts`.
+  // hub-client stands down when `HubConnector.hasNativeRetry` is true, so once that ships this
+  // list is the live one for the dominant vendor-module path; a divergence here un-fixes the
+  // incident rather than merely degrading coverage.
+  'no port in state',
+  'Container failed to start',
 ].join('|'), 'i');
 
 // Explicitly not retryable even when they arrive with a transient-looking status: these are

@@ -84,6 +84,51 @@ describe('HubConnector retry', () => {
     expect(scope.isDone()).to.equal(true);
   });
 
+  it('retries the container-start race using the node\'s actual message text', async () => {
+    // The regression this pins: an earlier version of HUB_TRANSIENT_MESSAGE guessed at
+    // `container ... is not running` and `image pull`, neither of which the node ever emits.
+    // The node's real text is `Deployment [id]: no port in state - not running`
+    // (ContainerDeployment.ts). It arrives as a hub-error 500, which is not in retryStatuses,
+    // so this message gate is the only thing that makes it retryable - and this race under
+    // burst load is the trigger of the incident this whole retry layer exists for.
+    //
+    // The em dash is what the node actually emits; asserting on a hyphen would pass while
+    // production missed.
+    const connector = await connected();
+    const scope = nock(HOST)
+      .put(`${TARGET_BASE}/getUsers`)
+      .reply(
+        200,
+        { message: 'Deployment [abc-123]: no port in state \u2014 not running' },
+        { 'hub-error': 'true', 'hub-error-status': '500' }
+      )
+      .put(`${TARGET_BASE}/getUsers`)
+      .reply(200, { ok: true });
+
+    const response = await connector.httpClient()!.put('/getUsers', {});
+
+    expect(response.data).to.deep.equal({ ok: true });
+    expect(scope.isDone()).to.equal(true);
+  });
+
+  it('retries a container that failed to start', async () => {
+    const connector = await connected();
+    const scope = nock(HOST)
+      .put(`${TARGET_BASE}/getUsers`)
+      .reply(
+        200,
+        { message: 'Container failed to start: exited' },
+        { 'hub-error': 'true', 'hub-error-status': '500' }
+      )
+      .put(`${TARGET_BASE}/getUsers`)
+      .reply(200, { ok: true });
+
+    const response = await connector.httpClient()!.put('/getUsers', {});
+
+    expect(response.data).to.deep.equal({ ok: true });
+    expect(scope.isDone()).to.equal(true);
+  });
+
   it('does NOT retry a hub-error 200 carrying a real module failure', async () => {
     // Same envelope, but the message is the module's own answer. Replaying a module operation
     // is not safe in general, so the message has to name a known-transient condition.
