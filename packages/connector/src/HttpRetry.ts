@@ -26,9 +26,14 @@ const HUB_TRANSIENT_MESSAGE = new RegExp([
   'exceeded \\d+ second timeout',
   // Node still bringing the module container up - the start races seen under burst load.
   //
-  // These are copied from the node's actual throw sites, not guessed:
-  //   `Deployment [id]: no port in state - not running`  (node ContainerDeployment.ts)
-  //   `Container failed to start: <state>`               (node lib/docker/Container.ts)
+  // These are copied from the node's actual throw sites, not guessed. What production emits,
+  // exactly:
+  //   `Unexpected error: Deployment [id]: no port in state — not running`  (ContainerDeployment.ts)
+  //   `Container failed to start: <state>`                                (lib/docker/Container.ts)
+  // The `Unexpected error: ` prefix comes from UnexpectedError, and that is an em dash. Neither
+  // is load-bearing for these patterns, which stop at `state` - but an example that does not
+  // match its source is drift in miniature, which is the whole hazard here. com/node pins both
+  // strings with a contract test at the throw sites.
   //
   // Both arrive as a hub-error 500, which is not in retryStatuses, so this message gate is the
   // only thing that makes them retryable - the text has to be right rather than plausible. An
