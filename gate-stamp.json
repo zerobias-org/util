@@ -367,8 +367,8 @@
     },
     "@zerobias-org/util-connector": {
       "version": "2.0.3",
-      "sourceHash": "424759eec45765f9bc6855da2005b48d77081a7bbb66f66465391d132237224a",
-      "testHash": "87cedd751469ec1be0cdf957fa43c0d5ff848cae2682d3f07b1900e04efbb696",
+      "sourceHash": "16f86741c32084aec48bff5bb31a8fd7b7659681aace5dc83d06425e4641fe72",
+      "testHash": "d48a6d3753783c9295b60dba28772e63534fc28e67c0ff61ed09095bee5b8c4e",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -379,8 +379,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 17,
-          "ran": 17,
+          "expected": 24,
+          "ran": 24,
           "status": "passed"
         },
         "integration": {
