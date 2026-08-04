@@ -13,6 +13,8 @@ const HOST = 'http://localhost:19998';
 const BASE_PATH = '/api';
 const TARGET_ID = '00000000-0000-4000-8000-000000000002';
 const TARGET_BASE = `${BASE_PATH}/targets/${TARGET_ID}`;
+/** What `connect()` builds as the axios baseURL, and therefore the byTarget key. */
+const TARGET_URL = `${HOST}${TARGET_BASE}`;
 
 function profile(): HubConnectionProfile {
   return new HubConnectionProfile(new CoreURL(`${HOST}${BASE_PATH}`), new UUID(TARGET_ID));
@@ -216,5 +218,155 @@ describe('HubConnector.onInstance', () => {
 
   it('advertises native retry so hub-client can stand its patch down', () => {
     expect(HubConnector.hasNativeRetry).to.equal(true);
+  });
+});
+
+describe('HubConnector.getRetryStats', () => {
+  beforeEach(() => {
+    nock.cleanAll();
+    nock.disableNetConnect();
+    resetDefaultBreaker();
+    HubConnector.resetRetryStats();
+  });
+
+  afterEach(() => {
+    nock.cleanAll();
+    nock.enableNetConnect();
+    resetDefaultBreaker();
+    HubConnector.resetRetryStats();
+  });
+
+  it('starts zeroed', () => {
+    expect(HubConnector.getRetryStats()).to.deep.equal({
+      transportRetries: 0,
+      unavailableRetries: 0,
+      exhausted: 0,
+      breakerTrips: 0,
+      byTarget: {},
+    });
+  });
+
+  it('counts a retried transport failure', async () => {
+    const connector = await connected();
+    nock(HOST)
+      .get(`${TARGET_BASE}/getUsers`)
+      .replyWithError(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
+      .get(`${TARGET_BASE}/getUsers`)
+      .reply(200, { ok: true });
+
+    await connector.httpClient()!.get('/getUsers');
+
+    const stats = HubConnector.getRetryStats();
+    expect(stats.transportRetries).to.equal(1);
+    expect(stats.unavailableRetries).to.equal(0);
+    expect(stats.exhausted).to.equal(0);
+    expect(stats.byTarget).to.deep.equal({ [TARGET_URL]: 1 });
+  });
+
+  it('counts a retried unavailability separately from transport', async () => {
+    const connector = await connected();
+    nock(HOST)
+      .put(`${TARGET_BASE}/getUsers`)
+      .reply(200, { message: 'Node abc is no longer connected' }, { 'hub-error': 'true' })
+      .put(`${TARGET_BASE}/getUsers`)
+      .reply(200, { ok: true });
+
+    await connector.httpClient()!.put('/getUsers', {});
+
+    const stats = HubConnector.getRetryStats();
+    expect(stats.unavailableRetries).to.equal(1);
+    expect(stats.transportRetries).to.equal(0);
+    expect(stats.byTarget).to.deep.equal({ [TARGET_URL]: 1 });
+  });
+
+  it('counts exhaustion when attempts run out', async () => {
+    const connector = await connected({ ...FAST, attempts: 2 });
+    const boom = (): Error => Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' });
+    nock(HOST)
+      .get(`${TARGET_BASE}/getUsers`)
+      .replyWithError(boom())
+      .get(`${TARGET_BASE}/getUsers`)
+      .replyWithError(boom());
+
+    let caught: unknown;
+    try {
+      await connector.httpClient()!.get('/getUsers');
+    } catch (error) {
+      caught = error;
+    }
+
+    const stats = HubConnector.getRetryStats();
+    // One retry was performed, then the second attempt used the budget up.
+    expect(stats.transportRetries).to.equal(1);
+    expect(stats.exhausted).to.equal(1);
+    expect(stats.breakerTrips).to.equal(0);
+    // A replay re-enters the whole interceptor chain, so the failure that finally surfaces has
+    // been through normalizeError twice. CoreError.from() is idempotent and the marker must
+    // still be readable - this is the shape callers actually see in production.
+    expect(isTransportFailure(caught)).to.equal(true);
+    expect((caught as any).code).to.equal('ECONNRESET');
+  });
+
+  it('counts a breaker trip', async () => {
+    // threshold 1: the single exhaustion below is enough to open it.
+    const connector = await connected({ ...FAST, attempts: 2, breakerThreshold: 1 });
+    const boom = (): Error => Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' });
+    nock(HOST)
+      .get(`${TARGET_BASE}/getUsers`)
+      .replyWithError(boom())
+      .get(`${TARGET_BASE}/getUsers`)
+      .replyWithError(boom());
+
+    try {
+      await connector.httpClient()!.get('/getUsers');
+    } catch { /* expected */ }
+
+    const stats = HubConnector.getRetryStats();
+    expect(stats.exhausted).to.equal(1);
+    expect(stats.breakerTrips).to.equal(1);
+  });
+
+  it('returns a copy that cannot mutate the counters', async () => {
+    const connector = await connected();
+    nock(HOST)
+      .get(`${TARGET_BASE}/getUsers`)
+      .replyWithError(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
+      .get(`${TARGET_BASE}/getUsers`)
+      .reply(200, { ok: true });
+    await connector.httpClient()!.get('/getUsers');
+
+    const first = HubConnector.getRetryStats();
+    first.transportRetries = 999;
+    first.exhausted = 999;
+    first.byTarget[TARGET_URL] = 999;
+    first.byTarget.injected = 42;
+
+    const second = HubConnector.getRetryStats();
+    expect(second.transportRetries).to.equal(1);
+    expect(second.exhausted).to.equal(0);
+    expect(second.byTarget).to.deep.equal({ [TARGET_URL]: 1 });
+    // byTarget must be a distinct object, not the live one behind a spread.
+    expect(second.byTarget).to.not.equal(first.byTarget);
+  });
+
+  it('clears on resetRetryStats', async () => {
+    const connector = await connected();
+    nock(HOST)
+      .get(`${TARGET_BASE}/getUsers`)
+      .replyWithError(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
+      .get(`${TARGET_BASE}/getUsers`)
+      .reply(200, { ok: true });
+    await connector.httpClient()!.get('/getUsers');
+    expect(HubConnector.getRetryStats().transportRetries).to.equal(1);
+
+    HubConnector.resetRetryStats();
+
+    expect(HubConnector.getRetryStats()).to.deep.equal({
+      transportRetries: 0,
+      unavailableRetries: 0,
+      exhausted: 0,
+      breakerTrips: 0,
+      byTarget: {},
+    });
   });
 });

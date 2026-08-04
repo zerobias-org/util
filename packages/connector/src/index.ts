@@ -16,10 +16,14 @@ export {
   classifyResponse,
   delayForRetry,
   getDefaultBreaker,
+  getRetryStats,
   hubErrorStatus,
   loadRetryConfig,
   resetDefaultBreaker,
+  resetRetryStats,
   retryAfterDelay,
   RetryBreaker
 } from './HttpRetry.js';
-export type { FailureClassification, FailureKind, RetryConfig } from './HttpRetry.js';
+export type {
+  FailureClassification, FailureKind, RetryConfig, RetryStats
+} from './HttpRetry.js';

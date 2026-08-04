@@ -11,7 +11,14 @@ import { LoggerEngine } from '@zerobias-org/logger';
 import axios, { AxiosInstance } from 'axios';
 
 import { Connector } from './Connector.js';
-import { attachRetryInterceptor, loadRetryConfig, RetryConfig } from './HttpRetry.js';
+import {
+  attachRetryInterceptor,
+  getRetryStats as readRetryStats,
+  loadRetryConfig,
+  resetRetryStats as clearRetryStats,
+  RetryConfig,
+  RetryStats
+} from './HttpRetry.js';
 import { isTransportError, markTransportFailure, transportCodeOf } from './TransportError.js';
 
 const logger = LoggerEngine.root();
@@ -54,6 +61,25 @@ export class HubConnector implements Connector<HubConnectionProfile, void> {
   static removeOnInstance(callback: (connector: HubConnector) => void): void {
     const idx = HubConnector._onInstanceCallbacks.indexOf(callback);
     if (idx !== -1) HubConnector._onInstanceCallbacks.splice(idx, 1);
+  }
+
+  /**
+   * Snapshot of the process-wide retry counters.
+   *
+   * Retrying makes a degraded node invisible - the job still succeeds, so nothing signals that
+   * the infrastructure is struggling until it fails outright. Exposed as a static so a caller
+   * can report it without importing anything beyond the class it already has, including from a
+   * copy of this package it resolved dynamically.
+   *
+   * The result is a copy, `byTarget` included; mutating it does not affect the counters.
+   */
+  static getRetryStats(): RetryStats {
+    return readRetryStats();
+  }
+
+  /** Zeroes the retry counters, typically at the start of a job. */
+  static resetRetryStats(): void {
+    clearRetryStats();
   }
 
   private _client?: AxiosInstance;

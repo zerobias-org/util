@@ -122,6 +122,71 @@ export const loadRetryConfig = (): RetryConfig => ({
   breakerThreshold: readInt('RETRY_BREAKER_THRESHOLD', 5),
 });
 
+/**
+ * Retry counters for the process.
+ *
+ * Retries make a degraded node invisible: the job still succeeds, so nothing signals that the
+ * infrastructure is struggling until it fails outright. These are what a caller reports at the
+ * end of a run so a spike is an early warning of node starvation rather than something only
+ * visible by reading logs nobody watches.
+ *
+ * Shape is identical to hub-client's RetryStats so the two can be summed field by field while
+ * both retry paths coexist.
+ */
+export interface RetryStats {
+  /** Retries performed after a transport-level failure (nothing came back off the wire). */
+  transportRetries: number;
+  /** Retries performed after the target reported itself unavailable. */
+  unavailableRetries: number;
+  /** Requests that ran out of attempts. */
+  exhausted: number;
+  /** Times the breaker opened on a target. */
+  breakerTrips: number;
+  /** Retries per target, so a single bad node stands out from general noise. */
+  byTarget: Record<string, number>;
+}
+
+const emptyStats = (): RetryStats => ({
+  transportRetries: 0,
+  unavailableRetries: 0,
+  exhausted: 0,
+  breakerTrips: 0,
+  byTarget: {},
+});
+
+// Held on globalThis rather than in module scope on purpose. Collector bundles routinely carry
+// several copies of this package - hub-client's findPackageCopies exists precisely because of
+// that - and a module-level counter would give each copy its own private tally, so whichever
+// copy the reader resolved would silently under-report. Symbol.for keeps one object per
+// process, shared by every duplicate.
+const STATS_KEY = Symbol.for('zerobias.connector.retry.stats');
+
+const globalStats = globalThis as unknown as Record<symbol, RetryStats | undefined>;
+if (!globalStats[STATS_KEY]) {
+  globalStats[STATS_KEY] = emptyStats();
+}
+const stats: RetryStats = globalStats[STATS_KEY]!;
+
+/**
+ * A snapshot of the retry counters. The result is a copy, `byTarget` included, so a caller
+ * cannot mutate the live counters by holding on to it.
+ */
+export const getRetryStats = (): RetryStats => ({ ...stats, byTarget: { ...stats.byTarget } });
+
+/**
+ * Zeroes the counters, typically at the start of a job.
+ *
+ * Mutates in place rather than rebinding: duplicate copies of this package share the one
+ * object, and replacing it would leave them incrementing an orphan.
+ */
+export const resetRetryStats = (): void => {
+  stats.transportRetries = 0;
+  stats.unavailableRetries = 0;
+  stats.exhausted = 0;
+  stats.breakerTrips = 0;
+  stats.byTarget = {};
+};
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 const messageOf = (body: unknown): string => {
@@ -394,9 +459,19 @@ const replay = async (
     logger.error(
       `[${label}] ${describeRequest(config)} failed after ${attempt} attempt(s): ${failure.reason}`
     );
-    breaker.recordFailure(key);
+    stats.exhausted += 1;
+    if (breaker.recordFailure(key)) {
+      stats.breakerTrips += 1;
+    }
     return undefined;
   }
+
+  if (failure.kind === 'transport') {
+    stats.transportRetries += 1;
+  } else {
+    stats.unavailableRetries += 1;
+  }
+  stats.byTarget[key] = (stats.byTarget[key] ?? 0) + 1;
 
   const wait = delayOverride ?? delayForRetry(attempt, failure.kind, cfg);
   logger.warning(
