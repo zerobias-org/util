@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/to-enum-non-string-guard",
+  "branch": "fix/connector-issupported-and-deps",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.41",
@@ -328,7 +328,7 @@
     },
     "@zerobias-org/util-codegen": {
       "version": "3.0.10",
-      "sourceHash": "9d3b942655e9da2c5d3ee858fd50a722e5d74bfc63086a634c883369b71d63e6",
+      "sourceHash": "d3e234941c7f04227bc99a64bfa1741b250f957c9eadb38b41da43a7eef80eeb",
       "testHash": "dbc3ac58a6c47fcea56d30c85a157fcb45f41f9ba1176104cc32a9773b8e57bc",
       "tasks": {
         "lint": "skipped",
@@ -367,8 +367,8 @@
     },
     "@zerobias-org/util-connector": {
       "version": "2.0.3",
-      "sourceHash": "1da4e8100993e6798ff5529fcf06dff9ec93a0f8f4b45798df14cd6ed2d86d89",
-      "testHash": "2bb646e7472ba501356498be2c59c152821649ad5150cf4ec3dbfe38df0167d6",
+      "sourceHash": "8f3bef6912170d2b8ee66fd6bb57ee84f1a2435a0e386482b7981832febef561",
+      "testHash": "8a90b75dd448cd8ee2f338457eae09c12cb01bd4032b2874608c71a1ec10d997",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -379,8 +379,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 1,
-          "ran": 1,
+          "expected": 26,
+          "ran": 26,
           "status": "passed"
         },
         "integration": {
@@ -444,7 +444,7 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "3.0.5",
+      "version": "3.0.6",
       "sourceHash": "86ce60b7006b474a7c75087eb98bfcda2192070a553b7e83427821ecba154c4d",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
