@@ -560,17 +560,31 @@ gradle.projectsEvaluated {
     // both are in the graph, but must not drag the docker/publish pipeline into
     // builds that only asked for the guard. Cycle-free by construction:
     // verifyNoPrepublishLeftover has no dependencies of its own.
+    //
+    // `tasks.configureEach`, NOT a `tasks.names` snapshot: the mutators do not
+    // exist yet at this point. zb.monorepo-build registers them (npmPack et al,
+    // via registerDockerTasksForPackage) from inside its OWN
+    // gradle.projectsEvaluated block, and this plugin is applied before
+    // zb.monorepo-build, so this callback runs first — a snapshot of
+    // `tasks.names` taken here contains none of them and the ordering is
+    // silently never applied. (build-tools 1.0.130 shipped exactly that and the
+    // next com/platform PR gate failed identically: `:api:npmPack` ran, then
+    // `:verifyNoPrepublishLeftover FAILED` on api/package.json mid-mutation.)
+    // configureEach is live — it covers tasks registered after this line — and
+    // still runs before the task graph is calculated, which is all
+    // mustRunAfter needs.
     val prepublishMutatorTasks = setOf("npmPack", "prepareDockerContext")
     rootProject.allprojects.forEach { p ->
-        // `tasks.names` avoids realizing every task just to match on name.
-        p.tasks.names
-            .filter {
-                it in prepublishMutatorTasks ||
-                    // Registered per package with a suffix for orphan packages
-                    // (prepublishPackage_some_dir), so match on prefix.
-                    it.startsWith("prepublishPackage") ||
-                    it.startsWith("prepublishLocalOnly")
+        p.tasks.configureEach {
+            if (
+                name in prepublishMutatorTasks ||
+                // Registered per package with a suffix for orphan packages
+                // (prepublishPackage_some_dir), so match on prefix.
+                name.startsWith("prepublishPackage") ||
+                name.startsWith("prepublishLocalOnly")
+            ) {
+                mustRunAfter(verifyNoPrepublishLeftover)
             }
-            .forEach { name -> p.tasks.named(name) { mustRunAfter(verifyNoPrepublishLeftover) } }
+        }
     }
 }
