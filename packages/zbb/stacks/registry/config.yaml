@@ -32,6 +32,17 @@ uplinks:
 
 publish:
   allow_unpublish: true
+  # Verdaccio probes the uplink before accepting a PUT, to avoid clobbering a
+  # version that already exists upstream. The @zerobias-org and @auditlogic
+  # uplinks authenticate via ZB_TOKEN / GITHUB_TOKEN, so with neither set the
+  # probe 401s, Verdaccio declares the uplink down and refuses the publish with
+  # "503 ... one of the uplinks is down, refuse to publish".
+  #
+  # Reads are unaffected (they fall through to npmjs), which is why this only
+  # bites on the publish path — i.e. exactly the Part1->2->3 handoff that
+  # create-connector calls mandatory. Allowing offline publishes keeps the
+  # local-registry bridge working for contributors with no ZeroBias credentials.
+  allow_offline: true
 
 packages:
   "@zerobias-com/*":

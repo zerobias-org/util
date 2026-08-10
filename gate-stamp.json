@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "main",
+  "branch": "fix/registry-allow-offline-publish",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.41",
@@ -489,7 +489,7 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.6",
+      "version": "2.0.7",
       "sourceHash": "fa3c1309ab8e85fc9158fe08de753b3b681fae5316b6907a17582b939c1ba543",
       "testHash": "446a47d1dd07ac1e455431e782def2a601d5b98974da834216c139be3258be97",
       "tasks": {
@@ -575,8 +575,8 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.7",
-      "sourceHash": "4240d99da19bdada55c21cc93e22cd6b78ec95343ea293e2e5b28efbbb25c0a5",
+      "version": "1.0.8",
+      "sourceHash": "facfc5d0b0e5ae2cac622bed4ddd78faa1e4426dab73c05b0abb5e3a6ce4c1af",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {
         "lint": "passed",
