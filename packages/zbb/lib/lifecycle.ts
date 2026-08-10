@@ -25,6 +25,12 @@ export const LIFECYCLE_COMMANDS: ReadonlySet<string> = new Set([
   'gate',
   'version',
   'publish',
+  // publishOrg runs the SAME gradle pipeline as publish (`./gradlew publish
+  // -PorgPublish=true`), so it needs the same dispatch treatment: slot
+  // required, `tools:`/`require:` preflight applied, publish env contract.
+  // Before it was a lifecycle command it fell through to the raw gradle
+  // wrapper, which skipped all three.
+  'publishOrg',
   'dockerBuild',
 ]);
 

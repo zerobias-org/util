@@ -6,6 +6,7 @@ import com.zerobias.buildtools.schema.SchemaTsGenerator
 import com.zerobias.buildtools.schema.TsTemplatePatcher
 import com.zerobias.buildtools.tasks.NeonBranchContext
 import com.zerobias.buildtools.tasks.NeonDataloaderTask
+import com.zerobias.buildtools.tasks.OrgPublish
 
 /**
  * zb.schema — AuditgraphDB schema packages.
@@ -147,6 +148,7 @@ gradle.taskGraph.whenReady {
 // the schema package, so both move dist-tags in lockstep.
 
 val isDryRunTs: Boolean = extra["isDryRun"] as Boolean
+val isOrgPublishTs: Boolean = extra["isOrgPublish"] as Boolean
 @Suppress("UNCHECKED_CAST")
 val npmDistTagsTs: List<String> = extra["npmDistTags"] as List<String>
 @Suppress("UNCHECKED_CAST")
@@ -275,7 +277,7 @@ val publishTsTwin by tasks.registering(NpmTask::class) {
     finalizedBy(restoreTsPackageJson, cleanupTsShrinkwrap)
 
     npmCommand.set(listOf("publish"))
-    args.set(listOf("--tag", "next"))
+    args.set(OrgPublish.npmPublishArgs(isOrgPublishTs))
     workingDir.set(tsDir())
 
     doFirst {
@@ -312,7 +314,10 @@ tasks.named("publishNpm") {
 val promoteTsTwin by tasks.registering {
     group = "publish"
     description = "Promote the TS twin from 'next' to all applicable dist-tags"
-    onlyIf { !isTsTwinSkipped() }
+    // !isOrgPublishTs: promoteAll's onlyIf does not skip its dependencies, so
+    // without this an org publish would dist-tag the twin's private rc version
+    // as dev/qa/uat/latest for every consumer.
+    onlyIf { !isTsTwinSkipped() && !isOrgPublishTs }
     mustRunAfter(publishTsTwin)
     doLast {
         val name = readTsArtifactName()

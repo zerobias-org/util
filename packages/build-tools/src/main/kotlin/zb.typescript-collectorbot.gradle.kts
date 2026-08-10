@@ -4,6 +4,7 @@ import com.github.gradle.node.npm.task.NpmTask
 import com.github.gradle.node.npm.task.NpxTask
 import com.zerobias.buildtools.collectorbot.CollectorbotEntryPointGenerator
 import com.zerobias.buildtools.module.ZbExtension
+import com.zerobias.buildtools.tasks.OrgPublish
 import com.zerobias.buildtools.tasks.registerDataloader
 import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
@@ -304,6 +305,7 @@ tasks.named("testDataloader") {
 // ════════════════════════════════════════════════════════════
 
 val isDryRun: Boolean = extra["isDryRun"] as Boolean
+val isOrgPublish: Boolean = extra["isOrgPublish"] as Boolean
 @Suppress("UNCHECKED_CAST")
 val preflightChecks = extra["preflightChecks"] as TaskProvider<*>
 @Suppress("UNCHECKED_CAST")
@@ -412,7 +414,7 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
     finalizedBy(restorePackageJson, cleanupShrinkwrapAfterPublish)
 
     npmCommand.set(listOf("publish"))
-    args.set(listOf("--tag", "next"))
+    args.set(OrgPublish.npmPublishArgs(isOrgPublish))
     workingDir.set(project.projectDir)
 
     doFirst {
@@ -689,6 +691,15 @@ listOf(
 ).forEach { taskName ->
     tasks.named(taskName) {
         onlyIf {
+            // promoteNpm must not run for an org publish: promoteAll's own
+            // onlyIf does not skip its dependencies, so without this the
+            // private rc version would be dist-tagged dev/qa/uat/latest for
+            // every consumer. The publish/image tasks DO run — an org publish
+            // ships the same artifacts a catalog publish does.
+            if (isOrgPublish && taskName == "promoteNpm") {
+                logger.lifecycle("[$taskName] Skipping -- org publish keeps its rc version untagged")
+                return@onlyIf false
+            }
             if (!collectorbotChangedSinceTag) {
                 logger.lifecycle("[$taskName] Skipping -- no changes since last tag")
             }

@@ -29,6 +29,40 @@ export interface VaultMount {
   name: string;
 }
 
+/**
+ * Parameters for the PKI secrets engine's `sign` endpoint.
+ *
+ * SECURITY: `commonName` and `altNames` are what the ISSUED certificate asserts. The Vault role
+ * must be configured with `use_csr_common_name=false` and `use_csr_sans=false`, otherwise Vault
+ * takes the subject and SANs from the CSR instead — i.e. from whoever supplied it. A caller
+ * that authenticates a requester and then passes its verified identity here gets no protection
+ * at all if the role is misconfigured.
+ */
+export interface VaultPkiSignParams {
+  /** PEM-encoded PKCS#10 certificate signing request. */
+  csr: string;
+  /** Subject common name for the issued certificate. */
+  commonName: string;
+  /** Subject alternative names (DNS), comma-separated by Vault convention. */
+  altNames?: string;
+  /** Requested lifetime, in Vault duration format (e.g. `24h`, `3600s`). Capped by the role. */
+  ttl?: string;
+}
+
+/** The certificate material returned by the PKI `sign` endpoint. */
+export interface VaultPkiCert {
+  /** The issued leaf, PEM. */
+  certificate: string;
+  /** The issuing CA certificate, PEM. */
+  issuingCa: string;
+  /** The CA chain above the issuer, if the mount has one. */
+  caChain: string[];
+  /** Vault's colon-delimited serial (e.g. `1b:ac:…`). */
+  serialNumber: string;
+  /** Expiry as a Unix timestamp in seconds. */
+  expiration?: number;
+}
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /**
@@ -90,6 +124,32 @@ export class VaultClient {
   /** POST `/{mount}/data/{path}` (KV v2). */
   async upsertSecret(mount: string, key: string, data: Record<string, unknown>): Promise<void> {
     await this.http.post(`/${mount}/data/${key}`, { data });
+  }
+
+  /**
+   * POST `/{mount}/sign/{role}` (PKI). Signs a CSR and returns the issued certificate.
+   *
+   * The CA private key never leaves Vault — only the CSR travels here and only a certificate
+   * comes back. See {@link VaultPkiSignParams} for the role configuration this relies on.
+   */
+  async signPki(mount: string, role: string, params: VaultPkiSignParams): Promise<VaultPkiCert> {
+    const resp = await this.http.post(`/${mount}/sign/${encodeURIComponent(role)}`, {
+      csr: params.csr,
+      common_name: params.commonName,
+      alt_names: params.altNames,
+      ttl: params.ttl,
+    });
+    const data = resp.data?.data;
+    if (!data?.certificate) {
+      throw new Error(`Vault PKI sign returned no certificate: mount=${mount}, role=${role}`);
+    }
+    return {
+      certificate: data.certificate as string,
+      issuingCa: data.issuing_ca as string,
+      caChain: (data.ca_chain ?? []) as string[],
+      serialNumber: data.serial_number as string,
+      expiration: data.expiration as number | undefined,
+    };
   }
 
   /** GET `/sys/mounts`. Names retain Vault's trailing slash. */

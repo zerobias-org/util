@@ -78,8 +78,11 @@ const ZBB_INTERNAL_PREFIXES = ['ZBB_', '_ZBB_'] as const;
 // from GitHub Packages, vault resolution).
 const BASE_CREDS = ['NPM_TOKEN', 'READ_TOKEN', 'GITHUB_TOKEN', 'VAULT_TOKEN'] as const;
 
-// publish / publishRemote: npm publish + docker push + release announce + the
-// `gh workflow run` image dispatch. GH_TOKEN holds the privileged dispatch PAT
+// publish / publishRemote / publishOrg: npm publish + docker push + release
+// announce + the `gh workflow run` image dispatch. (publishOrg skips the
+// announce and dispatch legs at the gradle level, but shares everything up to
+// and including the ECR/GHCR push, so it takes the same contract.)
+// GH_TOKEN holds the privileged dispatch PAT
 // (stripping it makes gh fall back to the default GITHUB_TOKEN → 403
 // "Resource not accessible by integration"); DISPATCH_TOKEN drives generate-kb.
 const PUBLISH_CONTRACT = [
@@ -94,7 +97,13 @@ const PUBLISH_CONTRACT = [
 const COMMAND_ENV_CONTRACTS: Record<string, readonly string[]> = {
   publish: PUBLISH_CONTRACT,
   publishRemote: PUBLISH_CONTRACT,
-  publishOrg: [...BASE_CREDS, 'ZB_TOKEN'],
+  // publishOrg IS publish (`./gradlew publish -PorgPublish=true`) — same gate,
+  // same preflight, same docker/ECR/GHCR push. It therefore needs the same
+  // contract; a narrower one stripped the AWS/ECR vars that preflightChecks
+  // and publishImageEcr hard-require. What the repo actually resolves is still
+  // decided by its own zbb.yaml `env:` block, which survives the seal
+  // regardless of the contract.
+  publishOrg: PUBLISH_CONTRACT,
   // validate/generate/compile/lint/test/build/gate → BASE_CREDS (default below)
 };
 

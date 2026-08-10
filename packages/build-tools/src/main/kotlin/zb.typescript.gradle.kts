@@ -9,6 +9,7 @@ import com.zerobias.buildtools.module.ConnectionProfileFlattener
 import com.zerobias.buildtools.module.ServerEntryPointGenerator
 import com.zerobias.buildtools.module.DockerRunner
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
+import com.zerobias.buildtools.tasks.OrgPublish
 import com.zerobias.buildtools.tasks.registerDataloader
 import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
@@ -1274,6 +1275,7 @@ val generateShrinkwrap by tasks.registering {
 // -- NPM Publish (staging with --tag next) ------------------------
 
 val isDryRun: Boolean = extra["isDryRun"] as Boolean
+val isOrgPublish: Boolean = extra["isOrgPublish"] as Boolean
 @Suppress("UNCHECKED_CAST")
 val preflightChecks = extra["preflightChecks"] as TaskProvider<*>
 @Suppress("UNCHECKED_CAST")
@@ -1305,7 +1307,7 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
     // see the restorePackageJson comment in this file for the reasoning.
 
     npmCommand.set(listOf("publish"))
-    args.set(listOf("--tag", "next"))
+    args.set(OrgPublish.npmPublishArgs(isOrgPublish))
     workingDir.set(project.projectDir)
 
     doFirst {
@@ -1844,7 +1846,7 @@ val publishSdkExec by tasks.registering(NpmTask::class) {
     finalizedBy(restoreSdkPackageJson)
 
     npmCommand.set(listOf("publish"))
-    args.set(listOf("--tag", "next"))
+    args.set(OrgPublish.npmPublishArgs(isOrgPublish))
     // SDK output directory -- buildOpenApiSdk generates into sdk/ subdir
     workingDir.set(project.file("sdk"))
 
@@ -1913,7 +1915,7 @@ val publishHubSdkExec by tasks.registering(NpmTask::class) {
     finalizedBy(restoreHubSdkPackageJson)
 
     npmCommand.set(listOf("publish"))
-    args.set(listOf("--tag", "next"))
+    args.set(OrgPublish.npmPublishArgs(isOrgPublish))
     workingDir.set(project.file("hub-sdk"))
 
     doFirst {
@@ -2188,6 +2190,14 @@ listOf(
 ).forEach { taskName ->
     tasks.named(taskName) {
         onlyIf {
+            // promoteAll's own onlyIf does NOT skip its dependencies — gradle
+            // runs a dependsOn task even when the depender is skipped. Without
+            // this guard an org publish would dist-tag its private rc version
+            // as dev/qa/uat/latest for every consumer of the package.
+            if (isOrgPublish) {
+                logger.lifecycle("[$taskName] Skipping -- org publish keeps its rc version untagged")
+                return@onlyIf false
+            }
             if (!changedSinceTag) {
                 logger.lifecycle("[$taskName] Skipping -- no changes since last tag")
             }

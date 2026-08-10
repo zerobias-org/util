@@ -11,8 +11,8 @@ import java.io.File
  * Why regex rather than a JSON parser:
  *   - Keeps build-tools' classpath minimal — no jackson / kotlinx-serialization
  *     pulled in just to fish out two top-level fields.
- *   - The existing in-tree consumers (NeonDataloaderTask, PublishOrgTask,
- *     and zb.content.gradle.kts) were each rolling their own regex
+ *   - The existing in-tree consumers (NeonDataloaderTask, the org-publish
+ *     tasks, and zb.content.gradle.kts) were each rolling their own regex
  *     extractor with the same patterns. Centralizing here eliminates
  *     three copies and gives those tasks a single seam to harden later
  *     if package.json shapes ever get fancier.
