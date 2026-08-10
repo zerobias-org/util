@@ -5,6 +5,9 @@ import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.util.SourceHasher
 import com.zerobias.buildtools.standard.StandardGateStampValidator
 import com.zerobias.buildtools.lifecycle.EventEmitter
+import com.zerobias.buildtools.tasks.DataloaderOrgJobTask
+import com.zerobias.buildtools.tasks.ResolveOrgVersionTask
+import com.zerobias.buildtools.tasks.VerifyOrgPublishTask
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import org.gradle.build.event.BuildEventsListenerRegistry
 import org.gradle.kotlin.dsl.support.serviceOf
@@ -326,7 +329,11 @@ val bumpVersion by tasks.registering {
     // npm from a flaky earlier run and bumps to 2.1.3). The result is that
     // npm gets 2.1.3 while tagVersion (which reads from package.json on disk)
     // tags 2.1.2 — a confusing version-vs-tag mismatch.
-    onlyIf { branch == "main" && changedSinceTag && !versionAlreadyCommitted }
+    //
+    // -PorgPublish=true: resolveOrgVersion is the authoritative version source
+    // for an org publish. A conventional-commits bump here would overwrite the
+    // org rc version and publish the artifact into the shared catalog line.
+    onlyIf { branch == "main" && changedSinceTag && !versionAlreadyCommitted && !isOrgPublish }
     doLast {
         // CRITICAL: do NOT write to package.json here. Keep the computed version
         // in memory only via `project.version`. Writing here used to leave the
@@ -353,7 +360,9 @@ val tagVersion by tasks.registering {
     // changedSinceTag: if no module files changed since the previous release
     // tag, the current package.json version matches that tag — re-creating
     // it with `git tag -a` would fail "tag already exists".
-    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded && changedSinceTag }
+    // isOrgPublish: an org publish is not a release of this repository — it
+    // must leave no tag, commit, or push behind.
+    onlyIf { branch == "main" && !isDryRun && promoteAllSucceeded && changedSinceTag && !isOrgPublish }
     doLast {
         val ver = readBaseVersion()
         val tag = "${tagPrefix}${ver}"
@@ -374,6 +383,28 @@ val isDryRun: Boolean = project.findProperty("dryRun") == "true"
 extra["isDryRun"] = isDryRun
 
 // ────────────────────────────────────────────────────────────
+// orgPublish — publish this artifact PRIVATELY to the org declared in
+// package.json's `zerobias.orgId`, instead of to the shared catalog.
+//
+// Deliberately a MODE of the normal publish pipeline rather than a parallel
+// task graph: an org publish must do everything a catalog publish does —
+// gate, preflight, image build + ECR/GHCR push, npm publish, SDK publishes —
+// so the two can't drift. What differs is only:
+//   - the version (resolveOrgVersion, not bumpVersion/resolvePublishVersion)
+//   - no repo-release side effects (commit / tag / push / promote / announce);
+//     an org publish is not a release of this repository
+//   - the catalog load is driven directly via dataloader-service /jobs
+//     (dataloaderOrgJob) instead of the release-event pipeline
+//
+// A project property (not a task name) because the flag has to be visible at
+// CONFIGURATION time — the guards below and the npm publish args are decided
+// before any task runs.
+// Usage: ./gradlew publish -PorgPublish=true   (or simply `zbb publishOrg`)
+// ────────────────────────────────────────────────────────────
+val isOrgPublish: Boolean = project.findProperty("orgPublish") == "true"
+extra["isOrgPublish"] = isOrgPublish
+
+// ────────────────────────────────────────────────────────────
 // versionAlreadyCommitted — set by CI workflows that ran the
 // versionStandardPackages task on a single runner before fanning out the
 // publish matrix. When true, per-package commit/push are no-ops; tagging +
@@ -388,7 +419,14 @@ val versionAlreadyCommitted: Boolean = project.findProperty("versionAlreadyCommi
 // On branches: always publish (dev versions are cheap, skip detection adds friction)
 // ────────────────────────────────────────────────────────────
 val changedSinceTag: Boolean by lazy {
-    try {
+    // An org publish is not tag-relative: it publishes an org-scoped rc
+    // version off whatever is in the working tree, and never creates or reads
+    // a release tag. Leaving the tag comparison in charge would skip the
+    // publish (and, worse, the image pushes) whenever the package happened to
+    // be unchanged since the last catalog release.
+    if (isOrgPublish) {
+        true
+    } else try {
         val projectRelativePath = project.projectDir.relativeTo(project.rootDir).path
         val modTagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
 
@@ -1204,17 +1242,12 @@ val gateCheck by tasks.registering {
 //   4. INVALID or TESTS_CHANGED → preflight hard-fails (handled in preflight check)
 //   5. VALID → skip gate entirely
 gradle.taskGraph.whenReady {
-    // Include `publishOrg` so the org-private publish path gets the same
-    // "gate stamp valid → skip test/validation/build" treatment that
-    // `publish` / `publishAll` already get. Without this, running
-    // `./gradlew :foo:publishOrg` after a successful `gate` would re-run
-    // dataloaderExec (and friends) even though the stamp says nothing has
-    // changed. `findByName` returns null (no throw) for projects that
-    // don't register publishOrg — keeps non-content plugins unaffected.
+    // `publishOrg` needs no separate check: it depends on `publish`, so the
+    // org-private path is already covered by the `publish` test below and gets
+    // the same "gate stamp valid → skip test/validation/build" treatment.
     val publishInGraph = try {
         hasTask(tasks.named("publish").get()) ||
-        hasTask(tasks.named("publishAll").get()) ||
-        (tasks.findByName("publishOrg")?.let { hasTask(it) } == true)
+        hasTask(tasks.named("publishAll").get())
     } catch (_: Exception) { false }
 
     if (!publishInGraph) return@whenReady
@@ -1317,7 +1350,8 @@ val resolvePublishVersion by tasks.registering {
     // build phase is done, so a build failure never leaves us with a partially-
     // bumped or partially-computed version.
     mustRunAfter(buildArtifacts)
-    onlyIf { branch != "main" && branchSuffix != null }
+    // isOrgPublish: resolveOrgVersion owns version resolution in org mode.
+    onlyIf { branch != "main" && branchSuffix != null && !isOrgPublish }
     doLast {
         val resolved = resolvePreReleaseVersion(baseVersion, branchSuffix!!, gitCounter)
         if (resolved != project.version.toString()) {
@@ -1325,6 +1359,35 @@ val resolvePublishVersion by tasks.registering {
             project.version = resolved
         }
     }
+}
+
+// ── Org-private publish (-PorgPublish=true) ─────────────────────────────
+//
+// Three tasks replace the catalog-release parts of the pipeline. Everything
+// else — gate, preflight, buildImage, publishImageEcr/Ghcr, publishNpm,
+// publishSdk, publishHubSdk — is shared with the normal publish, which is the
+// whole point: the org path cannot silently lose a step the catalog path has.
+val verifyOrgPublish by tasks.registering(VerifyOrgPublishTask::class) {
+    packageDir.set(project.layout.projectDirectory)
+}
+
+val resolveOrgVersion by tasks.registering(ResolveOrgVersionTask::class) {
+    packageDir.set(project.layout.projectDirectory)
+    // Same barrier as bumpVersion / resolvePublishVersion: hold version
+    // resolution until the build phase is done, so a build failure never
+    // burns an increment on the org's version line.
+    mustRunAfter(buildArtifacts)
+    doLast {
+        project.version = orgVersion.get()
+        logger.lifecycle("Org publish version: ${project.version}")
+    }
+}
+
+val dataloaderOrgJob by tasks.registering(DataloaderOrgJobTask::class) {
+    packageDir.set(project.layout.projectDirectory)
+    // project.version, not package.json — restorePackageJson has already put
+    // the original version back on disk by the time this runs.
+    artifactVersion.set(provider { project.version.toString() })
 }
 
 val publishAll by tasks.registering {
@@ -1336,6 +1399,23 @@ val publishAll by tasks.registering {
 // Ensure version resolution runs before any publish task reads version
 listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { taskName ->
     tasks.named(taskName) { mustRunAfter(bumpVersion, resolvePublishVersion) }
+}
+
+if (isOrgPublish) {
+    // Fail before gate: a missing orgId or a non-admin token should cost
+    // seconds, not a full validate/build/test/dataloader cycle.
+    gate.configure { dependsOn(verifyOrgPublish) }
+
+    publishAll.configure { dependsOn(resolveOrgVersion) }
+    listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { taskName ->
+        tasks.named(taskName) { mustRunAfter(resolveOrgVersion) }
+    }
+
+    // The catalog load runs LAST, after publishAll — which includes
+    // publishImage. A module whose row lands before its image is in the
+    // registry is deployable-but-unpullable, and the failure surfaces on the
+    // node at `docker pull`, far from the publish that caused it.
+    dataloaderOrgJob.configure { mustRunAfter(publishAll) }
 }
 
 // Guard lifecycle publish stubs: skip if module has no changes since last tag.
@@ -1383,7 +1463,12 @@ publishAll.configure {
 // Rollback on any publish failure — remove 'next' dist-tags and revert package.json bump.
 // Fires on both partial staging failure and promote failure.
 gradle.buildFinished {
-    if (!isDryRun && branch == "main" && stagedPackages.isNotEmpty() && !promoteAllSucceeded) {
+    // !isOrgPublish: an org publish never promotes, so promoteAllSucceeded is
+    // false on the SUCCESS path too. Without this guard a clean org publish
+    // would end by stripping a 'next' tag it never set and reverting a
+    // package.json restorePackageJson already restored.
+    if (!isDryRun && branch == "main" && !isOrgPublish
+        && stagedPackages.isNotEmpty() && !promoteAllSucceeded) {
         logger.warn("⚠ Publish pipeline failed — rolling back ${stagedPackages.size} staged package(s)")
 
         // Remove 'next' dist-tags for all packages that were staged
@@ -1425,6 +1510,13 @@ val promoteAll by tasks.registering {
     description = "Promote all NPM packages from 'next' tag to correct dist-tag (only after publishAll succeeds)"
     mustRunAfter(publishAll)
     onlyIf {
+        // Org publishes intentionally stay on their rc version with no
+        // dist-tag: promoting one to dev/qa/uat/latest would surface a single
+        // org's private artifact as the default for every consumer.
+        if (isOrgPublish) {
+            logger.lifecycle("[promoteAll] Skipping -- org publish keeps its rc version untagged")
+            return@onlyIf false
+        }
         if (!publishAllSucceeded) {
             logger.lifecycle("[promoteAll] Skipping -- publishAll did not succeed or was not run")
         }
@@ -1459,7 +1551,10 @@ val commitVersion by tasks.registering {
     // -PversionAlreadyCommitted=true ⇒ a pre-matrix `versionStandardPackages`
     // run already wrote and pushed the bump; this task would create a duplicate
     // commit on top.
-    onlyIf { branch == "main" && !isDryRun && changedSinceTag && !versionAlreadyCommitted }
+    // isOrgPublish: nothing to commit — the org rc version is never written to
+    // the tracked package.json (patchPackageJson/restorePackageJson handle the
+    // transient write), and an org publish must not touch git history.
+    onlyIf { branch == "main" && !isDryRun && changedSinceTag && !versionAlreadyCommitted && !isOrgPublish }
     doLast {
         val ver = project.version.toString()
         val pkgFile = project.file("package.json")
@@ -1538,7 +1633,9 @@ val publishReleaseEvent by tasks.registering {
     group = "publish"
     description = "Send release announcement (Slack + Lambda event)"
     mustRunAfter(tagVersion)
-    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag }
+    // isOrgPublish: a private org publish is not announceable — it is visible
+    // to exactly one org and has no release notes or tag to point at.
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag && !isOrgPublish }
     doLast {
         val ver = project.version.toString()
 
@@ -1584,7 +1681,7 @@ val pushVersion by tasks.registering {
     mustRunAfter(tagVersion)
     // -PversionAlreadyCommitted=true: pushTag handles the per-matrix tag push;
     // there is no commit on the local branch to push.
-    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag && !versionAlreadyCommitted }
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag && !versionAlreadyCommitted && !isOrgPublish }
     doLast {
         // Concurrent publish jobs from sibling modules can race on the same main
         // branch — when two jobs build in parallel and both produce a release
@@ -1692,7 +1789,7 @@ val pushTag by tasks.registering {
     group = "publish"
     description = "Push this module's release tag (used when version commit was made by a pre-matrix step)"
     mustRunAfter(tagVersion)
-    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag && versionAlreadyCommitted }
+    onlyIf { !isDryRun && promoteAllSucceeded && changedSinceTag && versionAlreadyCommitted && !isOrgPublish }
     doLast {
         val ver = readBaseVersion()
         val tag = "${tagPrefix}${ver}"
@@ -1717,6 +1814,36 @@ val publish by tasks.registering {
     group = "publish"
     description = "Publish all artifacts then promote from 'next' to correct dist-tag (staging-then-promote)"
     dependsOn(verifyNoLocalRegistry, publishAll, promoteAll, commitVersion, tagVersion, pushVersion, pushTag, publishReleaseEvent)
+}
+
+// ── publishOrg — discoverable alias for `publish -PorgPublish=true` ──
+//
+// The flag has to come from the command line because it is read at
+// configuration time, so this task cannot set it itself. It exists so
+// `./gradlew publishOrg` and `zbb publishOrg` name the same thing, and so
+// running it without the flag fails LOUDLY instead of quietly doing a public
+// catalog release.
+val publishOrg by tasks.registering {
+    group = "publish"
+    description = "Publish privately to the org in package.json's zerobias.orgId (requires -PorgPublish=true)"
+    dependsOn(publish)
+}
+
+if (isOrgPublish) {
+    publish.configure { dependsOn(dataloaderOrgJob) }
+} else {
+    // whenReady, not doFirst: task dependencies run BEFORE a task's own
+    // actions, so a doFirst check here would fire only after `publish` had
+    // already pushed the artifact to the public catalog.
+    gradle.taskGraph.whenReady {
+        if (hasTask(publishOrg.get())) {
+            throw GradleException(
+                "publishOrg requires -PorgPublish=true — the flag is read at configuration time.\n" +
+                "  Run `zbb publishOrg`, or `./gradlew publishOrg -PorgPublish=true`.\n" +
+                "Refusing to continue: without it this would run a normal public catalog publish."
+            )
+        }
+    }
 }
 
 // Ordering:

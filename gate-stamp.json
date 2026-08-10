@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/connector-issupported-and-deps",
+  "branch": "main",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.41",
@@ -327,8 +327,8 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "3.0.10",
-      "sourceHash": "d3e234941c7f04227bc99a64bfa1741b250f957c9eadb38b41da43a7eef80eeb",
+      "version": "3.0.11",
+      "sourceHash": "fbee0af4c8812df3ea7899ad0dc86c1023776c94ba5e73e7f627cb9d163dade9",
       "testHash": "dbc3ac58a6c47fcea56d30c85a157fcb45f41f9ba1176104cc32a9773b8e57bc",
       "tasks": {
         "lint": "skipped",
@@ -366,7 +366,7 @@
       }
     },
     "@zerobias-org/util-connector": {
-      "version": "2.0.3",
+      "version": "2.0.4",
       "sourceHash": "8f3bef6912170d2b8ee66fd6bb57ee84f1a2435a0e386482b7981832febef561",
       "testHash": "8a90b75dd448cd8ee2f338457eae09c12cb01bd4032b2874608c71a1ec10d997",
       "tasks": {
@@ -444,8 +444,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "3.0.6",
-      "sourceHash": "86ce60b7006b474a7c75087eb98bfcda2192070a553b7e83427821ecba154c4d",
+      "version": "3.0.7",
+      "sourceHash": "a6e774ee539c68ecf122f9c9e07b3a4c847e4aa24e15c3bdb9c1603855297ad3",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
         "lint": "passed",
@@ -489,8 +489,8 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.5",
-      "sourceHash": "a97f26a8b0c0d5c5cfe02e39c4ad4d14918325f9ef4cd8bc3cca251eb8f9d105",
+      "version": "2.0.6",
+      "sourceHash": "fa3c1309ab8e85fc9158fe08de753b3b681fae5316b6907a17582b939c1ba543",
       "testHash": "446a47d1dd07ac1e455431e782def2a601d5b98974da834216c139be3258be97",
       "tasks": {
         "lint": "passed",
@@ -576,7 +576,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "1.0.7",
-      "sourceHash": "f4cdb886568d88c8ad5f640f39ee4e5860bebe93ca747b7b23628777fe067175",
+      "sourceHash": "4240d99da19bdada55c21cc93e22cd6b78ec95343ea293e2e5b28efbbb25c0a5",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {
         "lint": "passed",

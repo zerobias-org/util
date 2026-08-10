@@ -1735,6 +1735,7 @@ Usage:
   zbb exec <command> [args...]                        Run an arbitrary command with slot+stack env
   zbb dataloader [args...]                            Run dataloader with slot SQL env
   zbb publish [--dry-run]                             Publish all artifacts (Gradle)
+  zbb publishOrg [--dry-run]                          Publish privately to the org in package.json
   zbb <gradle-task> [args...]                         Run Gradle task
   zbb --version                                       Show version
   zbb --help                                          Show this help
@@ -1769,6 +1770,8 @@ Lifecycle commands (require zbb.yaml + loaded slot + added stack):
   zbb gate [--all]                         Run lifecycle.gate (or ./gradlew gate)
   zbb gate --check                         Validate gate-stamp.json (no slot needed)
   zbb publish [--dry-run] [--force]        Run lifecycle.publish (or ./gradlew publish)
+  zbb publishOrg [--dry-run] [--force]     Same pipeline, published privately to the org
+                                           named in package.json's zerobias.orgId
   Without zbb.yaml in cwd, all of these fall through to ./gradlew <command>.
 
 Secret commands:

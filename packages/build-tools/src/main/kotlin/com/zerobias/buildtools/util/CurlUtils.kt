@@ -18,8 +18,8 @@ import kotlin.random.Random
  *     outer Kotlin-level retry loop, so transient 5xx/connection errors
  *     get an extra layer of resilience without flooding the service.
  *
- * Used by [com.zerobias.buildtools.tasks.NeonDataloaderTask] and
- * [com.zerobias.buildtools.tasks.PublishOrgTask].
+ * Used by [com.zerobias.buildtools.tasks.NeonDataloaderTask] and the
+ * org-publish tasks via [com.zerobias.buildtools.tasks.OrgPublish].
  */
 object CurlUtils {
 

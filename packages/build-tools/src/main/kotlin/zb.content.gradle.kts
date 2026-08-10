@@ -1,7 +1,7 @@
 @file:OptIn(ExperimentalStdlibApi::class)
 
 import com.github.gradle.node.npm.task.NpmTask
-import com.zerobias.buildtools.tasks.PublishOrgTask
+import com.zerobias.buildtools.tasks.OrgPublish
 import com.zerobias.buildtools.tasks.registerDataloader
 import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
 import com.zerobias.buildtools.util.PackageJsonReader
@@ -224,6 +224,7 @@ tasks.named("testDataloader") {
 // ════════════════════════════════════════════════════════════
 
 val isDryRun: Boolean = extra["isDryRun"] as Boolean
+val isOrgPublish: Boolean = extra["isOrgPublish"] as Boolean
 @Suppress("UNCHECKED_CAST")
 val preflightChecks = extra["preflightChecks"] as TaskProvider<*>
 @Suppress("UNCHECKED_CAST")
@@ -313,7 +314,8 @@ fun isAlreadyPublished(name: String, version: String, workDir: java.io.File): Bo
 
 val publishNpmExec by tasks.registering(NpmTask::class) {
     group = "publish"
-    description = "Publish content npm package with --tag next (staging)"
+    description = if (isOrgPublish) "Publish content npm package privately to the org (no dist-tag)"
+        else "Publish content npm package with --tag next (staging)"
     dependsOn(
         tasks.named("gate"),
         npmInstallContent,
@@ -324,14 +326,15 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
     finalizedBy(restorePackageJson, cleanupShrinkwrapAfterPublish)
 
     npmCommand.set(listOf("publish"))
-    args.set(listOf("--tag", "next"))
+    args.set(OrgPublish.npmPublishArgs(isOrgPublish))
     workingDir.set(project.projectDir)
 
     doFirst {
         val (name, _) = readPackageNameVersion()
         val ver = project.version.toString()
         if (isDryRun) {
-            logger.lifecycle("[DRY RUN] Would publish ${name}@${ver} with --tag next")
+            val how = if (isOrgPublish) "privately to the org (no dist-tag)" else "with --tag next"
+            logger.lifecycle("[DRY RUN] Would publish ${name}@${ver} $how")
             throw org.gradle.api.tasks.StopExecutionException()
         }
         if (isAlreadyPublished(name, ver, project.projectDir)) {
@@ -350,16 +353,10 @@ tasks.named("publishNpm") {
     dependsOn(publishNpmExec)
 }
 
-// ── publishOrg: brand-new org-private artifact publish + dataloader load ──
-//
-// Distinct from the standard `publish` flow above: requires only ZB_TOKEN,
-// refuses any artifact name that already has catalog versions (or versions
-// owned by another org), and drives the post-publish load via
-// dataloader-service /jobs. Gate-validates the artifact first (against an
-// ephemeral Neon branch via dataloader-service /branches).
-val publishOrg by tasks.registering(PublishOrgTask::class) {
-    dependsOn(tasks.named("gate"))
-}
+// Org-private publishing is a MODE of the pipeline above, not a separate task
+// — see the `orgPublish` block in zb.base.gradle.kts. Content packages need no
+// flavor-specific wiring for it beyond the promote guard below, because they
+// have no image to push.
 
 // ── Promotion: move from 'next' tag to correct dist-tags ──
 
@@ -390,6 +387,11 @@ val promoteNpm by tasks.registering {
     // never runs. Schema worked by scheduling luck; vendor exposed the
     // bug because its task graph happened to surface promote first.
     mustRunAfter(publishNpmExec)
+    // promoteAll's own onlyIf does NOT skip its dependencies — gradle runs a
+    // dependsOn task even when the depender is skipped. The guard has to live
+    // here, or an org publish would dist-tag its private rc version as
+    // dev/qa/uat/latest for every consumer of this package.
+    onlyIf { !isOrgPublish }
     doLast {
         val (name, _) = readPackageNameVersion()
         val ver = project.version.toString()
