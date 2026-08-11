@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/registry-allow-offline-publish",
+  "branch": "feat/module-devkit",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.41",
@@ -488,6 +488,53 @@
         "yaml": "\"2.8.3\""
       }
     },
+    "@zerobias-org/util-module-devkit": {
+      "version": "0.1.0",
+      "sourceHash": "fe73e879c2c265d70211f551048fdf152a697ff0d805d81518d7dff7f7a0d2e3",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      },
+      "rootDeps": {
+        "@types/chai": "^5.2.3",
+        "@types/mocha": "^10.0.10",
+        "@types/node": "^22.0.0",
+        "@zerobias-org/eslint-config": "^1.0.40",
+        "chai": "^6.0.0",
+        "mocha": "^11.7.5",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "\"^1.16.0\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "uuid": "\"^14.0.0\"",
+        "yaml": "\"2.8.3\""
+      }
+    },
     "@zerobias-org/util-secrets-manager": {
       "version": "2.0.7",
       "sourceHash": "fa3c1309ab8e85fc9158fe08de753b3b681fae5316b6907a17582b939c1ba543",
@@ -575,7 +622,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.8",
+      "version": "1.0.9",
       "sourceHash": "facfc5d0b0e5ae2cac622bed4ddd78faa1e4426dab73c05b0abb5e3a6ce4c1af",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {

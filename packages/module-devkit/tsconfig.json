@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "_comment": [
+    "Shared TypeScript base for Hub modules. Modules extend this and should",
+    "only declare genuinely local settings (outDir, include/exclude).",
+    "",
+    "lib includes DOM and types is explicit because @types/node 24 stopped",
+    "injecting ambient globals implicitly — without these, Buffer, URL,",
+    "node:stream and the generic ReadableStream declarations disappear and",
+    "transpile fails across generated code, hub-sdk, @aws-sdk/types and",
+    "@smithy/core. Narrowing types to [node] alone compiles src/ but breaks",
+    "the mocha e2e globals, hence both entries."
+  ],
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "mocha"],
+    "strict": true,
+    "noImplicitAny": false,
+    "useUnknownInCatchVariables": false,
+    "sourceMap": true,
+    "declaration": true,
+    "esModuleInterop": true
+  }
+}
