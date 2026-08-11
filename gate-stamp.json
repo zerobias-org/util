@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "feat/module-devkit",
+  "branch": "vault_self_signed",
   "packages": {
     "@zerobias-org/eslint-config": {
       "version": "1.0.41",
@@ -537,8 +537,8 @@
     },
     "@zerobias-org/util-secrets-manager": {
       "version": "2.0.7",
-      "sourceHash": "fa3c1309ab8e85fc9158fe08de753b3b681fae5316b6907a17582b939c1ba543",
-      "testHash": "446a47d1dd07ac1e455431e782def2a601d5b98974da834216c139be3258be97",
+      "sourceHash": "8636f9c44e1b2f3787ec9d4c9023c1da40d906f7843287ce623b1f0bfca641ee",
+      "testHash": "b3dab0cfdae2567800511661a5923a41df75cb56752c89a172a76e0a72bc30ac",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -549,8 +549,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 24,
-          "ran": 24,
+          "expected": 28,
+          "ran": 28,
           "status": "passed"
         },
         "integration": {
