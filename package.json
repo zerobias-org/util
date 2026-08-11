@@ -28,7 +28,7 @@
     "npm": ">=10.0.0"
   },
   "overrides": {
-    "@zerobias-org/types-core-js": "^2.0.4",
+    "@zerobias-org/types-core-js": "$@zerobias-org/types-core-js",
     "axios": "^1.16.0",
     "diff": "^8.0.4",
     "glob": ">=11",
