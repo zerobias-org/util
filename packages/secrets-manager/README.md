@@ -41,6 +41,12 @@ To enable fetching secrets from Hashicorp Vault, two environment variables must 
 - `VAULT_TOKEN`: the token to use to access the Vault instance
 - `VAULT_NAMESPACE`: the optional namespace to use to connect to the Vault instance
 
+### TLS
+
+Vault's certificate is **not** verified by default, so self-signed and internal-CA certificates
+work out of the box. Set `SSL_STRICT=true` to require a certificate that verifies against the
+system trust store (add an internal CA with `NODE_EXTRA_CA_CERTS`).
+
 ## AWS Secrets Manager
 
 - `AWS_SECRET_ACCESS_KEY`: the AWS access key to use
