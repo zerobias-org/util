@@ -455,4 +455,120 @@ class PrepublishTest {
         assertEquals(null, packages["@test/plain"]?.publishDirectory,
             "publishDirectory should be null when publishConfig.directory is absent")
     }
+
+    // ── override $-reference dereferencing ───────────────────────────
+
+    @Test
+    fun `resolve dereferences dollar-reference overrides against root deps`(@TempDir tmp: Path) {
+        val root = tmp.toFile()
+
+        // Root pins the version once and reuses it in overrides via `$name`.
+        File(root, "package.json").writeText("""
+            {
+              "name": "@test/root",
+              "private": true,
+              "workspaces": ["packages/lib"],
+              "dependencies": { "@scope/types": "^2.0.4" },
+              "devDependencies": {},
+              "overrides": {
+                "@scope/types": "${'$'}@scope/types",
+                "lodash": "^4.17.21"
+              }
+            }
+        """.trimIndent())
+
+        val pkgDir = File(root, "packages/lib")
+        File(pkgDir, "src").mkdirs()
+        File(pkgDir, "package.json").writeText("""
+            {
+              "name": "@test/lib",
+              "version": "1.0.0",
+              "dependencies": {}
+            }
+        """.trimIndent())
+        File(pkgDir, "src/index.ts").writeText("export const x = 1;")
+
+        val result = Prepublish.resolve(pkgDir, root, Prepublish.Options())
+
+        // The `$` reference becomes the concrete root version — the published
+        // package.json has no direct dep for npm to resolve it against.
+        assertEquals("^2.0.4", result.overrides["@scope/types"],
+            "\$-reference should be replaced with the root's declared version")
+        assertEquals("^4.17.21", result.overrides["lodash"],
+            "literal overrides should pass through untouched")
+
+        val written = File(pkgDir, "package.json").readText()
+        assertFalse(written.contains("${'$'}@scope/types"),
+            "written package.json must not contain an unresolvable \$-reference")
+    }
+
+    @Test
+    fun `resolve drops dollar-reference overrides that root cannot satisfy`(@TempDir tmp: Path) {
+        val root = tmp.toFile()
+
+        // Override references a package the root does NOT declare.
+        File(root, "package.json").writeText("""
+            {
+              "name": "@test/root",
+              "private": true,
+              "workspaces": ["packages/lib"],
+              "dependencies": {},
+              "devDependencies": {},
+              "overrides": { "@scope/missing": "${'$'}@scope/missing" }
+            }
+        """.trimIndent())
+
+        val pkgDir = File(root, "packages/lib")
+        File(pkgDir, "src").mkdirs()
+        File(pkgDir, "package.json").writeText("""
+            {
+              "name": "@test/lib",
+              "version": "1.0.0",
+              "dependencies": {}
+            }
+        """.trimIndent())
+        File(pkgDir, "src/index.ts").writeText("export const x = 1;")
+
+        val result = Prepublish.resolve(pkgDir, root, Prepublish.Options())
+
+        // Dropped rather than copied through: an unresolvable override fails
+        // `npm publish` outright, omitting it only forgoes a pin.
+        assertFalse(result.overrides.containsKey("@scope/missing"),
+            "unresolvable \$-reference should be dropped, not copied verbatim")
+    }
+
+    @Test
+    fun `resolveRootDeps keeps raw dollar-reference for gate stamp stability`(@TempDir tmp: Path) {
+        val root = tmp.toFile()
+
+        File(root, "package.json").writeText("""
+            {
+              "name": "@test/root",
+              "private": true,
+              "workspaces": ["packages/lib"],
+              "dependencies": { "@scope/types": "^2.0.4" },
+              "devDependencies": {},
+              "overrides": { "@scope/types": "${'$'}@scope/types" }
+            }
+        """.trimIndent())
+
+        val pkgDir = File(root, "packages/lib")
+        File(pkgDir, "src").mkdirs()
+        File(pkgDir, "package.json").writeText("""
+            {
+              "name": "@test/lib",
+              "version": "1.0.0",
+              "dependencies": {}
+            }
+        """.trimIndent())
+        File(pkgDir, "src/index.ts").writeText("export const x = 1;")
+
+        val rootDeps = Prepublish.resolveRootDeps(pkgDir, root)
+
+        // Stamps must keep recording the raw root value. Dereferencing here
+        // would change every existing stamp's rootDeps snapshot and invalidate
+        // the whole repo's gate stamps.
+        assertEquals("\"${'$'}@scope/types\"", rootDeps["@scope/types"],
+            "gate stamp snapshot should record the raw \$-reference")
+    }
 }
