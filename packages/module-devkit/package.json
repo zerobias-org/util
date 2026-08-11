@@ -1,0 +1,47 @@
+{
+  "name": "@zerobias-org/module-devkit",
+  "version": "0.1.0",
+  "description": "Shared build toolchain and tsconfig for Hub modules",
+  "type": "module",
+  "author": "team@zerobias.com",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/module-devkit"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://pkg.zerobias.org/"
+  },
+  "keywords": [
+    "zerobias",
+    "hub-module",
+    "toolchain",
+    "tsconfig"
+  ],
+  "exports": {
+    "./tsconfig.json": "./tsconfig.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "tsconfig.json"
+  ],
+  "dependencies": {
+    "@redocly/cli": "2.44.2",
+    "@types/chai": "4.3.20",
+    "@types/mocha": "10.0.10",
+    "@types/node": "22.20.1",
+    "@zerobias-org/eslint-config": "1.0.41",
+    "@zerobias-org/module-test-client": "1.0.8",
+    "@zerobias-org/util-api-client-base": "^1.0.44",
+    "@zerobias-org/util-codegen": "^2.0.54",
+    "chai": "4.5.0",
+    "mocha": "11.8.0",
+    "tsx": "4.23.8",
+    "typescript": "5.9.3"
+  }
+}
