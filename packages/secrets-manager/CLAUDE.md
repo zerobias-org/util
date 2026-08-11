@@ -81,7 +81,7 @@ await sm.setValue('vault.kv.app.token', 'xyz');   // Write (only if WRITABLE_SEC
 | Provider | Required | Optional |
 |---|---|---|
 | **AWS Secrets Manager / SSM** | At least one of: `AWS_REGION` / `AWS_DEFAULT_REGION` / `AWS_ENDPOINT`. With `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` it tries direct creds first; otherwise falls through to the default credential chain ("infrastructure mode" — env, shared profile, instance role). | `AWS_CONNECTION_TIMEOUT_MS` (default 10000) |
-| **HashiCorp Vault** | `VAULT_ADDR` plus one of: `VAULT_TOKEN` (token auth), or `VAULT_ROLE_ID` + `VAULT_SECRET_ID` (approle). Falls back to `~/.vault-token` for `vault login` users. | `VAULT_NAMESPACE`, `VAULT_AUTH_PATH` (default `approle`), `VAULT_CONNECTION_TIMEOUT_MS`, `VAULT_MAX_RETRIES`, `VAULT_RETRY_MS`, `NO_VAULT_RETRY` |
+| **HashiCorp Vault** | `VAULT_ADDR` plus one of: `VAULT_TOKEN` (token auth), or `VAULT_ROLE_ID` + `VAULT_SECRET_ID` (approle). Falls back to `~/.vault-token` for `vault login` users. | `VAULT_NAMESPACE`, `VAULT_AUTH_PATH` (default `approle`), `VAULT_CONNECTION_TIMEOUT_MS`, `VAULT_MAX_RETRIES`, `VAULT_RETRY_MS`, `NO_VAULT_RETRY`, `SSL_STRICT` (`false` to skip Vault TLS verification; verifies by default) |
 | **Azure Key Vault** | `AZURE_SUBSCRIPTION_ID` (or runs IMDS lookup at `169.254.169.254` for VM-resident detection). Auth via `DefaultAzureCredential` (env vars, managed identity, etc.). | — |
 | **Local file** | `FILE_SECRET_ROOT` — directory to expose | `WRITABLE_SECRET` (path prefix that's permitted to write) |
 | **All** | — | `CACHE_TIMEOUT_SECONDS` (default 300), `HUB_DISABLE_EXTERNAL_PROVIDERS` (`true` to skip AWS/Azure/Vault registration), `WRITABLE_SECRET` |
@@ -114,9 +114,18 @@ These have caused real bugs. Don't violate them.
 
 4. **Vault is KV v2 only.** `VaultClient.getSecret` and `upsertSecret` hardcode `/{mount}/data/{path}` paths; `listSecrets` uses `/{mount}/metadata/{path}?list=true`. Don't add KV v1 support without explicit version detection — silently auto-detecting causes secret-loss bugs in the wild.
 
-5. **Connect failures don't throw — they leave the manager inactive.** `SecretsManagerImpl.registerXProvider()` catches connect errors and stores them on the TreeNode's `connectError`. Consumers call `getRoot(provider)` which throws `InvalidStateError` if inactive. This pattern lets the manager partially come up when one backend is down. Preserve it.
+5. **Vault TLS verification is on by default; opting out is explicit and per-deployment.**
+   `VaultClient` attaches an `https.Agent` whose `rejectUnauthorized` follows `isSslStrict()` —
+   true unless `SSL_STRICT` is exactly `false` (trimmed, case-insensitive). Vault is often fronted
+   by a self-signed or internal-CA certificate, but the fix for that is the CA
+   (`NODE_EXTRA_CA_CERTS`), not a global downgrade: this client carries `VAULT_TOKEN` and approle
+   `secret_id` on every request, and an unverified channel puts those on the wire against whatever
+   answers the address. Don't invert the default to make a specific environment work — set
+   `SSL_STRICT=false` in that environment's config. The opt-out logs a warning on connect; keep it.
 
-6. **`WRITABLE_SECRET` is the only path that can write.** All other paths get `writable: false` on their TreeNode. The init-time write probe asserts this. Don't add bypass paths.
+6. **Connect failures don't throw — they leave the manager inactive.** `SecretsManagerImpl.registerXProvider()` catches connect errors and stores them on the TreeNode's `connectError`. Consumers call `getRoot(provider)` which throws `InvalidStateError` if inactive. This pattern lets the manager partially come up when one backend is down. Preserve it.
+
+7. **`WRITABLE_SECRET` is the only path that can write.** All other paths get `writable: false` on their TreeNode. The init-time write probe asserts this. Don't add bypass paths.
 
 ## Testing
 

@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import { Agent } from 'node:https';
+import process from 'node:process';
 
 import { logger } from './common.js';
 
@@ -66,6 +68,26 @@ export interface VaultPkiCert {
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /**
+ * Whether Vault's TLS certificate must verify against the trust store.
+ *
+ * Verification is ON by default — an unverifiable certificate fails the connect rather
+ * than silently downgrading the channel. Deployments fronted by a self-signed or
+ * internal-CA certificate either add the CA (`NODE_EXTRA_CA_CERTS`, preferred) or opt out
+ * with `SSL_STRICT=false`. Only the exact string `false` opts out; every other value,
+ * including unset and empty, verifies.
+ *
+ * Read per connect, not at module load, so the env can be set after import.
+ */
+export function isSslStrict(): boolean {
+  return (process.env.SSL_STRICT ?? '').trim().toLowerCase() !== 'false';
+}
+
+/** Agent applied to every Vault request. Inert for `http://` addresses. */
+function createHttpsAgent(): Agent {
+  return new Agent({ rejectUnauthorized: isSslStrict() });
+}
+
+/**
  * Minimal HashiCorp Vault HTTP client. Hardcoded to KV v2 — paths are
  * served from `/{mount}/data/{path}` and listed under `/{mount}/metadata/`.
  * Replaces the previous `@auditlogic/module-hashicorp-vault` dependency.
@@ -82,6 +104,11 @@ export class VaultClient {
     const baseHeaders: Record<string, string> = {};
     if (auth.namespace) baseHeaders['X-Vault-Namespace'] = auth.namespace;
 
+    const httpsAgent = createHttpsAgent();
+    if (!isSslStrict() && baseURL.startsWith('https://')) {
+      logger.warn('SSL_STRICT=false — Vault TLS certificate is NOT verified. Prefer adding the CA via NODE_EXTRA_CA_CERTS');
+    }
+
     let token: string;
     if (auth.method === 'token') {
       token = auth.accessToken;
@@ -89,13 +116,14 @@ export class VaultClient {
       await axios.get(`${baseURL}/auth/token/lookup-self`, {
         headers: { ...baseHeaders, 'X-Vault-Token': token },
         timeout: DEFAULT_TIMEOUT_MS,
+        httpsAgent,
       });
     } else {
       const path = auth.path ?? 'approle';
       const resp = await axios.post(
         `${baseURL}/auth/${encodeURIComponent(path)}/login`,
         { role_id: auth.roleId, secret_id: auth.secretId },
-        { headers: baseHeaders, timeout: DEFAULT_TIMEOUT_MS },
+        { headers: baseHeaders, timeout: DEFAULT_TIMEOUT_MS, httpsAgent },
       );
       token = resp.data?.auth?.client_token;
       if (!token) {
@@ -107,6 +135,7 @@ export class VaultClient {
       baseURL,
       timeout: DEFAULT_TIMEOUT_MS,
       headers: { ...baseHeaders, 'X-Vault-Token': token },
+      httpsAgent,
     });
     return new VaultClient(http);
   }
