@@ -18,25 +18,25 @@ describe('VaultClientTest', () => {
     }
   });
 
-  it('should accept self-signed certificates when SSL_STRICT is unset', async () => {
+  it('should require a trusted CA when SSL_STRICT is unset', async () => {
     delete process.env.SSL_STRICT;
+    expect(isSslStrict()).to.equal(true);
+  });
+
+  it('should accept self-signed certificates when SSL_STRICT is false', async () => {
+    process.env.SSL_STRICT = 'false';
     expect(isSslStrict()).to.equal(false);
   });
 
-  it('should require a trusted CA when SSL_STRICT is true', async () => {
-    process.env.SSL_STRICT = 'true';
-    expect(isSslStrict()).to.equal(true);
-  });
-
   it('should be case and whitespace insensitive', async () => {
-    process.env.SSL_STRICT = ' TRUE ';
-    expect(isSslStrict()).to.equal(true);
+    process.env.SSL_STRICT = ' FALSE ';
+    expect(isSslStrict()).to.equal(false);
   });
 
-  it('should stay relaxed for any other value', async () => {
-    for (const value of ['false', '1', 'yes', '']) {
+  it('should stay strict for any other value', async () => {
+    for (const value of ['true', '0', 'no', '', 'False!']) {
       process.env.SSL_STRICT = value;
-      expect(isSslStrict(), `SSL_STRICT=${value}`).to.equal(false);
+      expect(isSslStrict(), `SSL_STRICT=${value}`).to.equal(true);
     }
   });
 });

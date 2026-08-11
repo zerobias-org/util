@@ -70,14 +70,16 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 /**
  * Whether Vault's TLS certificate must verify against the trust store.
  *
- * Vault is overwhelmingly deployed behind a self-signed or internal-CA certificate, so
- * verification is OFF by default and self-signed certs are accepted. Set `SSL_STRICT=true`
- * to require a chain that verifies against the system store (or `NODE_EXTRA_CA_CERTS`).
+ * Verification is ON by default — an unverifiable certificate fails the connect rather
+ * than silently downgrading the channel. Deployments fronted by a self-signed or
+ * internal-CA certificate either add the CA (`NODE_EXTRA_CA_CERTS`, preferred) or opt out
+ * with `SSL_STRICT=false`. Only the exact string `false` opts out; every other value,
+ * including unset and empty, verifies.
  *
  * Read per connect, not at module load, so the env can be set after import.
  */
 export function isSslStrict(): boolean {
-  return (process.env.SSL_STRICT ?? '').trim().toLowerCase() === 'true';
+  return (process.env.SSL_STRICT ?? '').trim().toLowerCase() !== 'false';
 }
 
 /** Agent applied to every Vault request. Inert for `http://` addresses. */
@@ -104,7 +106,7 @@ export class VaultClient {
 
     const httpsAgent = createHttpsAgent();
     if (!isSslStrict() && baseURL.startsWith('https://')) {
-      logger.debug('Vault TLS verification is relaxed (self-signed certificates accepted); set SSL_STRICT=true to require a trusted CA');
+      logger.warn('SSL_STRICT=false — Vault TLS certificate is NOT verified. Prefer adding the CA via NODE_EXTRA_CA_CERTS');
     }
 
     let token: string;

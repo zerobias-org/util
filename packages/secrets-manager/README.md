@@ -43,9 +43,16 @@ To enable fetching secrets from Hashicorp Vault, two environment variables must 
 
 ### TLS
 
-Vault's certificate is **not** verified by default, so self-signed and internal-CA certificates
-work out of the box. Set `SSL_STRICT=true` to require a certificate that verifies against the
-system trust store (add an internal CA with `NODE_EXTRA_CA_CERTS`).
+Vault's certificate is verified against the system trust store by default. For a self-signed or
+internal-CA certificate, the preferred fix is to trust the CA:
+
+```bash
+NODE_EXTRA_CA_CERTS=/path/to/ca.pem
+```
+
+If that isn't practical, `SSL_STRICT=false` skips verification entirely. This sends `VAULT_TOKEN`
+and approle `secret_id` over an unauthenticated channel — scope it to the deployment that needs
+it, never to a shared default. Connecting with it set logs a warning.
 
 ## AWS Secrets Manager
 
