@@ -1,4 +1,4 @@
-# @zerobias-org/module-devkit
+# @zerobias-org/util-module-devkit
 
 Shared build toolchain and TypeScript base config for Hub modules.
 
@@ -18,14 +18,14 @@ modules take one devDependency and extend one tsconfig.
 ```jsonc
 // module package.json
 "devDependencies": {
-  "@zerobias-org/module-devkit": "^0.1.0"
+  "@zerobias-org/util-module-devkit": "^0.1.0"
 }
 ```
 
 ```jsonc
 // module tsconfig.json
 {
-  "extends": "@zerobias-org/module-devkit/tsconfig.json",
+  "extends": "@zerobias-org/util-module-devkit/tsconfig.json",
   "compilerOptions": {
     "outDir": "dist"
   },
@@ -97,6 +97,6 @@ lifecycle and risk profile.
 npm link
 
 # in a module
-npm link @zerobias-org/module-devkit
+npm link @zerobias-org/util-module-devkit
 zbb gate
 ```

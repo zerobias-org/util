@@ -1,5 +1,5 @@
 {
-  "name": "@zerobias-org/module-devkit",
+  "name": "@zerobias-org/util-module-devkit",
   "version": "0.1.0",
   "description": "Shared build toolchain and tsconfig for Hub modules",
   "type": "module",
