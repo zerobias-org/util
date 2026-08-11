@@ -92,7 +92,8 @@ object Prepublish {
      * Result of a `resolve()` call.
      *
      * - `dependencies` is the final sorted dep map written to the output file
-     * - `overrides` is copied verbatim from root `package.json`
+     * - `overrides` is taken from root `package.json` with npm `$name`
+     *   references dereferenced (see [dereferenceOverrides])
      * - `addedDeps` lists deps that were newly added (for the report)
      * - `missingDeps` lists scanned packages NOT found in root (warnings)
      */
@@ -127,7 +128,11 @@ object Prepublish {
         val rootPackageJson = readJson(rootPackageJsonPath)
         val rootDeps = stringMapField(rootPackageJson, "dependencies")
         val rootDevDeps = stringMapField(rootPackageJson, "devDependencies")
-        val rootOverrides = mapField(rootPackageJson, "overrides")
+        val rootOverrides = dereferenceOverrides(
+            mapField(rootPackageJson, "overrides"),
+            rootDeps,
+            rootDevDeps,
+        )
 
         // Build workspace map: package name → version, and name → full package.json
         val workspacePackages = mutableMapOf<String, String>()
@@ -829,6 +834,60 @@ object Prepublish {
     private fun stringMapField(json: Map<String, Any?>, key: String): Map<String, String> {
         val raw = json[key] as? Map<String, Any?> ?: return emptyMap()
         return raw.mapNotNull { (k, v) -> if (v is String) k to v else null }.toMap()
+    }
+
+    /**
+     * Dereference npm `$name` override references against the root's own
+     * dependencies.
+     *
+     * npm lets an override reuse the version of a direct dependency by name:
+     *
+     *     "overrides": { "@scope/pkg": "$@scope/pkg" }
+     *
+     * That resolves relative to the package.json the override lives in. Root
+     * declares the dep, so it resolves at the root — but prepublish copies
+     * root overrides into the package being published, where the dep does not
+     * exist, and `npm publish` then fails with:
+     *
+     *     npm error Unable to resolve reference $@scope/pkg
+     *
+     * Substituting the concrete version keeps the author's intent (one source
+     * of truth at the root) while producing a package.json that stands alone.
+     *
+     * A reference that cannot be resolved is dropped rather than copied
+     * through: an unresolvable override would fail the publish outright,
+     * whereas omitting it only forgoes a pin.
+     *
+     * NOTE: this is deliberately NOT applied in [resolveRootDeps]. That feeds
+     * the gate stamp's rootDeps snapshot, which must keep recording the raw
+     * root value — rewriting it there would invalidate every existing
+     * gate-stamp in the repo.
+     */
+    private fun dereferenceOverrides(
+        overrides: Map<String, Any?>,
+        rootDeps: Map<String, String>,
+        rootDevDeps: Map<String, String>,
+    ): Map<String, Any?> {
+        if (overrides.isEmpty()) return overrides
+        val allRootDeps = rootDeps + rootDevDeps
+        val out = linkedMapOf<String, Any?>()
+        for ((name, value) in overrides) {
+            if (value !is String || !value.startsWith("$")) {
+                out[name] = value
+                continue
+            }
+            val referenced = value.substring(1)
+            val resolved = allRootDeps[referenced]
+            if (resolved != null) {
+                out[name] = resolved
+            } else {
+                println(
+                    "  [prepublish] dropping override '$name': " +
+                        "reference '$value' is not a root dependency",
+                )
+            }
+        }
+        return out
     }
 
     @Suppress("UNCHECKED_CAST")
