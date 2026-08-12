@@ -582,18 +582,26 @@ val collectorbotIsDryRun: Boolean = extra["isDryRun"] as Boolean
 
 val ensureCollectorbotEcrRepo by tasks.registering(Exec::class) {
     group = "publish"
-    description = "Create ECR repository for collectorbot if it does not exist"
+    description = "Create ECR repository for collectorbot if missing and apply the org read policy"
     onlyIf { !collectorbotIsDryRun }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
-    isIgnoreExitValue = true
     doFirst {
         val awsRegion = System.getenv("AWS_REGION")
             ?: throw GradleException("AWS_REGION not set in slot env — add to zbb.yaml")
         val imageName = collectorbotImageName()
-        commandLine("aws", "ecr", "create-repository",
-            "--repository-name", imageName,
-            "--region", awsRegion)
+        // Grants read/pull to any principal in the zerobias AWS org (o-dppyp34ws8).
+        // MUST stay in sync with scripts/imagepublish.sh and zb.typescript's ensureEcrRepo.
+        val orgReadPolicy = """{ "Version": "2012-10-17", "Statement": [ { "Sid": "ReadonlyAccess", "Effect": "Allow", "Principal": { "AWS": "*" }, "Action": [ "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:DescribeImageScanFindings", "ecr:DescribeImages", "ecr:DescribeRepositories", "ecr:GetAuthorizationToken", "ecr:GetDownloadUrlForLayer", "ecr:GetRepositoryPolicy", "ecr:ListImages" ], "Condition": { "StringLike": { "aws:PrincipalOrgID": "o-dppyp34ws8" } } } ] }"""
+        commandLine("bash", "-c", """
+            set -e
+            # create-repository is idempotent: tolerate an already-existing repo.
+            aws ecr create-repository --repository-name "$imageName" --region "$awsRegion" \
+              || echo "ECR repository $imageName already exists — continuing to policy sync"
+            # Always (re)apply the org read policy; failure here must fail the build.
+            aws ecr set-repository-policy --repository-name "$imageName" --region "$awsRegion" \
+              --policy-text '$orgReadPolicy'
+        """.trimIndent())
     }
 }
 

@@ -123,7 +123,7 @@ val javaIsDryRun: Boolean = extra["isDryRun"] as Boolean
 
 val ensureJavaEcrRepo by tasks.registering(Exec::class) {
     group = "publish"
-    description = "Create ECR repository for Java module if it does not exist"
+    description = "Create ECR repository for Java module if missing and apply the org read policy"
     onlyIf { zb.hasConnectionProfile.get() && !javaIsDryRun }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
@@ -134,10 +134,18 @@ val ensureJavaEcrRepo by tasks.registering(Exec::class) {
         // env var is honoured as an override when explicitly set.
         val ecrRepoName = System.getenv("ECR_REPO_NAME")?.takeIf { it.isNotBlank() }
             ?: zb.dockerImageName.get()
-        commandLine("aws", "ecr", "create-repository",
-            "--repository-name", ecrRepoName,
-            "--region", awsRegion)
-        isIgnoreExitValue = true
+        // Grants read/pull to any principal in the zerobias AWS org (o-dppyp34ws8).
+        // MUST stay in sync with scripts/imagepublish.sh and zb.typescript's ensureEcrRepo.
+        val orgReadPolicy = """{ "Version": "2012-10-17", "Statement": [ { "Sid": "ReadonlyAccess", "Effect": "Allow", "Principal": { "AWS": "*" }, "Action": [ "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:DescribeImageScanFindings", "ecr:DescribeImages", "ecr:DescribeRepositories", "ecr:GetAuthorizationToken", "ecr:GetDownloadUrlForLayer", "ecr:GetRepositoryPolicy", "ecr:ListImages" ], "Condition": { "StringLike": { "aws:PrincipalOrgID": "o-dppyp34ws8" } } } ] }"""
+        commandLine("bash", "-c", """
+            set -e
+            # create-repository is idempotent: tolerate an already-existing repo.
+            aws ecr create-repository --repository-name "$ecrRepoName" --region "$awsRegion" \
+              || echo "ECR repository $ecrRepoName already exists — continuing to policy sync"
+            # Always (re)apply the org read policy; failure here must fail the build.
+            aws ecr set-repository-policy --repository-name "$ecrRepoName" --region "$awsRegion" \
+              --policy-text '$orgReadPolicy'
+        """.trimIndent())
     }
 }
 

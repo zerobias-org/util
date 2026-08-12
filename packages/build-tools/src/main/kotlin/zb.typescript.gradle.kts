@@ -1963,21 +1963,34 @@ publishHubSdkExec.configure { mustRunAfter(publishNpmExec) }
 // Image name derived from dockerImageName (same name used for local build, ECR, GHCR, pkg-proxy).
 // Resolved lazily in doFirst to avoid config-time failure when env not set.
 
-// Step 1: Ensure ECR repository exists (idempotent)
+// Step 1: Ensure ECR repository exists AND carries the org read policy (idempotent)
+//
+// create-repository is tolerant of an already-existing repo, but the
+// set-repository-policy call is always (re)applied so that:
+//   • a brand-new repo created on first deploy gets the cross-account pull grant, and
+//   • any repo created before this step applied the policy is self-healed.
+// The org read policy MUST stay in sync with scripts/imagepublish.sh (the CI path).
 val ensureEcrRepo by tasks.registering(Exec::class) {
     group = "publish"
-    description = "Create ECR repository if it does not exist"
+    description = "Create ECR repository if missing and apply the org read policy"
     onlyIf { !isInterface && zb.hasConnectionProfile.get() && !isDryRun }
     workingDir(project.projectDir)
     commandLine("echo", "placeholder")
-    isIgnoreExitValue = true // already exists -> non-zero is OK
     doFirst {
         val awsRegion = System.getenv("AWS_REGION")
             ?: throw GradleException("AWS_REGION not set in slot env — add to zbb.yaml")
         val imageName = zb.dockerImageName.get()
-        commandLine("aws", "ecr", "create-repository",
-            "--repository-name", imageName,
-            "--region", awsRegion)
+        // Grants read/pull to any principal in the zerobias AWS org (o-dppyp34ws8).
+        val orgReadPolicy = """{ "Version": "2012-10-17", "Statement": [ { "Sid": "ReadonlyAccess", "Effect": "Allow", "Principal": { "AWS": "*" }, "Action": [ "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:DescribeImageScanFindings", "ecr:DescribeImages", "ecr:DescribeRepositories", "ecr:GetAuthorizationToken", "ecr:GetDownloadUrlForLayer", "ecr:GetRepositoryPolicy", "ecr:ListImages" ], "Condition": { "StringLike": { "aws:PrincipalOrgID": "o-dppyp34ws8" } } } ] }"""
+        commandLine("bash", "-c", """
+            set -e
+            # create-repository is idempotent: tolerate an already-existing repo.
+            aws ecr create-repository --repository-name "$imageName" --region "$awsRegion" \
+              || echo "ECR repository $imageName already exists — continuing to policy sync"
+            # Always (re)apply the org read policy; failure here must fail the build.
+            aws ecr set-repository-policy --repository-name "$imageName" --region "$awsRegion" \
+              --policy-text '$orgReadPolicy'
+        """.trimIndent())
     }
 }
 
