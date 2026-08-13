@@ -173,11 +173,20 @@ fun isAlreadyPublished(name: String, version: String, workDir: java.io.File): Bo
     }
 }
 
-// Published straight to its final dist-tag rather than zb.content's
-// `--tag next` + promote dance. Content flows through environment channels
-// because a catalog artifact is loaded per environment; a toolchain pin has
-// no such lifecycle — consumers install it from `latest` (or whatever the
-// branch maps to) and there is nothing to promote afterwards.
+// Publish lands on `next` first, then promoteNpm moves it to the branch's
+// real dist-tags.
+//
+// This is NOT optional bookkeeping: OrgPublish.npmPublishArgs() returns
+// ["--tag", "next"] for every non-org publish, so a package published through
+// this plugin is ALWAYS staged on `next`. An earlier version of this plugin
+// treated promotion as a no-op on the assumption that publishing went straight
+// to the final tag — the result was three released versions of context-pack
+// while `latest` still pointed at the first one, so every consumer resolving
+// `latest` silently got the oldest build.
+//
+// The staging step is also useful in its own right: `next` gives a pack major
+// somewhere to sit while it is piloted on a real consumer, before the fleet
+// resolves it.
 val publishNpmExec by tasks.registering(NpmTask::class) {
     group = "publish"
     description = "Publish npm-only package"
@@ -206,19 +215,50 @@ tasks.named("publishNpm") {
     dependsOn(publishNpmExec)
 }
 
-// promoteAll stays wired for lifecycle parity with the other leaf plugins,
-// but has nothing to do: publishNpmExec already published to the final tag.
+// ── Promotion: move from the `next` staging tag to the real dist-tags ──
+//
+// Mirrors zb.content.promoteNpm. Without this a published version is reachable
+// only as `@next`, and `latest` keeps pointing at whatever was there before.
+fun promotePackage(name: String, ver: String, workDir: java.io.File, tags: List<String>) {
+    for (tag in tags) {
+        logger.lifecycle("  Tagging ${name}@${ver} → $tag")
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("npm", "dist-tag", "add", "${name}@${ver}", tag),
+            workingDir = workDir,
+            throwOnError = true,
+        )
+    }
+    // Best-effort: drop the staging tag once the real ones point at this
+    // version. A failure here leaves a harmless dangling `next`.
+    try {
+        com.zerobias.buildtools.util.ExecUtils.exec(
+            command = listOf("npm", "dist-tag", "rm", name, "next"),
+            workingDir = workDir,
+            throwOnError = false,
+        )
+    } catch (_: Exception) {
+    }
+}
+
 val promoteNpm by tasks.registering {
     group = "publish"
-    description = "No-op — npm-only packages publish directly to their final dist-tag"
+    description = "Promote the npm package from 'next' to all applicable dist-tags"
+    // Gradle can otherwise schedule promote before publish, which dist-tags a
+    // version that does not exist yet (404) and fail-fasts the build before
+    // publishNpmExec runs. Same hazard zb.content documents.
     mustRunAfter(publishNpmExec)
+    // An org publish takes no dist-tag at all — promoting it would surface one
+    // org's private artifact as the default for every consumer.
     onlyIf { !isOrgPublish }
     doLast {
         val (name, _) = readPackageNameVersion()
-        logger.lifecycle(
-            "[promoteNpm] $name publishes directly to ${npmDistTags.joinToString(", ")} " +
-                "— nothing to promote",
-        )
+        val ver = project.version.toString()
+        if (isDryRun) {
+            logger.lifecycle("[DRY RUN] Would promote ${name}@${ver} to: ${npmDistTags.joinToString(", ")}")
+            return@doLast
+        }
+        logger.lifecycle("Promoting ${name}@${ver}")
+        promotePackage(name, ver, project.projectDir, npmDistTags)
     }
 }
 
