@@ -63,7 +63,7 @@ zbb up                 # ./gradlew stackUp
 zbb down               # ./gradlew stackDown
 ```
 
-### `--slot` Flag
+### `--slot` and `--stack` Flags
 
 Run any command with slot env loaded, without entering a subshell:
 
@@ -74,6 +74,14 @@ zbb --slot local dataloader -d .
 ```
 
 This loads the slot env into the process before executing the command. Useful for one-off commands and scripts.
+
+`--slot` is the non-interactive equivalent of `zbb slot load` — the same env, no subshell — so it is the right form for scripts, CI, and anything that cannot answer a prompt. Both flags are accepted anywhere in the command line, so `zbb gate --slot local` works as well as `zbb --slot local gate`.
+
+`--stack <name>` picks the stack explicitly instead of inferring it from the cwd's `zbb.yaml`:
+
+```bash
+zbb --slot local --stack hub start
+```
 
 ### Project Cache
 
@@ -88,6 +96,11 @@ zbb --refresh-cache
 `zbb` automatically sets:
 - `JAVA_HOME` to Java 21 (works around Gradle 8.10.2 issues with Java 25)
 - `GRADLE_OPTS` to suppress native access warnings
+
+The `JAVA_HOME` resolution happens when the slot is loaded — via `zbb slot load` or the `--slot`
+flag. Setting `ZB_SLOT=<name>` in the environment by hand looks equivalent but skips it, so on a
+machine whose default `java` is 25 those invocations fail with a bare `* What went wrong: 25.0.2`.
+Prefer `--slot`, or export a Java 21 `JAVA_HOME` yourself.
 
 ## Slots
 
