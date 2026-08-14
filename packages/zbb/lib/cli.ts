@@ -209,6 +209,7 @@ async function requireLoadedSlot(): Promise<Slot> {
   const slotName = process.env.ZB_SLOT;
   if (!slotName) {
     console.error('Not inside a loaded slot. Run: zbb slot load <name>');
+    console.error('Or pass the slot to this command: zbb --slot <name> ...');
     process.exit(1);
   }
   return SlotManager.load(slotName);
@@ -1724,6 +1725,14 @@ async function signalContainer(slot: Slot, serviceName: string, signal: string, 
 function printUsage(): void {
   console.log(`zbb — ZeroBias Build
 
+Global flags (accepted anywhere in the command line):
+  --slot <name>                                       Run the command with that slot's env loaded,
+                                                      without entering a subshell. Also sets
+                                                      JAVA_HOME to a Java 21 when the current one
+                                                      is not 21. Use this for scripts and CI.
+  --stack <name>                                      Pick the stack explicitly instead of
+                                                      inferring it from the cwd's zbb.yaml.
+
 Usage:
   zbb slot <create|load|list|info|delete|gc>          Slot management
   zbb stack <add|list|info|remove|update>             Stack management
@@ -1768,7 +1777,8 @@ Lifecycle commands (require zbb.yaml + loaded slot + added stack):
   zbb build [--all] [--verbose]            Run lifecycle.build (or ./gradlew build)
   zbb test [--all] [--verbose]             Run lifecycle.test (or ./gradlew test)
   zbb gate [--all]                         Run lifecycle.gate (or ./gradlew gate)
-  zbb gate --check                         Validate gate-stamp.json (no slot needed)
+  zbb gate --check                         Validate gate-stamp.json (no slot required, but pass
+                                           --slot if your default java is not 21)
   zbb publish [--dry-run] [--force]        Run lifecycle.publish (or ./gradlew publish)
   zbb publishOrg [--dry-run] [--force]     Same pipeline, published privately to the org
                                            named in package.json's zerobias.orgId
