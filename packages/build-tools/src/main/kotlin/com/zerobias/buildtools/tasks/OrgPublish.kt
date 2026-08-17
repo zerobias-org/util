@@ -28,9 +28,21 @@ import java.nio.file.attribute.PosixFilePermissions
  * independently runnable.
  *
  * Required env:
- *   ZB_TOKEN — ZeroBias platform API key. Must belong to an admin of the
- *              orgId declared in package.json's `zerobias.orgId`
- *              (superusers may also use it).
+ *   ZB_TOKEN   — npm/registry credential (interpolated by the repo `.npmrc`s
+ *                and used for `npm view`/`npm publish`). In the single-key
+ *                setup it doubles as the platform key.
+ *
+ * Optional env (two-key setup — registry and platform keys differ, e.g. the
+ * registry only accepts one env's keys while the org load targets another):
+ *   ZB_API_KEY — ZeroBias platform API key (dana `/me`, dataloader jobs and
+ *                branches). Must belong to an admin of the orgId declared in
+ *                package.json's `zerobias.orgId` (superusers may also use
+ *                it). Falls back to ZB_TOKEN when unset. The registry side
+ *                NEVER falls back to ZB_API_KEY — the platform key must not
+ *                silently travel to the registry. NeonDataloaderTask also
+ *                deliberately stays on ZB_TOKEN: the Neon branch service
+ *                defaults to prod and may be prod-only, so it follows the
+ *                registry key's env rather than the org's.
  *
  * Optional env (prod-default overrides, kept strippable by zbb's env seal so
  * a stale shell value can't silently redirect a prod publish):
@@ -70,9 +82,23 @@ object OrgPublish {
     fun resolveNpmToken(zbToken: String): String =
         System.getenv("PUBLISH_ORG_NPM_TOKEN")?.takeIf { it.isNotBlank() } ?: zbToken
 
+    /** npm-side base token — feeds [resolveNpmToken]; never ZB_API_KEY. */
     fun requireToken(taskName: String): String =
         System.getenv("ZB_TOKEN")?.takeIf { it.isNotBlank() }
             ?: throw GradleException("$taskName: ZB_TOKEN must be set.")
+
+    /**
+     * Platform-API key: `ZB_API_KEY`, falling back to `ZB_TOKEN` so the
+     * single-key setup keeps working unchanged. Deliberately asymmetric —
+     * see the env contract above.
+     */
+    fun platformKey(): String? =
+        System.getenv("ZB_API_KEY")?.takeIf { it.isNotBlank() }
+            ?: System.getenv("ZB_TOKEN")?.takeIf { it.isNotBlank() }
+
+    fun requirePlatformKey(taskName: String): String =
+        platformKey()
+            ?: throw GradleException("$taskName: ZB_API_KEY or ZB_TOKEN must be set.")
 
     /** package.json contents for [projectDir], or a clear failure. */
     fun readPackageJson(taskName: String, projectDir: File): String {

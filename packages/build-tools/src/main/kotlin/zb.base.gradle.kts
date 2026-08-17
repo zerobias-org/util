@@ -1885,6 +1885,7 @@ val envExports = mapOf(
     "npmToken" to "NPM_TOKEN",
     "writeToken" to "WRITE_TOKEN",
     "zbToken" to "ZB_TOKEN",
+    "zbApiKey" to "ZB_API_KEY",
     "dispatchToken" to "DISPATCH_TOKEN",
     "username" to "GITHUB_USERNAME",
     "dockerRegistry" to "DOCKER_REGISTRY",
