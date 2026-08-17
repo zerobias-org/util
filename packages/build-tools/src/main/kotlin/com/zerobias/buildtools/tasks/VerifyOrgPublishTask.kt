@@ -13,9 +13,9 @@ import org.gradle.api.tasks.TaskAction
  * validate/build/test/dataloader cycle.
  *
  * Checks, in order:
- *   1. `ZB_TOKEN` is set.
+ *   1. the platform key is set (`ZB_API_KEY`, falling back to `ZB_TOKEN`).
  *   2. package.json declares a well-formed `zerobias.orgId`.
- *   3. the token's principal is an admin of that org, per dana `/me`.
+ *   3. the platform key's principal is an admin of that org, per dana `/me`.
  *
  * Registry-state checks (is this name free? which increment is next?) live in
  * [ResolveOrgVersionTask] instead — those depend on what the build produces
@@ -38,7 +38,7 @@ abstract class VerifyOrgPublishTask : DefaultTask() {
     @TaskAction
     fun execute() {
         val pkgDir = packageDir.get().asFile
-        val token = OrgPublish.requireToken(name)
+        val token = OrgPublish.requirePlatformKey(name)
         val pkgRaw = OrgPublish.readPackageJson(name, pkgDir)
         val orgId = OrgPublish.readOrgId(name, pkgRaw)
 

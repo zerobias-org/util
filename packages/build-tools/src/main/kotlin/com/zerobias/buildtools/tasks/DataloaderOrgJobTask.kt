@@ -45,7 +45,7 @@ abstract class DataloaderOrgJobTask : DefaultTask() {
     @TaskAction
     fun execute() {
         val pkgDir = packageDir.get().asFile
-        val token = OrgPublish.requireToken(name)
+        val token = OrgPublish.requirePlatformKey(name)
         val pkgRaw = OrgPublish.readPackageJson(name, pkgDir)
         val pkgName = PackageJsonReader.extractString(pkgRaw, "name")
             ?: throw GradleException("$name: package.json missing 'name'.")
