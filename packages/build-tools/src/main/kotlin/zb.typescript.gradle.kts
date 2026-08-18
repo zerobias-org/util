@@ -59,6 +59,29 @@ val assembledSpec = project.file("generated/full-assembled.yml")
 val bundledSpec = project.file("generated/full-bundled.yml")
 val fullSpec = project.file("generated/full.yml")
 
+// ── Codegen version — participates in every generator task's up-to-date check ──
+//
+// The `hub-generator` binary is supplied by @zerobias-org/util-codegen, and its
+// major version determines the shape of everything under generated/: codegen 2
+// emits `Date` for date-time fields, codegen 3 emits `DateTime`. Declaring only
+// the spec as an input means bumping codegen leaves the previous generation in
+// place and reports UP-TO-DATE, so a local gate goes green against stale code
+// that no longer matches the installed generator.
+//
+// Read the installed version rather than the declared range: the range can be a
+// caret that resolves differently over time, and it is the resolved artifact
+// that actually produces the output. node_modules is guaranteed present because
+// every consumer task dependsOn(npmInstallModule).
+val codegenPackageJson = project.file("node_modules/@zerobias-org/util-codegen/package.json")
+val codegenVersion = project.provider {
+    if (codegenPackageJson.exists()) {
+        com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(codegenPackageJson).path("version").asText("unknown")
+    } else {
+        "absent"
+    }
+}
+
 // ════════════════════════════════════════════════════════════
 // VALIDATE phase
 // ════════════════════════════════════════════════════════════
@@ -331,6 +354,7 @@ val generateApi by tasks.registering(NpxTask::class) {
         }
     })
     inputs.file(fullSpec)
+    inputs.property("codegenVersion", codegenVersion)
     inputs.property("hasConnectionProfile", zb.hasConnectionProfile)
     inputs.property("generatorArgs", zb.generatorArgs)
     outputs.dir("generated/api")
@@ -694,6 +718,7 @@ val generateServerApi by tasks.registering(NpxTask::class) {
         "-p", "modulePackage=../api"
     ))
     inputs.file(fullSpec)
+    inputs.property("codegenVersion", codegenVersion)
     outputs.file(layout.buildDirectory.file("server-api-generated.marker"))
     // Declare the actual generated directory as an output. Without this,
     // gradle considers the task up-to-date based solely on the marker, and
@@ -923,6 +948,7 @@ val buildHubSdkExec by tasks.registering(NpxTask::class) {
     // This matches what publish-api-client-module CI action produces.
     args.set(listOf("generate", "-g", "hub-module", "-i", fullSpec.absolutePath, "-o", "hub-sdk/generated/"))
     inputs.file(fullSpec)
+    inputs.property("codegenVersion", codegenVersion)
     outputs.dir("hub-sdk/generated")
 }
 
