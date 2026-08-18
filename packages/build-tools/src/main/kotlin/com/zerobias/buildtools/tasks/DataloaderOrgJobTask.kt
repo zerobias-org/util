@@ -5,7 +5,6 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
-import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 
@@ -25,7 +24,7 @@ import org.gradle.api.tasks.TaskAction
  */
 abstract class DataloaderOrgJobTask : DefaultTask() {
 
-    @get:InputDirectory
+    @get:Internal
     abstract val packageDir: DirectoryProperty
 
     /**
