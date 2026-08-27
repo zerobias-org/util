@@ -3,7 +3,9 @@ package com.zerobias.buildtools.module
 import com.zerobias.buildtools.util.ExecUtils
 import org.gradle.api.GradleException
 import java.io.File
+import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.UnknownHostException
 import java.net.URI
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
@@ -99,8 +101,31 @@ object DockerRunner {
             containerId = containerId,
             port = hostPort,
             image = imageName,
-            baseUrl = "https://localhost:$hostPort"
+            baseUrl = "https://$moduleHost:$hostPort"
         )
+    }
+
+    /**
+     * Host used to reach a started module container.
+     *
+     * Explicit `MODULE_HOST` always wins. Otherwise this probes for
+     * `host.docker.internal`, which only resolves when this process is
+     * itself running inside a container with that name mapped in (e.g. via
+     * Compose's `extra_hosts: host.docker.internal:host-gateway`) — the
+     * sandbox case, where the Docker daemon is a sibling rather than
+     * co-located with this process, so published ports land on the daemon
+     * host's gateway IP instead of this process's own loopback. Falls back
+     * to `localhost` for the normal case (local dev, most CI runners) where
+     * this process and the daemon share a network namespace. Resolved once
+     * per Gradle daemon lifetime since the answer can't change mid-build.
+     */
+    private val moduleHost: String by lazy {
+        System.getenv("MODULE_HOST") ?: try {
+            InetAddress.getByName("host.docker.internal")
+            "host.docker.internal"
+        } catch (e: UnknownHostException) {
+            "localhost"
+        }
     }
 
     /**
@@ -109,7 +134,7 @@ object DockerRunner {
      */
     fun waitForHealthy(port: Int, timeoutMs: Long = 60_000, intervalMs: Long = 1_000) {
         val deadline = System.currentTimeMillis() + timeoutMs
-        val url = "https://localhost:$port/"
+        val url = "https://$moduleHost:$port/"
         var lastError: String? = null
 
         // Trust all certs (modules use self-signed)
