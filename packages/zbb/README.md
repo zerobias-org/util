@@ -65,7 +65,7 @@ zbb down               # ./gradlew stackDown
 
 ### `--slot` and `--stack` Flags
 
-Run any command with slot env loaded, without entering a subshell:
+Run any command in a slot, without entering a subshell:
 
 ```bash
 zbb --slot local compile
@@ -73,9 +73,24 @@ zbb --slot local testDocker
 zbb --slot local dataloader -d .
 ```
 
-This loads the slot env into the process before executing the command. Useful for one-off commands and scripts.
+`--slot` is the non-interactive equivalent of `zbb slot load` — no subshell — so it is the right form for scripts, CI, and anything that cannot answer a prompt. Both flags are accepted anywhere in the command line, so `zbb gate --slot local` works as well as `zbb --slot local gate`.
 
-`--slot` is the non-interactive equivalent of `zbb slot load` — the same env, no subshell — so it is the right form for scripts, CI, and anything that cannot answer a prompt. Both flags are accepted anywhere in the command line, so `zbb gate --slot local` works as well as `zbb --slot local gate`.
+> **A slot alone injects only its identity.** `--slot` by itself puts just the
+> seven `ZB_SLOT*` framework vars into the process. Every real var —
+> credentials, ports, service URLs — is **stack-scoped**, stored per stack
+> inside the slot (`~/.zbb/slots/<slot>/stacks/<stack>/.env`), and is only
+> injected when zbb has a **stack context**. The examples above work because
+> they run from a directory whose `zbb.yaml` provides that context. From
+> anywhere else, add one of:
+>
+> 1. `--stack <short-name>` — per invocation (`zbb --slot local --stack hub …`)
+> 2. `ZB_STACK=<short-name>` — for a whole run or shell session
+> 3. `cd` into a directory with a `zbb.yaml`
+>
+> The named stack's vars **plus all its dependencies' vars** (transitively)
+> become visible. Without any stack context there is no error for commands
+> like `exec` — the command simply runs with no user env vars, which
+> typically surfaces later as empty `${VAR}` expansions or auth failures.
 
 `--stack <name>` picks the stack explicitly instead of inferring it from the cwd's `zbb.yaml`:
 

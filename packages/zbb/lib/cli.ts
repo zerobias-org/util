@@ -1726,12 +1726,18 @@ function printUsage(): void {
   console.log(`zbb — ZeroBias Build
 
 Global flags (accepted anywhere in the command line):
-  --slot <name>                                       Run the command with that slot's env loaded,
-                                                      without entering a subshell. Also sets
+  --slot <name>                                       Run the command in that slot, without
+                                                      entering a subshell. Injects only the
+                                                      slot's ZB_SLOT* identity vars — all real
+                                                      vars are stack-scoped, so pair this with a
+                                                      stack context (--stack, ZB_STACK, or a cwd
+                                                      whose zbb.yaml names the stack). Also sets
                                                       JAVA_HOME to a Java 21 when the current one
                                                       is not 21. Use this for scripts and CI.
   --stack <name>                                      Pick the stack explicitly instead of
-                                                      inferring it from the cwd's zbb.yaml.
+                                                      inferring it from the cwd's zbb.yaml. Loads
+                                                      that stack's vars plus its dependencies'.
+                                                      With NO stack context, no user vars load.
 
 Usage:
   zbb slot <create|load|list|info|delete|gc>          Slot management

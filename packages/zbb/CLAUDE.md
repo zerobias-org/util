@@ -20,7 +20,10 @@ All commands are accessible via the `zbb` binary.
 ### Global flag
 
 ```
-zbb --slot <name> <command>   Load slot env before running any command
+zbb --slot <name> <command>   Run any command in the slot. Injects only the
+                              7 ZB_SLOT* identity vars — every real var is
+                              stack-scoped and needs a stack context
+                              (--stack <name>, ZB_STACK, or cwd zbb.yaml)
 ```
 
 ### Slot management
