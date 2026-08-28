@@ -1,7 +1,46 @@
 {
   "version": 1,
-  "branch": "docs/zbb-global-flags",
+  "branch": "feat/dev-stack",
   "packages": {
+    "@zerobias-org/dev-stack": {
+      "version": "1.0.0",
+      "sourceHash": "b473fac29d1a4a00761e8d1b692ec62dec2d840cea0e67de8476ecf5367dbd59",
+      "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tasks": {
+        "lint": "passed",
+        "compile": "passed",
+        "copyDeps": "passed",
+        "generate": "passed",
+        "transpile": "passed",
+        "test": "skipped"
+      },
+      "tests": {
+        "unit": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "integration": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        },
+        "e2e": {
+          "expected": 0,
+          "ran": 0,
+          "status": "skipped"
+        }
+      },
+      "rootDeps": {
+        "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
+        "axios": "\"^1.16.0\"",
+        "diff": "\"^8.0.4\"",
+        "glob": "\">=11\"",
+        "serialize-javascript": "\"7.0.5\"",
+        "uuid": "\"^14.0.0\"",
+        "yaml": "\"2.8.3\""
+      }
+    },
     "@zerobias-org/eslint-config": {
       "version": "1.0.41",
       "sourceHash": "fe69da159a37f2c8a06f4c80e77d9b38e2de23b26e9dea79b0073074cedada2d",
@@ -575,7 +614,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.9",
+      "version": "1.0.10",
       "sourceHash": "764be09aa853dbf926b6b15da30912c310fb4c7c90a9ab36e745f819b5af2192",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {

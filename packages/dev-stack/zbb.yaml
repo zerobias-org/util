@@ -1,0 +1,88 @@
+# ──────────────────────────────────────────────────────────────────────
+# ZeroBias Development Env Stack
+# ──────────────────────────────────────────────────────────────────────
+#
+# Pure env/config stack — no services, no lifecycle, nothing to start.
+# It is the ONE place a slot stores the shared developer credentials
+# that every ZeroBias dev tool needs (npm registry, ZeroBias MCPs,
+# org-first SDLC publishing). Content stacks inherit them instead of
+# redeclaring them:
+#
+#   depends:
+#     dev:
+#       package: "@zerobias-org/dev-stack@^1.0.0"   # auto-pulled at stack add
+#   imports:
+#     dev:
+#       optional: true          # unseeded slot degrades to empty vars, never errors
+#       vars: [ZB_TOKEN, ZB_API_KEY, ZB_ORG_ID, ZB_PLATFORM_URL,
+#              KNOWLEDGE_MCP_URL, NPM_CONFIG_TAG]
+#
+# Seed once per slot (scripts/setup-org-credentials.sh does this):
+#   zbb --slot <slot> --stack dev env set ZB_API_KEY <key>
+# and every importing stack sees the value transitively. Launching a
+# tool with the creds works from ANY directory, no repo checkout needed:
+#   zbb --slot <slot> --stack dev exec claude
+#
+# NOTE: a per-stack `env set` override SHADOWS an imported value (zbb
+# never clobbers user overrides). Keep credentials here only — don't
+# `env set` them on individual content stacks, or rotation stops
+# propagating to that stack.
+
+name: "@zerobias-org/dev"
+version: "1.0.0"
+
+env:
+  ZB_TOKEN:
+    type: secret
+    mask: true
+    description: >-
+      REGISTRY key — auths pkg.zerobias.org (npm view/publish, .npmrc
+      interpolation) and the content gate's Neon dataloader step (the
+      step runs iff this is present). Must be a PROD-issued key while
+      the registry accepts only prod keys.
+
+  ZB_API_KEY:
+    type: secret
+    mask: true
+    description: >-
+      ORG key — org OWNER API key of the target org/env. Used by org
+      publish platform calls (dana /me verify, dataloader org job) and
+      resolves the ${ZB_API_KEY} placeholders in .mcp.json and the zb
+      MCP 'env' profile at claude session start. Unset = single-key
+      setup (ZB_TOKEN does both).
+
+  ZB_ORG_ID:
+    type: string
+    description: >-
+      Target org UUID. Resolves the ${ZB_ORG_ID} placeholder in
+      .mcp.json (zb-knowledge dana-org-id header) and is mirrored into
+      package.json zerobias.orgId by the create skills.
+
+  ZB_PLATFORM_URL:
+    type: string
+    default: "https://app.zerobias.com/api"
+    description: Platform API base of the target environment
+
+  KNOWLEDGE_MCP_URL:
+    type: string
+    default: "https://api.app.zerobias.com/knowledge-mcp/mcp"
+    description: >-
+      Per-env zb-knowledge MCP endpoint (keys are per-env; the .mcp.json
+      default is PROD, so non-prod slots need their own value —
+      setup-org-credentials.sh derives it from ZB_PLATFORM_URL).
+
+  NPM_CONFIG_TAG:
+    type: string
+    default: "dev"
+    description: >-
+      npm dist-tag for org-private rc publishes (npm 11 refuses
+      prerelease publishes without one; catalog publishes pass --tag
+      explicitly, so this default is inert for them).
+
+exports:
+  - ZB_TOKEN
+  - ZB_API_KEY
+  - ZB_ORG_ID
+  - ZB_PLATFORM_URL
+  - KNOWLEDGE_MCP_URL
+  - NPM_CONFIG_TAG

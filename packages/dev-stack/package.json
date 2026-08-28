@@ -1,0 +1,24 @@
+{
+  "name": "@zerobias-org/dev-stack",
+  "description": "ZeroBias development env stack artifact — shared developer credentials schema for zbb stack add",
+  "version": "1.0.0",
+  "author": "team@zerobias.com",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/util.git",
+    "directory": "packages/dev-stack"
+  },
+  "publishConfig": {
+    "registry": "https://pkg.zerobias.org/"
+  },
+  "files": [
+    "zbb.yaml",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "dependencies": {}
+}
