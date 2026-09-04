@@ -1435,7 +1435,21 @@ if (isOrgPublish) {
     // publishImage. A module whose row lands before its image is in the
     // registry is deployable-but-unpullable, and the failure surfaces on the
     // node at `docker pull`, far from the publish that caused it.
-    dataloaderOrgJob.configure { mustRunAfter(publishAll) }
+    dataloaderOrgJob.configure {
+        mustRunAfter(publishAll)
+        // A dry run must not reach the platform. publishNpmExec already
+        // short-circuits under -PdryRun=true, so without this guard the job
+        // is queued for a version that was deliberately NOT published — it
+        // POSTs to the real dataloader, then fails on `npm view` E404 after
+        // burning a job record. Every other step honours dry-run; this one
+        // was the only outward-facing task that did not.
+        onlyIf {
+            if (isDryRun) {
+                logger.lifecycle("[DRY RUN] Would queue a dataloader job for the org-published artifact")
+            }
+            !isDryRun
+        }
+    }
 }
 
 // Guard lifecycle publish stubs: skip if module has no changes since last tag.
