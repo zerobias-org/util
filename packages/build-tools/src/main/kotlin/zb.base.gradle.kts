@@ -1411,11 +1411,45 @@ if (isOrgPublish) {
         tasks.named(taskName) { mustRunAfter(resolveOrgVersion) }
     }
 
+    // patchPackageJson writes `project.version` INTO package.json, and
+    // resolveOrgVersion reads its base version back OUT of that same file.
+    // Ordering them is not optional.
+    //
+    // The mustRunAfter above constrains publishNpm, but Gradle does not
+    // propagate that to a task's own dependencies — and patchPackageJson is a
+    // dependency of publishNpmExec, so it stays free to run first. On `main`
+    // that is harmless: project.version is the plain baseVersion, so the
+    // round-trip is a no-op. Off `main` it is fatal — branchSuffix makes
+    // project.version `X.Y.Z-uat.<n>`, resolveOrgVersion reads that back and
+    // rejects it ("must be plain semver"). Which is precisely backwards: the
+    // org-first SDLC does its publishOrg from a feature branch by design.
+    //
+    // Failing here also leaks the patched version onto disk, because
+    // restorePackageJson is finalizedBy publishNpmExec — a task that never
+    // runs once resolveOrgVersion fails.
+    tasks.matching { it.name == "patchPackageJson" }.configureEach {
+        mustRunAfter(resolveOrgVersion)
+    }
+
     // The catalog load runs LAST, after publishAll — which includes
     // publishImage. A module whose row lands before its image is in the
     // registry is deployable-but-unpullable, and the failure surfaces on the
     // node at `docker pull`, far from the publish that caused it.
-    dataloaderOrgJob.configure { mustRunAfter(publishAll) }
+    dataloaderOrgJob.configure {
+        mustRunAfter(publishAll)
+        // A dry run must not reach the platform. publishNpmExec already
+        // short-circuits under -PdryRun=true, so without this guard the job
+        // is queued for a version that was deliberately NOT published — it
+        // POSTs to the real dataloader, then fails on `npm view` E404 after
+        // burning a job record. Every other step honours dry-run; this one
+        // was the only outward-facing task that did not.
+        onlyIf {
+            if (isDryRun) {
+                logger.lifecycle("[DRY RUN] Would queue a dataloader job for the org-published artifact")
+            }
+            !isDryRun
+        }
+    }
 }
 
 // Guard lifecycle publish stubs: skip if module has no changes since last tag.
