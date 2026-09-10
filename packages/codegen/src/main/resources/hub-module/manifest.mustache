@@ -23,5 +23,16 @@
 {{/operations}}
 {{/apis}}
 {{/apiInfo}}
+  },
+  "operationParamTypes": {
+{{#apiInfo}}
+{{#apis}}
+{{#operations}}
+  {{#operation}}
+    "{{operationId}}": [{{#allParams}}{"name": "{{paramName}}", "type": "{{#datatypeWithEnum}}{{{datatypeWithEnum}}}{{/datatypeWithEnum}}{{^datatypeWithEnum}}{{{dataType}}}{{/datatypeWithEnum}}"{{#dataFormat}}, "format": "{{{dataFormat}}}"{{/dataFormat}}}{{^-last}}, {{/-last}}{{/allParams}}]{{^-last}},{{/-last}}
+    {{/operation}}{{^-last}},{{/-last}}
+{{/operations}}
+{{/apis}}
+{{/apiInfo}}
   }
 }

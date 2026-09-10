@@ -241,6 +241,12 @@ async function main() {
   const manifestPath = path.join(process.cwd(), 'generated', 'api', 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
   const opParams: Record<string, string[]> = manifest.operationParams || {};
+  // Declared type (and format) per parameter, emitted alongside operationParams. A module built
+  // from an older manifest has no entry here, resolves its param names exactly as before, and
+  // simply skips deserialization.
+  const opParamTypes: Record<string, Array<{ name: string; type: string; format?: string }>> =
+    manifest.operationParamTypes || {};
+  const { ObjectSerializer } = await import('./model/index.js');
 
   app.post('/connections/:connectionId/:method', async (req: express.Request, res: express.Response) => {
     const connection = connections[req.params.connectionId]
@@ -266,14 +272,44 @@ async function main() {
     // Resolve param names from manifest and build positional args
     // Find operationId by matching ApiClass.method in manifest.operations
     let paramNames: string[] = [];
+    let paramTypes: Array<{ name: string; type: string; format?: string }> = [];
     for (const [opId, opMethod] of Object.entries(manifest.operations)) {
       if (opMethod === method) {
         paramNames = opParams[opId] || [];
+        paramTypes = opParamTypes[opId] || [];
         break;
       }
     }
 
-    const args = paramNames.map(name => argMap?.[name]);
+    // The wire protocol delivers raw JSON. The generated REST controllers deserialize their
+    // params before calling the same impl; this route never did, so the two entry points into one
+    // implementation disagreed — and production only ever uses this one. Any parameter whose model
+    // field is a wrapper type (DateTime/DateFormat since codegen 3.x, UUID, an enum) arrived as a
+    // bare string, and the impl blew up on the first .toDate() inside the module.
+    //
+    // Matched by name rather than position so the two manifest maps cannot drift.
+    //
+    // Falling back to the raw value is deliberate: that is precisely what every module did before
+    // this, so a type we cannot deserialize degrades to the old behaviour rather than turning a
+    // working operation into a 500.
+    const args = await Promise.all(paramNames.map(async (name) => {
+      const value = argMap?.[name];
+      const declared = paramTypes.find(p => p.name === name);
+      if (value === undefined || value === null || !declared?.type) {
+        return value;
+      }
+
+      try {
+        return await ObjectSerializer.deserialize(value, declared.type, declared.format || '');
+      } catch (e) {
+        logger.error(
+          'Could not deserialize ' + name + ' as ' + declared.type + ' for ' + method
+            + '; passing the raw value through',
+          e as Error
+        );
+        return value;
+      }
+    }));
 
     try {
       const result = await meth.call(api, ...args);
