@@ -47,6 +47,17 @@ class ServerEntryPointGeneratorTest {
     }
 
     @Test
+    fun `an empty string is passed through rather than deserialized away`() {
+        // ObjectSerializer.deserialize returns undefined for '' and does not throw, so the
+        // fallback cannot catch it. Without this guard every empty optional filter, search term,
+        // cursor and name param silently became undefined on the way to the impl.
+        assertTrue(
+            generated.contains("value === undefined || value === null || value === '' || !declared?.type"),
+            "an empty-string argument must skip deserialization, not be turned into undefined"
+        )
+    }
+
+    @Test
     fun `a value that will not deserialize falls back rather than failing the call`() {
         assertTrue(
             generated.contains("passing the raw value through"),

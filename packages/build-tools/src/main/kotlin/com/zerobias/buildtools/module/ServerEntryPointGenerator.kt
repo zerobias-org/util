@@ -295,7 +295,11 @@ async function main() {
     const args = await Promise.all(paramNames.map(async (name) => {
       const value = argMap?.[name];
       const declared = paramTypes.find(p => p.name === name);
-      if (value === undefined || value === null || !declared?.type) {
+      // '' is skipped deliberately: ObjectSerializer.deserialize returns undefined for an empty
+      // string, and it does so without throwing, so the fallback below would never fire. An empty
+      // optional filter, search term, cursor or name reached the impl verbatim before this route
+      // deserialized anything, and still must.
+      if (value === undefined || value === null || value === '' || !declared?.type) {
         return value;
       }
 
