@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "feat/dev-stack",
+  "branch": "fix/execute-route-deserializes-args",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.0",
@@ -367,8 +367,8 @@
     },
     "@zerobias-org/util-codegen": {
       "version": "3.0.11",
-      "sourceHash": "fbee0af4c8812df3ea7899ad0dc86c1023776c94ba5e73e7f627cb9d163dade9",
-      "testHash": "dbc3ac58a6c47fcea56d30c85a157fcb45f41f9ba1176104cc32a9773b8e57bc",
+      "sourceHash": "62b85a09573cade3c5d5d51b01e01a6b0e3a58e77f9b2d0f01cba0d79cd8beab",
+      "testHash": "7a055db278c0ebd45ba867f0d4445e82202a7eab9bead6d02e98a971fa2ed57d",
       "tasks": {
         "lint": "skipped",
         "compile": "skipped",
@@ -379,8 +379,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 6,
-          "ran": 6,
+          "expected": 9,
+          "ran": 9,
           "status": "passed"
         },
         "integration": {
