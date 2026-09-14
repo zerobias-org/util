@@ -51,6 +51,10 @@ export class JsonNode extends TreeNode {
       return this.val as boolean;
     }
 
+    if (this.val !== null && typeof this.val === 'object') {
+      return JSON.stringify(this.val);
+    }
+
     throw new UnexpectedError(`Secret node of unhandled type ${typeof this.val}`);
   }
 }

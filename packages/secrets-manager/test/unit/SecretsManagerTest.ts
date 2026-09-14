@@ -20,6 +20,10 @@ const tempSecret = {
       test1: 'test1'
     }
   },
+  sshAuthorizedKeys: [
+    'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 dev@laptop',
+    'ssh-rsa AAAAB3NzaC1yc2E another@host',
+  ],
 };
 let tempSecretFile: string;
 let tempSecretId: UUID;
@@ -87,7 +91,7 @@ describe('SecretsManagerTest', function () {
     const nodes = await secrets.listNodes(tempSecretPath);
     // logger.info(JSON.stringify(nodes));
     expect(nodes).to.be.ok;
-    expect(nodes.length).to.be.eq(3);
+    expect(nodes.length).to.be.eq(4);
   });
 
   it('should read a value from a JSON file', async () => {
@@ -102,6 +106,11 @@ describe('SecretsManagerTest', function () {
     expect(value1).to.be.eq(tempSecret.foo);
     const value2 = await secrets.getValue(`${tempSecretPath}.zoo.test.test1`);
     expect(value2).to.be.eq(tempSecret.zoo.test.test1);
+  });
+
+  it('should read an array-valued leaf as its JSON serialization', async () => {
+    const value = await secrets.getValue(`${tempSecretPath}.sshAuthorizedKeys`);
+    expect(value).to.be.eq(JSON.stringify(tempSecret.sshAuthorizedKeys));
   });
 
   it('should write over JSON file with new secret', async () => {
