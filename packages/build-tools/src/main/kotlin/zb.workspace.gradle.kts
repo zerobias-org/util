@@ -8,6 +8,9 @@
  * task that runs once per CI workflow before the publish matrix fans out. See
  * the task block below for context on why this exists.
  *
+ * And `writeElementRulesBaseline`, which adopts the element content rules
+ * ratchet that zb.content enforces (see ElementContentRules).
+ *
  * Usage (root build.gradle.kts only):
  *   plugins {
  *       id("zb.workspace")
@@ -206,6 +209,36 @@ val versionStandardPackages by tasks.registering {
         throw GradleException(
             "versionStandardPackages: push failed after $maxAttempts attempts: ${lastError?.message}",
             lastError
+        )
+    }
+}
+
+// ────────────────────────────────────────────────────────────
+// writeElementRulesBaseline — adopt the element content rules ratchet
+// ────────────────────────────────────────────────────────────
+//
+// zb.content's validateContent enforces ElementContentRules per package,
+// ratcheted by element-rules-baseline.txt at the repo root; without that
+// file the rules only warn. This writes the file from the current state of
+// every subproject with an elements/ directory.
+//
+// Run it once to adopt the ratchet. Afterwards lower counts by hand as
+// violations are fixed — regenerating would silently absorb a regression.
+val writeElementRulesBaseline by tasks.registering {
+    group = "verification"
+    description = "Write element-rules-baseline.txt from current element content rule violations"
+
+    doLast {
+        val rules = com.zerobias.buildtools.content.ElementContentRules
+        val counts = project.subprojects
+            .filter { it.file("elements").isDirectory }
+            .associate { it.path to rules.checkPackage(it.projectDir).size }
+        val failing = counts.filterValues { it > 0 }
+        val file = project.rootDir.resolve(rules.BASELINE_FILE)
+        file.writeText(rules.formatBaseline(failing))
+        logger.lifecycle(
+            "[element-rules] ${counts.size} packages with elements/, ${failing.size} with violations " +
+                "(${failing.values.sum()} total) → ${file.relativeTo(project.rootDir)}"
         )
     }
 }
