@@ -15,6 +15,8 @@ import com.zerobias.buildtools.util.PackageJsonReader
  *   validate        → repo-supplied via rootProject.extra["contentValidator"]
  *                      (no default; missing slot is a build-time error —
  *                       compose your validator from SchemaPrimitives)
+ *                     + ElementContentRules for packages with elements/,
+ *                       ratcheted by the repo's element-rules-baseline.txt
  *   testIntegration → NeonDataloaderTask (loads artifact into ephemeral
  *                      Neon Postgres branch — this is the universal
  *                      "is this loadable?" contract across content types)
@@ -109,6 +111,29 @@ val validateContent by tasks.registering {
             )
 
         validator(project)
+
+        // Element content rules are the same for every artifact type that
+        // ships elements (framework, standard, benchmark), so they run here
+        // rather than in each repo's validator. The repo's
+        // element-rules-baseline.txt ratchets them — see ElementContentRules.
+        if (project.file("elements").isDirectory) {
+            val rules = com.zerobias.buildtools.content.ElementContentRules
+            val violations = rules.checkPackage(project.projectDir)
+            val baselineFile = rootProject.file(rules.BASELINE_FILE)
+            val baseline = if (baselineFile.isFile) rules.parseBaseline(baselineFile.readText()) else null
+            val verdict = rules.judge(project.path, violations.size, baseline)
+
+            val shown = if (verdict.outcome.fails) 25 else 5
+            val listing = violations.take(shown).joinToString("") { "\n  $it" } +
+                if (violations.size > shown) "\n  … and ${violations.size - shown} more" else ""
+            when {
+                verdict.outcome.fails -> throw GradleException("[element-rules] ${verdict.message}$listing")
+                verdict.outcome == com.zerobias.buildtools.content.ElementContentRules.Outcome.PASS ->
+                    logger.lifecycle("[element-rules] ${verdict.message}")
+                else -> logger.warn("[element-rules] ${verdict.message}$listing")
+            }
+        }
+
         logger.lifecycle("[validate] passed for ${project.path}")
     }
 }
