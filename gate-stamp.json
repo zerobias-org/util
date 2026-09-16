@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/execute-route-deserializes-args",
+  "branch": "fix/secrets-manager-jsonnode-string-secret",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.0",
@@ -528,9 +528,9 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.8",
-      "sourceHash": "8636f9c44e1b2f3787ec9d4c9023c1da40d906f7843287ce623b1f0bfca641ee",
-      "testHash": "b3dab0cfdae2567800511661a5923a41df75cb56752c89a172a76e0a72bc30ac",
+      "version": "2.0.9",
+      "sourceHash": "ee75e9f196dea0c55488a543fbb89e0b16c8e9ab7af5d32d644cc617cbb0b984",
+      "testHash": "d0842c56ae77db9b5212854a2576e81423eba91083d1ef96479b1a53376d7827",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -541,8 +541,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 28,
-          "ran": 28,
+          "expected": 31,
+          "ran": 31,
           "status": "passed"
         },
         "integration": {
