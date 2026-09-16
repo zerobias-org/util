@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "task/task-13",
+  "branch": "fix/secrets-manager-jsonnode-string-secret",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.0",
@@ -529,8 +529,8 @@
     },
     "@zerobias-org/util-secrets-manager": {
       "version": "2.0.9",
-      "sourceHash": "7c03cf04ca7279475daf8e7c54611030a4057f9db0520273c993364f02be7605",
-      "testHash": "b3dab0cfdae2567800511661a5923a41df75cb56752c89a172a76e0a72bc30ac",
+      "sourceHash": "7f998e7894a2ba163c16bb50ab08fdd31ff29150cf7c15e3e0462b77cefdb2bd",
+      "testHash": "9d411af523b25e904fcd67557ab3258280b581546c2ba525ac21ee1fc66df87e",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -541,8 +541,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 28,
-          "ran": 28,
+          "expected": 32,
+          "ran": 32,
           "status": "passed"
         },
         "integration": {
