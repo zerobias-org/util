@@ -1,4 +1,4 @@
-import { IllegalArgumentError, UnexpectedError } from '@zerobias-org/types-core-js';
+import { IllegalArgumentError } from '@zerobias-org/types-core-js';
 import { SecretNode } from '../generated/model/index.js';
 import { TreeNode } from './TreeNode.js';
 
@@ -18,6 +18,8 @@ function getNodeType(val: JsonValueType): SecretNode.TypeEnumDef {
 export class JsonNode extends TreeNode {
   val: JsonValueType;
 
+  private readonly rawVal: JsonValueType;
+
   constructor(val: JsonValueType, path: string, parent?: TreeNode) {
     super(
       path,
@@ -27,6 +29,7 @@ export class JsonNode extends TreeNode {
       async () => Object.keys(this.val).map((k) => new JsonNode(this.val[k], k, this))
     );
 
+    this.rawVal = val;
     try {
       this.val = typeof val === 'string' ? JSON.parse(val) : val;
     } catch {
@@ -51,6 +54,9 @@ export class JsonNode extends TreeNode {
       return this.val as boolean;
     }
 
-    throw new UnexpectedError(`Secret node of unhandled type ${typeof this.val}`);
+    if (typeof this.rawVal === 'string') {
+      return this.rawVal;
+    }
+    return JSON.stringify(this.val);
   }
 }
