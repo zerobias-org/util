@@ -529,8 +529,8 @@
     },
     "@zerobias-org/util-secrets-manager": {
       "version": "2.0.9",
-      "sourceHash": "ee75e9f196dea0c55488a543fbb89e0b16c8e9ab7af5d32d644cc617cbb0b984",
-      "testHash": "d0842c56ae77db9b5212854a2576e81423eba91083d1ef96479b1a53376d7827",
+      "sourceHash": "7f998e7894a2ba163c16bb50ab08fdd31ff29150cf7c15e3e0462b77cefdb2bd",
+      "testHash": "9d411af523b25e904fcd67557ab3258280b581546c2ba525ac21ee1fc66df87e",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -541,8 +541,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 31,
-          "ran": 31,
+          "expected": 32,
+          "ran": 32,
           "status": "passed"
         },
         "integration": {

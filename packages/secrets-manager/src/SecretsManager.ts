@@ -14,7 +14,9 @@ export interface SecretsManager {
 
   /**
    * @param path the secret node to return the value of
-   * @returns the value at the given node in the secrets tree
+   * @returns the value at the given node in the secrets tree. A leaf whose stored value is a
+   *   string is returned verbatim (the stored bytes); a non-string leaf (object/array) is
+   *   returned as its JSON serialization.
    */
   getValue(path: string): Promise<SecretType>;
 

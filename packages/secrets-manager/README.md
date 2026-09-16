@@ -8,6 +8,12 @@ Hub Secrets Manager supports the following secrets providers:
 - Hashicorp Vault
 - AWS Secrets Manager
  
+## Reading values
+`getValue(path)` returns a leaf's value. A leaf whose stored value is a string is returned
+verbatim (the stored bytes) — a credential that merely happens to be JSON, e.g. an OAuth blob,
+comes back as-is. A non-string leaf (object or array) is returned as its JSON serialization.
+Address a field inside a JSON secret by extending the path (e.g. `file.secret.subkey`).
+
 ## Caching
 The secrets manager will cache results on a timeout that resets on `list` calls. This defaults to 5 minutes and can be modified with the `CACHE_TIMEOUT_SECONDS` environment variable.
 
