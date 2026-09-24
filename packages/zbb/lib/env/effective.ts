@@ -75,8 +75,10 @@ const ZBB_INTERNAL_PREFIXES = ['ZBB_', '_ZBB_'] as const;
  */
 
 // Every lifecycle command needs the install/auth creds (private-dep installs
-// from GitHub Packages, vault resolution).
-const BASE_CREDS = ['NPM_TOKEN', 'READ_TOKEN', 'GITHUB_TOKEN', 'VAULT_TOKEN'] as const;
+// from GitHub Packages and pkg.zerobias.org, vault resolution). ZB_TOKEN is what
+// the repo .npmrc expands for pkg.zerobias.org, so any command that runs npm
+// install needs it — not just publish, or gate 401s on private deps.
+const BASE_CREDS = ['NPM_TOKEN', 'READ_TOKEN', 'GITHUB_TOKEN', 'ZB_TOKEN', 'VAULT_TOKEN'] as const;
 
 // publish / publishRemote / publishOrg: npm publish + docker push + release
 // announce + the `gh workflow run` image dispatch. (publishOrg skips the
@@ -87,10 +89,10 @@ const BASE_CREDS = ['NPM_TOKEN', 'READ_TOKEN', 'GITHUB_TOKEN', 'VAULT_TOKEN'] as
 // "Resource not accessible by integration"); DISPATCH_TOKEN drives generate-kb.
 const PUBLISH_CONTRACT = [
   ...BASE_CREDS,
-  'GH_TOKEN', 'DISPATCH_TOKEN', 'ZB_TOKEN',
+  'GH_TOKEN', 'DISPATCH_TOKEN',
   'ECR_REGISTRY', 'ECR_REPO_NAME', 'GHCR_REGISTRY', 'DOCKER_BUILD_CONCURRENCY',
   'AWS_REGION', 'SECRET_NAME',
-  'SLACK_RELEASES_WEBHOOK', 'SLACK_DEVOPS_NOTIFICATIONS',
+  'SLACK_RELEASES_WEBHOOK', 'SLACK_INTERNAL_RELEASES_WEBHOOK', 'SLACK_DEVOPS_NOTIFICATIONS',
   'GITHUB_ACTOR', 'GITHUB_RUN_ID', 'GITHUB_SHA', 'GITHUB_SERVER_URL', 'GITHUB_REPOSITORY', 'CI',
 ] as const;
 

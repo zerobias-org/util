@@ -110,7 +110,9 @@ object ReleaseAnnouncement {
     /**
      * Post a release announcement to Slack via incoming webhook.
      *
-     * Requires env: SLACK_RELEASES_WEBHOOK
+     * Requires env: SLACK_RELEASES_WEBHOOK. When SLACK_INTERNAL_RELEASES_WEBHOOK
+     * is also present the announcement goes there instead, so a repo opts into
+     * the internal releases channel purely by declaring that var in its workflow.
      */
     private fun sendSlack(
         packages: List<PublishedPackage>,
@@ -119,10 +121,14 @@ object ReleaseAnnouncement {
         githubRepo: String?,
         logger: Logger,
     ) {
-        val webhookUrl = System.getenv("SLACK_RELEASES_WEBHOOK")
+        val internalUrl = System.getenv("SLACK_INTERNAL_RELEASES_WEBHOOK")?.takeIf { it.isNotBlank() }
+        val webhookUrl = internalUrl ?: System.getenv("SLACK_RELEASES_WEBHOOK")
         if (webhookUrl.isNullOrBlank()) {
             logger.lifecycle("[announce] SLACK_RELEASES_WEBHOOK not set — skipping Slack notification")
             return
+        }
+        if (internalUrl != null) {
+            logger.lifecycle("[announce] SLACK_INTERNAL_RELEASES_WEBHOOK set — announcing to internal releases channel")
         }
 
         val messageText = buildSlackText(packages, repoRoot, githubRepo)

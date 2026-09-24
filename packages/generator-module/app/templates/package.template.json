@@ -35,22 +35,22 @@
   },
   "dependencies": {
     "<%= productPackage %>": "latest",
-    "@zerobias-org/logger": "^3.0.9",
-    "@zerobias-org/util-connector": "^1.0.40",
-    "@zerobias-org/util-hub-module-utils": "^2.0.50"
+    "@zerobias-org/logger": "^4.0.1",
+    "@zerobias-org/util-connector": "^2.0.4",
+    "@zerobias-org/util-hub-module-utils": "^3.0.8"
   },
   "peerDependencies": {
-    "@zerobias-org/types-core": "^1.0.13",
-    "@zerobias-org/types-core-js": "^1.2.25"
+    "@zerobias-org/types-core": "^2.0.2",
+    "@zerobias-org/types-core-js": "^2.0.6"
   },
   "devDependencies": {
     "@types/chai": "4.3.20",
     "@types/mocha": "10.0.10",
     "@types/node": "22.19.17",
-    "@zerobias-org/eslint-config": "1.0.36",
-    "@zerobias-org/module-test-client": "1.0.3",
-    "@zerobias-org/util-api-client-base": "^1.0.44",
-    "@zerobias-org/util-codegen": "^2.0.55",
+    "@zerobias-org/eslint-config": "1.0.41",
+    "@zerobias-org/module-test-client": "1.0.8",
+    "@zerobias-org/util-api-client-base": "^2.0.1",
+    "@zerobias-org/util-codegen": "^3.0.12",
     "@redocly/cli": "2.29.0",
     "chai": "4.5.0",
     "mocha": "11.7.5",

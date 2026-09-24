@@ -23,8 +23,8 @@
     "dist"
   ],
   "peerDependencies": {
-    "@zerobias-org/types-core-js": "^1.2.19",
-    "@zerobias-org/util-connector": "^1.0.32",
+    "@zerobias-org/types-core-js": "^2.0.6",
+    "@zerobias-org/util-connector": "^2.0.4",
     "axios": "^1.0.0"
   },
   "publishConfig": {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/secrets-manager-jsonnode-string-secret",
+  "branch": "main",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.0",
@@ -85,7 +85,7 @@
     },
     "@zerobias-org/generator-module": {
       "version": "0.25.4",
-      "sourceHash": "4f7a37622f2e8be4b5577f739099629a69d27ce911683059b16d6bd6cdc9e210",
+      "sourceHash": "92e22a3ccb62cd25a3e6c133d6e8e27cb329797d811b3d94bb5c5deb0eea96aa",
       "testHash": "9d49948bd8d5d647c71d9466b0469674226aac875ab21ce6c1e53f54a1044ae4",
       "tasks": {
         "lint": "passed",
@@ -528,7 +528,7 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.9",
+      "version": "2.0.10",
       "sourceHash": "7f998e7894a2ba163c16bb50ab08fdd31ff29150cf7c15e3e0462b77cefdb2bd",
       "testHash": "9d411af523b25e904fcd67557ab3258280b581546c2ba525ac21ee1fc66df87e",
       "tasks": {
@@ -615,7 +615,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "1.0.10",
-      "sourceHash": "764be09aa853dbf926b6b15da30912c310fb4c7c90a9ab36e745f819b5af2192",
+      "sourceHash": "ec5fe157b583c16f1e2dad55034899a313f4f64b07821b54d175e89fb0fd375e",
       "testHash": "530a4736f1635c670073cf9cd8a4b1f60255c42af434a6c11fbc86fc378fb705",
       "tasks": {
         "lint": "passed",
