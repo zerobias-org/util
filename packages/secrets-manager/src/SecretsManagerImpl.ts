@@ -99,6 +99,25 @@ export class SecretsManagerImpl implements SecretsManager {
     });
   }
 
+  /**
+   * Whether a value addresses a secret in a registered manager, rather than being literal data.
+   *
+   * The delimiter alone cannot decide this. A connection profile carries literal caller data beside
+   * its secret paths — URLs, git refs, versions — and any of those containing a delimiter would
+   * otherwise be read as `<provider>.<path>` and resolved, failing with "Secret manager
+   * https://github, is inactive". A reference must both carry a delimiter AND name a manager this
+   * instance registered. A registered-but-inactive provider still returns true, so a genuinely
+   * broken vault fails loudly here rather than being silently read back as a literal.
+   */
+  isSecretReference(value: string): boolean {
+    if (!value) {
+      return false;
+    }
+
+    const [providerKey, ...subpath] = value.split(DELIMITER);
+    return subpath.length > 0 && this.managers[providerKey] !== undefined;
+  }
+
   async getRoot(providerKey: string): Promise<TreeNode> {
     let root = this.managers[providerKey];
     if (!root || !root?.active) {

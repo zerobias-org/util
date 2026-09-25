@@ -21,6 +21,14 @@ export interface SecretsManager {
   getValue(path: string): Promise<SecretType>;
 
   /**
+   * @param value a connection-profile value, which may be a secret path or literal data
+   * @returns true when the value addresses a secret in a registered manager. Callers resolving a
+   *   profile must gate `getValue` on this: a profile mixes secret paths with literal data, and
+   *   `getValue` reads everything before the first delimiter as a provider name.
+   */
+  isSecretReference(value: string): boolean;
+
+  /**
    * Sets the value at the given path
    *
    * @param path the path to the secret
