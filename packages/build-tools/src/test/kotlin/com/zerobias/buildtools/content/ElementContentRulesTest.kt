@@ -154,59 +154,63 @@ class ElementContentRulesTest {
         assertEquals(0, ElementContentRules.checkPackage(dir).size)
     }
 
-    // ── ratchet ────────────────────────────────────────────────────────
+    // ── enforce mode ───────────────────────────────────────────────────
 
-    private fun outcome(violations: Int, baseline: Map<String, Int>?) =
-        ElementContentRules.judge(":acme:fw:v1", violations, baseline).outcome
+    private fun v(field: String) = ElementContentRules.Violation("el", field, "x")
 
     @Test
-    fun `no baseline file never fails`() {
-        assertEquals(Outcome.PASS, outcome(0, null))
-        assertEquals(Outcome.WARN_UNENFORCED, outcome(7, null))
+    fun `parseMode defaults to warn and accepts enforce`() {
+        assertEquals(ElementContentRules.Mode.WARN, ElementContentRules.parseMode(null))
+        assertEquals(ElementContentRules.Mode.WARN, ElementContentRules.parseMode(""))
+        assertEquals(ElementContentRules.Mode.WARN, ElementContentRules.parseMode("warn"))
+        assertEquals(ElementContentRules.Mode.ENFORCE, ElementContentRules.parseMode("enforce"))
+        assertEquals(ElementContentRules.Mode.ENFORCE, ElementContentRules.parseMode(" Enforce "))
     }
 
     @Test
-    fun `unlisted package must be clean`() {
-        val baseline = mapOf(":other:pkg:v1" to 3)
-        assertEquals(Outcome.PASS, outcome(0, baseline))
-        assertEquals(Outcome.FAIL_NEW, outcome(1, baseline))
+    fun `parseMode rejects an unknown value instead of silently not enforcing`() {
+        assertThrows(IllegalArgumentException::class.java) { ElementContentRules.parseMode("strict") }
     }
 
     @Test
-    fun `listed package is held to its count`() {
-        val baseline = mapOf(":acme:fw:v1" to 5)
-        assertEquals(Outcome.PASS, outcome(5, baseline))
-        assertEquals(Outcome.WARN_TIGHTEN, outcome(3, baseline))
-        assertEquals(Outcome.FAIL_REGRESSED, outcome(6, baseline))
-        assertEquals(Outcome.FAIL_STALE, outcome(0, baseline))
+    fun `enforce passes a clean package`() {
+        assertEquals(Outcome.PASS, ElementContentRules.judge(":acme:fw:v1", emptyList(), ElementContentRules.Mode.ENFORCE).outcome)
     }
 
     @Test
-    fun `failing outcomes are exactly the FAIL ones`() {
-        assertEquals(
-            setOf(Outcome.FAIL_NEW, Outcome.FAIL_REGRESSED, Outcome.FAIL_STALE),
-            Outcome.values().filter { it.fails }.toSet(),
-        )
+    fun `enforce fails on any description or background violation`() {
+        assertEquals(Outcome.FAIL_ENFORCED, ElementContentRules.judge(":acme:fw:v1", listOf(v("description")), ElementContentRules.Mode.ENFORCE).outcome)
+        assertEquals(Outcome.FAIL_ENFORCED, ElementContentRules.judge(":acme:fw:v1", listOf(v("background")), ElementContentRules.Mode.ENFORCE).outcome)
+        assertEquals(Outcome.FAIL_ENFORCED, ElementContentRules.judge(":acme:fw:v1", listOf(v("links.demonstrates[0]"), v("description")), ElementContentRules.Mode.ENFORCE).outcome)
     }
 
     @Test
-    fun `baseline round-trips through format and parse`() {
-        val counts = mapOf(":b:pkg:v1" to 2, ":a:pkg:v1" to 40, ":c:clean:v1" to 0)
-        val text = ElementContentRules.formatBaseline(counts)
-        assertEquals(mapOf(":a:pkg:v1" to 40, ":b:pkg:v1" to 2), ElementContentRules.parseBaseline(text))
-        assertTrue(text.indexOf(":a:pkg:v1") < text.indexOf(":b:pkg:v1"))
+    fun `enforce only warns on link shape problems`() {
+        val verdict = ElementContentRules.judge(":acme:fw:v1", listOf(v("links.demonstrates[0]"), v("links")), ElementContentRules.Mode.ENFORCE)
+        assertEquals(Outcome.WARN_ADVISORY, verdict.outcome)
+        assertTrue(!verdict.outcome.fails)
     }
 
     @Test
-    fun `baseline parse ignores comments and blank lines`() {
-        val text = "# header\n\n:a:pkg:v1=3   # trailing comment\n"
-        assertEquals(mapOf(":a:pkg:v1" to 3), ElementContentRules.parseBaseline(text))
+    fun `yaml errors block in enforce mode`() {
+        assertEquals(Outcome.FAIL_ENFORCED, ElementContentRules.judge(":acme:fw:v1", listOf(v("yaml")), ElementContentRules.Mode.ENFORCE).outcome)
     }
 
     @Test
-    fun `malformed or duplicate baseline lines are rejected`() {
-        listOf("a:pkg:v1=3", ":a:pkg:v1=", ":a:pkg:v1=zero", ":a:pkg:v1=0", ":a:pkg:v1=1\n:a:pkg:v1=2").forEach {
-            assertThrows(IllegalArgumentException::class.java, { ElementContentRules.parseBaseline(it) }, it)
-        }
+    fun `warn mode never fails`() {
+        val verdict = ElementContentRules.judge(":acme:fw:v1", listOf(v("description"), v("links")), ElementContentRules.Mode.WARN)
+        assertEquals(Outcome.WARN_UNENFORCED, verdict.outcome)
+        assertTrue(!verdict.outcome.fails)
+        assertEquals(Outcome.PASS, ElementContentRules.judge(":acme:fw:v1", emptyList(), ElementContentRules.Mode.WARN).outcome)
+    }
+
+    @Test
+    fun `only enforce violations fail`() {
+        assertEquals(setOf(Outcome.FAIL_ENFORCED), Outcome.values().filter { it.fails }.toSet())
+    }
+
+    @Test
+    fun `the old ratchet value is rejected rather than silently ignored`() {
+        assertThrows(IllegalArgumentException::class.java) { ElementContentRules.parseMode("ratchet") }
     }
 }
