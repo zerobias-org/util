@@ -184,7 +184,7 @@ class ElementContentRulesTest {
     @Test
     fun `failing outcomes are exactly the FAIL ones`() {
         assertEquals(
-            setOf(Outcome.FAIL_NEW, Outcome.FAIL_REGRESSED, Outcome.FAIL_STALE),
+            setOf(Outcome.FAIL_NEW, Outcome.FAIL_REGRESSED, Outcome.FAIL_STALE, Outcome.FAIL_ENFORCED),
             Outcome.values().filter { it.fails }.toSet(),
         )
     }
@@ -208,5 +208,47 @@ class ElementContentRulesTest {
         listOf("a:pkg:v1=3", ":a:pkg:v1=", ":a:pkg:v1=zero", ":a:pkg:v1=0", ":a:pkg:v1=1\n:a:pkg:v1=2").forEach {
             assertThrows(IllegalArgumentException::class.java, { ElementContentRules.parseBaseline(it) }, it)
         }
+    }
+
+    // ── enforce mode ───────────────────────────────────────────────────
+
+    private fun v(field: String) = ElementContentRules.Violation("el", field, "x")
+
+    @Test
+    fun `parseMode defaults to ratchet and accepts enforce`() {
+        assertEquals(ElementContentRules.Mode.RATCHET, ElementContentRules.parseMode(null))
+        assertEquals(ElementContentRules.Mode.RATCHET, ElementContentRules.parseMode(""))
+        assertEquals(ElementContentRules.Mode.RATCHET, ElementContentRules.parseMode("ratchet"))
+        assertEquals(ElementContentRules.Mode.ENFORCE, ElementContentRules.parseMode("enforce"))
+        assertEquals(ElementContentRules.Mode.ENFORCE, ElementContentRules.parseMode(" Enforce "))
+    }
+
+    @Test
+    fun `parseMode rejects an unknown value instead of silently not enforcing`() {
+        assertThrows(IllegalArgumentException::class.java) { ElementContentRules.parseMode("strict") }
+    }
+
+    @Test
+    fun `enforce passes a clean package`() {
+        assertEquals(Outcome.PASS, ElementContentRules.judgeEnforced(":acme:fw:v1", emptyList()).outcome)
+    }
+
+    @Test
+    fun `enforce fails on any description or background violation`() {
+        assertEquals(Outcome.FAIL_ENFORCED, ElementContentRules.judgeEnforced(":acme:fw:v1", listOf(v("description"))).outcome)
+        assertEquals(Outcome.FAIL_ENFORCED, ElementContentRules.judgeEnforced(":acme:fw:v1", listOf(v("background"))).outcome)
+        assertEquals(Outcome.FAIL_ENFORCED, ElementContentRules.judgeEnforced(":acme:fw:v1", listOf(v("links.demonstrates[0]"), v("description"))).outcome)
+    }
+
+    @Test
+    fun `enforce only warns on link shape problems`() {
+        val verdict = ElementContentRules.judgeEnforced(":acme:fw:v1", listOf(v("links.demonstrates[0]"), v("links")))
+        assertEquals(Outcome.WARN_ADVISORY, verdict.outcome)
+        assertTrue(!verdict.outcome.fails)
+    }
+
+    @Test
+    fun `yaml errors block in enforce mode`() {
+        assertEquals(Outcome.FAIL_ENFORCED, ElementContentRules.judgeEnforced(":acme:fw:v1", listOf(v("yaml"))).outcome)
     }
 }

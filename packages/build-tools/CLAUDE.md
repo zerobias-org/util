@@ -152,6 +152,28 @@ Extends base with Maven/Java lifecycle:
 | Build | `buildJavaImage` | Exec → docker build |
 | Publish | `publishJavaImage` | Exec → docker push |
 
+### zb.content — element content rules
+
+`validateContent` runs `ElementContentRules` (`content/ElementContentRules.kt`) on every
+package with an `elements/` directory (framework, standard, benchmark repos):
+
+- `description` — plain text, no markdown/HTML/newlines, under 200 characters
+- `background` — must be a string (long text belongs in `elements/<code>-background.md`)
+- `links` — `Record<predicate, alias[]>` shape only; resolving an alias needs the live catalog
+
+`deprecate: true` / `skip: true` elements are exempt. How a violation is treated is chosen
+per consumer repo:
+
+| Repo setting | Behaviour |
+|---|---|
+| `zb.elementRules=enforce` in root `gradle.properties` | any description/background violation **fails** (`FAIL_ENFORCED`); `links` problems only warn (`WARN_ADVISORY`). No exceptions list — combining it with a baseline file is an error. |
+| `element-rules-baseline.txt` at the repo root | ratchet: listed packages may not exceed their count; unlisted packages must be clean |
+| neither | report only (`WARN_UNENFORCED`) — a green build says nothing about the content |
+
+Consumers resolve build-tools at `1.+`, which is why enforcement is opt-in per repo rather
+than a default. The content-side rules and the fix procedure are documented in the meta-repo
+(`docs/ElementContentRules.md`).
+
 ## Dependencies
 
 ```kotlin

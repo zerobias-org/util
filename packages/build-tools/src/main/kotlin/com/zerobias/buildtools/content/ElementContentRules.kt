@@ -19,7 +19,14 @@ import java.io.File
  * shape-checked here — resolving one needs the live catalog.
  *
  * `zb.content` runs [checkPackage] from `validateContent` for every package
- * with an `elements/` directory, and applies the repo's ratchet via [judge].
+ * with an `elements/` directory, then decides the package's fate one of two
+ * ways, chosen per repo:
+ *
+ *   - `zb.elementRules=enforce` in the repo's `gradle.properties` — every
+ *     description/background violation fails the build ([judgeEnforced]).
+ *     No list of exceptions: packages are fixed, not recorded.
+ *   - otherwise the ratchet against [BASELINE_FILE] ([judge]), which only
+ *     warns while the repo has no baseline.
  */
 object ElementContentRules {
 
@@ -30,6 +37,29 @@ object ElementContentRules {
 
     data class Violation(val element: String, val field: String, val message: String) {
         override fun toString() = "$element: $field $message"
+
+        /**
+         * Whether enforce mode fails the build on this violation. `links` are
+         * only shape-checked here — whether an alias resolves needs the live
+         * catalog — so enforce mode reports them without failing.
+         */
+        val blocking: Boolean
+            get() = !this.field.startsWith("links")
+    }
+
+    /** Gradle property (root `gradle.properties`) that selects the mode. */
+    const val MODE_PROPERTY = "zb.elementRules"
+
+    enum class Mode { RATCHET, ENFORCE }
+
+    /** `null` or `ratchet` → [Mode.RATCHET]; `enforce` → [Mode.ENFORCE]. */
+    @JvmStatic
+    fun parseMode(value: Any?): Mode = when (value?.toString()?.trim()?.lowercase()) {
+        null, "", "ratchet" -> Mode.RATCHET
+        "enforce" -> Mode.ENFORCE
+        else -> throw IllegalArgumentException(
+            "$MODE_PROPERTY must be 'enforce' or 'ratchet' (got '$value')"
+        )
     }
 
     // Allow-listed tag names only: a bare `<[^>]+>` flags config placeholders
@@ -148,6 +178,10 @@ object ElementContentRules {
         FAIL_REGRESSED(true),
         /** Package is clean but still listed. */
         FAIL_STALE(true),
+        /** Enforce mode: only non-blocking (`links`) violations remain. */
+        WARN_ADVISORY(false),
+        /** Enforce mode: a description/background violation. */
+        FAIL_ENFORCED(true),
     }
 
     data class Verdict(val outcome: Outcome, val message: String)
@@ -166,7 +200,7 @@ object ElementContentRules {
             violations == 0 && allowed == null ->
                 Verdict(Outcome.PASS, "$projectPath: element content rules passed")
             baseline == null ->
-                Verdict(Outcome.WARN_UNENFORCED, "$projectPath: $violations element content rule violation(s) — not enforced until this repo commits $BASELINE_FILE")
+                Verdict(Outcome.WARN_UNENFORCED, "$projectPath: $violations element content rule violation(s) — not enforced (set $MODE_PROPERTY=enforce in gradle.properties, or commit $BASELINE_FILE)")
             allowed == null ->
                 Verdict(Outcome.FAIL_NEW, "$projectPath: $violations element content rule violation(s) in a package not listed in $BASELINE_FILE — packages outside the baseline must be clean")
             violations > allowed ->
@@ -177,6 +211,24 @@ object ElementContentRules {
                 Verdict(Outcome.WARN_TIGHTEN, "$projectPath: $violations element content rule violation(s), $BASELINE_FILE allows $allowed — lower its count to $violations")
             else ->
                 Verdict(Outcome.PASS, "$projectPath: $violations element content rule violation(s), at its baseline")
+        }
+    }
+
+    /**
+     * Enforce mode: any blocking violation fails; `links` shape problems are
+     * reported but never fail (see [Violation.blocking]).
+     */
+    @JvmStatic
+    fun judgeEnforced(projectPath: String, violations: List<Violation>): Verdict {
+        val blocking = violations.count { it.blocking }
+        val advisory = violations.size - blocking
+        return when {
+            blocking > 0 ->
+                Verdict(Outcome.FAIL_ENFORCED, "$projectPath: $blocking element content rule violation(s) — $MODE_PROPERTY=enforce fails on any; fix them (move long text to <code>-background.md)")
+            advisory > 0 ->
+                Verdict(Outcome.WARN_ADVISORY, "$projectPath: element content rules passed; $advisory link alias warning(s) (shape only — resolve aliases against the live catalog)")
+            else ->
+                Verdict(Outcome.PASS, "$projectPath: element content rules passed")
         }
     }
 
