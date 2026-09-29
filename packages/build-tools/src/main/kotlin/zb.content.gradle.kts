@@ -16,9 +16,8 @@ import com.zerobias.buildtools.util.PackageJsonReader
  *                      (no default; missing slot is a build-time error —
  *                       compose your validator from SchemaPrimitives)
  *                     + ElementContentRules for packages with elements/:
- *                       enforced with zb.elementRules=enforce in the repo's
- *                       gradle.properties, else ratcheted by its
- *                       element-rules-baseline.txt (warn-only without one)
+ *                       fatal with zb.elementRules=enforce in the repo's
+ *                       gradle.properties, reported only otherwise
  *   testIntegration → NeonDataloaderTask (loads artifact into ephemeral
  *                      Neon Postgres branch — this is the universal
  *                      "is this loadable?" contract across content types)
@@ -116,24 +115,13 @@ val validateContent by tasks.registering {
 
         // Element content rules are the same for every artifact type that
         // ships elements (framework, standard, benchmark), so they run here
-        // rather than in each repo's validator. A repo either enforces them
-        // (zb.elementRules=enforce in gradle.properties) or ratchets them
-        // with element-rules-baseline.txt — see ElementContentRules.
+        // rather than in each repo's validator. The repo enforces them with
+        // zb.elementRules=enforce in gradle.properties — see ElementContentRules.
         if (project.file("elements").isDirectory) {
             val rules = com.zerobias.buildtools.content.ElementContentRules
             val violations = rules.checkPackage(project.projectDir)
-            val baselineFile = rootProject.file(rules.BASELINE_FILE)
             val mode = rules.parseMode(rootProject.findProperty(rules.MODE_PROPERTY))
-            val verdict = if (mode == com.zerobias.buildtools.content.ElementContentRules.Mode.ENFORCE) {
-                if (baselineFile.isFile) throw GradleException(
-                    "[element-rules] ${rules.MODE_PROPERTY}=enforce and ${rules.BASELINE_FILE} are both set — " +
-                    "enforce mode takes no exceptions list; delete the baseline or drop the property"
-                )
-                rules.judgeEnforced(project.path, violations)
-            } else {
-                val baseline = if (baselineFile.isFile) rules.parseBaseline(baselineFile.readText()) else null
-                rules.judge(project.path, violations.size, baseline)
-            }
+            val verdict = rules.judge(project.path, violations, mode)
 
             // In enforce mode list what fails first; advisory link warnings after.
             val ordered = violations.sortedBy { !it.blocking }

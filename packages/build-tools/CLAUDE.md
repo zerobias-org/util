@@ -161,14 +161,13 @@ package with an `elements/` directory (framework, standard, benchmark repos):
 - `background` — must be a string (long text belongs in `elements/<code>-background.md`)
 - `links` — `Record<predicate, alias[]>` shape only; resolving an alias needs the live catalog
 
-`deprecate: true` / `skip: true` elements are exempt. How a violation is treated is chosen
-per consumer repo:
+`deprecate: true` / `skip: true` elements are exempt. The consumer repo chooses the mode with
+`zb.elementRules` in its root `gradle.properties`:
 
-| Repo setting | Behaviour |
+| `zb.elementRules` | Behaviour |
 |---|---|
-| `zb.elementRules=enforce` in root `gradle.properties` | any description/background violation **fails** (`FAIL_ENFORCED`); `links` problems only warn (`WARN_ADVISORY`). No exceptions list — combining it with a baseline file is an error. |
-| `element-rules-baseline.txt` at the repo root | ratchet: listed packages may not exceed their count; unlisted packages must be clean |
-| neither | report only (`WARN_UNENFORCED`) — a green build says nothing about the content |
+| `enforce` | any description/background violation **fails** (`FAIL_ENFORCED`); `links` shape problems only warn (`WARN_ADVISORY`). No exceptions list — a violating package is fixed, not recorded. |
+| `warn` or unset | violations are reported, never fatal (`WARN_UNENFORCED`) — a green build says nothing about the content |
 
 Consumers resolve build-tools at `1.+`, which is why enforcement is opt-in per repo rather
 than a default. The content-side rules and the fix procedure are documented in the meta-repo

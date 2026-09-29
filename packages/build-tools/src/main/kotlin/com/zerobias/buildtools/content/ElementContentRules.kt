@@ -19,21 +19,17 @@ import java.io.File
  * shape-checked here — resolving one needs the live catalog.
  *
  * `zb.content` runs [checkPackage] from `validateContent` for every package
- * with an `elements/` directory, then decides the package's fate one of two
- * ways, chosen per repo:
+ * with an `elements/` directory and applies [judge]. The repo chooses the
+ * mode with `zb.elementRules` in its root `gradle.properties`:
  *
- *   - `zb.elementRules=enforce` in the repo's `gradle.properties` — every
- *     description/background violation fails the build ([judgeEnforced]).
- *     No list of exceptions: packages are fixed, not recorded.
- *   - otherwise the ratchet against [BASELINE_FILE] ([judge]), which only
- *     warns while the repo has no baseline.
+ *   - `enforce` — every description/background violation fails the build.
+ *     There is no exceptions list: a violating package is fixed, not recorded.
+ *   - `warn` (default) — violations are reported, never fatal. The default
+ *     stays non-fatal because consumers resolve build-tools as `1.+`.
  */
 object ElementContentRules {
 
     const val MAX_DESCRIPTION = 200
-
-    /** Ratchet file at the consumer repo's root. */
-    const val BASELINE_FILE = "element-rules-baseline.txt"
 
     data class Violation(val element: String, val field: String, val message: String) {
         override fun toString() = "$element: $field $message"
@@ -50,15 +46,15 @@ object ElementContentRules {
     /** Gradle property (root `gradle.properties`) that selects the mode. */
     const val MODE_PROPERTY = "zb.elementRules"
 
-    enum class Mode { RATCHET, ENFORCE }
+    enum class Mode { WARN, ENFORCE }
 
-    /** `null` or `ratchet` → [Mode.RATCHET]; `enforce` → [Mode.ENFORCE]. */
+    /** `null`, empty or `warn` → [Mode.WARN]; `enforce` → [Mode.ENFORCE]. */
     @JvmStatic
     fun parseMode(value: Any?): Mode = when (value?.toString()?.trim()?.lowercase()) {
-        null, "", "ratchet" -> Mode.RATCHET
+        null, "", "warn" -> Mode.WARN
         "enforce" -> Mode.ENFORCE
         else -> throw IllegalArgumentException(
-            "$MODE_PROPERTY must be 'enforce' or 'ratchet' (got '$value')"
+            "$MODE_PROPERTY must be 'enforce' or 'warn' (got '$value')"
         )
     }
 
@@ -164,20 +160,12 @@ object ElementContentRules {
             }
     }
 
-    // ── Ratchet ──────────────────────────────────────────────────────
+    // ── Verdict ──────────────────────────────────────────────────────
 
     enum class Outcome(val fails: Boolean) {
         PASS(false),
-        /** Repo has no baseline file yet: violations are reported, never fatal. */
+        /** Warn mode: violations are reported, never fatal. */
         WARN_UNENFORCED(false),
-        /** Fewer violations than the baseline allows — the count should be lowered. */
-        WARN_TIGHTEN(false),
-        /** Package not in the baseline has violations. */
-        FAIL_NEW(true),
-        /** Package has more violations than the baseline allows. */
-        FAIL_REGRESSED(true),
-        /** Package is clean but still listed. */
-        FAIL_STALE(true),
         /** Enforce mode: only non-blocking (`links`) violations remain. */
         WARN_ADVISORY(false),
         /** Enforce mode: a description/background violation. */
@@ -187,75 +175,23 @@ object ElementContentRules {
     data class Verdict(val outcome: Outcome, val message: String)
 
     /**
-     * Decide a package's fate from its violation count and the repo's
-     * baseline (`null` when the repo has no [BASELINE_FILE]).
-     *
-     * Consumers resolve build-tools as `1.+`, so a repo without a baseline
-     * only warns: enforcement starts when the repo commits one.
+     * Decide a package's fate. In [Mode.ENFORCE] any blocking violation
+     * fails; `links` shape problems are reported but never fail (see
+     * [Violation.blocking]). In [Mode.WARN] nothing fails.
      */
     @JvmStatic
-    fun judge(projectPath: String, violations: Int, baseline: Map<String, Int>?): Verdict {
-        val allowed = baseline?.get(projectPath)
-        return when {
-            violations == 0 && allowed == null ->
-                Verdict(Outcome.PASS, "$projectPath: element content rules passed")
-            baseline == null ->
-                Verdict(Outcome.WARN_UNENFORCED, "$projectPath: $violations element content rule violation(s) — not enforced (set $MODE_PROPERTY=enforce in gradle.properties, or commit $BASELINE_FILE)")
-            allowed == null ->
-                Verdict(Outcome.FAIL_NEW, "$projectPath: $violations element content rule violation(s) in a package not listed in $BASELINE_FILE — packages outside the baseline must be clean")
-            violations > allowed ->
-                Verdict(Outcome.FAIL_REGRESSED, "$projectPath: $violations element content rule violation(s), $BASELINE_FILE allows $allowed — fix the new ones")
-            violations == 0 ->
-                Verdict(Outcome.FAIL_STALE, "$projectPath: element content rules now pass — remove it from $BASELINE_FILE")
-            violations < allowed ->
-                Verdict(Outcome.WARN_TIGHTEN, "$projectPath: $violations element content rule violation(s), $BASELINE_FILE allows $allowed — lower its count to $violations")
-            else ->
-                Verdict(Outcome.PASS, "$projectPath: $violations element content rule violation(s), at its baseline")
-        }
-    }
-
-    /**
-     * Enforce mode: any blocking violation fails; `links` shape problems are
-     * reported but never fail (see [Violation.blocking]).
-     */
-    @JvmStatic
-    fun judgeEnforced(projectPath: String, violations: List<Violation>): Verdict {
+    fun judge(projectPath: String, violations: List<Violation>, mode: Mode): Verdict {
         val blocking = violations.count { it.blocking }
         val advisory = violations.size - blocking
         return when {
+            violations.isEmpty() ->
+                Verdict(Outcome.PASS, "$projectPath: element content rules passed")
+            mode == Mode.WARN ->
+                Verdict(Outcome.WARN_UNENFORCED, "$projectPath: ${violations.size} element content rule violation(s) — not enforced (set $MODE_PROPERTY=enforce in gradle.properties)")
             blocking > 0 ->
                 Verdict(Outcome.FAIL_ENFORCED, "$projectPath: $blocking element content rule violation(s) — $MODE_PROPERTY=enforce fails on any; fix them (move long text to <code>-background.md)")
-            advisory > 0 ->
-                Verdict(Outcome.WARN_ADVISORY, "$projectPath: element content rules passed; $advisory link alias warning(s) (shape only — resolve aliases against the live catalog)")
             else ->
-                Verdict(Outcome.PASS, "$projectPath: element content rules passed")
+                Verdict(Outcome.WARN_ADVISORY, "$projectPath: element content rules passed; $advisory link alias warning(s) (shape only — resolve aliases against the live catalog)")
         }
-    }
-
-    /** Parse `:project:path=<count>` lines; `#` starts a comment. */
-    @JvmStatic
-    fun parseBaseline(text: String): Map<String, Int> {
-        val counts = linkedMapOf<String, Int>()
-        for (raw in text.lineSequence()) {
-            val line = raw.substringBefore('#').trim()
-            if (line.isEmpty()) continue
-            val path = line.substringBeforeLast('=', "").trim()
-            val count = line.substringAfterLast('=', "").trim().toIntOrNull()
-            require(path.startsWith(":") && count != null && count > 0) {
-                "$BASELINE_FILE: malformed line '$raw' (expected :project:path=<count> with count > 0)"
-            }
-            require(counts.put(path, count) == null) { "$BASELINE_FILE: $path is listed twice" }
-        }
-        return counts
-    }
-
-    /** Render a baseline file, packages sorted by path. */
-    @JvmStatic
-    fun formatBaseline(counts: Map<String, Int>): String = buildString {
-        appendLine("# Element content rule violations allowed per package (ratchet).")
-        appendLine("# A package not listed here must have none; a listed package may not exceed its count.")
-        appendLine("# Lower a count as violations are fixed, and remove a package once it reaches zero.")
-        appendLine("# Bootstrap: ./gradlew writeElementRulesBaseline")
-        counts.filterValues { it > 0 }.toSortedMap().forEach { (path, count) -> appendLine("$path=$count") }
     }
 }
