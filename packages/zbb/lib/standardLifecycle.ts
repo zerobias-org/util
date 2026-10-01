@@ -315,13 +315,40 @@ export function resolveCommandForCwd(repoRoot: string, baseCommand: string): str
   }
   let projects = loadProjectCache(found.root);
   if (projects === null) {
-    try {
-      projects = buildProjectCache(found.root, found.wrapper);
-    } catch (e) {
-      console.error(`[zbb] could not enumerate gradle projects: ${(e as Error).message}`);
-      return baseCommand;
+    // Enumeration shells out to gradle, which can fail transiently (daemon
+    // startup, memory pressure, a concurrent build holding a lock). Give it one
+    // more go before concluding anything.
+    let lastErr: Error | null = null;
+    for (let attempt = 1; attempt <= 2 && projects === null; attempt++) {
+      try {
+        projects = buildProjectCache(found.root, found.wrapper);
+      } catch (e) {
+        lastErr = e as Error;
+      }
+    }
+    if (projects === null) {
+      // Do NOT fall through to the unscoped command. cwd is a registered gradle
+      // subproject, so the user asked for one project; running the bare task
+      // instead runs it against EVERY project in the build. For `publish` that
+      // means publishing the whole repo, and the first project whose preflight
+      // fails takes the build down with an error naming a package the user
+      // never mentioned.
+      //
+      // Not hypothetical: a transient `projectPaths` failure surfaced as
+      // "Preflight FAILED ... :cis:benchmarks:amazon_linux" on publish jobs for
+      // unrelated DISA packages, costing 10+ re-runs per PR to get past.
+      console.error(
+        `[zbb] could not enumerate gradle projects after 2 attempts: ${lastErr?.message}`,
+      );
+      console.error(
+        `Refusing to run '${taskName}' unscoped from ${cwd} — without the project\n` +
+        `map the task would run against every project in the build. Re-run, or run\n` +
+        `\`zbb\` from the repo root if you did mean to target all projects.`,
+      );
+      process.exit(1);
     }
   }
+
   const projectPath = detectProject(found.root, projects);
   if (!projectPath) {
     console.error(
