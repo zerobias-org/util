@@ -736,12 +736,52 @@ val preflightChecks by tasks.registering {
 
         // 8. Verify npm registry auth (whoami against the registry in .npmrc)
         try {
-            // Parse registry from .npmrc — look for the scoped registry
-            val npmrcFile = project.file(".npmrc")
-            val registry = if (npmrcFile.exists()) {
-                val registryLine = npmrcFile.readLines().firstOrNull { it.contains("registry=") && !it.startsWith("//") }
-                registryLine?.substringAfter("registry=")?.trim()
-            } else null
+            // Resolve the registry the way npm does: the package's own scope wins, and
+            // config is inherited from parent directories up to the repo root.
+            //
+            // Reading only the package's own .npmrc is not enough. In the content repos
+            // that file is frequently a one-line relative path pointing at the root
+            // .npmrc rather than npm config, so it carries no `registry=` of its own.
+            // The old lookup then yielded null and fell through to `npm whoami` with no
+            // --registry, i.e. the public registry, where a GitHub Packages NPM_TOKEN is
+            // not valid. That reported "npm whoami failed against default registry —
+            // NPM_TOKEN may be invalid or expired" against a token that was fine, which
+            // is a long way from the actual problem.
+            val scope = Regex("""^@([^/]+)/""").find(pkgName)?.groupValues?.get(1)
+            val searched = mutableListOf<String>()
+            val registry = run {
+                var dir: java.io.File? = project.projectDir
+                while (dir != null) {
+                    val candidate = java.io.File(dir, ".npmrc")
+                    if (candidate.isFile) {
+                        searched += candidate.path
+                        val lines = candidate.readLines()
+                            .map { it.trim() }
+                            .filterNot { it.startsWith("//") || it.startsWith("#") || it.startsWith(";") }
+                        // A scoped entry for this package's own scope beats a bare default.
+                        val hit = scope?.let { s -> lines.firstOrNull { it.startsWith("@$s:registry=") } }
+                            ?: lines.firstOrNull { it.startsWith("registry=") }
+                        if (hit != null) return@run hit.substringAfter("registry=").trim()
+                    }
+                    if (dir == project.rootDir) break
+                    dir = dir.parentFile
+                }
+                null
+            }
+            if (registry == null) {
+                // Publishing a scoped package to the public registry is legitimate, so
+                // this stays a warning rather than a failure -- this plugin is shared and
+                // hard-failing here would break those repos. It is worth saying out loud,
+                // though: silently defaulting is what made the original fault read as a
+                // bad token.
+                logger.warn(
+                    "Preflight WARNING: no registry resolved for " +
+                        (scope?.let { "scope @$it" } ?: "package $pkgName") +
+                        " — searched ${if (searched.isEmpty()) "no .npmrc files" else searched.joinToString(", ")}; " +
+                        "falling back to the npm default registry"
+                )
+            }
+            val registryLabel = registry ?: "default registry"
 
             val whoamiCmd = if (registry != null) {
                 listOf("npm", "whoami", "--registry", registry)
@@ -755,9 +795,9 @@ val preflightChecks by tasks.registering {
             val username = whoami.standardOutput.asText.get().trim()
             val exitCode = whoami.result.get().exitValue
             if (exitCode != 0 || username.isEmpty()) {
-                throw GradleException("Preflight FAILED: npm whoami failed against ${registry ?: "default registry"} — NPM_TOKEN may be invalid or expired")
+                throw GradleException("Preflight FAILED: npm whoami failed against $registryLabel — NPM_TOKEN may be invalid or expired for that registry")
             }
-            logger.lifecycle("Preflight: npm authenticated as '$username' (${registry ?: "default registry"})")
+            logger.lifecycle("Preflight: npm authenticated as '$username' ($registryLabel)")
         } catch (e: GradleException) {
             throw e
         } catch (e: Exception) {
