@@ -215,6 +215,41 @@ describe('resolveCommandForCwd — refuse path', () => {
   });
 });
 
+describe('resolveCommandForCwd — project enumeration failure', () => {
+  // When the project map cannot be built, the task must NOT fall through to the
+  // unscoped command: cwd is a registered subproject, so the user asked for one
+  // project, and the bare task runs against every project in the build. For
+  // `publish` that publishes the whole repo and fails on whichever unrelated
+  // project's preflight breaks first.
+  it('exits 1 rather than running the task unscoped when gradle enumeration fails', async () => {
+    const repoRoot = await makeRepo({
+      projects: { ':package:thing': 'package/thing' },
+      buildFileDirs: ['package/thing'],
+    });
+    // Invalidate the cache so buildProjectCache is forced to run...
+    await writeFile(join(repoRoot, 'package/thing/extra.gradle.kts'), '// x\n', 'utf-8');
+    await mkdir(join(repoRoot, 'package/added'), { recursive: true });
+    await writeFile(join(repoRoot, 'package/added/build.gradle.kts'), '// x\n', 'utf-8');
+    // ...and make gradlew fail in a way that is not "task not found", which is
+    // the only failure buildProjectCache treats as an empty-but-valid result.
+    await writeFile(
+      join(repoRoot, 'gradlew'),
+      '#!/bin/sh\necho "FAILURE: daemon could not be started" >&2\nexit 1\n',
+      { mode: 0o755 },
+    );
+    process.chdir(join(repoRoot, 'package/thing'));
+
+    assert.throws(
+      () => resolveCommandForCwd(repoRoot, './gradlew publish'),
+      ProcessExitInTest,
+    );
+    assert.equal(exitCode, 1);
+    const combined = exitMessages.join('\n');
+    assert.match(combined, /could not enumerate gradle projects/);
+    assert.match(combined, /Refusing to run 'publish' unscoped/);
+  });
+});
+
 describe('resolveCommandForCwd — bail-on-unsafe', () => {
   it('returns the baseCommand unchanged when it contains &&', async () => {
     const repoRoot = await makeRepo({
