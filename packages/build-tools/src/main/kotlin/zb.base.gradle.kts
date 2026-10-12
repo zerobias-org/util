@@ -1441,6 +1441,35 @@ listOf("publishNpm", "publishImage", "publishSdk", "publishHubSdk").forEach { ta
     tasks.named(taskName) { mustRunAfter(bumpVersion, resolvePublishVersion) }
 }
 
+// The lifecycle tasks above are not enough: Gradle orders a task's own
+// dependencies independently, so the tasks that actually read project.version —
+// patchPackageJson, the publish/promote execs, image pushes, preflight — could run
+// before the version resolved. A dev publish then patched package.json to X-dev.0,
+// npm published X-dev.0, and promoteNpm 404'd tagging the resolved Y-dev.0
+// (zerobias-org/framework run 37686651611). Order every version reader after every
+// version resolver. The plugins applied on top of zb.base register these tasks;
+// configureEach covers whichever of them exist.
+val versionReaders = setOf(
+    "patchPackageJson", "preflightChecks",
+    "publishNpmExec", "publishSdkExec", "publishHubSdkExec",
+    "publishImageEcr", "publishImageGhcr",
+    "promoteNpm", "promoteSdk", "promoteHubSdk",
+)
+tasks.matching { it.name in versionReaders }.configureEach {
+    mustRunAfter(bumpVersion, resolvePublishVersion, resolveOrgVersion)
+}
+// A promote must also follow its own publish, or it tags a version that is not
+// on the registry yet (same failure: E404 on dist-tag add).
+mapOf(
+    "promoteNpm" to "publishNpmExec",
+    "promoteSdk" to "publishSdkExec",
+    "promoteHubSdk" to "publishHubSdkExec",
+).forEach { (promote, publishExec) ->
+    tasks.matching { it.name == promote }.configureEach {
+        mustRunAfter(tasks.matching { it.name == publishExec })
+    }
+}
+
 if (isOrgPublish) {
     // Fail before gate: a missing orgId or a non-admin token should cost
     // seconds, not a full validate/build/test/dataloader cycle.
