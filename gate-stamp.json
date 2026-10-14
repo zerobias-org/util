@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/codegen-attachment-filename",
+  "branch": "fix/zbb-minio-image",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.0",
@@ -367,7 +367,7 @@
     },
     "@zerobias-org/util-codegen": {
       "version": "3.0.12",
-      "sourceHash": "c0b955e9eec874d9336a862e8fd07bd84b785d7ece4940249fe91144797bfd33",
+      "sourceHash": "62b85a09573cade3c5d5d51b01e01a6b0e3a58e77f9b2d0f01cba0d79cd8beab",
       "testHash": "7a055db278c0ebd45ba867f0d4445e82202a7eab9bead6d02e98a971fa2ed57d",
       "tasks": {
         "lint": "skipped",
@@ -615,7 +615,7 @@
     },
     "@zerobias-org/zbb": {
       "version": "1.0.12",
-      "sourceHash": "dc030c0410556b2711da38576b8ae10ef5137d985d918a8b9d87c5bc1b9b6f6c",
+      "sourceHash": "4ab9027bf9376ad4825ade1160384b3a431570fb8c42b4c1a6c1c6c100e6f23c",
       "testHash": "724db59aa9d0502ce5fb64d08bc49974eace43f06091023bb0c99261e5536555",
       "tasks": {
         "lint": "passed",
