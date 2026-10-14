@@ -1,6 +1,9 @@
 services:
   minio:
-    image: minio/minio:latest
+    # minio/minio is no longer published; Chainguard builds MinIO from source.
+    image: cgr.dev/chainguard/minio:latest
+    # Root like the old image, so volumes it created stay writable.
+    user: "0:0"
     container_name: ${ZB_SLOT}-minio
     command: server /data --console-address ":9001"
     ports:
