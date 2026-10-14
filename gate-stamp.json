@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/zbb-enumeration-failure-must-not-run-unscoped",
+  "branch": "fix/zbb-minio-image",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.0",
@@ -614,8 +614,8 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.11",
-      "sourceHash": "dc030c0410556b2711da38576b8ae10ef5137d985d918a8b9d87c5bc1b9b6f6c",
+      "version": "1.0.12",
+      "sourceHash": "4ab9027bf9376ad4825ade1160384b3a431570fb8c42b4c1a6c1c6c100e6f23c",
       "testHash": "724db59aa9d0502ce5fb64d08bc49974eace43f06091023bb0c99261e5536555",
       "tasks": {
         "lint": "passed",
