@@ -133,7 +133,7 @@ export class {{classname}}Controller {
           const filename = (rf as RequestDetailedFile).options?.filename;
           if (filename) {
             // Node sends non-ASCII header bytes as UTF-8 or Latin-1 depending on the body, so the name goes in filename* (RFC 6266).
-            const ascii = filename.replace(/[^\x20-\x7e]|["\\]/g, '_');
+            const ascii = filename.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]|["\\]/g, '_');
             cd = `${cd}; filename="${ascii}"`;
             if (ascii !== filename) {
               cd = `${cd}; filename*=UTF-8''${encodeURIComponent(filename).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`;
