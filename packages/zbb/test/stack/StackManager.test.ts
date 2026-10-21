@@ -464,3 +464,34 @@ describe('StackManager substack directory creation', () => {
     assert.equal(existsSync(join(stackPath, 'substacks')), false, 'substacks dir should not exist');
   });
 });
+
+describe('StackManager built-in dependencies', () => {
+  it('resolves a dynamodb dependency from the built-in stack, not npm', async () => {
+    const sourceDir = join(tmpDir, 'src-ddb-consumer');
+    await createMockStackSource(sourceDir, {
+      name: '@test/ddb-consumer',
+      version: '1.0.0',
+      depends: { dynamodb: { package: '@zerobias-com/dynamodb@^1.0.0' } },
+      imports: { dynamodb: ['DYNAMODB_ENDPOINT', 'DYNAMODB_URL', 'DYNAMODB_ENSURE_TABLES'] },
+    });
+
+    const mgr = new StackManager(slot);
+    const consumer = await mgr.add(sourceDir);
+
+    const identity = yamlParse(await readFile(join(slotDir, 'stacks', 'dynamodb', 'stack.yaml'), 'utf-8'));
+    assert.equal(identity.name, '@zerobias-com/dynamodb');
+    assert.equal(identity.mode, 'dev');
+    assert.ok(identity.source.endsWith(join('stacks', 'dynamodb')), `built-in source, got ${identity.source}`);
+
+    const ddb = (await mgr.list()).find((s) => s.name === 'dynamodb');
+    assert.ok(ddb, 'dynamodb stack added to the slot');
+    const port = ddb.env.get('DYNAMODB_PORT');
+    assert.ok(port && /^\d+$/.test(port), 'port allocated');
+    assert.equal(ddb.env.get('DYNAMODB_URL'), `http://localhost:${port}`);
+    assert.match(ddb.env.get('DYNAMODB_ENDPOINT') ?? '', /^http:\/\/[\w-]+-dynamodb:8000$/);
+    assert.equal(ddb.env.get('DYNAMODB_ENSURE_TABLES'), join(slotDir, 'stacks', 'dynamodb', 'ensure-tables.sh'));
+
+    assert.equal(consumer.env.get('DYNAMODB_URL'), `http://localhost:${port}`);
+    assert.equal(consumer.env.get('DYNAMODB_ENSURE_TABLES'), ddb.env.get('DYNAMODB_ENSURE_TABLES'));
+  });
+});

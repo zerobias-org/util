@@ -543,6 +543,52 @@ zbb destroy local
 
 This is a direct Docker operation (not a Gradle alias). It finds containers/volumes/networks prefixed with the slot's `ZB_SLOT` name and removes them.
 
+## Built-in Stacks
+
+zbb ships stacks under `stacks/`. A stack pulls one into its slot by naming it under `depends:`: when the dependency key matches a built-in, zbb adds it from its own install instead of resolving `package:` from npm. Nothing is added unless some stack depends on it.
+
+| Stack | Runs | Exports |
+|-------|------|---------|
+| `postgres` | PostgreSQL (`${ZB_SLOT}-postgres`) | `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` |
+| `registry` | Verdaccio (`${ZB_SLOT}-registry`) | `REGISTRY_URL`, `REGISTRY_PORT`, `REGISTRY_INTERNAL_URL` |
+| `oidc` | mock OAuth2 server | `IDP_DISCOVERY_URL`, `IDP_CLIENT_ID`, `IDP_CLIENT_SECRET`, `OIDC_PORT` |
+| `minio` | MinIO (S3) | `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_DEFAULT_REGION`, `S3_FORCE_PATH_STYLE`, `MINIO_PORT`, `MINIO_CONSOLE_PORT` |
+| `dynamodb` | DynamoDB Local (`${ZB_SLOT}-dynamodb`, data in the `${ZB_SLOT}_dynamodb-data` volume) | `DYNAMODB_URL`, `DYNAMODB_ENDPOINT`, `DYNAMODB_PORT`, `DYNAMODB_REGION`, `DYNAMODB_ACCESS_KEY_ID`, `DYNAMODB_SECRET_ACCESS_KEY`, `DYNAMODB_ENSURE_TABLES` |
+
+### `dynamodb`
+
+DynamoDB Local for services that use DynamoDB tables in a deployed environment. It exports `DYNAMODB_*` rather than `AWS_*` (which `minio` owns), so each consumer maps them in its own compose file, and each consumer creates its own tables:
+
+| Var | Value |
+|-----|-------|
+| `DYNAMODB_ENDPOINT` | `http://${ZB_SLOT}-dynamodb:8000`, for containers on the slot network |
+| `DYNAMODB_URL` | `http://localhost:${DYNAMODB_PORT}`, for the host (the port is bound to 127.0.0.1) |
+| `DYNAMODB_REGION` | `us-east-1` |
+| `DYNAMODB_ACCESS_KEY_ID` / `DYNAMODB_SECRET_ACCESS_KEY` | `local` (DynamoDB Local accepts any credentials) |
+| `DYNAMODB_ENSURE_TABLES` | `<slot>/stacks/dynamodb/ensure-tables.sh`, installed when the stack starts |
+
+```yaml
+# consumer zbb.yaml
+depends:
+  dynamodb:
+    package: "@zerobias-com/dynamodb@^1.0.0"
+imports:
+  dynamodb: [DYNAMODB_ENDPOINT, DYNAMODB_URL, DYNAMODB_REGION, DYNAMODB_ACCESS_KEY_ID, DYNAMODB_SECRET_ACCESS_KEY, DYNAMODB_ENSURE_TABLES]
+lifecycle:
+  start: bash "${DYNAMODB_ENSURE_TABLES}" dynamodb-tables.json && docker compose ... up -d
+
+# consumer compose service
+environment:
+  AWS_ENDPOINT_URL_DYNAMODB: ${DYNAMODB_ENDPOINT}
+  AWS_REGION: ${DYNAMODB_REGION}
+  AWS_ACCESS_KEY_ID: ${DYNAMODB_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${DYNAMODB_SECRET_ACCESS_KEY}
+```
+
+`ensure-tables.sh <tables.json>...` reads `DYNAMODB_URL` and creates every table in the descriptors that doesn't exist yet. A descriptor is a JSON array of `CreateTable` inputs (the `CreateTableCommandInput` shape); a table may add `"ttl": "<attribute>"` to enable Time To Live. Existing tables are never altered. `--check <tables.json>...` exits non-zero if any table is missing (useful as a consumer health check), and `--ping` exits zero once DynamoDB Local answers.
+
+DynamoDB Local doesn't model GSI propagation delay or lazy TTL deletion, so behaviour that depends on either needs real DynamoDB.
+
 ## Project Configuration
 
 Each project declares its needs in `zbb.yaml` at the project root. `zbb` finds these by walking from the repo root (the directory containing `.zbb.yaml` or `gradlew`) downward, ignoring `node_modules/`.
