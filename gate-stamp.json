@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/codegen-attachment-filename",
+  "branch": "feat/zbb-dynamodb-stack",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.0",
@@ -366,7 +366,7 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "3.0.12",
+      "version": "3.0.13",
       "sourceHash": "933fd76aed19aad8bf2ff8af9beae8bdf170a4b472ab2964d8664dafa293aa1f",
       "testHash": "7a055db278c0ebd45ba867f0d4445e82202a7eab9bead6d02e98a971fa2ed57d",
       "tasks": {
@@ -483,8 +483,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "3.0.8",
-      "sourceHash": "355fd46ef7b9578d3fa24f83f024b6aa7e5f760322741817f6dfe0ac458a51a4",
+      "version": "3.0.9",
+      "sourceHash": "bbfec7bdc87856b44e3d457ff096b12db3d47fb81c7568fed8dab335977fad54",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
         "lint": "passed",
@@ -528,8 +528,8 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.11",
-      "sourceHash": "c2715542b725e96330419695e2ef3ee3fe7766d7ca5eb3c34633fb8e23b11af6",
+      "version": "2.0.12",
+      "sourceHash": "9255d21c166a71ec2418fae86b589a2eca35ba81170a34cdce220686081d932b",
       "testHash": "90c852915dceab79801c8783b3003ddeccc04ad9eda8021a1ac93d88ba387c49",
       "tasks": {
         "lint": "passed",
@@ -615,8 +615,8 @@
     },
     "@zerobias-org/zbb": {
       "version": "1.0.13",
-      "sourceHash": "4ab9027bf9376ad4825ade1160384b3a431570fb8c42b4c1a6c1c6c100e6f23c",
-      "testHash": "724db59aa9d0502ce5fb64d08bc49974eace43f06091023bb0c99261e5536555",
+      "sourceHash": "30a6050c3e7226824396d1fc43f3f2c361061cabac76289c8591fcd902122867",
+      "testHash": "a3a05f6be4cd06832600b938d6a74d34883bcf0bb80a851fe7df002d9d13af5f",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
