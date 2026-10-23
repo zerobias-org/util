@@ -1,7 +1,7 @@
 {
   "name": "@zerobias-org/dev-stack",
   "description": "ZeroBias development env stack artifact — shared developer credentials schema for zbb stack add",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "team@zerobias.com",
   "license": "ISC",
   "repository": {
