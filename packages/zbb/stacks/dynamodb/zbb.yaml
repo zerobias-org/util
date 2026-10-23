@@ -1,0 +1,88 @@
+# DynamoDB Local for stacks whose services use DynamoDB in a deployed environment. A slot only gets it
+# when a stack declares it under `depends:`. Consumers create their own tables from a descriptor with
+# `bash "$DYNAMODB_ENSURE_TABLES" <tables.json>` and map the DYNAMODB_* exports to AWS_* in their compose.
+name: "@zerobias-com/dynamodb"
+version: "1.0.0"
+
+exports:
+  - DYNAMODB_PORT
+  - DYNAMODB_URL
+  - DYNAMODB_ENDPOINT
+  - DYNAMODB_REGION
+  - DYNAMODB_ACCESS_KEY_ID
+  - DYNAMODB_SECRET_ACCESS_KEY
+  - DYNAMODB_ENSURE_TABLES
+
+env:
+  DYNAMODB_PORT:
+    type: port
+    description: Host port of DynamoDB Local (bound to 127.0.0.1)
+
+  DYNAMODB_URL:
+    type: string
+    value: "http://localhost:${DYNAMODB_PORT}"
+    description: DynamoDB Local endpoint from the host (aws --endpoint-url, NoSQL Workbench, ensure-tables.sh)
+
+  DYNAMODB_ENDPOINT:
+    type: string
+    value: "http://${ZB_SLOT}-dynamodb:8000"
+    description: DynamoDB Local endpoint from containers on the slot network (map to AWS_ENDPOINT_URL_DYNAMODB)
+
+  DYNAMODB_REGION:
+    type: string
+    default: us-east-1
+    description: Region for SDK clients (map to AWS_REGION); DynamoDB Local ignores it with -sharedDb
+
+  DYNAMODB_ACCESS_KEY_ID:
+    type: string
+    default: local
+    description: Dummy access key (map to AWS_ACCESS_KEY_ID); DynamoDB Local accepts any credentials
+
+  DYNAMODB_SECRET_ACCESS_KEY:
+    type: string
+    default: local
+    description: Dummy secret key (map to AWS_SECRET_ACCESS_KEY)
+
+  DYNAMODB_ENSURE_TABLES:
+    type: string
+    value: "${ZB_STACKS_DIR}/dynamodb/ensure-tables.sh"
+    description: "Table helper installed by start; consumers run: bash \"$DYNAMODB_ENSURE_TABLES\" <tables.json>"
+
+state:
+  status:
+    type: enum
+    values: [starting, healthy, stopped, error]
+
+lifecycle:
+  start: >-
+    COMPOSE_IGNORE_ORPHANS=1 docker compose -f compose.yml -p ${ZB_SLOT} up -d &&
+    install -m 755 ensure-tables.sh "${DYNAMODB_ENSURE_TABLES}"
+  stop: docker stop ${ZB_SLOT}-dynamodb 2>/dev/null; docker rm ${ZB_SLOT}-dynamodb 2>/dev/null; true
+  health:
+    command: "bash ensure-tables.sh --ping"
+    interval: 2
+    timeout: 60
+  cleanup:
+    - "docker stop ${ZB_SLOT}-dynamodb 2>/dev/null; docker rm ${ZB_SLOT}-dynamodb 2>/dev/null; true"
+    - "docker volume rm ${ZB_SLOT}_dynamodb-data 2>/dev/null; true"
+
+logs:
+  source: docker
+  container: "${ZB_SLOT}-dynamodb"
+
+require:
+  - tool: docker
+    check: "docker --version"
+    parse: "Docker version (\\S+),"
+    version: ">=24"
+    install: "https://docs.docker.com/engine/install/"
+  - tool: jq
+    check: "jq --version"
+    parse: "jq-(\\S+)"
+    version: ">=1.6"
+    install: "apt install jq"
+  - tool: curl
+    check: "curl --version"
+    parse: "curl (\\S+)"
+    version: ">=7"
+    install: "apt install curl"

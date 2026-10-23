@@ -1,0 +1,19 @@
+# DynamoDB Local on the slot network as ${ZB_SLOT}-dynamodb:8000 (host 127.0.0.1:${DYNAMODB_PORT}),
+# persisted in the ${ZB_SLOT}_dynamodb-data volume. root because the image's user can't write a fresh volume.
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:3.3.1
+    container_name: ${ZB_SLOT}-dynamodb
+    labels:
+      zerobias.slot: ${ZB_SLOT}
+      zerobias.module: dynamodb
+    user: root
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/data"]
+    ports:
+      - "127.0.0.1:${DYNAMODB_PORT}:8000"
+    volumes:
+      - dynamodb-data:/data
+    restart: unless-stopped
+
+volumes:
+  dynamodb-data:
