@@ -95,6 +95,18 @@ describe('effective env', () => {
       assert.equal(process.env.SLACK_RELEASES_WEBHOOK, undefined);
     });
 
+    it('gate and test carry DATALOADER_ENV (recorded in the stamp); publish strips it', () => {
+      for (const command of ['gate', 'test', 'testIntegration']) {
+        reset({ PATH: '/usr/bin', DATALOADER_ENV: 'dev' });
+        applyEffectiveEnv({ ZB_SLOT: 'local' }, commandPassthrough(command));
+        assert.equal(process.env.DATALOADER_ENV, 'dev', command);
+      }
+      reset({ PATH: '/usr/bin', DATALOADER_ENV: 'dev' });
+      const stripped = applyEffectiveEnv({ ZB_SLOT: 'local' }, commandPassthrough('publish'));
+      assert.equal(process.env.DATALOADER_ENV, undefined);
+      assert.ok(stripped.includes('DATALOADER_ENV'));
+    });
+
     it('ZBB_HERMETIC=0 falls back to additive-only (no stripping)', () => {
       reset({ ZBB_HERMETIC: '0', LEFTOVER: 'kept' });
       const stripped = applyEffectiveEnv({ ZB_SLOT: 'local' }, new Set());

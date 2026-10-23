@@ -1,5 +1,6 @@
 package com.zerobias.buildtools.tasks
 
+import com.zerobias.buildtools.monorepo.Prepublish
 import com.zerobias.buildtools.util.CurlUtils
 import com.zerobias.buildtools.util.ExecUtils
 import com.zerobias.buildtools.util.PackageJsonReader
@@ -20,6 +21,7 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.TaskProvider
 import java.io.File
+import java.nio.file.Files
 
 /**
  * Gradle task that runs the platform `dataloader` CLI against an ephemeral
@@ -43,8 +45,16 @@ import java.io.File
  *   DATALOADER_SPEC        — npm spec the loader is run from via `npx` for this
  *                            content-master gate. Defaults to
  *                            `@zerobias-com/platform-dataloader@prod` (the version in
- *                            prod). Override for loader dev (a version, @latest, or a
- *                            local `file:` path).
+ *                            prod), or to the env's loader under DATALOADER_ENV.
+ *                            Override for loader dev (a version, @latest, or a local
+ *                            `file:` path).
+ *   DATALOADER_ENV         — `dev` or `qa` checks the package against that environment
+ *                            instead of prod: the branch is still forked from
+ *                            content-master (prod data only), but it is brought to the
+ *                            hydra schema that env runs before the load, and the load
+ *                            uses that env's loader. The gate stamp records it, so the
+ *                            package can publish to that env but not to uat or main.
+ *                            See [envChannel].
  *
  * Skips cleanly (no failure) when ZB_TOKEN is not set — lets local dev
  * without vault proceed without blowing up gate. CI jobs that require
@@ -151,6 +161,22 @@ abstract class NeonDataloaderTask : DefaultTask() {
     @get:Optional
     abstract val ttlSeconds: Property<Int>
 
+    /**
+     * The environment (`dev` or `qa`) the package is checked against instead of prod. When set,
+     * the gate runs that environment's loader (`platform-dataloader@<env>`, the dist-tag dev-slots
+     * moves on each deploy, as prod-apply does for `prod`) and, before loading, applies to the
+     * content-master branch the hydra-schema version that loader was built against (its stamped
+     * `schemaVersion`). The data stays prod's; the schema and loader are the ones the environment
+     * runs, so content that needs platform or hydra work not yet in prod can be tested there first.
+     *
+     * [registerDataloader] sets it from `DATALOADER_ENV` ([requestedDataloaderEnv]); unset keeps
+     * the prod check. Because it is asked for explicitly, a missing dist-tag, a missing `sem-apply`
+     * or a loader without a `schemaVersion` fails the task rather than quietly checking prod.
+     */
+    @get:Input
+    @get:Optional
+    abstract val envChannel: Property<String>
+
     init {
         group = "lifecycle"
         description = "Run dataloader against an ephemeral Neon branch (via dataloader-service)"
@@ -213,6 +239,7 @@ abstract class NeonDataloaderTask : DefaultTask() {
         logger.lifecycle("  PGSSLMODE  = ${creds.sslMode}")
         logger.lifecycle("  expiresAt  = ${creds.expiresAt}")
 
+        var envSetup: EnvSetup? = null
         try {
             // ── 2: Run dataloader against the branch ──
             val pgEnv = mapOf(
@@ -223,6 +250,10 @@ abstract class NeonDataloaderTask : DefaultTask() {
                 "PGDATABASE" to creds.database,
                 "PGSSLMODE" to creds.sslMode
             )
+
+            // DATALOADER_ENV brings the branch to that env's hydra schema before seeding or loading.
+            envSetup = resolveEnvSetup(workingDir)
+            envSetup?.let { applyEnvSchema(it, pgEnv) }
 
             // ── 2a: If the artifact is org-private (zerobias.orgId set in
             //   package.json), seed the org's hydra.principal / hydra.org
@@ -237,16 +268,7 @@ abstract class NeonDataloaderTask : DefaultTask() {
                 seedOrgIntoBranch(orgId, pgEnv, workingDir)
             }
 
-            // This is the content-master gate: it loads against a branch forked from
-            // content-master, so it MUST run the loader version deployed in prod — the
-            // SDLC-gated one bundled in platform-dataloader-service, published under the
-            // `prod` npm dist-tag (moved by prod-apply on each promotion). Invoke it via
-            // npx so this task is pinned to @prod independently of whatever `dataloader`
-            // is globally installed on PATH (which the local `dataloader` task uses and
-            // must NOT be forced to prod). Override for loader development via
-            // DATALOADER_SPEC (e.g. a version, @latest, or a local `file:` path).
-            val loaderSpec = System.getenv("DATALOADER_SPEC")?.takeIf { it.isNotBlank() }
-                ?: "@zerobias-com/platform-dataloader@prod"
+            val loaderSpec = loaderSpec(envSetup)
             // --ignore-scripts: the published loader ships pre-built (no build/prepare
             // needed), and a transitive dep (ip-num) has a `preinstall` (`npx only-allow
             // npm`) that exits 127 and would otherwise fail npx's on-demand install.
@@ -334,8 +356,118 @@ abstract class NeonDataloaderTask : DefaultTask() {
                     "— it self-cleans at expiresAt"
                 )
             }
+            envSetup?.tempDir?.deleteRecursively()
         }
     }
+
+    /** What a `DATALOADER_ENV` check runs with: that env's loader, and the hydra-schema it was built against, unpacked. */
+    private data class EnvSetup(
+        val channel: String,
+        val loaderVersion: String,
+        val schemaVersion: String,
+        val schemaDir: File,
+        val tempDir: File,
+    )
+
+    /**
+     * Resolves what a `DATALOADER_ENV` check runs with, or null for the prod check.
+     *
+     * The loader version comes from the env's dist-tag. The hydra-schema version is the
+     * `schemaVersion` build-tools stamps into that loader's published package.json; the
+     * registry's metadata leaves custom fields out, so it is read from the tarball. The
+     * env was asked for explicitly, so anything missing for it is an error.
+     */
+    private fun resolveEnvSetup(workingDir: File): EnvSetup? {
+        val channel = envChannel.orNull?.takeIf { it.isNotBlank() } ?: return null
+        val loaderVersion = ExecUtils.execCapture(
+            listOf("npm", "view", "$LOADER_PACKAGE@$channel", "version"), workingDir, throwOnError = false
+        ).trim()
+        if (!VERSION_REGEX.matches(loaderVersion)) {
+            throw GradleException(
+                "${name}: DATALOADER_ENV=$channel, but $LOADER_PACKAGE has no '$channel' dist-tag " +
+                "(dev-slots' $channel deploy sets it)."
+            )
+        }
+        if (ExecUtils.execCapture(listOf("sh", "-c", "command -v sem-apply"), workingDir, throwOnError = false).isBlank()) {
+            throw GradleException(
+                "${name}: DATALOADER_ENV=$channel applies the $channel hydra schema with sem-apply, which is not " +
+                "installed: gem install schema-evolution-manager -v 0.9.47"
+            )
+        }
+
+        val tempDir = Files.createTempDirectory("zb-env-schema-").toFile()
+        try {
+            val loaderDir = unpack("$LOADER_PACKAGE@$loaderVersion", File(tempDir, "loader"), workingDir)
+            val schemaVersion = PackageJsonReader.extractString(File(loaderDir, "package.json").readText(), "schemaVersion")
+                ?: throw GradleException(
+                    "${name}: $LOADER_PACKAGE@$loaderVersion (the '$channel' tag) carries no schemaVersion, so the " +
+                    "hydra schema it needs is unknown."
+                )
+            val schemaDir = unpack("${Prepublish.HYDRA_SCHEMA_PACKAGE}@$schemaVersion", File(tempDir, "schema"), workingDir)
+            logger.lifecycle(
+                "${name}: DATALOADER_ENV=$channel — checking on content-master with the $channel loader " +
+                "($LOADER_PACKAGE@$loaderVersion) and its hydra schema (${Prepublish.HYDRA_SCHEMA_PACKAGE}@$schemaVersion)"
+            )
+            return EnvSetup(channel, loaderVersion, schemaVersion, schemaDir, tempDir)
+        } catch (e: Exception) {
+            tempDir.deleteRecursively()
+            throw e
+        }
+    }
+
+    /** Downloads [spec] with `npm pack` into [dir], unpacks it, and returns the package directory. */
+    private fun unpack(spec: String, dir: File, workingDir: File): File {
+        dir.mkdirs()
+        val tarball = ExecUtils.execCapture(
+            listOf("npm", "pack", spec, "--pack-destination", dir.absolutePath, "--silent"), workingDir
+        ).lines().last { it.isNotBlank() }.trim()
+        ExecUtils.execCapture(listOf("tar", "-xzf", File(dir, tarball).absolutePath, "-C", dir.absolutePath), workingDir)
+        return File(dir, "package")
+    }
+
+    /**
+     * Applies the env's hydra schema to the branch the way an environment's deploy does: `apply.sh`
+     * (sem-apply, which skips every migration content-master already has) and then `grant.sh`, so
+     * the loader's role can reach tables the new migrations created. A failure here is the hydra
+     * release not applying on prod data, not a problem with the package being tested, and the
+     * error says so.
+     */
+    private fun applyEnvSchema(setup: EnvSetup, pgEnv: Map<String, String>) {
+        for (script in listOf("apply.sh", "grant.sh")) {
+            logger.lifecycle("${name}: hydra-schema ${setup.schemaVersion}: running $script on the branch")
+            val process = ProcessBuilder("bash", script)
+                .directory(setup.schemaDir)
+                .redirectErrorStream(true)
+                .apply { environment().putAll(pgEnv) }
+                .start()
+            val output = StringBuilder()
+            process.inputStream.bufferedReader().forEachLine { line ->
+                if (script == "apply.sh") logger.lifecycle("  [hydra-schema] $line") else logger.info("  [hydra-schema] $line")
+                output.appendLine(line)
+            }
+            val exit = process.waitFor()
+            if (exit != 0) {
+                throw GradleException(
+                    "${name}: ${Prepublish.HYDRA_SCHEMA_PACKAGE}@${setup.schemaVersion} ($script) did not apply to " +
+                    "the content-master branch (exit $exit). That is the hydra schema the ${setup.channel} loader " +
+                    "needs, not a problem with this package.\n$output"
+                )
+            }
+        }
+    }
+
+    /**
+     * The npm spec the gate runs the loader from. It goes through `npx` so the gate doesn't depend on
+     * whatever `dataloader` is on PATH, which the local `dataloader` task uses and which must not be
+     * forced to prod. `DATALOADER_SPEC` wins (loader development: a version, `@latest` or a `file:`
+     * path). A `DATALOADER_ENV` check runs that env's loader, pinned to the version its tag pointed
+     * at. Everything else runs the loader prod runs: the `prod` dist-tag, which prod-apply moves to
+     * the loader bundled in the deployed platform-dataloader-service on each promotion.
+     */
+    private fun loaderSpec(envSetup: EnvSetup?): String =
+        System.getenv("DATALOADER_SPEC")?.takeIf { it.isNotBlank() }
+            ?: envSetup?.let { "$LOADER_PACKAGE@${it.loaderVersion}" }
+            ?: "$LOADER_PACKAGE@prod"
 
     // ── Internal ─────────────────────────────────────────────────────
 
@@ -468,6 +600,8 @@ abstract class NeonDataloaderTask : DefaultTask() {
 
     companion object {
         private const val DEFAULT_SERVICE_BASE_URL = "https://app.zerobias.com/api/dataloader"
+        private const val LOADER_PACKAGE = "@zerobias-com/platform-dataloader"
+        private val VERSION_REGEX = Regex("""\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?""")
 
         /**
          * Resolve the dataloader-service base URL. Reads `DATALOADER_SERVICE_URL`
@@ -492,6 +626,10 @@ abstract class NeonDataloaderTask : DefaultTask() {
  * Plugin-specific extras (force, mustRunAfter, postLoadActions, doFirst
  * spec-symlink, etc.) live in the [configure] block.
  *
+ * It also sets [NeonDataloaderTask.envChannel] from `DATALOADER_ENV`
+ * ([requestedDataloaderEnv]), so a gate can check the package against an
+ * environment's loader and hydra schema instead of prod's.
+ *
  * One name across the codebase keeps the EventEmitter display map and
  * zbb's failure reporter trivial — no per-plugin aliasing, no drift.
  */
@@ -499,11 +637,13 @@ fun Project.registerDataloader(
     force: Boolean = false,
     forceDirect: Boolean = false,
     configure: NeonDataloaderTask.() -> Unit = {},
-): TaskProvider<NeonDataloaderTask> =
-    tasks.register(DATALOADER_TASK_NAME, NeonDataloaderTask::class.java) {
+): TaskProvider<NeonDataloaderTask> {
+    val channel = requestedDataloaderEnv()
+    return tasks.register(DATALOADER_TASK_NAME, NeonDataloaderTask::class.java) {
         packageDir.set(layout.projectDirectory)
         this.force.set(force)
         this.forceDirect.set(forceDirect)
+        channel?.let { envChannel.set(it) }
         val safeProjectName = path.removePrefix(":").replace(":", "-")
         displayLogPath.set(
             rootProject.layout.projectDirectory
@@ -511,6 +651,7 @@ fun Project.registerDataloader(
         )
         configure()
     }
+}
 
 /**
  * Resolve the dataloader force mode for the current build, returning
@@ -544,3 +685,23 @@ fun Project.resolveDataloaderForceMode(): Pair<Boolean, Boolean> {
 }
 
 const val DATALOADER_TASK_NAME = "dataloaderExec"
+
+/** Environments a package can be checked against instead of prod; see [NeonDataloaderTask.envChannel]. */
+private val ENV_CHANNELS = setOf("dev", "qa")
+
+/**
+ * The environment `DATALOADER_ENV` asks the content-master dataloader check to run against (`dev`
+ * or `qa`), or null for the prod check (unset or `prod`). [registerDataloader] hands it to
+ * [NeonDataloaderTask.envChannel], and zb.base's `writeGateStamp` records it in the gate stamp as
+ * `dataloaderEnv`, which is how publishes to uat and main refuse a package that was only checked
+ * against dev or qa.
+ */
+fun requestedDataloaderEnv(): String? {
+    val value = System.getenv("DATALOADER_ENV")?.trim()?.lowercase()
+        ?.takeIf { it.isNotEmpty() && it != "prod" }
+        ?: return null
+    if (value !in ENV_CHANNELS) {
+        throw GradleException("DATALOADER_ENV must be dev, qa or prod, not '$value'")
+    }
+    return value
+}

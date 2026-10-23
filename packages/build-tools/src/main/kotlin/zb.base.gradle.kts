@@ -5,9 +5,11 @@ import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.util.SourceHasher
 import com.zerobias.buildtools.standard.StandardGateStampValidator
 import com.zerobias.buildtools.lifecycle.EventEmitter
+import com.zerobias.buildtools.tasks.DATALOADER_TASK_NAME
 import com.zerobias.buildtools.tasks.DataloaderOrgJobTask
 import com.zerobias.buildtools.tasks.ResolveOrgVersionTask
 import com.zerobias.buildtools.tasks.VerifyOrgPublishTask
+import com.zerobias.buildtools.tasks.requestedDataloaderEnv
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import org.gradle.build.event.BuildEventsListenerRegistry
 import org.gradle.kotlin.dsl.support.serviceOf
@@ -1103,6 +1105,7 @@ fun checkGateStamp(): GateStampResult {
                 currentSourceHash = computeSourceHash(),
                 currentTestHash = computeTestHash(),
                 currentTestCounts = suiteCounts,
+                distTag = npmDistTag,
             )
             when (outcome.result) {
                 StandardGateStampValidator.Result.INVALID ->
@@ -1174,11 +1177,16 @@ val writeGateStamp by tasks.registering {
             """      "$suite": { "expected": $expected, "ran": $passed, "status": "$status" }"""
         }
 
+        // A DATALOADER_ENV check is recorded so uat/main publishes refuse it (StandardGateStampValidator).
+        val dataloaderEnvLine = requestedDataloaderEnv()
+            ?.takeIf { project.tasks.findByName(DATALOADER_TASK_NAME) != null }
+            ?.let { "\n  \"dataloaderEnv\": \"$it\"," }
+            ?: ""
         val stamp = """{
   "version": "${project.version}",
   "branch": "$branch",
   "sourceHash": "$sourceHash",
-  "testHash": "$testHash",
+  "testHash": "$testHash",$dataloaderEnvLine
   "tasks": {
     ${taskResults.joinToString(",\n    ")}
   },
