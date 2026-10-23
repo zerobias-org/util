@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "feat/zbb-dynamodb-stack",
+  "branch": "main",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.0",
@@ -33,7 +33,7 @@
       },
       "rootDeps": {
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -75,7 +75,7 @@
         "@typescript-eslint/parser": "^8.53.0",
         "eslint": "^10.1.0",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -85,7 +85,7 @@
     },
     "@zerobias-org/generator-module": {
       "version": "0.25.5",
-      "sourceHash": "92e22a3ccb62cd25a3e6c133d6e8e27cb329797d811b3d94bb5c5deb0eea96aa",
+      "sourceHash": "2ae604aa60eca2706630bbc4848d07342a329dd877923278f33455c670696dac",
       "testHash": "9d49948bd8d5d647c71d9466b0469674226aac875ab21ce6c1e53f54a1044ae4",
       "tasks": {
         "lint": "passed",
@@ -115,7 +115,7 @@
       "rootDeps": {
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
         "chai": "^6.0.0",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -157,7 +157,7 @@
         "winston": "^3.2.0",
         "winston-transport": "^4.9.0",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -195,7 +195,7 @@
         }
       },
       "rootDeps": {
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "yaml": "\"2.8.3\"",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
         "diff": "\"^8.0.4\"",
@@ -234,7 +234,7 @@
         }
       },
       "rootDeps": {
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "dockerode": "^4.0.0",
         "get-port": "^7.1.0",
         "uuid": "\"^14.0.0\"",
@@ -276,7 +276,7 @@
       },
       "rootDeps": {
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "qs": "^6.14.0",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
@@ -316,7 +316,7 @@
       },
       "rootDeps": {
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -355,7 +355,7 @@
       },
       "rootDeps": {
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "form-data": "^4.0.0",
         "qs": "^6.14.0",
         "diff": "\"^8.0.4\"",
@@ -396,7 +396,7 @@
       },
       "rootDeps": {
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -435,7 +435,7 @@
       },
       "rootDeps": {
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -474,7 +474,7 @@
       },
       "rootDeps": {
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -512,11 +512,11 @@
         }
       },
       "rootDeps": {
-        "@zerobias-org/types-amazon-js": "^2.0.4",
-        "@zerobias-org/types-core": "^2.0.2",
+        "@zerobias-org/types-amazon-js": "^2.0.7",
+        "@zerobias-org/types-core": "^2.0.3",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "@zerobias-org/types-microsoft-js": "^2.0.4",
-        "axios": "\"^1.16.0\"",
+        "@zerobias-org/types-microsoft-js": "^2.0.7",
+        "axios": "\"^1.20.0\"",
         "change-case": "^5.0.0",
         "jsonata": "^2.0.0",
         "qs": "^6.14.0",
@@ -563,7 +563,7 @@
         "@azure/identity": "^4.13.0",
         "@azure/keyvault-secrets": "^4.6.0",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "safe-stable-stringify": "^2.5.0",
         "yaml": "\"2.8.3\"",
         "diff": "\"^8.0.4\"",
@@ -603,9 +603,9 @@
       },
       "rootDeps": {
         "@stoplight/json-ref-resolver": "^3.1.6",
-        "@zerobias-org/types-format-spectral-ruleset": "^2.0.4",
+        "@zerobias-org/types-format-spectral-ruleset": "^2.0.7",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
@@ -614,7 +614,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.13",
+      "version": "1.0.14",
       "sourceHash": "30a6050c3e7226824396d1fc43f3f2c361061cabac76289c8591fcd902122867",
       "testHash": "a3a05f6be4cd06832600b938d6a74d34883bcf0bb80a851fe7df002d9d13af5f",
       "tasks": {
@@ -647,7 +647,7 @@
         "semver": "^7.6.0",
         "yaml": "\"2.8.3\"",
         "@zerobias-org/types-core-js": "\"$@zerobias-org/types-core-js\"",
-        "axios": "\"^1.16.0\"",
+        "axios": "\"^1.20.0\"",
         "diff": "\"^8.0.4\"",
         "glob": "\">=11\"",
         "serialize-javascript": "\"7.0.5\"",
