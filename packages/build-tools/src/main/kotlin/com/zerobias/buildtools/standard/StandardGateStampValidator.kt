@@ -14,7 +14,8 @@ package com.zerobias.buildtools.standard
  *   - TESTS_CHANGED: sourceHash matches but testHash differs → rerun tests
  *                    only, keep build/validation skipped
  *   - INVALID:       stamp missing, sourceHash mismatch, recorded task
- *                    failed/not-run, or test status missing → rerun all
+ *                    failed/not-run, test status missing, or a dataloader
+ *                    check this branch doesn't accept → rerun all
  */
 object StandardGateStampValidator {
 
@@ -46,6 +47,22 @@ object StandardGateStampValidator {
     /** Recorded test-suite statuses that count as "ok to skip". */
     val PASSING_TEST_STATUSES = setOf("passed", "skipped")
 
+    /** The `dataloaderEnv` of a stamp whose dataloader check ran against prod; a stamp without the field means the same. */
+    const val PROD_DATALOADER_ENV = "prod"
+
+    /**
+     * The dataloader checks a branch's publishes accept, by the branch's npm dist-tag. A gate run
+     * with `DATALOADER_ENV=dev` (or `qa`) checks the package against that environment's loader and
+     * hydra schema instead of prod's, and records it as the stamp's `dataloaderEnv`. Each branch
+     * accepts its own environment's check and any later one, so a package checked against dev can
+     * publish to dev and be tried there, but uat and main (and anything not listed) need the prod
+     * check.
+     */
+    val ACCEPTED_DATALOADER_ENVS: Map<String, Set<String>> = mapOf(
+        "dev" to setOf("dev", "qa", PROD_DATALOADER_ENV),
+        "qa" to setOf("qa", PROD_DATALOADER_ENV),
+    )
+
     /**
      * Decide whether the gate stamp permits skipping work.
      *
@@ -57,12 +74,18 @@ object StandardGateStampValidator {
      *                          working tree's test/ subdirectories. Suites
      *                          with `currentExpected == 0` are ignored
      *                          (they don't exist in the working tree).
+     * @param distTag           The current branch's npm dist-tag (zb.base's
+     *                          `npmDistTag`), which decides the dataloader
+     *                          checks the stamp may carry
+     *                          ([ACCEPTED_DATALOADER_ENVS]). Defaults to the
+     *                          strictest, `latest`.
      */
     fun validate(
         stampContent: String?,
         currentSourceHash: String,
         currentTestHash: String,
         currentTestCounts: List<SuiteCount>,
+        distTag: String = "latest",
     ): Outcome {
         if (stampContent == null) {
             return Outcome(Result.INVALID, "stamp-missing")
@@ -88,6 +111,14 @@ object StandardGateStampValidator {
             if (taskStatus !in PASSING_STATUSES) {
                 return Outcome(Result.INVALID, "task-$taskName-status-$taskStatus")
             }
+        }
+
+        // 2b. The dataloader check must be one this branch accepts (a dev-checked package can't reach uat/main).
+        val dataloaderEnv = Regex(""""dataloaderEnv"\s*:\s*"([^"]+)"""")
+            .find(content)?.groupValues?.get(1)
+            ?: PROD_DATALOADER_ENV
+        if (dataloaderEnv !in (ACCEPTED_DATALOADER_ENVS[distTag] ?: setOf(PROD_DATALOADER_ENV))) {
+            return Outcome(Result.INVALID, "dataloader-env-$dataloaderEnv-not-accepted-on-$distTag")
         }
 
         // 3. testHash mismatch → tests changed but source didn't, rerun

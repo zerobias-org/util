@@ -18,17 +18,19 @@ class StandardGateStampValidatorTest {
         tstHash: String = testHash,
         tasks: List<Pair<String, String>> = StandardGateStampValidator.REQUIRED_TASKS.map { it to "passed" },
         testSuites: List<Triple<String, Int, String>> = listOf(),
+        dataloaderEnv: String? = null,
     ): String {
         val tasksJson = tasks.joinToString(",\n    ") { (n, s) -> "\"$n\": \"$s\"" }
         val suitesJson = testSuites.joinToString(",\n    ") { (n, exp, st) ->
             "\"$n\": { \"expected\": $exp, \"ran\": $exp, \"status\": \"$st\" }"
         }
+        val envLine = dataloaderEnv?.let { "\n              \"dataloaderEnv\": \"$it\"," } ?: ""
         return """
             {
               "version": "1.0.0",
               "branch": "main",
               "sourceHash": "$srcHash",
-              "testHash": "$tstHash",
+              "testHash": "$tstHash",$envLine
               "tasks": {
                 $tasksJson
               },
@@ -44,8 +46,46 @@ class StandardGateStampValidatorTest {
         currSrc: String = sourceHash,
         currTest: String = testHash,
         suites: List<StandardGateStampValidator.SuiteCount> = listOf(),
+        distTag: String = "latest",
     ): StandardGateStampValidator.Outcome =
-        StandardGateStampValidator.validate(content, currSrc, currTest, suites)
+        StandardGateStampValidator.validate(content, currSrc, currTest, suites, distTag)
+
+    // ── Dataloader environment ─────────────────────────────────────────
+
+    @Test
+    fun `stamp without dataloaderEnv is a prod check, valid on every branch`() {
+        for (distTag in listOf("dev", "qa", "uat", "latest")) {
+            assertEquals(StandardGateStampValidator.Result.VALID, validate(stamp(), distTag = distTag).result, distTag)
+        }
+    }
+
+    @Test
+    fun `dev-checked stamp is valid on dev only`() {
+        val content = stamp(dataloaderEnv = "dev")
+        assertEquals(StandardGateStampValidator.Result.VALID, validate(content, distTag = "dev").result)
+        for (distTag in listOf("qa", "uat", "latest")) {
+            val outcome = validate(content, distTag = distTag)
+            assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result, distTag)
+            assertEquals("dataloader-env-dev-not-accepted-on-$distTag", outcome.reason)
+        }
+    }
+
+    @Test
+    fun `qa-checked stamp is valid on dev and qa, not uat or main`() {
+        val content = stamp(dataloaderEnv = "qa")
+        for (distTag in listOf("dev", "qa")) {
+            assertEquals(StandardGateStampValidator.Result.VALID, validate(content, distTag = distTag).result, distTag)
+        }
+        for (distTag in listOf("uat", "latest")) {
+            assertEquals(StandardGateStampValidator.Result.INVALID, validate(content, distTag = distTag).result, distTag)
+        }
+    }
+
+    @Test
+    fun `without a distTag the strictest rule applies`() {
+        val outcome = StandardGateStampValidator.validate(stamp(dataloaderEnv = "dev"), sourceHash, testHash, listOf())
+        assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result)
+    }
 
     // ── Missing / malformed ────────────────────────────────────────────
 

@@ -96,7 +96,16 @@ const PUBLISH_CONTRACT = [
   'GITHUB_ACTOR', 'GITHUB_RUN_ID', 'GITHUB_SHA', 'GITHUB_SERVER_URL', 'GITHUB_REPOSITORY', 'CI',
 ] as const;
 
+// gate / test / testIntegration run the content-master dataloader check.
+// DATALOADER_ENV picks the environment it checks against (dev/qa; default
+// prod). Unlike the overrides kept out below, a stale value can't reach prod:
+// the gate stamp records it, and uat/main publishes refuse such a stamp.
+const DATALOADER_CHECK_CONTRACT = [...BASE_CREDS, 'DATALOADER_ENV'] as const;
+
 const COMMAND_ENV_CONTRACTS: Record<string, readonly string[]> = {
+  gate: DATALOADER_CHECK_CONTRACT,
+  test: DATALOADER_CHECK_CONTRACT,
+  testIntegration: DATALOADER_CHECK_CONTRACT,
   publish: PUBLISH_CONTRACT,
   publishRemote: PUBLISH_CONTRACT,
   // publishOrg IS publish (`./gradlew publish -PorgPublish=true`) — same gate,
@@ -106,7 +115,7 @@ const COMMAND_ENV_CONTRACTS: Record<string, readonly string[]> = {
   // decided by its own zbb.yaml `env:` block, which survives the seal
   // regardless of the contract.
   publishOrg: PUBLISH_CONTRACT,
-  // validate/generate/compile/lint/test/build/gate → BASE_CREDS (default below)
+  // validate/generate/compile/lint/build → BASE_CREDS (default below)
 };
 
 // Build-verb commands that need only the base creds.
