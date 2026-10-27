@@ -5,6 +5,7 @@ import com.zerobias.buildtools.tasks.OrgPublish
 import com.zerobias.buildtools.tasks.registerDataloader
 import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
 import com.zerobias.buildtools.util.PackageJsonReader
+import com.zerobias.buildtools.util.declareNodeModulesOutput
 
 /**
  * zb.content — leaf plugin for content-catalog NPM packages that ship
@@ -167,7 +168,7 @@ val npmInstallContent by tasks.registering(NpmTask::class) {
     args.set(listOf("--no-workspaces", "--no-package-lock"))
     workingDir.set(project.projectDir)
     inputs.file("package.json")
-    outputs.dir("node_modules")
+    declareNodeModulesOutput(project.file("node_modules"))
 
     // Skip when the package has no dependencies. Running `npm install`
     // on a no-deps content package creates an empty node_modules/

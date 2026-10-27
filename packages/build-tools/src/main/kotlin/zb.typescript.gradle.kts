@@ -13,6 +13,7 @@ import com.zerobias.buildtools.tasks.OrgPublish
 import com.zerobias.buildtools.tasks.registerDataloader
 import com.zerobias.buildtools.tasks.resolveDataloaderForceMode
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
+import com.zerobias.buildtools.util.declareNodeModulesOutput
 
 plugins {
     id("zb.base")
@@ -217,7 +218,7 @@ val npmInstallModule by tasks.registering(NpmTask::class) {
     npmCommand.set(listOf("install"))
     workingDir.set(project.projectDir)
     inputs.file("package.json")
-    outputs.dir("node_modules")
+    declareNodeModulesOutput(project.file("node_modules"))
     usesService(registryInjection)
 
     doFirst {

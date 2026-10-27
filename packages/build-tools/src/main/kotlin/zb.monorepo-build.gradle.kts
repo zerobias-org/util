@@ -35,6 +35,7 @@ import com.zerobias.buildtools.monorepo.RegistryInjectionService
 import com.zerobias.buildtools.monorepo.SubstackDockerConfig
 import com.zerobias.buildtools.util.ExecUtils
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
+import com.zerobias.buildtools.util.declareNodeModulesOutput
 import org.gradle.api.tasks.Exec
 
 @Suppress("UNCHECKED_CAST")
@@ -138,8 +139,7 @@ val workspaceInstall = tasks.register<Exec>("workspaceInstall") {
         inputs.file(publishesFile).withPropertyName("registryPublishes")
     }
 
-    outputs.dir(rootProject.file("node_modules"))
-        .withPropertyName("nodeModules")
+    declareNodeModulesOutput(rootProject.file("node_modules"))
 
     usesService(registryInjection)
 
@@ -165,8 +165,6 @@ val workspaceInstall = tasks.register<Exec>("workspaceInstall") {
             }
         }
     }
-
-    outputs.upToDateWhen { rootProject.file("node_modules").exists() }
 }
 
 // Restore task: always runs after workspaceInstall (success OR failure)

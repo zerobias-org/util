@@ -36,6 +36,7 @@ import com.github.gradle.node.npm.task.NpxTask
 import com.zerobias.buildtools.appliance.ApplianceDebExtension
 import com.zerobias.buildtools.appliance.ApplianceExtension
 import com.zerobias.buildtools.monorepo.RegistryInjectionService
+import com.zerobias.buildtools.util.declareNodeModulesOutput
 
 plugins {
     id("base")
@@ -156,7 +157,7 @@ val npmInstallModule = tasks.register("npmInstallModule", NpmTask::class.java) {
     npmCommand.set(listOf("install", "--include=dev", "--no-audit", "--no-fund"))
     workingDir.set(moduleDir)
     inputs.file(pkgJson).withPropertyName("packageJson")
-    outputs.dir(nodeModulesDir)
+    declareNodeModulesOutput(nodeModulesDir)
     usesService(registryInjection)
 
     doFirst {
