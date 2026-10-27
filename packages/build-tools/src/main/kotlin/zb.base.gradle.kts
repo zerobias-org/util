@@ -1669,9 +1669,9 @@ val commitVersion by tasks.registering {
     doLast {
         val ver = project.version.toString()
         val pkgFile = project.file("package.json")
-        val moduleDir = project.projectDir.relativeTo(project.rootDir).path
-        val pkgPath = "${moduleDir}/package.json"
-        val stampPath = "${moduleDir}/gate-stamp.json"
+        // Relative to rootDir, where the git commands run: plain "package.json" when the project is the build's root.
+        val pkgPath = pkgFile.relativeTo(project.rootDir).path
+        val stampPath = gateStampFile.asFile.relativeTo(project.rootDir).path
 
         // commitVersion is the single authoritative writer for the committed
         // package.json version on main. bumpVersion only updates project.version
