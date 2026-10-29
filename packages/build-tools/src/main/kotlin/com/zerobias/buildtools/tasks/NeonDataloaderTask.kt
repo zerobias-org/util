@@ -56,9 +56,11 @@ import java.nio.file.Files
  *                            package can publish to that env but not to uat or main.
  *                            See [envChannel].
  *
- * Skips cleanly (no failure) when ZB_TOKEN is not set — lets local dev
- * without vault proceed without blowing up gate. CI jobs that require
- * dataloader validation must ensure the slot exposes ZB_TOKEN.
+ * Without ZB_TOKEN (unset or blank) a local run skips the load, so a gate
+ * without vault still runs everything else. zb.base's `writeGateStamp` then
+ * records `dataloaderExec` as skipped, and `gate --check` and publish refuse
+ * that stamp. Under `CI=true` the task fails instead: see
+ * [dataloaderTokenCheck].
  *
  * Usage: leaf plugins call the [registerDataloader] helper at the bottom
  * of this file, NOT `tasks.register<NeonDataloaderTask>(...)` directly,
@@ -182,13 +184,16 @@ abstract class NeonDataloaderTask : DefaultTask() {
         description = "Run dataloader against an ephemeral Neon branch (via dataloader-service)"
         // Fresh Neon branch every invocation; no sensible up-to-date signal.
         outputs.upToDateWhen { false }
-        // onlyIf: skip entirely when ZB_TOKEN isn't available.
+        // Only a local run without ZB_TOKEN skips; under CI=true the action runs and fails on the missing token.
         onlyIf {
-            val hasToken = System.getenv("ZB_TOKEN")?.isNotBlank() == true
-            if (!hasToken) {
-                logger.lifecycle("${name}: ZB_TOKEN not set — skipping")
+            val skip = dataloaderTokenCheck(System.getenv("ZB_TOKEN"), System.getenv("CI")) == DataloaderTokenCheck.SKIP
+            if (skip) {
+                logger.lifecycle(
+                    "${name}: ZB_TOKEN not set — skipping the load. A gate stamp written by this run records " +
+                    "the load as skipped, which gate --check and publish refuse."
+                )
             }
-            hasToken
+            !skip
         }
     }
 
@@ -202,10 +207,7 @@ abstract class NeonDataloaderTask : DefaultTask() {
         val workingDir = project.projectDir
 
         val token = System.getenv("ZB_TOKEN")?.takeIf { it.isNotBlank() }
-            ?: throw GradleException(
-                "${name}: ZB_TOKEN is not set. testDataloader requires ZB_TOKEN " +
-                "for ZeroBias production authentication against the dataloader-service /branches endpoint."
-            )
+            ?: throw GradleException(missingTokenMessage(name))
 
         val resolvedTestName = (testName.orNull?.takeIf { it.isNotBlank() } ?: run {
             val (pkgName, _) = PackageJsonReader.readNameVersion(File(pkgDir, "package.json"))
@@ -683,6 +685,30 @@ fun Project.resolveDataloaderForceMode(): Pair<Boolean, Boolean> {
     val useForceDirect = !useForce && (forceDirectProp || !isCi)
     return useForce to useForceDirect
 }
+
+/** What [NeonDataloaderTask] does about `ZB_TOKEN`; see [dataloaderTokenCheck]. */
+enum class DataloaderTokenCheck { LOAD, SKIP, FAIL }
+
+/**
+ * Decides what [NeonDataloaderTask] does about `ZB_TOKEN` ([token]), which the dataloader-service
+ * requires before it creates the content-master branch. With a token the task loads. Without one
+ * (unset or blank) a local run skips the load, and zb.base's `writeGateStamp` records
+ * `dataloaderExec` as skipped, which `gate --check` and publish refuse. Under `CI=true` ([ci]) the
+ * task fails instead ([missingTokenMessage]): a CI job that reaches the load is there to run it,
+ * and a skip would pass the job without the package ever being loaded.
+ */
+fun dataloaderTokenCheck(token: String?, ci: String?): DataloaderTokenCheck = when {
+    !token.isNullOrBlank() -> DataloaderTokenCheck.LOAD
+    ci == "true" -> DataloaderTokenCheck.FAIL
+    else -> DataloaderTokenCheck.SKIP
+}
+
+/** The error [NeonDataloaderTask] fails with when it runs without `ZB_TOKEN`, which only a `CI=true` run does. */
+fun missingTokenMessage(taskName: String): String =
+    "$taskName: ZB_TOKEN is not set (or is blank). Under CI=true the dataloader check fails rather than " +
+    "skip the load, since a skipped load would let the gate pass without loading the package. The " +
+    "dataloader-service creates the content-master branch only for a ZB_TOKEN that is a ZeroBias API key " +
+    "of a superuser or of an admin of the package's org: expose one to this job."
 
 const val DATALOADER_TASK_NAME = "dataloaderExec"
 

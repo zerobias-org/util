@@ -12,9 +12,9 @@ import java.io.File
 /**
  * Runs real gates on throwaway packages through the zb.content and zb.base plugins, without
  * ZB_TOKEN: a local gate skips the load and its stamp records `"dataloaderExec": "skipped"`, which
- * gateCheck refuses, while a package without a dataloader step records no load. The builds get no
- * ZB_TOKEN and point DATALOADER_SERVICE_URL at a closed local port, so nothing can reach the
- * dataloader-service.
+ * gateCheck refuses; under CI=true the gate fails instead; a package without a dataloader step is
+ * unaffected by either. The builds get no ZB_TOKEN and point DATALOADER_SERVICE_URL at a closed
+ * local port, so nothing can reach the dataloader-service.
  */
 class GateStampDataloaderFunctionalTest {
 
@@ -85,6 +85,17 @@ class GateStampDataloaderFunctionalTest {
         assertFalse(writtenBeforeTheEntry.contains("dataloaderExec"), writtenBeforeTheEntry)
         stamp(dir).writeText(writtenBeforeTheEntry)
         gradle(dir, ci = false, "gateCheck").build()
+    }
+
+    @Test
+    fun `a CI gate without ZB_TOKEN fails the load instead of skipping it, and writes no stamp`() {
+        val dir = contentPkg()
+
+        val gate = gradle(dir, ci = true, "gate").buildAndFail()
+        assertEquals(TaskOutcome.FAILED, gate.task(":dataloaderExec")?.outcome)
+        assertTrue(gate.output.contains("dataloaderExec: ZB_TOKEN is not set"), gate.output)
+        assertTrue(gate.output.contains("Under CI=true the dataloader check fails rather than skip the load"), gate.output)
+        assertFalse(stamp(dir).exists(), "a failed gate must not write a stamp")
     }
 
     @Test
