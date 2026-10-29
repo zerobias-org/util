@@ -128,8 +128,10 @@ CLI. Scope is implicit from the working directory
 | a dir with `build.gradle.kts` not in `settings.gradle.kts` | hard error, exit 1 (`:326-332`) |
 
 Recognized flags: `--dry-run`, `--force`, `--clean`, `--verbose`, `--modules`,
-`--no-push`. Anything else lands in `parsed.remaining` and is forwarded verbatim
-to Gradle (`zbb/lib/lifecycle.ts:115`).
+`--no-push`, `--version-committed` (`-PversionAlreadyCommitted=true`) and
+`--force-direct` (`-Pdataloader.forceDirect=true`). The last two are standard
+mode only; a monorepo refuses them. Anything else lands in `parsed.remaining`
+and is forwarded verbatim to Gradle (`zbb/lib/lifecycle.ts`).
 
 > **Note.** The "publish must run from the monorepo root" refusal at
 > `cli.ts:577-584` is keyed on the literal string `'publish'` **and** only fires

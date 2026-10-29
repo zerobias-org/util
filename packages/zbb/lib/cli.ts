@@ -41,7 +41,7 @@ import {
 import { derivePackageScope, type PackageScope } from './monorepo/scope.js';
 import { resolveEffectiveEnv, loadShellPassthrough, applyEffectiveEnv, commandPassthrough } from './env/effective.js';
 import { spawn } from 'node:child_process';
-import { isLifecycleCommand, parseLifecycleArgs } from './lifecycle.js';
+import { isLifecycleCommand, parseLifecycleArgs, standardModeOnlyFlags } from './lifecycle.js';
 import {
   spawnLifecycleAndExit,
   spawnGradleFallbackAndExit,
@@ -569,6 +569,17 @@ async function _main(argv: string[]): Promise<void> {
         parsed,
         { skipDisplay: true },
       );
+    }
+
+    // Refused before the slot loads: these set zb.base properties that no monorepo build reads.
+    const standardOnly = isMonorepo && isLifecycleCommand(command) ? standardModeOnlyFlags(parsed) : [];
+    if (standardOnly.length > 0) {
+      console.error(
+        `zbb ${command}: ${standardOnly.join(', ')} ${standardOnly.length === 1 ? 'is' : 'are'} only supported ` +
+        `in standard-mode repos (a gate-stamp.json per package). ${monorepoEntry!.dir} is a monorepo: its ` +
+        `publish commits its own version bumps and none of its packages has a dataloader step.`,
+      );
+      process.exit(1);
     }
 
     // Publish from a subpackage is intentionally blocked — see
@@ -1743,7 +1754,7 @@ Usage:
   zbb run <script> [args...]                          Run a script defined in zbb.yaml lifecycle or package.json, with slot+stack env
   zbb exec <command> [args...]                        Run an arbitrary command with slot+stack env
   zbb dataloader [args...]                            Run dataloader with slot SQL env
-  zbb publish [--dry-run]                             Publish all artifacts (Gradle)
+  zbb publish [--dry-run] [--version-committed]       Publish all artifacts (Gradle)
   zbb publishOrg [--dry-run]                          Publish privately to the org in package.json
   zbb <gradle-task> [args...]                         Run Gradle task
   zbb --version                                       Show version
@@ -1776,13 +1787,23 @@ Lifecycle commands (require zbb.yaml + loaded slot + added stack):
   zbb clean [--all]                        Run lifecycle.clean (or ./gradlew clean)
   zbb build [--all] [--verbose]            Run lifecycle.build (or ./gradlew build)
   zbb test [--all] [--verbose]             Run lifecycle.test (or ./gradlew test)
-  zbb gate [--all]                         Run lifecycle.gate (or ./gradlew gate)
+  zbb gate [--all] [--force-direct]        Run lifecycle.gate (or ./gradlew gate)
   zbb gate --check                         Validate gate-stamp.json (no slot required, but pass
                                            --slot if your default java is not 21)
-  zbb publish [--dry-run] [--force]        Run lifecycle.publish (or ./gradlew publish)
+  zbb publish [--dry-run] [--force] [--version-committed]
+                                           Run lifecycle.publish (or ./gradlew publish)
   zbb publishOrg [--dry-run] [--force]     Same pipeline, published privately to the org
                                            named in package.json's zerobias.orgId
   Without zbb.yaml in cwd, all of these fall through to ./gradlew <command>.
+
+  Standard-mode only (a monorepo refuses them):
+  --force-direct                           -Pdataloader.forceDirect=true: the dataloader check
+                                           reloads only the package itself, not its
+                                           dependencies, even under CI=true
+  --version-committed                      -PversionAlreadyCommitted=true: an earlier
+                                           \`zbb version\` committed and pushed the version bump,
+                                           so publish skips its own and pushes only its tag
+  Any other flag (-Pname=value, --info, ...) is passed to gradle unchanged.
 
 Secret commands:
   zbb secret create <name> [key=value ...] [@file.yml] [--type @schema.yml]

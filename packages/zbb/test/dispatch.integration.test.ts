@@ -227,3 +227,79 @@ describe('dispatch integration — monorepo scope wiring', () => {
       'root publish should hit the slot preflight');
   });
 });
+
+describe('dispatch integration — standard-mode-only flags in a monorepo', () => {
+  it('refuses `zbb publish --version-committed` before the slot check, without invoking gradlew', () => {
+    const r = runZbb(['publish', '--version-committed'], tmpRoot);
+    assert.equal(r.status, 1, `expected exit 1, got ${r.status}. stderr: ${r.stderr}`);
+    assert.match(r.stderr, /--version-committed is only supported in standard-mode repos/);
+    assert.doesNotMatch(r.stderr, /loaded slot/i, 'the refusal should come before the slot preflight');
+    assert.equal(r.gradlewArgv.length, 0, 'gradlew should not be invoked');
+  });
+
+  it('refuses `zbb gate --check --force-direct`, without invoking gradlew', () => {
+    const r = runZbb(['gate', '--check', '--force-direct'], tmpRoot);
+    assert.equal(r.status, 1, `expected exit 1, got ${r.status}. stderr: ${r.stderr}`);
+    assert.match(r.stderr, /--force-direct is only supported in standard-mode repos/);
+    assert.equal(r.gradlewArgv.length, 0, 'gradlew should not be invoked');
+  });
+
+  it('still forwards flags zbb does not recognize', () => {
+    const r = runZbb(['gate', '--check', '-PfooBar=true', '--info'], tmpRoot);
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}. stderr: ${r.stderr}`);
+    assert.match(r.gradlewArgv[0], /monorepoGateCheck -PfooBar=true --info/);
+  });
+});
+
+describe('dispatch integration — standard-mode-only flags in a standard repo', () => {
+  let stdRoot: string;
+
+  beforeEach(async () => {
+    // A separate temp dir: under tmpRoot the walk-up would find the monorepo zbb.yaml.
+    stdRoot = await mkdtemp(join(tmpdir(), 'zbb-dispatch-std-'));
+    await writeFile(
+      join(stdRoot, 'zbb.yaml'),
+      [
+        'name: "@scope/standard"',
+        'version: "1.0.0"',
+        'lifecycle:',
+        '  gate: ./gradlew gate',
+        '  gateCheck: ./gradlew gateCheck',
+        '  publish: ./gradlew publish',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeFile(
+      join(stdRoot, 'gradlew'),
+      ['#!/usr/bin/env bash', 'echo "$@" >> "$ZBB_TEST_GRADLEW_LOG"', 'exit 0'].join('\n'),
+      { mode: 0o755 },
+    );
+    await writeFile(join(stdRoot, 'settings.gradle.kts'), '// stub\n', 'utf-8');
+  });
+
+  afterEach(async () => {
+    await rm(stdRoot, { recursive: true, force: true });
+  });
+
+  it('maps --force-direct and --version-committed to their gradle properties and forwards the rest', () => {
+    const r = runZbb(
+      ['gate', '--check', '--force-direct', '--version-committed', '-PfooBar=true', '--info'],
+      stdRoot,
+    );
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}. stderr: ${r.stderr}`);
+    const argv = r.gradlewArgv[0].split(' ');
+    assert.equal(argv[0], 'gateCheck');
+    for (const expected of [
+      '-Pdataloader.forceDirect=true',
+      '-PversionAlreadyCommitted=true',
+      '-PfooBar=true',
+      '--info',
+    ]) {
+      assert.ok(argv.includes(expected), `expected ${expected} in gradlew argv: ${r.gradlewArgv[0]}`);
+    }
+    for (const unexpected of ['--force-direct', '--version-committed', '-Pforce=true']) {
+      assert.ok(!argv.includes(unexpected), `did not expect ${unexpected} in gradlew argv: ${r.gradlewArgv[0]}`);
+    }
+  });
+});

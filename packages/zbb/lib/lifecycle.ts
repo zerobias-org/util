@@ -54,6 +54,18 @@ export interface ParsedLifecycleArgs {
   modules?: string;
   /** `zbb version --no-push` — keeps the version commit local; used for testing. */
   noPush: boolean;
+  /**
+   * `zbb publish --version-committed` — wired to gradle's -PversionAlreadyCommitted=true. An
+   * earlier `zbb version` job already committed and pushed the version bump, so this publish
+   * skips its own bump, commit and branch push, and pushes only its release tag. Standard mode only.
+   */
+  versionCommitted: boolean;
+  /**
+   * `zbb gate --force-direct` — wired to gradle's -Pdataloader.forceDirect=true. The dataloader
+   * check reloads only the package itself, not every dependency, even under CI=true (whose
+   * default is `-f`). Standard mode only.
+   */
+  forceDirect: boolean;
   remaining: string[];
 }
 
@@ -67,6 +79,8 @@ export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
     check: false,
     skipDocker: false,
     noPush: false,
+    versionCommitted: false,
+    forceDirect: false,
     remaining: [],
   };
 
@@ -105,6 +119,12 @@ export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
       case '--no-push':
         result.noPush = true;
         break;
+      case '--version-committed':
+        result.versionCommitted = true;
+        break;
+      case '--force-direct':
+        result.forceDirect = true;
+        break;
       default:
         // Support `--modules=a,b,c` (single token, equals form) in addition
         // to `--modules a,b,c`. Same shape as gradle's -P flags so the user
@@ -118,4 +138,17 @@ export function parseLifecycleArgs(args: string[]): ParsedLifecycleArgs {
   }
 
   return result;
+}
+
+/**
+ * The flags in `parsed` that set a property only standard-mode (zb.base) builds read:
+ * `--version-committed` and `--force-direct`. The monorepo dispatcher refuses them rather than
+ * pass a property nothing in its build reads, since a monorepo publish commits its own version
+ * bumps and no monorepo package has a dataloader step.
+ */
+export function standardModeOnlyFlags(parsed: ParsedLifecycleArgs): string[] {
+  const flags: string[] = [];
+  if (parsed.versionCommitted) flags.push('--version-committed');
+  if (parsed.forceDirect) flags.push('--force-direct');
+  return flags;
 }
