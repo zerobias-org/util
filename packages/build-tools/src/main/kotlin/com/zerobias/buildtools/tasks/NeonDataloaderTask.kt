@@ -659,10 +659,12 @@ fun Project.registerDataloader(
  * Resolve the dataloader force mode for the current build, returning
  * `(force, forceDirect)` to pass into [registerDataloader].
  *
- * Precedence (first match wins):
+ * Precedence (first match wins; [dataloaderForceMode] applies it):
  *
  *   1. `-Pdataloader.force=true`        → `-f`              (panic: reload everything)
- *   2. `-Pdataloader.forceDirect=true`  → `--force-direct`  (reload top-level only)
+ *   2. `-Pdataloader.forceDirect=true`  → `--force-direct`  (reload top-level only, also
+ *                                                            under CI; `zbb gate --force-direct`
+ *                                                            sets this property)
  *   3. `CI=true`                        → `-f`              (fresh-branch CI safety —
  *                                                            matches zbb's CI rule)
  *   4. otherwise (local dev)            → `--force-direct`  (skip transitive deps that
@@ -677,12 +679,19 @@ fun Project.registerDataloader(
  * three pipelines pick up the same env-aware default and the same `-P`
  * escape hatches.
  */
-fun Project.resolveDataloaderForceMode(): Pair<Boolean, Boolean> {
-    val forceProp = providers.gradleProperty("dataloader.force").orNull?.toBoolean() ?: false
-    val forceDirectProp = providers.gradleProperty("dataloader.forceDirect").orNull?.toBoolean() ?: false
-    val isCi = System.getenv("CI") == "true"
-    val useForce = forceProp || (isCi && !forceDirectProp)
-    val useForceDirect = !useForce && (forceDirectProp || !isCi)
+fun Project.resolveDataloaderForceMode(): Pair<Boolean, Boolean> = dataloaderForceMode(
+    force = providers.gradleProperty("dataloader.force").orNull?.toBoolean() ?: false,
+    forceDirect = providers.gradleProperty("dataloader.forceDirect").orNull?.toBoolean() ?: false,
+    ci = System.getenv("CI") == "true",
+)
+
+/**
+ * The precedence [resolveDataloaderForceMode] documents, as `(force, forceDirect)`, from the
+ * `-Pdataloader.force` and `-Pdataloader.forceDirect` properties and whether `CI=true`.
+ */
+fun dataloaderForceMode(force: Boolean, forceDirect: Boolean, ci: Boolean): Pair<Boolean, Boolean> {
+    val useForce = force || (ci && !forceDirect)
+    val useForceDirect = !useForce && (forceDirect || !ci)
     return useForce to useForceDirect
 }
 

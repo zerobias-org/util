@@ -5,7 +5,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * What [NeonDataloaderTask] does when `ZB_TOKEN` is missing ([dataloaderTokenCheck]).
+ * The environment decisions [NeonDataloaderTask] makes before it loads: what a missing `ZB_TOKEN`
+ * does ([dataloaderTokenCheck]) and which force flag the loader gets ([dataloaderForceMode]).
  * GateStampDataloaderFunctionalTest runs the task itself through a gate.
  */
 class NeonDataloaderTaskTest {
@@ -43,4 +44,25 @@ class NeonDataloaderTaskTest {
         assertTrue(message.contains("skipped load would let the gate pass"), message)
     }
 
+    // ── Force mode, as (force, forceDirect) ────────────────────────────
+
+    @Test
+    fun `CI defaults to -f, local runs to --force-direct`() {
+        assertEquals(true to false, dataloaderForceMode(force = false, forceDirect = false, ci = true))
+        assertEquals(false to true, dataloaderForceMode(force = false, forceDirect = false, ci = false))
+    }
+
+    @Test
+    fun `forceDirect (zbb gate --force-direct) selects --force-direct even under CI`() {
+        assertEquals(false to true, dataloaderForceMode(force = false, forceDirect = true, ci = true))
+        assertEquals(false to true, dataloaderForceMode(force = false, forceDirect = true, ci = false))
+    }
+
+    @Test
+    fun `force wins over forceDirect`() {
+        for (ci in listOf(true, false)) {
+            assertEquals(true to false, dataloaderForceMode(force = true, forceDirect = true, ci = ci), "CI=$ci")
+            assertEquals(true to false, dataloaderForceMode(force = true, forceDirect = false, ci = ci), "CI=$ci")
+        }
+    }
 }
