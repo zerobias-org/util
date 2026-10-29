@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "feat/content-gate-env-loader",
+  "branch": "feat/zbb-ci-gate-flags",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
@@ -614,9 +614,9 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.15",
-      "sourceHash": "6b0bce8a3fe82aa854b854a6e7ce926c9ed0aae45680c3c3ecd0bf7c8e4a4154",
-      "testHash": "297dc4f1e0b82157188c32a9cc35d17f7ca7fdc85f6ce57db4520d33f97902a1",
+      "version": "1.0.16",
+      "sourceHash": "ceb449ce2136faf257b547669a56a6df989935fcf4559110a6130f2a777debab",
+      "testHash": "0460b4b235ff78fa8f222cc6dc31fa9950dad5f4103903826987946888c69b30",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
