@@ -997,6 +997,13 @@ val gate by tasks.registering {
 //   testHash   — committed test files (test/**). If ONLY this changes, we
 //                can skip everything except test tasks on the next run.
 //
+// `tasks` records each gate task's result. A package with a dataloader step
+// also records `dataloaderExec`, the load itself, because `testDataloader`
+// counts as passed even when the load was skipped (no ZB_TOKEN).
+// StandardGateStampValidator refuses a stamp whose load is anything but
+// "passed"; stamps without the entry (no dataloader step, or written before
+// the entry existed) are not checked for it.
+//
 // Git-only enumeration is critical: filesystem walks picked up untracked
 // local artifacts (.DS_Store, coverage output, build output, temp files)
 // which produce different hashes between local and CI and cause the
@@ -1133,23 +1140,24 @@ val writeGateStamp by tasks.registering {
     doLast {
         val sourceHash = computeSourceHash()
         val testHash = computeTestHash()
+        val hasDataloaderStep = project.tasks.findByName(DATALOADER_TASK_NAME) != null
+        // testDataloader counts as executed even when it skipped the load, so the load records its own result.
         val taskNames = listOf(
             "validate", "lint", "compile",
             "test", "testDirect", "testDocker", "testDataloader",
             "buildArtifacts",
-        )
-        val taskResults = taskNames.map { taskName ->
-            val task = project.tasks.findByName(taskName)
-            val state = task?.state
-            val status = when {
+        ) + listOfNotNull(DATALOADER_TASK_NAME.takeIf { hasDataloaderStep })
+        val taskStatuses = taskNames.associateWith { taskName ->
+            val state = project.tasks.findByName(taskName)?.state
+            when {
                 state == null -> "not-found"
                 state.skipped -> "skipped"
                 state.executed -> "passed"
                 state.upToDate -> "up-to-date"
                 else -> "unknown"
             }
-            """"$taskName": "$status""""
         }
+        val taskResults = taskStatuses.map { (taskName, status) -> """"$taskName": "$status"""" }
 
         // Count expected tests from source files
         val testSuites = mapOf(
@@ -1179,7 +1187,7 @@ val writeGateStamp by tasks.registering {
 
         // A DATALOADER_ENV check is recorded so uat/main publishes refuse it (StandardGateStampValidator).
         val dataloaderEnvLine = requestedDataloaderEnv()
-            ?.takeIf { project.tasks.findByName(DATALOADER_TASK_NAME) != null }
+            ?.takeIf { hasDataloaderStep }
             ?.let { "\n  \"dataloaderEnv\": \"$it\"," }
             ?: ""
         val stamp = """{
@@ -1206,6 +1214,14 @@ ${testEntries.joinToString(",\n")}
                 logger.lifecycle("  $suite: $expected/$expected passed")
             }
         }
+        taskStatuses[DATALOADER_TASK_NAME]
+            ?.takeIf { it != StandardGateStampValidator.DATALOADER_PASSING_STATUS }
+            ?.let {
+                logger.warn(
+                    "  $DATALOADER_TASK_NAME: $it — the package was not loaded, so gate --check and publish " +
+                    "refuse this stamp. Re-run zbb gate with ZB_TOKEN set."
+                )
+            }
 
         // Emit the gate_stamp_written event so the TUI display can render
         // the stamp footer line, identical to the monorepo path.

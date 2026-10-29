@@ -1,5 +1,7 @@
 package com.zerobias.buildtools.standard
 
+import com.zerobias.buildtools.tasks.DATALOADER_TASK_NAME
+
 /**
  * Pure decision logic for the standard-mode (zb.base) gate-stamp validator.
  *
@@ -14,8 +16,9 @@ package com.zerobias.buildtools.standard
  *   - TESTS_CHANGED: sourceHash matches but testHash differs → rerun tests
  *                    only, keep build/validation skipped
  *   - INVALID:       stamp missing, sourceHash mismatch, recorded task
- *                    failed/not-run, test status missing, or a dataloader
- *                    check this branch doesn't accept → rerun all
+ *                    failed/not-run, a recorded dataloader load that did
+ *                    not run, test status missing, or a dataloader check
+ *                    this branch doesn't accept → rerun all
  */
 object StandardGateStampValidator {
 
@@ -44,6 +47,14 @@ object StandardGateStampValidator {
     /** Recorded task results that count as "ok to skip". */
     val PASSING_STATUSES = setOf("passed", "skipped", "up-to-date", "not-found")
 
+    /**
+     * The only result a stamp may record for [DATALOADER_TASK_NAME], the task that loads the
+     * package into content-master. `testDataloader` is recorded as passed even when the load
+     * inside it was skipped, so `writeGateStamp` records the load's own result beside it, for
+     * packages that have the step.
+     */
+    const val DATALOADER_PASSING_STATUS = "passed"
+
     /** Recorded test-suite statuses that count as "ok to skip". */
     val PASSING_TEST_STATUSES = setOf("passed", "skipped")
 
@@ -65,6 +76,11 @@ object StandardGateStampValidator {
 
     /**
      * Decide whether the gate stamp permits skipping work.
+     *
+     * A stamp that records a dataloader load ([DATALOADER_TASK_NAME]) must record it as
+     * [DATALOADER_PASSING_STATUS]: a skipped load (a local gate without `ZB_TOKEN`) is INVALID.
+     * A stamp without the entry is not checked for it, which covers both packages without a
+     * dataloader step (the stamp never records one) and stamps written before the entry existed.
      *
      * @param stampContent      Raw JSON content of `gate-stamp.json`, or
      *                          `null` if the file does not exist.
@@ -111,6 +127,13 @@ object StandardGateStampValidator {
             if (taskStatus !in PASSING_STATUSES) {
                 return Outcome(Result.INVALID, "task-$taskName-status-$taskStatus")
             }
+        }
+
+        // 2a. A recorded load must have run; "skipped" passes for every other task but not for this one.
+        val loadStatus = Regex(""""$DATALOADER_TASK_NAME"\s*:\s*"([^"]+)"""")
+            .find(content)?.groupValues?.get(1)
+        if (loadStatus != null && loadStatus != DATALOADER_PASSING_STATUS) {
+            return Outcome(Result.INVALID, "dataloader-load-$loadStatus")
         }
 
         // 2b. The dataloader check must be one this branch accepts (a dev-checked package can't reach uat/main).

@@ -87,6 +87,58 @@ class StandardGateStampValidatorTest {
         assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result)
     }
 
+    // ── Dataloader load (dataloaderExec) ───────────────────────────────
+
+    /** Every required task passed, plus the load recorded with [loadStatus], the shape writeGateStamp writes for a package with a dataloader step. */
+    private fun withLoad(loadStatus: String): List<Pair<String, String>> =
+        StandardGateStampValidator.REQUIRED_TASKS.map { it to "passed" } + ("dataloaderExec" to loadStatus)
+
+    @Test
+    fun `stamp without a dataloaderExec entry is not checked for it (old stamps, packages without a load)`() {
+        // Every stamp written before the entry existed has testDataloader "passed" and nothing else.
+        for (distTag in listOf("dev", "qa", "uat", "latest")) {
+            assertEquals(StandardGateStampValidator.Result.VALID, validate(stamp(), distTag = distTag).result, distTag)
+        }
+    }
+
+    @Test
+    fun `recorded load that passed → VALID`() {
+        assertEquals(StandardGateStampValidator.Result.VALID, validate(stamp(tasks = withLoad("passed"))).result)
+    }
+
+    @Test
+    fun `recorded load that was skipped → INVALID, although testDataloader says passed`() {
+        for (distTag in listOf("dev", "qa", "uat", "latest")) {
+            val outcome = validate(stamp(tasks = withLoad("skipped")), distTag = distTag)
+            assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result, distTag)
+            assertEquals("dataloader-load-skipped", outcome.reason)
+        }
+    }
+
+    @Test
+    fun `recorded load with any status but passed → INVALID`() {
+        // "skipped", "up-to-date" and "not-found" pass for every other task.
+        for (status in listOf("unknown", "not-found", "up-to-date", "failed")) {
+            val outcome = validate(stamp(tasks = withLoad(status)))
+            assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result, status)
+            assertEquals("dataloader-load-$status", outcome.reason)
+        }
+    }
+
+    @Test
+    fun `skipped load trumps test hash drift → INVALID, not TESTS_CHANGED`() {
+        val outcome = validate(stamp(tasks = withLoad("skipped"), tstHash = "OLD"), currTest = "NEW")
+        assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result)
+        assertEquals("dataloader-load-skipped", outcome.reason)
+    }
+
+    @Test
+    fun `dataloader env is still checked when the load passed`() {
+        val outcome = validate(stamp(tasks = withLoad("passed"), dataloaderEnv = "dev"), distTag = "latest")
+        assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result)
+        assertEquals("dataloader-env-dev-not-accepted-on-latest", outcome.reason)
+    }
+
     // ── Missing / malformed ────────────────────────────────────────────
 
     @Test
