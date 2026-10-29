@@ -78,7 +78,10 @@ zbb info     → stackInfo
 ### Other
 
 ```
+zbb gate [--force-direct]       Gate + gate-stamp.json; --force-direct → -Pdataloader.forceDirect=true
 zbb publish [--dry-run]         Publish all artifacts (Gradle)
+zbb publish --version-committed → -PversionAlreadyCommitted=true: `zbb version` already committed the bump
+                                (--force-direct and --version-committed: standard mode only)
 zbb publishRemote               Publish to GitHub Packages Maven
 zbb dataloader [args...]        Run platform dataloader with slot SQL env
 zbb <gradle-task> [args...]     Any Gradle task — auto-prefixed for subproject

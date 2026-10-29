@@ -515,9 +515,21 @@ zbb dataloader -f -d .
 
 Requires `@zerobias-com/platform-dataloader` to be installed globally (`npm i -g @zerobias-com/platform-dataloader`). Injects `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, and `NPM_TOKEN` from the active slot.
 
+## Gate
+
+Runs the Gradle `gate` lifecycle and writes `gate-stamp.json`, which `zbb gate --check` and `zbb publish` validate against the working tree.
+
+In a standard-mode repo, packages with a dataloader step (`zb.content`, `zb.schema`, `zb.typescript`, `zb.typescript-collectorbot`) load the package into an ephemeral branch of content-master, which needs `ZB_TOKEN`. Without it, a local gate skips the load and the stamp records `"dataloaderExec": "skipped"` next to the other task results. `zbb gate --check` and `zbb publish` refuse that stamp. A gate whose load doesn't run (no `ZB_TOKEN`, or `-x dataloaderExec`) keeps a passing load the stamp it replaces recorded, as long as the package's `sourceHash` is unchanged, so re-running a gate or changing only tests doesn't throw that result away. Under `CI=true` a missing `ZB_TOKEN` fails the gate instead. Stamps written before the `dataloaderExec` entry existed, and stamps of packages without a dataloader step, are validated as before.
+
+```bash
+# The dataloader check reloads only the package itself, not every dependency,
+# even under CI=true, whose default is a full reload (-Pdataloader.forceDirect=true)
+zbb gate --force-direct
+```
+
 ## Publish
 
-Runs the Gradle `publish` lifecycle with special handling for `--dry-run`:
+Runs the Gradle `publish` lifecycle with special handling for `--dry-run` and `--version-committed`:
 
 ```bash
 # Publish all artifacts
@@ -525,9 +537,17 @@ zbb publish
 
 # Dry run (converts to Gradle property -PdryRun=true)
 zbb publish --dry-run
+
+# Publish one package after an earlier `zbb version` job committed and pushed
+# the version bump (converts to -PversionAlreadyCommitted=true)
+zbb publish --version-committed
 ```
 
 `--dry-run` is converted to `-PdryRun=true` (a Gradle project property), not Gradle's built-in `--dry-run` flag which skips task execution entirely.
+
+`--version-committed` is for a CI matrix that runs `zbb version` once and then publishes each package in its own job: the publish skips its own version bump, commit and branch push, and pushes only its release tag.
+
+`--force-direct` and `--version-committed` set properties that only standard-mode builds read, so a monorepo refuses them. Any flag zbb doesn't recognize, such as `-Pname=value` or `--info`, is passed to Gradle unchanged.
 
 ## Destroy
 
@@ -873,7 +893,8 @@ Usage:
   zbb secret <create|get|list|update|delete>    Secret management
   zbb logs <list|show>                           Log viewer (local/docker/aws)
   zbb dataloader [args...]                       Run dataloader with slot SQL env
-  zbb publish [--dry-run]                        Publish all artifacts (Gradle)
+  zbb gate [--force-direct]                      Run the gate, write gate-stamp.json
+  zbb publish [--dry-run] [--version-committed]  Publish all artifacts (Gradle)
   zbb destroy [slot-name]                        Tear down stack containers/volumes
   zbb up|down                                    Stack aliases (Gradle)
   zbb --slot <name> <command>                    Run command with slot env loaded

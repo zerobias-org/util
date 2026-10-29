@@ -49,7 +49,7 @@ const requireCJS = createRequire(import.meta.url);
  * @param repoRoot absolute path to the repo root (where zbb.yaml lives)
  * @param command the lifecycle command name (e.g. 'build', 'test', 'gate')
  * @param baseCommand the `./gradlew <task>` string from zbb.yaml's lifecycle entry
- * @param parsed parsed --force / --dry-run / --verbose flags
+ * @param parsed parsed --force / --dry-run / --verbose / --version-committed / --force-direct flags
  */
 export async function spawnStandardLifecycleAndExit(
   repoRoot: string,
@@ -77,6 +77,9 @@ export async function spawnStandardLifecycleAndExit(
   if (parsed.dryRun) passthrough.push('-PdryRun=true');
   if (parsed.force) passthrough.push('-Pforce=true');
   if (parsed.clean) passthrough.push('-Pcleanlocalregistry');
+  // zb.base properties the monorepo dispatcher refuses (see standardModeOnlyFlags).
+  if (parsed.versionCommitted) passthrough.push('-PversionAlreadyCommitted=true');
+  if (parsed.forceDirect) passthrough.push('-Pdataloader.forceDirect=true');
   // version-specific flags. modules: comma-separated list of relative
   // paths under package/ (matches the github workflow's `detect` output).
   // noPush: keeps the version commit local — used by tests / dry-runs.

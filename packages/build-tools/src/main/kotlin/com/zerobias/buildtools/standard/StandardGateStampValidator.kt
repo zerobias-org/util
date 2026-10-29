@@ -1,5 +1,7 @@
 package com.zerobias.buildtools.standard
 
+import com.zerobias.buildtools.tasks.DATALOADER_TASK_NAME
+
 /**
  * Pure decision logic for the standard-mode (zb.base) gate-stamp validator.
  *
@@ -14,8 +16,9 @@ package com.zerobias.buildtools.standard
  *   - TESTS_CHANGED: sourceHash matches but testHash differs → rerun tests
  *                    only, keep build/validation skipped
  *   - INVALID:       stamp missing, sourceHash mismatch, recorded task
- *                    failed/not-run, test status missing, or a dataloader
- *                    check this branch doesn't accept → rerun all
+ *                    failed/not-run, a recorded dataloader load that did
+ *                    not run, test status missing, or a dataloader check
+ *                    this branch doesn't accept → rerun all
  */
 object StandardGateStampValidator {
 
@@ -44,6 +47,14 @@ object StandardGateStampValidator {
     /** Recorded task results that count as "ok to skip". */
     val PASSING_STATUSES = setOf("passed", "skipped", "up-to-date", "not-found")
 
+    /**
+     * The only result a stamp may record for [DATALOADER_TASK_NAME], the task that loads the
+     * package into content-master. `testDataloader` is recorded as passed even when the load
+     * inside it was skipped, so `writeGateStamp` records the load's own result beside it, for
+     * packages that have the step.
+     */
+    const val DATALOADER_PASSING_STATUS = "passed"
+
     /** Recorded test-suite statuses that count as "ok to skip". */
     val PASSING_TEST_STATUSES = setOf("passed", "skipped")
 
@@ -65,6 +76,11 @@ object StandardGateStampValidator {
 
     /**
      * Decide whether the gate stamp permits skipping work.
+     *
+     * A stamp that records a dataloader load ([DATALOADER_TASK_NAME]) must record it as
+     * [DATALOADER_PASSING_STATUS]: a skipped load (a local gate without `ZB_TOKEN`) is INVALID.
+     * A stamp without the entry is not checked for it, which covers both packages without a
+     * dataloader step (the stamp never records one) and stamps written before the entry existed.
      *
      * @param stampContent      Raw JSON content of `gate-stamp.json`, or
      *                          `null` if the file does not exist.
@@ -113,6 +129,13 @@ object StandardGateStampValidator {
             }
         }
 
+        // 2a. A recorded load must have run; "skipped" passes for every other task but not for this one.
+        val loadStatus = Regex(""""$DATALOADER_TASK_NAME"\s*:\s*"([^"]+)"""")
+            .find(content)?.groupValues?.get(1)
+        if (loadStatus != null && loadStatus != DATALOADER_PASSING_STATUS) {
+            return Outcome(Result.INVALID, "dataloader-load-$loadStatus")
+        }
+
         // 2b. The dataloader check must be one this branch accepts (a dev-checked package can't reach uat/main).
         val dataloaderEnv = Regex(""""dataloaderEnv"\s*:\s*"([^"]+)"""")
             .find(content)?.groupValues?.get(1)
@@ -158,4 +181,34 @@ object StandardGateStampValidator {
 
         return Outcome(Result.VALID, "stamp-valid")
     }
+
+    /**
+     * The dataloader load a new stamp records: its [status] and the `dataloaderEnv` it was checked
+     * against ([env], null for prod). [carried] when it is a previous stamp's passing load rather
+     * than this gate's own result.
+     */
+    data class RecordedLoad(val status: String, val env: String?, val carried: Boolean)
+
+    /**
+     * The load `writeGateStamp` records, from what this gate's [DATALOADER_TASK_NAME] did
+     * ([status]), the `DATALOADER_ENV` it ran with ([requestedEnv]) and the stamp it replaces
+     * ([previousStamp]). A load that did not run this time keeps the passing load [previousStamp]
+     * recorded for the same [sourceHash], with that load's `dataloaderEnv`. The load checks the
+     * package's source, which is unchanged since it passed, so a re-run without `ZB_TOKEN`, a
+     * TESTS_CHANGED publish or `-x dataloaderExec` doesn't throw away a result that still holds.
+     * Otherwise the stamp records this gate's own result, which [validate] refuses unless it passed.
+     */
+    fun recordedLoad(status: String, requestedEnv: String?, sourceHash: String, previousStamp: String?): RecordedLoad {
+        if (status != DATALOADER_PASSING_STATUS && previousStamp != null &&
+            stampField(previousStamp, "sourceHash") == sourceHash &&
+            stampField(previousStamp, DATALOADER_TASK_NAME) == DATALOADER_PASSING_STATUS
+        ) {
+            return RecordedLoad(DATALOADER_PASSING_STATUS, stampField(previousStamp, "dataloaderEnv"), carried = true)
+        }
+        return RecordedLoad(status, requestedEnv, carried = false)
+    }
+
+    /** The string value of [field] in a stamp's JSON, found the same way [validate] reads it. */
+    private fun stampField(stampContent: String, field: String): String? =
+        Regex(""""$field"\s*:\s*"([^"]+)"""").find(stampContent)?.groupValues?.get(1)
 }
