@@ -132,6 +132,46 @@ class StandardGateStampValidatorTest {
         assertEquals("dataloader-load-skipped", outcome.reason)
     }
 
+    // ── What writeGateStamp records for the load (recordedLoad) ────────
+
+    private fun recordedLoad(status: String, previous: String?, requestedEnv: String? = null) =
+        StandardGateStampValidator.recordedLoad(status, requestedEnv, sourceHash, previous)
+
+    @Test
+    fun `a load that ran records its own result and DATALOADER_ENV`() {
+        val previous = stamp(tasks = withLoad("passed"), dataloaderEnv = "qa")
+        assertEquals(
+            StandardGateStampValidator.RecordedLoad("passed", "dev", carried = false),
+            recordedLoad("passed", previous, requestedEnv = "dev"),
+        )
+    }
+
+    @Test
+    fun `a load that did not run keeps the previous passing load for the same source, with its env`() {
+        for (status in listOf("skipped", "unknown")) {
+            assertEquals(
+                StandardGateStampValidator.RecordedLoad("passed", null, carried = true),
+                recordedLoad(status, stamp(tasks = withLoad("passed")), requestedEnv = "dev"),
+                status,
+            )
+            assertEquals(
+                StandardGateStampValidator.RecordedLoad("passed", "dev", carried = true),
+                recordedLoad(status, stamp(tasks = withLoad("passed"), dataloaderEnv = "dev")),
+                status,
+            )
+        }
+    }
+
+    @Test
+    fun `a load that did not run records itself when nothing passed for this source`() {
+        val skipped = StandardGateStampValidator.RecordedLoad("skipped", null, carried = false)
+        assertEquals(skipped, recordedLoad("skipped", null))
+        assertEquals(skipped, recordedLoad("skipped", stamp(srcHash = "OLD", tasks = withLoad("passed"))))
+        assertEquals(skipped, recordedLoad("skipped", stamp(tasks = withLoad("skipped"))))
+        // A stamp from before the entry existed is no evidence that the load ran.
+        assertEquals(skipped, recordedLoad("skipped", stamp()))
+    }
+
     @Test
     fun `dataloader env is still checked when the load passed`() {
         val outcome = validate(stamp(tasks = withLoad("passed"), dataloaderEnv = "dev"), distTag = "latest")

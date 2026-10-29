@@ -181,4 +181,34 @@ object StandardGateStampValidator {
 
         return Outcome(Result.VALID, "stamp-valid")
     }
+
+    /**
+     * The dataloader load a new stamp records: its [status] and the `dataloaderEnv` it was checked
+     * against ([env], null for prod). [carried] when it is a previous stamp's passing load rather
+     * than this gate's own result.
+     */
+    data class RecordedLoad(val status: String, val env: String?, val carried: Boolean)
+
+    /**
+     * The load `writeGateStamp` records, from what this gate's [DATALOADER_TASK_NAME] did
+     * ([status]), the `DATALOADER_ENV` it ran with ([requestedEnv]) and the stamp it replaces
+     * ([previousStamp]). A load that did not run this time keeps the passing load [previousStamp]
+     * recorded for the same [sourceHash], with that load's `dataloaderEnv`. The load checks the
+     * package's source, which is unchanged since it passed, so a re-run without `ZB_TOKEN`, a
+     * TESTS_CHANGED publish or `-x dataloaderExec` doesn't throw away a result that still holds.
+     * Otherwise the stamp records this gate's own result, which [validate] refuses unless it passed.
+     */
+    fun recordedLoad(status: String, requestedEnv: String?, sourceHash: String, previousStamp: String?): RecordedLoad {
+        if (status != DATALOADER_PASSING_STATUS && previousStamp != null &&
+            stampField(previousStamp, "sourceHash") == sourceHash &&
+            stampField(previousStamp, DATALOADER_TASK_NAME) == DATALOADER_PASSING_STATUS
+        ) {
+            return RecordedLoad(DATALOADER_PASSING_STATUS, stampField(previousStamp, "dataloaderEnv"), carried = true)
+        }
+        return RecordedLoad(status, requestedEnv, carried = false)
+    }
+
+    /** The string value of [field] in a stamp's JSON, found the same way [validate] reads it. */
+    private fun stampField(stampContent: String, field: String): String? =
+        Regex(""""$field"\s*:\s*"([^"]+)"""").find(stampContent)?.groupValues?.get(1)
 }

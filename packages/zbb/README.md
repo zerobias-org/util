@@ -519,7 +519,7 @@ Requires `@zerobias-com/platform-dataloader` to be installed globally (`npm i -g
 
 Runs the Gradle `gate` lifecycle and writes `gate-stamp.json`, which `zbb gate --check` and `zbb publish` validate against the working tree.
 
-In a standard-mode repo, packages with a dataloader step (`zb.content`, `zb.schema`, `zb.typescript`, `zb.typescript-collectorbot`) load the package into an ephemeral branch of content-master, which needs `ZB_TOKEN`. Without it, a local gate skips the load and the stamp records `"dataloaderExec": "skipped"` next to the other task results. `zbb gate --check` and `zbb publish` refuse that stamp. Under `CI=true` a missing `ZB_TOKEN` fails the gate instead. Stamps written before the `dataloaderExec` entry existed, and stamps of packages without a dataloader step, are validated as before.
+In a standard-mode repo, packages with a dataloader step (`zb.content`, `zb.schema`, `zb.typescript`, `zb.typescript-collectorbot`) load the package into an ephemeral branch of content-master, which needs `ZB_TOKEN`. Without it, a local gate skips the load and the stamp records `"dataloaderExec": "skipped"` next to the other task results. `zbb gate --check` and `zbb publish` refuse that stamp. A gate whose load doesn't run (no `ZB_TOKEN`, or `-x dataloaderExec`) keeps a passing load the stamp it replaces recorded, as long as the package's `sourceHash` is unchanged, so re-running a gate or changing only tests doesn't throw that result away. Under `CI=true` a missing `ZB_TOKEN` fails the gate instead. Stamps written before the `dataloaderExec` entry existed, and stamps of packages without a dataloader step, are validated as before.
 
 ```bash
 # The dataloader check reloads only the package itself, not every dependency,

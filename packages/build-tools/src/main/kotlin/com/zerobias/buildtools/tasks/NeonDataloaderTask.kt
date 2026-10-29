@@ -58,9 +58,9 @@ import java.nio.file.Files
  *
  * Without ZB_TOKEN (unset or blank) a local run skips the load, so a gate
  * without vault still runs everything else. zb.base's `writeGateStamp` then
- * records `dataloaderExec` as skipped, and `gate --check` and publish refuse
- * that stamp. Under `CI=true` the task fails instead: see
- * [dataloaderTokenCheck].
+ * records `dataloaderExec` as skipped (unless the stamp it replaces passed the
+ * load for the same source), and `gate --check` and publish refuse that
+ * stamp. Under `CI=true` the task fails instead: see [dataloaderTokenCheck].
  *
  * Usage: leaf plugins call the [registerDataloader] helper at the bottom
  * of this file, NOT `tasks.register<NeonDataloaderTask>(...)` directly,
@@ -189,8 +189,8 @@ abstract class NeonDataloaderTask : DefaultTask() {
             val skip = dataloaderTokenCheck(System.getenv("ZB_TOKEN"), System.getenv("CI")) == DataloaderTokenCheck.SKIP
             if (skip) {
                 logger.lifecycle(
-                    "${name}: ZB_TOKEN not set — skipping the load. A gate stamp written by this run records " +
-                    "the load as skipped, which gate --check and publish refuse."
+                    "${name}: ZB_TOKEN not set — skipping the load. Unless the previous gate stamp passed the load " +
+                    "for this same source, the new stamp records it as skipped, which gate --check and publish refuse."
                 )
             }
             !skip
@@ -702,9 +702,10 @@ enum class DataloaderTokenCheck { LOAD, SKIP, FAIL }
  * Decides what [NeonDataloaderTask] does about `ZB_TOKEN` ([token]), which the dataloader-service
  * requires before it creates the content-master branch. With a token the task loads. Without one
  * (unset or blank) a local run skips the load, and zb.base's `writeGateStamp` records
- * `dataloaderExec` as skipped, which `gate --check` and publish refuse. Under `CI=true` ([ci]) the
- * task fails instead ([missingTokenMessage]): a CI job that reaches the load is there to run it,
- * and a skip would pass the job without the package ever being loaded.
+ * `dataloaderExec` as skipped (unless the stamp it replaces passed the load for the same source),
+ * which `gate --check` and publish refuse. Under `CI=true` ([ci]) the task fails instead
+ * ([missingTokenMessage]): a CI job that reaches the load is there to run it, and a skip would
+ * pass the job without the package ever being loaded.
  */
 fun dataloaderTokenCheck(token: String?, ci: String?): DataloaderTokenCheck = when {
     !token.isNullOrBlank() -> DataloaderTokenCheck.LOAD
