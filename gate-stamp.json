@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "feat/zbb-ci-gate-flags",
+  "branch": "task/task-454",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
@@ -484,7 +484,7 @@
     },
     "@zerobias-org/util-hub-module-utils": {
       "version": "3.0.10",
-      "sourceHash": "757066d1f0fb0c30a8aca57e1b3732525bdf73f8e08dbd7adefdd33c86012963",
+      "sourceHash": "4bcd09888f530d92390de51b163f7977325111e874d86a72550c97f22f7d904e",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
         "lint": "passed",
@@ -529,7 +529,7 @@
     },
     "@zerobias-org/util-secrets-manager": {
       "version": "2.0.13",
-      "sourceHash": "0b21cf6127122e1797877cf6a8275bd9d0b265c557a1cbf575560695c6decc4d",
+      "sourceHash": "cfb4239271580a7d1f6e3a74efde96d22d9cea84850ec8527e173e7bf17b2eb9",
       "testHash": "90c852915dceab79801c8783b3003ddeccc04ad9eda8021a1ac93d88ba387c49",
       "tasks": {
         "lint": "passed",
@@ -614,7 +614,7 @@
       }
     },
     "@zerobias-org/zbb": {
-      "version": "1.0.16",
+      "version": "1.0.17",
       "sourceHash": "ceb449ce2136faf257b547669a56a6df989935fcf4559110a6130f2a777debab",
       "testHash": "0460b4b235ff78fa8f222cc6dc31fa9950dad5f4103903826987946888c69b30",
       "tasks": {
