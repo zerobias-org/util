@@ -37,7 +37,9 @@
     "*.md"
   ],
   "dependencies": {
-    "@zerobias-org/logger": "^4.0.2",
+    "@zerobias-org/logger": "^4.0.2"
+  },
+  "devDependencies": {
     "@zerobias-org/util-codegen": "^3.0.14"
   }
 }
