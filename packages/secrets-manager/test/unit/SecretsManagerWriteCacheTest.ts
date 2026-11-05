@@ -23,6 +23,29 @@ async function seed(name: string, content: Record<string, unknown>): Promise<voi
   await writeFile(path.join(secretRoot, `${name}.json`), JSON.stringify(content));
 }
 
+/**
+ * Holds the first backend fetch that waits on it until `release()`, so a test can land a write while
+ * that read is in flight. `reached()` resolves once the fetch is being held.
+ */
+function hold() {
+  let markReached!: () => void;
+  let release!: () => void;
+  const reached = new Promise<void>((resolve) => { markReached = resolve; });
+  const released = new Promise<void>((resolve) => { release = resolve; });
+  let used = false;
+  return {
+    wait: async () => {
+      if (!used) {
+        used = true;
+        markReached();
+        await released;
+      }
+    },
+    reached: () => reached,
+    release: () => release(),
+  };
+}
+
 describe('SecretsManagerWriteCacheTest', function () {
   logger.info('Running SecretsManagerWriteCacheTest Unit Tests...');
   this.timeout(20000);
@@ -194,6 +217,89 @@ describe('SecretsManagerWriteCacheTest', function () {
     await new Promise((resolve) => setTimeout(resolve, timeoutMs + 1000));
 
     expect(await fresh.getValue('file.once.value')).to.be.eq('new');
+  });
+
+  // A read already in flight when a write lands returns what it fetched, but must not cache it.
+
+  it('should not cache what a vault read fetched before a write landed', async () => {
+    const store: Record<string, Record<string, unknown>> = { raced: { expiresIn: 3842 } };
+    const held = hold();
+    const client = {
+      listMounts: async () => [{ name: 'kv/' }],
+      listSecrets: async () => Object.keys(store),
+      getSecret: async (_mount: string, name: string) => {
+        const data = { ...store[name] };
+        await held.wait();
+        return { data };
+      },
+      upsertSecret: async (_mount: string, name: string, json: Record<string, unknown>) => {
+        store[name] = json;
+      },
+    };
+    (secrets as any).managers.vault = new VaultNode(client as any, 'vault', SecretNode.TypeEnum.Node);
+
+    const read = secrets.getValue('vault.kv.raced.expiresIn');
+    await held.reached();
+    await secrets.setValue('vault.kv.raced', { expiresIn: 4918 });
+    held.release();
+
+    expect(await read).to.be.eq(3842);
+    expect(await secrets.getValue('vault.kv.raced.expiresIn')).to.be.eq(4918);
+  });
+
+  it('should not cache the aws secret content a read fetched before a write landed', async () => {
+    const store: Record<string, string> = { raced: JSON.stringify({ expiresIn: 3842 }) };
+    const held = hold();
+    const client = {
+      listSecretNames: async () => Object.keys(store),
+      getSecretString: async (name: string) => {
+        const value = store[name];
+        await held.wait();
+        return value;
+      },
+      putSecretValue: async (name: string, value: string) => {
+        store[name] = value;
+      },
+    };
+    const root = new AwsNode(client as any, 'aws', SecretNode.TypeEnum.Node);
+    (secrets as any).managers.aws = root;
+
+    const read = secrets.getValue('aws.raced.expiresIn');
+    await held.reached();
+    await secrets.setValue('aws.raced', { expiresIn: 4918 });
+    held.release();
+
+    expect(await read).to.be.eq(3842);
+    // Drop the cached value too: the secret's content cached below the root must be fresh on its own.
+    delete root.values['raced.expiresIn'];
+    expect(await secrets.getValue('aws.raced.expiresIn')).to.be.eq(4918);
+  });
+
+  it('should not cache the awsssm parameter a read fetched before a write landed', async () => {
+    const store: Record<string, string> = { '/dummy/writable/raced': JSON.stringify({ expiresIn: 3842 }) };
+    const held = hold();
+    const client = {
+      send: async (command: unknown) => {
+        if (command instanceof GetParameterCommand) {
+          const value = store[command.input.Name!];
+          await held.wait();
+          return { Parameter: { Value: value } };
+        }
+        if (command instanceof PutParameterCommand) {
+          store[command.input.Name!] = command.input.Value!;
+        }
+        return {};
+      },
+    };
+    (secrets as any).managers.awsssm = new AwsSsmNode(client as any, 'awsssm', SecretNode.TypeEnum.Node);
+
+    const read = secrets.getValue('awsssm./dummy/writable.raced.expiresIn');
+    await held.reached();
+    await secrets.setValue('awsssm./dummy/writable.raced', { expiresIn: 4918 });
+    held.release();
+
+    expect(await read).to.be.eq(3842);
+    expect(await secrets.getValue('awsssm./dummy/writable.raced.expiresIn')).to.be.eq(4918);
   });
 
   after('should clean up', async () => {
