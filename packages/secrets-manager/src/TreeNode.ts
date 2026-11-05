@@ -121,6 +121,33 @@ export class TreeNode {
     this._childJSON[key] = value;
   }
 
+  /**
+   * Drops what a write to `subPath` made stale, so the next read resolves from the backend
+   * instead of waiting for the cache timeout. To be called on a provider root.
+   *
+   * - Cached values: the one at `subPath`, every one below it and every one above it. Values
+   *   cached for other paths stay.
+   * - Cached nodes: everything resolved below this root's children, which is where the content
+   *   read from a secret lives. These are not matched against `subPath` because providers key
+   *   them differently (a writable AWS secret is keyed `name/postfix` but addressed
+   *   `name.postfix`). The root's own listing is kept.
+   *
+   * @param subPath the written path below this provider root, i.e. a key of `values`
+   */
+  invalidate(subPath: string) {
+    for (const key of Object.keys(this._values)) {
+      if (key === subPath
+        || key.startsWith(`${subPath}${DELIMITER}`)
+        || subPath.startsWith(`${key}${DELIMITER}`)) {
+        delete this._values[key];
+      }
+    }
+
+    for (const child of Object.values(this.children)) {
+      child.children = {};
+    }
+  }
+
   asNode(): SecretNode {
     return new SecretNode(this.fullPath, this.type, this.writable, this.active, this.writeSuccess, this.writeError, this.connectError);
   }

@@ -133,6 +133,9 @@ export class AwsSsmNode extends TreeNode {
       Tier: 'Intelligent-Tiering',
     }));
     this.childJSON[paramName] = json;
+    // resolveChild caches a string-valued parameter under its parameter name, which for a
+    // writable secret (`name/postfix`) is not the key SecretsManagerImpl invalidates.
+    delete this.values[paramName];
     return (subpath && subpath.length > 0
       ? new JsonNode(subObj, subpath[subpath.length - 1], secretNode)
       : secretNode

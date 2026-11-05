@@ -591,8 +591,12 @@ export class SecretsManagerImpl implements SecretsManager {
       throw new IllegalArgumentError('Cannot write secrets at the root');
     }
 
-    const [providerKey] = path.split(DELIMITER);
+    const [providerKey, ...subpathArr] = path.split(DELIMITER);
     const root = await this.getRoot(providerKey);
-    return root.setValue(path, value);
+    const node = await root.setValue(path, value);
+    // getValue caches what it resolves on the root; without this a read after the write keeps
+    // returning the old value until the cache timeout fires.
+    root.invalidate(subpathArr.join(DELIMITER));
+    return node;
   }
 }

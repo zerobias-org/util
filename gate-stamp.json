@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "feat/zbb-ci-gate-flags",
+  "branch": "claude/fix-secrets-manager-stale-read-5b33c3",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
@@ -529,8 +529,8 @@
     },
     "@zerobias-org/util-secrets-manager": {
       "version": "2.0.13",
-      "sourceHash": "0b21cf6127122e1797877cf6a8275bd9d0b265c557a1cbf575560695c6decc4d",
-      "testHash": "90c852915dceab79801c8783b3003ddeccc04ad9eda8021a1ac93d88ba387c49",
+      "sourceHash": "eddfa777c8fc29fd6c4cc8733d8a0ea91155ca9bddf37ad4cc7d6e2bf87189fd",
+      "testHash": "a4f359b9c88898b17b522f83eac80cd6aae828b21abfc4632077e192b0816339",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -541,8 +541,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 39,
-          "ran": 39,
+          "expected": 46,
+          "ran": 46,
           "status": "passed"
         },
         "integration": {
