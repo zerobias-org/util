@@ -152,6 +152,11 @@ export class TreeNode {
     return new SecretNode(this.fullPath, this.type, this.writable, this.active, this.writeSuccess, this.writeError, this.connectError);
   }
 
+  /**
+   * Arms the timer that empties this node's caches after `CACHE_TIMEOUT_SECONDS`, unless it is
+   * already armed. The timer is unref'd: a cached secret must not keep a short-lived process, such
+   * as a CLI, alive until the timeout.
+   */
   handleCacheTimeout() {
     if (!this.cacheTimeoutId) {
       this.cacheTimeoutId = setTimeout(() => {
@@ -161,6 +166,7 @@ export class TreeNode {
         this._childJSON = {};
         this._values = {};
       }, cacheTimeout);
+      this.cacheTimeoutId.unref();
     }
   }
 

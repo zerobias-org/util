@@ -175,6 +175,27 @@ describe('SecretsManagerWriteCacheTest', function () {
     expect(await secrets.getValue('awsssm./dummy/writable.plain')).to.be.eq('new');
   });
 
+  it('should expire a value cached on its first read, without holding the process open', async function () {
+    const timeoutMs = 1000 * Number(process.env.CACHE_TIMEOUT_SECONDS ?? 300);
+    if (timeoutMs > 10_000) {
+      this.skip();
+    }
+    await seed('once', { value: 'old' });
+    // A fresh manager, so no timer armed by an earlier test can empty the cache for this one.
+    const fresh = new SecretsManagerImpl();
+    await fresh.init();
+    expect(await fresh.getValue('file.once.value')).to.be.eq('old');
+    const timer = (fresh as any).managers.file.cacheTimeoutId;
+    expect(timer, 'the first read arms the cache timer').to.not.be.eq(undefined);
+    expect(timer.hasRef(), 'the cache timer keeps the process alive').to.be.eq(false);
+
+    // Changed behind the manager's back, so nothing invalidates it: only the timer can.
+    await seed('once', { value: 'new' });
+    await new Promise((resolve) => setTimeout(resolve, timeoutMs + 1000));
+
+    expect(await fresh.getValue('file.once.value')).to.be.eq('new');
+  });
+
   after('should clean up', async () => {
     if (secretRoot) {
       await rm(secretRoot, { recursive: true, force: true });

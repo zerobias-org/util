@@ -568,6 +568,11 @@ export class SecretsManagerImpl implements SecretsManager {
       });
   }
 
+  /**
+   * Resolves the value at `path`, from the provider root's cache when it is there. A value stays
+   * cached for at most `CACHE_TIMEOUT_SECONDS` from when it is cached, and a write through setValue
+   * drops what it made stale.
+   */
   async getValue(path: string): Promise<string | number | boolean> {
     logger.debug(`Resolving ${path}`);
     const [providerKey, ...subpathArr] = path.split(DELIMITER);
@@ -582,6 +587,7 @@ export class SecretsManagerImpl implements SecretsManager {
       .then(async (node: TreeNode) => {
         const value = await node.getValue();
         root.setValues(subPath, value);
+        root.handleCacheTimeout();
         return value;
       });
   }
