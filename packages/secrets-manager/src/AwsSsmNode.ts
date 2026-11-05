@@ -133,18 +133,27 @@ export class AwsSsmNode extends TreeNode {
       Tier: 'Intelligent-Tiering',
     }));
     this.childJSON[paramName] = json;
+    // resolveChild caches a string-valued parameter under its parameter name, which for a
+    // writable secret (`name/postfix`) is not the key SecretsManagerImpl invalidates.
+    delete this.values[paramName];
     return (subpath && subpath.length > 0
       ? new JsonNode(subObj, subpath[subpath.length - 1], secretNode)
       : secretNode
     ).asNode();
   }
 
+  /**
+   * Resolves `path` (`<parameter name>[.<key>...]`) from this root's parameter caches or SSM. A
+   * parameter fetched while a write invalidated this root is returned but not cached (see
+   * TreeNode.cacheVersion).
+   */
   async resolveChild(path: string): Promise<TreeNode> {
     const [node, ...more] = path.split(DELIMITER);
     logger.debug(`node ${node}, more: ${more}`);
 
     this.handleCacheTimeout();
     let nodeValue: Record<string, any>;
+    let cacheable = true;
     if (this.values[node]) {
       logger.debug(`We did hit values cache lets just return the value as a json node: ${node}`);
       if (more.length > 0) {
@@ -159,17 +168,23 @@ export class AwsSsmNode extends TreeNode {
       nodeValue = this.childJSON[node];
     } else {
       logger.debug(`We didnt hit childJSON cache lets fetch ssm param: ${node}`);
+      const version = this.cacheVersion;
       const value = await this.getParameterValue(this.client, node);
+      cacheable = this.cacheVersion === version;
       if (typeof value === 'string') {
         if (more.length > 0) {
           throw new UnexpectedError(`Value at ${node} was not an object and more path was given ${JSON.stringify(more)}.`);
         }
 
-        this.values[node] = value;
+        if (cacheable) {
+          this.values[node] = value;
+        }
         return new JsonNode(value, node, this);
       }
 
-      this.childJSON[node] = value;
+      if (cacheable) {
+        this.childJSON[node] = value;
+      }
       nodeValue = value;
     }
 
@@ -207,7 +222,9 @@ export class AwsSsmNode extends TreeNode {
     } while (restCheck.length > 0);
 
     logger.debug(`Ended do while with paramVal: ${paramVal}`);
-    this.values[`${node}${DELIMITER}${more.join(DELIMITER)}`] = paramVal;
+    if (cacheable) {
+      this.values[`${node}${DELIMITER}${more.join(DELIMITER)}`] = paramVal;
+    }
     return new JsonNode(paramVal, path, this);
   }
 

@@ -35,6 +35,8 @@ export class TreeNode {
 
   private cacheTimeoutId: NodeJS.Timeout | undefined;
 
+  private _cacheVersion = 0;
+
   constructor(
     path: string,
     type: SecretNode.TypeEnumDef,
@@ -113,6 +115,20 @@ export class TreeNode {
     return this.path;
   }
 
+  /** The provider root this node hangs under; a root returns itself. */
+  private get providerRoot(): TreeNode {
+    return this.parent ? this.parent.providerRoot : this;
+  }
+
+  /**
+   * Bumped on the provider root by every invalidate(). A fetch records it before it starts and caches
+   * its result only if it is unchanged when the fetch returns, so a read that was in flight when a
+   * write landed cannot put the pre-write content back.
+   */
+  get cacheVersion(): number {
+    return this.providerRoot._cacheVersion;
+  }
+
   setValues(key: string, value: string | number | boolean) {
     this._values[key] = value;
   }
@@ -121,10 +137,46 @@ export class TreeNode {
     this._childJSON[key] = value;
   }
 
+  /**
+   * Drops what a write to `subPath` made stale, so the next read resolves from the backend
+   * instead of waiting for the cache timeout. To be called on a provider root.
+   *
+   * - Cached values: the one at `subPath`, every one below it and every one above it. Values
+   *   cached for other paths stay.
+   * - Cached nodes: everything resolved below this root's children, which is where the content
+   *   read from a secret lives. These are not matched against `subPath` because providers key
+   *   them differently (a writable AWS secret is keyed `name/postfix` but addressed
+   *   `name.postfix`). The root's own listing is kept.
+   * - Fetches in flight: the cache version is bumped, so whatever they return is handed to their
+   *   callers but not cached.
+   *
+   * @param subPath the written path below this provider root, i.e. a key of `values`
+   */
+  invalidate(subPath: string) {
+    this.providerRoot._cacheVersion += 1;
+
+    for (const key of Object.keys(this._values)) {
+      if (key === subPath
+        || key.startsWith(`${subPath}${DELIMITER}`)
+        || subPath.startsWith(`${key}${DELIMITER}`)) {
+        delete this._values[key];
+      }
+    }
+
+    for (const child of Object.values(this.children)) {
+      child.children = {};
+    }
+  }
+
   asNode(): SecretNode {
     return new SecretNode(this.fullPath, this.type, this.writable, this.active, this.writeSuccess, this.writeError, this.connectError);
   }
 
+  /**
+   * Arms the timer that empties this node's caches after `CACHE_TIMEOUT_SECONDS`, unless it is
+   * already armed. The timer is unref'd: a cached secret must not keep a short-lived process, such
+   * as a CLI, alive until the timeout.
+   */
   handleCacheTimeout() {
     if (!this.cacheTimeoutId) {
       this.cacheTimeoutId = setTimeout(() => {
@@ -134,6 +186,7 @@ export class TreeNode {
         this._childJSON = {};
         this._values = {};
       }, cacheTimeout);
+      this.cacheTimeoutId.unref();
     }
   }
 
@@ -148,27 +201,36 @@ export class TreeNode {
 
     this.handleCacheTimeout();
 
-    if (Object.keys(this.children).length === 0) {
-      await this.resolveChildren();
-    }
-
-    return Object.values(this.children)
+    const children = await this.resolveChildren();
+    return Object.values(children)
       .map((node) => node.asNode());
   }
 
-  protected async resolveChildren(force = false): Promise<void> {
+  /**
+   * Fetches this node's children when none are cached (or when `force`) and returns them. If a write
+   * invalidated the provider while they were being fetched, they may predate it: they are returned to
+   * this caller but not cached.
+   */
+  protected async resolveChildren(force = false): Promise<Record<string, TreeNode>> {
     if (!this.active) {
       throw new InvalidStateError('This node is not active, cannot resolveChildren');
     }
 
-    if (this.resolver && (force || Object.keys(this.children).length === 0)) {
-      return this.resolver(`${this.fullPath}`)
-        .then((nodes: TreeNode[]) => { for (const node of nodes) {
-          this.children[node.path] = node;
-        } });
+    if (!this.resolver || (!force && Object.keys(this.children).length > 0)) {
+      return this.children;
     }
 
-    return;
+    const version = this.cacheVersion;
+    const resolved: Record<string, TreeNode> = {};
+    for (const node of await this.resolver(`${this.fullPath}`)) {
+      resolved[node.path] = node;
+    }
+    if (this.cacheVersion !== version) {
+      return resolved;
+    }
+
+    Object.assign(this.children, resolved);
+    return this.children;
   }
 
   async getChild(path: string, force = false): Promise<TreeNode> {
@@ -181,9 +243,9 @@ export class TreeNode {
     }
 
     const [first, ...rest] = path.split(DELIMITER);
-    await this.resolveChildren(force);
+    const children = await this.resolveChildren(force);
 
-    const child = this.children[first];
+    const child = children[first];
     if (child) {
       if (rest.length > 0) {
         return child.getChild(rest.join(DELIMITER));
