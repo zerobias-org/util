@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "task/task-454",
+  "branch": "fix/vault-token-renewal",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
@@ -483,7 +483,7 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "3.0.11",
+      "version": "3.0.12",
       "sourceHash": "c1f5b2a54edd29741b4214c9b3fa7ac1bda293ab01c57bc8ada20a56f85eada7",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
@@ -528,9 +528,9 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.15",
-      "sourceHash": "6606d9db7042122d24d7ad602dd43576bca307414c46bf0677fa1e0f2435b610",
-      "testHash": "d09de724b9c94a4b4f15be798b34ae89b7fefa05c13a6b2d9c4d67ba838dc0b7",
+      "version": "2.0.16",
+      "sourceHash": "78ef6585c0f9b3ff870243e472eef166eed061695acd0bfc99faadce1c45c98b",
+      "testHash": "7d8a21809b925f19525e2c030c6bba6930355e8f58180e2c6b08a56fc07fa983",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -541,8 +541,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 50,
-          "ran": 50,
+          "expected": 53,
+          "ran": 53,
           "status": "passed"
         },
         "integration": {
