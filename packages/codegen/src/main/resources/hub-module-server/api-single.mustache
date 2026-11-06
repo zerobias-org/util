@@ -59,10 +59,10 @@ export class {{classname}}Controller {
     let {{paramName}}: {{{datatypeWithEnum}}} = await ObjectSerializer.deserialize(req.query['{{paramName}}'], "{{{datatypeWithEnum}}}"{{#dataFormat}}, '{{{.}}}'{{/dataFormat}});
   {{/queryParams}}
   {{#headerParams}}
-    let {{baseName}}: {{{dataType}}} = await ObjectSerializer.deserialize(req.headers['{{baseName}}'], "{{{dataType}}}"{{#dataFormat}}, '{{{.}}}'{{/dataFormat}});
+    let {{paramName}}: {{{dataType}}} = await ObjectSerializer.deserialize(req.headers['{{#lambda.lowercase}}{{baseName}}{{/lambda.lowercase}}'], "{{{dataType}}}"{{#dataFormat}}, '{{{.}}}'{{/dataFormat}});
   {{/headerParams}}
   {{#formParams}}
-    let {{baseName}}: {{{dataType}}} = await ObjectSerializer.deserialize(req.body['{{baseName}}'], "{{{dataType}}}"{{#dataFormat}}, '{{{.}}}'{{/dataFormat}});
+    let {{paramName}}: {{{dataType}}} = await ObjectSerializer.deserialize(req.body['{{baseName}}'], "{{{dataType}}}"{{#dataFormat}}, '{{{.}}}'{{/dataFormat}});
   {{/formParams}}
   {{#bodyParam}}
     let {{paramName}}: {{{dataType}}} = await ObjectSerializer.deserialize(req.body, "{{{dataType}}}")
