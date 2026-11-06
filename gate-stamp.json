@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/server-header-params",
+  "branch": "task/task-454",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
@@ -366,7 +366,7 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "3.0.14",
+      "version": "3.0.15",
       "sourceHash": "b1a4ea98ce21efb655d87016b755e473de851627991f3216fd58c6533c1f3a6b",
       "testHash": "c78afea3ddbccd64f4408d44fde7fb618a311cd63288366c4b63c7207149e649",
       "tasks": {
@@ -483,8 +483,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "3.0.10",
-      "sourceHash": "757066d1f0fb0c30a8aca57e1b3732525bdf73f8e08dbd7adefdd33c86012963",
+      "version": "3.0.11",
+      "sourceHash": "c1f5b2a54edd29741b4214c9b3fa7ac1bda293ab01c57bc8ada20a56f85eada7",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
         "lint": "passed",
@@ -528,8 +528,8 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.14",
-      "sourceHash": "fb2479d65e81169f315cd1fcb99db349f519cb9f9ed5f8bfdb7ec0858589b9b0",
+      "version": "2.0.15",
+      "sourceHash": "6606d9db7042122d24d7ad602dd43576bca307414c46bf0677fa1e0f2435b610",
       "testHash": "d09de724b9c94a4b4f15be798b34ae89b7fefa05c13a6b2d9c4d67ba838dc0b7",
       "tasks": {
         "lint": "passed",
