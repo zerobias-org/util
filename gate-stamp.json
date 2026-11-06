@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "task/task-454",
+  "branch": "fix/server-header-params",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
@@ -367,8 +367,8 @@
     },
     "@zerobias-org/util-codegen": {
       "version": "3.0.14",
-      "sourceHash": "7d33d8a413c03b178546e432f5ea2fcd408779c00a9ecb13a70f2530a759e85e",
-      "testHash": "7a055db278c0ebd45ba867f0d4445e82202a7eab9bead6d02e98a971fa2ed57d",
+      "sourceHash": "b1a4ea98ce21efb655d87016b755e473de851627991f3216fd58c6533c1f3a6b",
+      "testHash": "c78afea3ddbccd64f4408d44fde7fb618a311cd63288366c4b63c7207149e649",
       "tasks": {
         "lint": "skipped",
         "compile": "skipped",
@@ -379,8 +379,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 9,
-          "ran": 9,
+          "expected": 13,
+          "ran": 13,
           "status": "passed"
         },
         "integration": {
@@ -484,7 +484,7 @@
     },
     "@zerobias-org/util-hub-module-utils": {
       "version": "3.0.10",
-      "sourceHash": "4bcd09888f530d92390de51b163f7977325111e874d86a72550c97f22f7d904e",
+      "sourceHash": "757066d1f0fb0c30a8aca57e1b3732525bdf73f8e08dbd7adefdd33c86012963",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
         "lint": "passed",
@@ -528,9 +528,9 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.13",
-      "sourceHash": "cfb4239271580a7d1f6e3a74efde96d22d9cea84850ec8527e173e7bf17b2eb9",
-      "testHash": "90c852915dceab79801c8783b3003ddeccc04ad9eda8021a1ac93d88ba387c49",
+      "version": "2.0.14",
+      "sourceHash": "fb2479d65e81169f315cd1fcb99db349f519cb9f9ed5f8bfdb7ec0858589b9b0",
+      "testHash": "d09de724b9c94a4b4f15be798b34ae89b7fefa05c13a6b2d9c4d67ba838dc0b7",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
@@ -541,8 +541,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 39,
-          "ran": 39,
+          "expected": 50,
+          "ran": 50,
           "status": "passed"
         },
         "integration": {
