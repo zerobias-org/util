@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "claude/fix-secrets-manager-stale-read-5b33c3",
+  "branch": "fix/server-header-params",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
@@ -367,8 +367,8 @@
     },
     "@zerobias-org/util-codegen": {
       "version": "3.0.14",
-      "sourceHash": "7d33d8a413c03b178546e432f5ea2fcd408779c00a9ecb13a70f2530a759e85e",
-      "testHash": "7a055db278c0ebd45ba867f0d4445e82202a7eab9bead6d02e98a971fa2ed57d",
+      "sourceHash": "b1a4ea98ce21efb655d87016b755e473de851627991f3216fd58c6533c1f3a6b",
+      "testHash": "c78afea3ddbccd64f4408d44fde7fb618a311cd63288366c4b63c7207149e649",
       "tasks": {
         "lint": "skipped",
         "compile": "skipped",
@@ -379,8 +379,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 9,
-          "ran": 9,
+          "expected": 13,
+          "ran": 13,
           "status": "passed"
         },
         "integration": {
@@ -528,7 +528,7 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.13",
+      "version": "2.0.14",
       "sourceHash": "fb2479d65e81169f315cd1fcb99db349f519cb9f9ed5f8bfdb7ec0858589b9b0",
       "testHash": "d09de724b9c94a4b4f15be798b34ae89b7fefa05c13a6b2d9c4d67ba838dc0b7",
       "tasks": {
