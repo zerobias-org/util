@@ -154,7 +154,8 @@ Run `./gradlew build --stacktrace` for detailed error output.
 ### A server parameter reads undefined, or its controller doesn't compile
 `hub-module-server` declares every parameter under its camelCase `{{paramName}}`, the name the impl call passes, and
 reads a header lowercased (`{{#lambda.lowercase}}`), since Node lowercases incoming header names: `If-Match` becomes
-`let ifMatch = … req.headers['if-match']`. `test/unit/serverParams.spec.ts` generates a server and pins this.
+`let ifMatch = … req.headers['if-match']`. `test/unit/serverParams.spec.ts` pins this: it generates a server,
+type-checks the controller against stubs of its imports, and runs it on a request with lowercased header names.
 
 ## Testing Changes
 
