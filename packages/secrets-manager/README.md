@@ -15,7 +15,7 @@ comes back as-is. A non-string leaf (object or array) is returned as its JSON se
 Address a field inside a JSON secret by extending the path (e.g. `file.secret.subkey`).
 
 ## Caching
-The secrets manager will cache results on a timeout that resets on `list` calls. This defaults to 5 minutes and can be modified with the `CACHE_TIMEOUT_SECONDS` environment variable.
+The secrets manager caches what it reads for at most `CACHE_TIMEOUT_SECONDS` (default 5 minutes). A write through the secrets manager drops the cached entries it makes stale right away; a change made anywhere else shows up once the cache times out.
 
 ## Writable Configuration
 
