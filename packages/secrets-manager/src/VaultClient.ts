@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { Agent } from 'node:https';
 import process from 'node:process';
 
@@ -109,27 +109,7 @@ export class VaultClient {
       logger.warn('SSL_STRICT=false — Vault TLS certificate is NOT verified. Prefer adding the CA via NODE_EXTRA_CA_CERTS');
     }
 
-    let token: string;
-    if (auth.method === 'token') {
-      token = auth.accessToken;
-      // Validate token with lookup-self before declaring success.
-      await axios.get(`${baseURL}/auth/token/lookup-self`, {
-        headers: { ...baseHeaders, 'X-Vault-Token': token },
-        timeout: DEFAULT_TIMEOUT_MS,
-        httpsAgent,
-      });
-    } else {
-      const path = auth.path ?? 'approle';
-      const resp = await axios.post(
-        `${baseURL}/auth/${encodeURIComponent(path)}/login`,
-        { role_id: auth.roleId, secret_id: auth.secretId },
-        { headers: baseHeaders, timeout: DEFAULT_TIMEOUT_MS, httpsAgent },
-      );
-      token = resp.data?.auth?.client_token;
-      if (!token) {
-        throw new Error('Vault approle login did not return a client_token');
-      }
-    }
+    const token = await VaultClient.authenticate(auth, baseURL, baseHeaders, httpsAgent);
 
     const http = axios.create({
       baseURL,
@@ -137,7 +117,122 @@ export class VaultClient {
       headers: { ...baseHeaders, 'X-Vault-Token': token },
       httpsAgent,
     });
+
+    // Approle tokens have a finite TTL (e.g. 24h). This client is long-lived, so once the
+    // token lapses every request would otherwise fail with 403 until the process restarts.
+    // Re-authenticate transparently on the first auth failure per request.
+    VaultClient.installReauthInterceptor(http, auth, baseURL, baseHeaders, httpsAgent, token);
+
     return new VaultClient(http);
+  }
+
+  /**
+   * Obtain a Vault client token: an approle login, or validation of a static token via
+   * lookup-self. Factored out of {@link connect} so the re-auth interceptor can mint a fresh
+   * token on expiry without rebuilding the client.
+   */
+  private static async authenticate(
+    auth: VaultAuth,
+    baseURL: string,
+    baseHeaders: Record<string, string>,
+    httpsAgent: Agent,
+  ): Promise<string> {
+    if (auth.method === 'token') {
+      // Validate token with lookup-self before declaring success.
+      await axios.get(`${baseURL}/auth/token/lookup-self`, {
+        headers: { ...baseHeaders, 'X-Vault-Token': auth.accessToken },
+        timeout: DEFAULT_TIMEOUT_MS,
+        httpsAgent,
+      });
+      return auth.accessToken;
+    }
+
+    const path = auth.path ?? 'approle';
+    const resp = await axios.post(
+      `${baseURL}/auth/${encodeURIComponent(path)}/login`,
+      { role_id: auth.roleId, secret_id: auth.secretId },
+      { headers: baseHeaders, timeout: DEFAULT_TIMEOUT_MS, httpsAgent },
+    );
+    const token = resp.data?.auth?.client_token;
+    if (!token) {
+      throw new Error('Vault approle login did not return a client_token');
+    }
+    return token;
+  }
+
+  /**
+   * Keep this long-lived client usable past the token's TTL. Vault returns 403 (permission
+   * denied) for an expired or revoked token; on the first such response per request, re-run the
+   * approle login, swap in the fresh token, and retry the request once. Static-token auth cannot
+   * be re-minted from credentials, so it is left untouched (the request fails as before).
+   *
+   * A monotonic token "generation" collapses the stampede when a 24h token expires and many
+   * in-flight requests fail at once: each request carries the generation it was sent under, so a
+   * 403 can tell "my token is merely stale, someone already refreshed it" (retry with the current
+   * token, no login) from "the current token was rejected" (one shared re-login, then retry).
+   * The result is exactly one login per expiry regardless of concurrency or timing.
+   */
+  private static installReauthInterceptor(
+    http: AxiosInstance,
+    auth: VaultAuth,
+    baseURL: string,
+    baseHeaders: Record<string, string>,
+    httpsAgent: Agent,
+    initialToken: string,
+  ): void {
+    if (auth.method === 'token') return;
+
+    let currentToken = initialToken;
+    let generation = 0;
+    let reloginInFlight: Promise<void> | undefined;
+
+    // Stamp every request with the live token + the generation it was sent under.
+    http.interceptors.request.use((cfg) => {
+      cfg.headers.set('X-Vault-Token', currentToken);
+      (cfg as InternalAxiosRequestConfig & { __vaultGen?: number }).__vaultGen = generation;
+      return cfg;
+    });
+
+    http.interceptors.response.use(
+      (resp) => resp,
+      async (error: AxiosError) => {
+        const status = error.response?.status;
+        const cfg = error.config as
+          (InternalAxiosRequestConfig & { __vaultGen?: number; __vaultRetried?: boolean }) | undefined;
+
+        // Only act on auth failures, and retry each request at most once.
+        if (!cfg || cfg.__vaultRetried || (status !== 401 && status !== 403)) {
+          return Promise.reject(error);
+        }
+        cfg.__vaultRetried = true;
+
+        try {
+          // Re-login only if nobody has already refreshed the token since this request was sent.
+          if (cfg.__vaultGen === generation) {
+            if (!reloginInFlight) {
+              reloginInFlight = VaultClient.authenticate(auth, baseURL, baseHeaders, httpsAgent)
+                .then((freshToken) => {
+                  currentToken = freshToken;
+                  generation += 1;
+                  reloginInFlight = undefined;
+                }, (reauthError) => {
+                  reloginInFlight = undefined;
+                  throw reauthError;
+                });
+            }
+            await reloginInFlight;
+          }
+
+          logger.info(`Vault rejected token (${status}); re-authenticated and retrying request`);
+          // The request interceptor re-stamps the fresh token on this retry.
+          return http.request(cfg);
+        } catch (reauthError) {
+          logger.warn(`Vault re-authentication failed: ${(reauthError as Error).message}`);
+          // Surface the original auth error, not the re-auth failure.
+          return Promise.reject(error);
+        }
+      },
+    );
   }
 
   /** GET `/{mount}/data/{path}` (KV v2). Throws if the secret does not exist. */
