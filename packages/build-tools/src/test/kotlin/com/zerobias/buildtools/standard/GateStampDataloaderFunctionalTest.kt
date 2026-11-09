@@ -13,9 +13,11 @@ import java.io.File
  * Runs real gates on throwaway packages through the zb.content and zb.base plugins, without
  * ZB_TOKEN: a local gate skips the load and its stamp records `"dataloaderExec": "skipped"`, which
  * gateCheck refuses; under CI=true the gate fails instead; a package without a dataloader step is
- * unaffected by either; and a gate whose load doesn't run keeps a passing load recorded for the
- * same source. The builds get no ZB_TOKEN and point DATALOADER_SERVICE_URL at a closed local port,
- * so nothing can reach the dataloader-service.
+ * unaffected by either; a gate whose load doesn't run keeps a passing load recorded for the same
+ * source; and a gate pointed at a non-prod dataloader-service records that environment. The builds
+ * get no ZB_TOKEN or ZB_ENV and point DATALOADER_SERVICE_URL at a closed local port, and the one
+ * build that names a real environment's service still has no ZB_TOKEN, so its load is skipped and
+ * nothing can reach a dataloader-service.
  */
 class GateStampDataloaderFunctionalTest {
 
@@ -62,10 +64,10 @@ class GateStampDataloaderFunctionalTest {
         check(process.waitFor() == 0) { "git ${args.joinToString(" ")} failed: $output" }
     }
 
-    /** The test JVM's environment without ZB_TOKEN or any dataloader/CI setting, plus CI=true when [ci] and [extra]. */
+    /** The test JVM's environment without ZB_TOKEN, ZB_ENV or any dataloader/CI setting, plus CI=true when [ci] and [extra]. */
     private fun env(ci: Boolean, extra: Map<String, String>): Map<String, String> =
         System.getenv()
-            .filterKeys { it !in setOf("ZB_TOKEN", "CI", "ZBB_MONOREPO_EVENT_FILE") && !it.startsWith("DATALOADER_") }
+            .filterKeys { it !in setOf("ZB_TOKEN", "ZB_ENV", "CI", "ZBB_MONOREPO_EVENT_FILE") && !it.startsWith("DATALOADER_") }
             .plus("DATALOADER_SERVICE_URL" to "http://127.0.0.1:9")
             .plus(if (ci) mapOf("CI" to "true") else emptyMap())
             .plus(extra)
@@ -204,5 +206,28 @@ class GateStampDataloaderFunctionalTest {
         val prodKept = stamp(dir).readText()
         assertTrue(prodKept.contains("\"dataloaderExec\": \"passed\""), prodKept)
         assertFalse(prodKept.contains("dataloaderEnv"), prodKept)
+    }
+
+    /**
+     * ZB_ENV=uat alone records nothing while DATALOADER_SERVICE_URL names a local service, since
+     * that wins; once it is blank (unset), the check talks to uat's service, and the stamp records
+     * a uat check, which main refuses. Without ZB_TOKEN neither gate sends anything.
+     */
+    @Test
+    fun `a gate against a non-prod dataloader-service records that environment, which main refuses`() {
+        val dir = contentPkg()
+
+        gradle(dir, ci = false, "gate", extraEnv = mapOf("ZB_ENV" to "uat")).build()
+        val localService = stamp(dir).readText()
+        assertFalse(localService.contains("dataloaderEnv"), localService)
+
+        val uat = gradle(dir, ci = false, "gate", extraEnv = mapOf("ZB_ENV" to "uat", "DATALOADER_SERVICE_URL" to "")).build()
+        assertEquals(TaskOutcome.SKIPPED, uat.task(":dataloaderExec")?.outcome)
+        val uatService = stamp(dir).readText()
+        assertTrue(uatService.contains("\"dataloaderEnv\": \"uat\""), uatService)
+
+        passLoad(dir)
+        val refused = gradle(dir, ci = false, "gateCheck").buildAndFail()
+        assertTrue(refused.output.contains("Gate stamp invalid — dataloader-env-uat-not-accepted-on-latest"), refused.output)
     }
 }

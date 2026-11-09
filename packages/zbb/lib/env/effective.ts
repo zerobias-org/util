@@ -17,6 +17,7 @@
 import { loadRepoConfig } from '../config.js';
 import type { Slot } from '../slot/Slot.js';
 import type { Stack } from '../stack/Stack.js';
+import { ZB_ENV_VAR, keepsAmbientOverZbEnvDefault, overlayZbEnv, parseZbEnv } from './zbEnv.js';
 
 /**
  * OS / runtime machinery that always passes through to a dispatched
@@ -136,11 +137,13 @@ const ALL_CONTRACT_VARS: ReadonlySet<string> = new Set([
  * so EnvContractCoverageTest treats them as "covered" without leaking them:
  * the prod-default OVERRIDES (must stay strippable) and framework vars handled
  * by the effective env / ZBB_ prefix. (PATH/HOME/NVM_DIR are in SYSTEM_BASE.)
+ * ZB_ENV is one of those framework vars: resolveEffectiveEnv carries it from
+ * the slot or the shell, along with the URL defaults it derives.
  */
 export const ENV_CONTRACT_IGNORED: ReadonlySet<string> = new Set([
   'PUBLISH_ORG_NPM_TOKEN', 'PUBLISH_ORG_REGISTRY_URL', 'ZB_PLATFORM_URL',
   'DATALOADER_SERVICE_URL', 'DATALOADER_SPEC',
-  'ZB_SLOT', 'ZB_SLOT_DIR', 'ZB_STACK', 'ZBB_MONOREPO_EVENT_FILE',
+  'ZB_SLOT', 'ZB_SLOT_DIR', 'ZB_STACK', 'ZB_ENV', 'ZBB_MONOREPO_EVENT_FILE',
 ]);
 
 /**
@@ -169,19 +172,33 @@ function isZbbInternalVar(key: string): boolean {
  * included, since a command still needs them even if `env list` tidies
  * them away). Pure composition — callers must have already resolved the
  * slot/stack (e.g. via prepareSlot's `slot.resolve()` + `stack.load()`).
+ *
+ * The built-in ZB_ENV comes from the slot (`zbb env set ZB_ENV …`) or else
+ * `ambient` (the shell), and overlays its environment's URL defaults; a var
+ * the stack holds as a user override keeps its value (see overlayZbEnv).
  */
-export function resolveEffectiveEnv(slot: Slot, stack: Stack | null): Record<string, string> {
+export function resolveEffectiveEnv(
+  slot: Slot,
+  stack: Stack | null,
+  ambient: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(slot.env.getAll())) {
     if (v) env[k] = v;
   }
+  const overrides = new Set<string>();
   if (stack) {
     // showHidden=true: `hidden` is a display concern, not an injection one.
     for (const [k, v] of Object.entries(stack.env.getAll(true))) {
       if (v) env[k] = v;
     }
     env.ZB_STACK = stack.name;
+    for (const [k, entry] of Object.entries(stack.env.getManifest(true))) {
+      if (entry.resolution === 'override') overrides.add(k);
+    }
   }
+  const target = parseZbEnv(env[ZB_ENV_VAR] ?? ambient[ZB_ENV_VAR]);
+  if (target) overlayZbEnv(env, target, overrides);
   return env;
 }
 
@@ -250,8 +267,9 @@ export function applyEffectiveEnv(
 
   // Effective env is authoritative — it wins over any same-named ambient
   // value that survived (e.g. a system-base key a stack legitimately
-  // redefines).
+  // redefines), except a hand-picked endpoint over a ZB_ENV-derived default.
   for (const [k, v] of Object.entries(effectiveEnv)) {
+    if (!hermetic && keepsAmbientOverZbEnvDefault(k, effectiveEnv, process.env)) continue;
     process.env[k] = v;
   }
 

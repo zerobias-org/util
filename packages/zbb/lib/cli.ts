@@ -40,6 +40,10 @@ import {
 } from './config.js';
 import { derivePackageScope, type PackageScope } from './monorepo/scope.js';
 import { resolveEffectiveEnv, loadShellPassthrough, applyEffectiveEnv, commandPassthrough } from './env/effective.js';
+import {
+  ZB_ENV_DEFAULT_KEYS, ZB_ENV_VAR, applyZbEnvNpm, applyZbEnvToShell, clearZbEnvNpm, isZbEnvDefaultKey,
+  parseZbEnv, zbEnvNpmrcPath, zbEnvWatchedKeys,
+} from './env/zbEnv.js';
 import { spawn } from 'node:child_process';
 import { isLifecycleCommand, parseLifecycleArgs, standardModeOnlyFlags } from './lifecycle.js';
 import {
@@ -159,6 +163,7 @@ async function prepareSlot(
       `[zbb] hermetic env: stripped ${stripped.length} undeclared shell var(s): ${stripped.sort().join(', ')}`,
     );
   }
+  applyZbEnvNpm(parseZbEnv(process.env[ZB_ENV_VAR]), { command: options?.command, repoRoot });
 
   return repoRoot;
 }
@@ -344,12 +349,15 @@ async function _main(argv: string[]): Promise<void> {
   // Stack subcommands
   if (command === 'stack') {
     const slot = await requireLoadedSlot();
+    applyZbEnvNpm(parseZbEnv(slot.env.get(ZB_ENV_VAR) ?? process.env[ZB_ENV_VAR]), { command });
     return handleStack(args.slice(1), slot);
   }
 
   // Registry subcommands
   if (command === 'registry') {
     const slot = await requireLoadedSlot();
+    // The local Verdaccio flows pass their own --userconfig; ZB_ENV's scope overrides would beat it.
+    clearZbEnvNpm();
     const { handleRegistry } = await import('./registry/commands.js');
     return handleRegistry(args.slice(1), slot);
   }
@@ -561,6 +569,7 @@ async function _main(argv: string[]): Promise<void> {
       // (see 57s build-tools build that reported "up-to-date"). Falling
       // through to the bash -c path lets PR #76's --console=plain
       // injection stream raw gradle output to the terminal.
+      applyZbEnvToShell({ command, repoRoot: findRepoRoot(process.cwd()) });
       const { spawnStandardLifecycleAndExit } = await import('./standardLifecycle.js');
       return spawnStandardLifecycleAndExit(
         ownerDir,
@@ -769,7 +778,7 @@ async function _main(argv: string[]): Promise<void> {
     {
       const { refreshGradleDaemonEnv } = await import('./gradleDaemon.js');
       const { collectChainEnvKeys } = await import('./config.js');
-      const watched = collectChainEnvKeys(chain);
+      const watched = [...collectChainEnvKeys(chain), ...zbEnvWatchedKeys()];
       refreshGradleDaemonEnv(process.env, watched, console.log);
     }
 
@@ -823,6 +832,8 @@ async function _main(argv: string[]): Promise<void> {
     const slot = await SlotManager.load(process.env.ZB_SLOT);
     const stack = await resolveStackForCwd(slot, process.env.ZB_STACK);
     await prepareSlot(slot, { stack });
+  } else {
+    applyZbEnvToShell({ repoRoot: findRepoRoot(process.cwd()) });
   }
   runGradle(args);
 }
@@ -1205,6 +1216,20 @@ function envAccessorFor(
   return { scope: 'stack', env: stackCtx.env, stack: stackCtx };
 }
 
+/**
+ * `zbb env list`'s view of the built-in ZB_ENV: whether the slot or the shell
+ * set it, the URL values a command receives, and the npm config zbb writes.
+ */
+function printZbEnvSection(slot: Slot, effective: Record<string, string>): void {
+  const target = parseZbEnv(effective[ZB_ENV_VAR]);
+  if (!target) return;
+  console.log(`  [ZB_ENV: ${target.name} (${slot.env.get(ZB_ENV_VAR) ? 'slot' : 'shell'})]`);
+  for (const key of ZB_ENV_DEFAULT_KEYS) {
+    if (effective[key]) console.log(`  ${key}=${effective[key]}`);
+  }
+  console.log(`  npm config: ${zbEnvNpmrcPath(target)}`);
+}
+
 async function handleEnv(args: string[]): Promise<void> {
   const { slot, stack: stackCtx } = await requireLoadedSlotAndStack();
   const sub = args[0];
@@ -1221,6 +1246,7 @@ async function handleEnv(args: string[]): Promise<void> {
       // slot path vars + hidden/derived machinery for a readable view;
       // `--slot` forces the slot-only view.
       if (stackCtx && !slotOnly) {
+        const effective = resolveEffectiveEnv(slot, stackCtx);
         if (!plain) {
           console.log(`  [slot: ${slot.name}]`);
           for (const key of slot.env.list()) {
@@ -1231,12 +1257,14 @@ async function handleEnv(args: string[]): Promise<void> {
         const manifest = stackCtx.env.getManifest(true);
         console.log(`  [stack: ${stackCtx.name}]`);
         for (const key of stackCtx.env.list(!plain)) {
-          const value = unmask ? stackCtx.env.get(key)! : (stackCtx.env.shouldMask(key) ? '***' : stackCtx.env.getMasked(key)!);
+          const fromZbEnv = isZbEnvDefaultKey(key) && effective[key] !== stackCtx.env.get(key) ? effective[key] : undefined;
+          const value = fromZbEnv ?? (unmask ? stackCtx.env.get(key)! : (stackCtx.env.shouldMask(key) ? '***' : stackCtx.env.getMasked(key)!));
           const entry = manifest[key];
-          const resolution = entry?.resolution ?? '';
+          const resolution = fromZbEnv !== undefined ? `ZB_ENV=${effective[ZB_ENV_VAR]}` : (entry?.resolution ?? '');
           const typeInfo = entry?.type ?? '';
           console.log(`  ${key}=${value}  (${resolution} — ${typeInfo})`);
         }
+        printZbEnvSection(slot, effective);
       } else {
         const manifest = slot.env.getManifest();
         console.log(`  [slot: ${slot.name}]`);
@@ -1248,6 +1276,7 @@ async function handleEnv(args: string[]): Promise<void> {
           const override = slot.env.isOverride(key) ? ' (override)' : '';
           console.log(`  ${key}=${value}  (${source} — ${typeInfo}${override})`);
         }
+        printZbEnvSection(slot, resolveEffectiveEnv(slot, null));
       }
       break;
     }
@@ -1257,6 +1286,17 @@ async function handleEnv(args: string[]): Promise<void> {
       if (!key) {
         console.error('Usage: zbb env get <VAR>');
         process.exit(1);
+      }
+      if (key === ZB_ENV_VAR || isZbEnvDefaultKey(key)) {
+        const effective = resolveEffectiveEnv(slot, stackCtx);
+        if (effective[ZB_ENV_VAR]) {
+          if (effective[key] === undefined) {
+            console.error(`Variable '${key}' not set.`);
+            process.exit(1);
+          }
+          console.log(effective[key]);
+          break;
+        }
       }
       const acc = envAccessorFor(key, slot, stackCtx);
       if (acc.scope === 'stack-missing') {
@@ -1285,11 +1325,16 @@ async function handleEnv(args: string[]): Promise<void> {
         process.exit(1);
       }
       const old = acc.env.get(key);
-      await acc.env.set(key, value);
+      try {
+        await acc.env.set(key, value);
+      } catch (err: unknown) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exit(1);
+      }
       const where = acc.scope === 'stack'
         ? `stack: ${acc.stack.name}`
         : 'saved; manifest source: override';
-      console.log(`  ${key}: ${old ?? '(unset)'} -> ${value} (${where})`);
+      console.log(`  ${key}: ${old ?? '(unset)'} -> ${acc.env.get(key) ?? value} (${where})`);
       break;
     }
 

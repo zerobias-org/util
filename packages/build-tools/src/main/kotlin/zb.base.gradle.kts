@@ -9,7 +9,7 @@ import com.zerobias.buildtools.tasks.DATALOADER_TASK_NAME
 import com.zerobias.buildtools.tasks.DataloaderOrgJobTask
 import com.zerobias.buildtools.tasks.ResolveOrgVersionTask
 import com.zerobias.buildtools.tasks.VerifyOrgPublishTask
-import com.zerobias.buildtools.tasks.requestedDataloaderEnv
+import com.zerobias.buildtools.tasks.checkedDataloaderEnv
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
 import org.gradle.build.event.BuildEventsListenerRegistry
 import org.gradle.kotlin.dsl.support.serviceOf
@@ -1161,7 +1161,7 @@ val writeGateStamp by tasks.registering {
             }
         }
         val load = taskStatuses[DATALOADER_TASK_NAME]?.let {
-            StandardGateStampValidator.recordedLoad(it, requestedDataloaderEnv(), sourceHash, previousStamp)
+            StandardGateStampValidator.recordedLoad(it, checkedDataloaderEnv(), sourceHash, previousStamp)
         }
         val recordedStatuses = load?.let { taskStatuses + (DATALOADER_TASK_NAME to it.status) } ?: taskStatuses
         val taskResults = recordedStatuses.map { (taskName, status) -> """"$taskName": "$status"""" }
@@ -1192,7 +1192,7 @@ val writeGateStamp by tasks.registering {
             """      "$suite": { "expected": $expected, "ran": $passed, "status": "$status" }"""
         }
 
-        // A DATALOADER_ENV check is recorded so uat/main publishes refuse it (StandardGateStampValidator).
+        // A non-prod check (DATALOADER_ENV or dataloader-service) is recorded so uat/main publishes refuse it.
         val dataloaderEnvLine = load?.env?.let { "\n  \"dataloaderEnv\": \"$it\"," } ?: ""
         val stamp = """{
   "version": "${project.version}",

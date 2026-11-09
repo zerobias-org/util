@@ -478,3 +478,68 @@ describe('prepareSlot-style composition (integration)', () => {
     );
   });
 });
+
+describe('SlotEnvironment ZB_ENV (optional slot var)', () => {
+  let tmpDir: string;
+  let slotDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'zbb-zbenv-test-'));
+    slotDir = join(tmpDir, 'test-slot');
+    await mkdir(slotDir, { recursive: true });
+    await writeFile(join(slotDir, '.env'), 'ZB_SLOT=test-slot\n', 'utf-8');
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('is slot-level without being one of the canonical path vars', () => {
+    assert.ok(isSlotLevelVar('ZB_ENV'));
+    assert.ok(!ZBB_SLOT_VARS.has('ZB_ENV'));
+  });
+
+  it('set() stores the canonical name, so dev is saved as ci, and getAll() carries it', async () => {
+    const env = new SlotEnvironment(slotDir);
+    await env.load();
+    await env.set('ZB_ENV', ' DEV ');
+
+    assert.equal(env.get('ZB_ENV'), 'ci');
+    assert.equal(env.getAll().ZB_ENV, 'ci');
+    assert.ok(env.isOverride('ZB_ENV'));
+    assert.match(await readFile(join(slotDir, '.env'), 'utf-8'), /^ZB_ENV=ci$/m);
+  });
+
+  it('set() rejects an unknown environment and a blank value', async () => {
+    const env = new SlotEnvironment(slotDir);
+    await env.load();
+
+    await assert.rejects(() => env.set('ZB_ENV', 'staging'), /ZB_ENV must be prod, uat, qa or ci/);
+    await assert.rejects(() => env.set('ZB_ENV', '  '), /zbb env unset ZB_ENV/);
+    assert.equal(env.get('ZB_ENV'), undefined);
+  });
+
+  it('unset() removes it entirely, since it has no canonical value', async () => {
+    const env = new SlotEnvironment(slotDir);
+    await env.load();
+    await env.set('ZB_ENV', 'qa');
+    await env.unset('ZB_ENV');
+
+    assert.equal(env.get('ZB_ENV'), undefined);
+    assert.ok(!env.isOverride('ZB_ENV'));
+    const reloaded = new SlotEnvironment(slotDir);
+    await reloaded.load();
+    assert.equal(reloaded.get('ZB_ENV'), undefined);
+    assert.equal(reloaded.get('ZB_SLOT'), 'test-slot');
+  });
+
+  it('reset() drops it with the other overrides', async () => {
+    const env = new SlotEnvironment(slotDir);
+    await env.load();
+    await env.set('ZB_ENV', 'uat');
+    await env.reset();
+
+    assert.equal(env.get('ZB_ENV'), undefined);
+    assert.doesNotMatch(await readFile(join(slotDir, '.env'), 'utf-8'), /ZB_ENV/);
+  });
+});
