@@ -169,7 +169,15 @@ ZB_SLOT_LOGS      <slot>/logs/
 ZB_SLOT_STATE     <slot>/state/
 ZB_SLOT_TMP       <slot>/state/tmp/
 ZB_STACKS_DIR     <slot>/stacks/
+ZB_ENV            optional target environment (prod|uat|qa|ci); absent unless set
 ```
+
+`ZB_ENV` is built in (`lib/env/zbEnv.ts`). No zbb.yaml declares it. `zbb env set ZB_ENV <env>` stores it slot-wide (`SlotEnvironment.ZBB_SLOT_OPTIONAL_VARS`); otherwise the shell value applies.
+
+When it's set:
+- `resolveEffectiveEnv` overlays the env's `ZB_PLATFORM_URL`, `DATALOADER_SERVICE_URL` and `PUBLISH_ORG_REGISTRY_URL`. A stack override or a non-default value wins.
+- `applyZbEnvNpm` points npm at a generated `~/.zbb/npm/<env>.npmrc`, sets the scope registries in npm's env, and normalizes lockfile hosts on exit. It skips `publish`/`publishRemote`.
+- build-tools' `util/ZbEnv.kt` mirrors the URL table for Gradle runs without zbb. Keep the two in sync.
 
 Stack-scoped vars (live in `<slot>/stacks/<stack>/.env`, sourced on cd):
 

@@ -36,10 +36,11 @@ env:
     type: secret
     mask: true
     description: >-
-      REGISTRY key — auths pkg.zerobias.org (npm view/publish, .npmrc
+      REGISTRY key — auths the npm registry (npm view/publish, .npmrc
       interpolation) and the content gate's Neon dataloader step (the
-      step runs iff this is present). Must be a PROD-issued key while
-      the registry accepts only prod keys.
+      step runs iff this is present). Issued by the environment ZB_ENV
+      selects (pkg.zerobias.org / <env>.pkg.zerobias.org); prod when
+      ZB_ENV is unset.
 
   ZB_API_KEY:
     type: secret
@@ -61,7 +62,9 @@ env:
   ZB_PLATFORM_URL:
     type: string
     default: "https://app.zerobias.com/api"
-    description: Platform API base of the target environment
+    description: >-
+      Platform API base of the target environment. With ZB_ENV set, zbb
+      replaces this default with that environment's (an `env set` wins).
 
   KNOWLEDGE_MCP_URL:
     type: string

@@ -82,6 +82,19 @@ class StandardGateStampValidatorTest {
     }
 
     @Test
+    fun `uat-checked stamp (a uat dataloader-service) is valid on dev and qa, not uat or main`() {
+        val content = stamp(dataloaderEnv = "uat")
+        for (distTag in listOf("dev", "qa")) {
+            assertEquals(StandardGateStampValidator.Result.VALID, validate(content, distTag = distTag).result, distTag)
+        }
+        for (distTag in listOf("uat", "latest")) {
+            val outcome = validate(content, distTag = distTag)
+            assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result, distTag)
+            assertEquals("dataloader-env-uat-not-accepted-on-$distTag", outcome.reason)
+        }
+    }
+
+    @Test
     fun `without a distTag the strictest rule applies`() {
         val outcome = StandardGateStampValidator.validate(stamp(dataloaderEnv = "dev"), sourceHash, testHash, listOf())
         assertEquals(StandardGateStampValidator.Result.INVALID, outcome.result)
@@ -134,15 +147,15 @@ class StandardGateStampValidatorTest {
 
     // ── What writeGateStamp records for the load (recordedLoad) ────────
 
-    private fun recordedLoad(status: String, previous: String?, requestedEnv: String? = null) =
-        StandardGateStampValidator.recordedLoad(status, requestedEnv, sourceHash, previous)
+    private fun recordedLoad(status: String, previous: String?, checkedEnv: String? = null) =
+        StandardGateStampValidator.recordedLoad(status, checkedEnv, sourceHash, previous)
 
     @Test
-    fun `a load that ran records its own result and DATALOADER_ENV`() {
+    fun `a load that ran records its own result and the environment it was checked against`() {
         val previous = stamp(tasks = withLoad("passed"), dataloaderEnv = "qa")
         assertEquals(
             StandardGateStampValidator.RecordedLoad("passed", "dev", carried = false),
-            recordedLoad("passed", previous, requestedEnv = "dev"),
+            recordedLoad("passed", previous, checkedEnv = "dev"),
         )
     }
 
@@ -151,7 +164,7 @@ class StandardGateStampValidatorTest {
         for (status in listOf("skipped", "unknown")) {
             assertEquals(
                 StandardGateStampValidator.RecordedLoad("passed", null, carried = true),
-                recordedLoad(status, stamp(tasks = withLoad("passed")), requestedEnv = "dev"),
+                recordedLoad(status, stamp(tasks = withLoad("passed")), checkedEnv = "dev"),
                 status,
             )
             assertEquals(

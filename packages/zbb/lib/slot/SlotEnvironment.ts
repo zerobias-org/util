@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
+import { ZB_ENV_VAR, parseZbEnv } from '../env/zbEnv.js';
 
 /**
  * Source values for ManifestEntry:
@@ -36,7 +37,8 @@ export interface ManifestEntry {
  *
  * All other env vars belong to stacks, not the slot. A stack contributes
  * its own env (and any imports it explicitly declares) when loaded. The
- * slot itself only carries identity + filesystem-path vars.
+ * slot itself only carries identity + filesystem-path vars, plus the
+ * optional ZBB_SLOT_OPTIONAL_VARS below.
  *
  * Writing any var outside this set into slot.env will throw — callers
  * must route to the appropriate stack's env instead. Reading polluted
@@ -58,8 +60,15 @@ export const ZBB_SLOT_VARS = new Set([
   'ZB_STACKS_DIR',
 ]);
 
+/**
+ * Slot-level vars with no canonical value: absent until `zbb env set`, and
+ * removed again by `unset`/`reset`. ZB_ENV (lib/env/zbEnv.ts) is the slot's
+ * target ZeroBias environment, shared by every stack in it.
+ */
+export const ZBB_SLOT_OPTIONAL_VARS = new Set([ZB_ENV_VAR]);
+
 export function isSlotLevelVar(key: string): boolean {
-  return ZBB_SLOT_VARS.has(key);
+  return ZBB_SLOT_VARS.has(key) || ZBB_SLOT_OPTIONAL_VARS.has(key);
 }
 
 /**
@@ -160,6 +169,11 @@ export class SlotEnvironment extends EventEmitter {
         `on the appropriate stack instead.`,
       );
     }
+    if (key === ZB_ENV_VAR) {
+      const target = parseZbEnv(value);
+      if (!target) throw new Error(`ZB_ENV needs a value (prod, uat, qa or ci); use 'zbb env unset ZB_ENV' to clear it.`);
+      value = target.name;
+    }
     this.declared.set(key, value);
     // Write .env first — before manifest write can trigger watcher
     await this.writeEnvFile();
@@ -233,12 +247,13 @@ export class SlotEnvironment extends EventEmitter {
       );
     }
     const canonical = canonicalSlotVar(this.slotDir, key);
-    if (canonical === undefined) {
+    if (canonical === undefined && !ZBB_SLOT_OPTIONAL_VARS.has(key)) {
       // Shouldn't happen: isSlotLevelVar already guarded the key set,
       // and canonicalSlotVar covers every ZBB_SLOT_VARS entry.
       throw new Error(`Cannot compute canonical value for slot var '${key}'`);
     }
-    this.declared.set(key, canonical);
+    if (canonical === undefined) this.declared.delete(key);
+    else this.declared.set(key, canonical);
     await this.writeEnvFile();
     this.manifest.delete(key);
     const { saveYaml } = await import('../yaml.js');
@@ -257,6 +272,7 @@ export class SlotEnvironment extends EventEmitter {
     for (const key of toRevert) {
       const canonical = canonicalSlotVar(this.slotDir, key);
       if (canonical !== undefined) this.declared.set(key, canonical);
+      else if (ZBB_SLOT_OPTIONAL_VARS.has(key)) this.declared.delete(key);
       this.manifest.delete(key);
     }
     await this.writeEnvFile();

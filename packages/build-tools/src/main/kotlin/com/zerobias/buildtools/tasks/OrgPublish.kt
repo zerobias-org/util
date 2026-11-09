@@ -3,6 +3,7 @@ package com.zerobias.buildtools.tasks
 import com.zerobias.buildtools.util.CurlUtils
 import com.zerobias.buildtools.util.ExecUtils
 import com.zerobias.buildtools.util.PackageJsonReader
+import com.zerobias.buildtools.util.ZbEnv
 import org.gradle.api.GradleException
 import java.io.File
 import java.nio.file.Files
@@ -44,8 +45,16 @@ import java.nio.file.attribute.PosixFilePermissions
  *                defaults to prod and may be prod-only, so it follows the
  *                registry key's env rather than the org's.
  *
+ * Optional env (environment selection, see [ZbEnv]):
+ *   ZB_ENV — the ZeroBias environment to publish into: prod, uat, qa or ci
+ *            (dev = ci). It supplies the defaults of ZB_PLATFORM_URL and
+ *            PUBLISH_ORG_REGISTRY_URL below, and a non-prod one also points
+ *            the org `npm publish` at its registry ([npmPublishArgs]). The
+ *            keys above must then be that environment's. Unset keeps prod.
+ *
  * Optional env (prod-default overrides, kept strippable by zbb's env seal so
- * a stale shell value can't silently redirect a prod publish):
+ * a stale shell value can't silently redirect a prod publish; each URL set
+ * here wins over its ZB_ENV default):
  *   ZB_PLATFORM_URL          — platform API base URL.
  *   PUBLISH_ORG_REGISTRY_URL — npm registry to classify/publish against.
  *   PUBLISH_ORG_NPM_TOKEN    — registry token, when it differs from ZB_TOKEN
@@ -64,14 +73,30 @@ object OrgPublish {
     val PLAIN_SEMVER_RE = Regex("""(\d+)\.(\d+)\.(\d+)""")
     val RC_VERSION_RE = Regex("""\d+\.\d+\.\d+-rc\.([0-9a-f]{32})\.(\d+)""")
 
-    /** Registry to classify + publish against. Prod verdaccio unless overridden. */
+    /** Registry to classify + publish against, from `PUBLISH_ORG_REGISTRY_URL` and `ZB_ENV`. */
     fun registryUrl(): String =
-        (System.getenv("PUBLISH_ORG_REGISTRY_URL")?.takeIf { it.isNotBlank() }
+        registryUrl(System.getenv("PUBLISH_ORG_REGISTRY_URL"), ZbEnv.current())
+
+    /**
+     * Registry to classify + publish against: [override] (`PUBLISH_ORG_REGISTRY_URL`) when set,
+     * else the registry of the environment [zbEnv] (`ZB_ENV`) selects, else prod verdaccio.
+     */
+    fun registryUrl(override: String?, zbEnv: ZbEnv?): String =
+        (override?.takeIf { it.isNotBlank() }
+            ?: zbEnv?.registryUrl
             ?: DEFAULT_REGISTRY_URL).trimEnd('/')
 
-    /** Platform API base. Prod unless overridden. */
+    /** Platform API base, from `ZB_PLATFORM_URL` and `ZB_ENV`. */
     fun platformUrl(): String =
-        (System.getenv("ZB_PLATFORM_URL")?.takeIf { it.isNotBlank() }
+        platformUrl(System.getenv("ZB_PLATFORM_URL"), ZbEnv.current())
+
+    /**
+     * Platform API base: [override] (`ZB_PLATFORM_URL`) when set, else the API of the environment
+     * [zbEnv] (`ZB_ENV`) selects, else prod's.
+     */
+    fun platformUrl(override: String?, zbEnv: ZbEnv?): String =
+        (override?.takeIf { it.isNotBlank() }
+            ?: zbEnv?.platformApiUrl
             ?: DEFAULT_PLATFORM_URL).trimEnd('/')
 
     /**
@@ -232,16 +257,30 @@ object OrgPublish {
      * auto-promote a prerelease to `latest`, and tagging one would surface a
      * single org's private artifact as the default for every consumer.
      *
-     * `--registry` is added only when `PUBLISH_ORG_REGISTRY_URL` is set (local
-     * verdaccio testing). In prod the repo's `.npmrc` and package.json
-     * `publishConfig.registry` already point at the ZeroBias verdaccio, and
-     * overriding the target here would diverge from what a catalog publish does.
+     * `--registry` is added only when an org publish targets a registry other
+     * than prod's ([npmPublishRegistry]): `PUBLISH_ORG_REGISTRY_URL` is set
+     * (local verdaccio testing) or `ZB_ENV` selects a non-prod environment. In
+     * prod the repo's `.npmrc` and package.json `publishConfig.registry` already
+     * point at the ZeroBias verdaccio, and overriding the target here would
+     * diverge from what a catalog publish does. A catalog publish never reads
+     * either variable.
      */
     fun npmPublishArgs(isOrgPublish: Boolean): List<String> {
         if (!isOrgPublish) return listOf("--tag", "next")
-        val override = System.getenv("PUBLISH_ORG_REGISTRY_URL")?.takeIf { it.isNotBlank() }
-        return if (override != null) listOf("--registry", override.trimEnd('/')) else emptyList()
+        val registry = npmPublishRegistry(
+            System.getenv("PUBLISH_ORG_REGISTRY_URL"), ZbEnv.current()
+        )
+        return if (registry != null) listOf("--registry", registry) else emptyList()
     }
+
+    /**
+     * The registry an org publish passes to `npm publish` as `--registry`: [override]
+     * (`PUBLISH_ORG_REGISTRY_URL`) when set, else the registry of a non-prod environment [zbEnv]
+     * (`ZB_ENV`) selects. Null for prod, which the repo's own npm config already targets.
+     */
+    fun npmPublishRegistry(override: String?, zbEnv: ZbEnv?): String? =
+        (override?.takeIf { it.isNotBlank() }
+            ?: zbEnv?.takeIf { it != ZbEnv.PROD }?.registryUrl)?.trimEnd('/')
 
     /**
      * Temp `.npmrc` carrying auth for the target host only.
