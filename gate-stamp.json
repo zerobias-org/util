@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "branch": "fix/vault-token-renewal",
+  "branch": "feat/zb-env-npm-registry",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
-      "sourceHash": "b473fac29d1a4a00761e8d1b692ec62dec2d840cea0e67de8476ecf5367dbd59",
+      "sourceHash": "afdb7087faea25095bff9ed58c7f20b95fb12994f660acf8b4c9f220b13e619d",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -528,7 +528,7 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.16",
+      "version": "2.0.17",
       "sourceHash": "78ef6585c0f9b3ff870243e472eef166eed061695acd0bfc99faadce1c45c98b",
       "testHash": "7d8a21809b925f19525e2c030c6bba6930355e8f58180e2c6b08a56fc07fa983",
       "tasks": {
@@ -615,8 +615,8 @@
     },
     "@zerobias-org/zbb": {
       "version": "1.0.17",
-      "sourceHash": "ceb449ce2136faf257b547669a56a6df989935fcf4559110a6130f2a777debab",
-      "testHash": "0460b4b235ff78fa8f222cc6dc31fa9950dad5f4103903826987946888c69b30",
+      "sourceHash": "57b250a6407431bc6a573d56fb932f0e83021fcfcff18a9d65dded28d7ae1bc1",
+      "testHash": "a9deaf311f100c16d80e6b7aab1e0e87a8eec4c7942f8748997721aa283b3a7c",
       "tasks": {
         "lint": "passed",
         "compile": "passed",
