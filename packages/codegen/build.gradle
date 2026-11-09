@@ -110,7 +110,8 @@ task mochaUnit(type: Exec) {
     dependsOn stageBinJars
     workingDir projectDir
     commandLine 'node', '--import', 'tsx/esm', '../../node_modules/mocha/bin/mocha.js',
-                '--exit', '--extensions', 'ts', 'test/unit/dateNormalization.spec.ts', 'test/unit/serverParams.spec.ts'
+                '--exit', '--extensions', 'ts', 'test/unit/dateNormalization.spec.ts', 'test/unit/serverParams.spec.ts',
+                'test/unit/apiClientBodies.spec.ts'
 }
 
 // Vanniktech reads artifactId from project.name. codegen's

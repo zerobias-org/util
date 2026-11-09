@@ -157,6 +157,34 @@ reads a header lowercased (`{{#lambda.lowercase}}`), since Node lowercases incom
 `let ifMatch = … req.headers['if-match']`. `test/unit/serverParams.spec.ts` pins this: it generates a server,
 type-checks the controller against stubs of its imports, and runs it on a request with lowercased header names.
 
+### What an `api-client` sends for a binary body or a header parameter
+A binary body (`type: string, format: binary`) of contents, a string, bytes, a stream or a `Blob`, always sets a
+Content-Type, because without one axios sends `application/x-www-form-urlencoded`. The first of these wins:
+
+1. A `RequestDetailedFile`'s `options.contentType`. That is an object with contents as its `value` and nothing else but
+   `options`.
+2. A `Blob`'s own `type`.
+3. The media type the spec declares, or `application/octet-stream` for `*/*`.
+
+Anything else, such as a plain object, goes as axios sent it before, with no Content-Type of ours.
+
+Where there are Buffers, strings and typed arrays go as Buffers over the same bytes; elsewhere as `Blob`s. axios would
+rewrite a string sent as JSON, and sends a typed array's whole underlying buffer, not just the part it views. On Node,
+axios takes a Blob's type from the Blob, so a Blob carries the chosen type, and the File API lowercases it. So a
+case-sensitive parameter, such as a multipart boundary, loses its case when it goes with a Blob: send such contents as a
+Buffer or a string instead.
+
+A binary body sets `maxRedirects: 0`, because follow-redirects holds a whole stream in memory to replay it, and a 3xx
+then rejects, because the generated check only fails on 400 and above. Declared header parameters are sent, and left
+out when not given. `test/unit/apiClientBodies.spec.ts` pins this: it generates a client, type-checks it and calls it
+against a local server.
+
+### A `*/` in a spec's description
+Spec text in a generated comment goes through the `commentSafe` lambda (`{{#lambda.commentSafe}}…{{/lambda.commentSafe}}`),
+which escapes a `*/`, such as the one in `*/*`, that would end the comment early and stop the SDK compiling. Wrap any new
+comment text in it. `ApiClientGenerator.escapeText` must keep returning text as it is: it also renders enum values,
+defaults and patterns, so escaping there turned an enum value `text/*` into `text/_*`.
+
 ## Testing Changes
 
 1. Make changes to Java code or templates
