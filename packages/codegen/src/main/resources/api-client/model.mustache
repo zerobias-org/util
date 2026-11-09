@@ -11,7 +11,7 @@ import { ObjectSerializer, RequestFile } from './index.js';
 
 {{#description}}
 /**
-* {{{description}}}
+* {{#lambda.commentSafe}}{{{description}}}{{/lambda.commentSafe}}
 */
 {{/description}}
 {{^isEnum}}
@@ -20,7 +20,7 @@ export class {{classname}} {{#parent}}extends {{{parent}}} {{/parent}}{
 {{#vars}}
 {{#description}}
   /**
-  * {{{description}}}
+  * {{#lambda.commentSafe}}{{{description}}}{{/lambda.commentSafe}}
   */
 {{/description}}
   '{{name}}'{{^required}}?{{/required}}: {{{datatypeWithEnum}}}{{#isNullable}} | null{{/isNullable}};
@@ -77,7 +77,7 @@ export class {{classname}} {{#parent}}extends {{{parent}}} {{/parent}}{
 {{#-first}}
 /**
  * @type {{classname}}{{#description}}
- * {{{description}}}{{/description}}
+ * {{#lambda.commentSafe}}{{{description}}}{{/lambda.commentSafe}}{{/description}}
  * @export
  */
 export type {{classname}} = {{#oneOf}}{{{.}}}{{^-last}} | {{/-last}}{{/oneOf}};
@@ -91,7 +91,7 @@ export namespace {{classname}} {
   export const {{enumName}} = {
     {{#allowableValues}}
     {{#enumVars}}
-    /** {{enumDescription}} */
+    /** {{#lambda.commentSafe}}{{enumDescription}}{{/lambda.commentSafe}} */
     {{name}}: EnumValue.instance('{{classname}}.{{enumName}}', '{{{name}}}', {{{value}}}{{#escapedEnumDescription}}, '{{{.}}}'{{/escapedEnumDescription}}),
     {{/enumVars}}
     {{/allowableValues}}
@@ -125,7 +125,7 @@ export namespace {{classname}} {
 export const {{classname}} = {
   {{#allowableValues}}
   {{#enumVars}}
-  /** {{enumDescription}} */
+  /** {{#lambda.commentSafe}}{{enumDescription}}{{/lambda.commentSafe}} */
   {{name}}: EnumValue.instance('{{classname}}', '{{{name}}}', {{{value}}}{{#escapedEnumDescription}}, '{{{.}}}'{{/escapedEnumDescription}}),
   {{/enumVars}}
   {{/allowableValues}}

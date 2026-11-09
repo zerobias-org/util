@@ -94,9 +94,11 @@ paths:
     post:
       operationId: uploadThing
       tags: [things]
+      summary: Takes */* and /* too
+      description: Takes any type, */* included, and /* this too.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
-        - { name: checksum, in: query, schema: { type: string } }
+        - { name: checksum, in: query, description: 'The MD5 of the contents, of any type: */* included', schema: { type: string } }
         - { name: If-Match, in: header, schema: { type: string } }
       requestBody:
         required: true
@@ -105,6 +107,21 @@ paths:
             schema:
               type: string
               format: binary
+      responses:
+        '200':
+          $ref: '#/components/responses/ThingResponse'
+  /things/{id}/a*/b:
+    get:
+      operationId: getOddPath
+      tags: [odds]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            x-enum-descriptions: ['Oldest first, never */ early', 'Newest first /* last']
       responses:
         '200':
           $ref: '#/components/responses/ThingResponse'
@@ -135,10 +152,16 @@ components:
   schemas:
     Thing:
       type: object
+      description: A thing, whose contents can be of any type, */* included
       required: [id]
       properties:
         id:
           type: string
+          description: Its id, never /* a comment */
+    MediaRange:
+      type: string
+      description: A media range, such as text/* or */*
+      enum: ['text/*', 'image/png']
 `;
 
 /** Type-checks the caller's view of RequestFile: every kind of body must be assignable to it. */
@@ -162,6 +185,19 @@ interface Received {
   url?: string;
   headers: http.IncomingHttpHeaders;
   body: Buffer;
+}
+
+/** The syntax errors in every file the generator wrote, such as a comment that a star-slash in a description ended early. */
+function syntaxErrors(dir: string): string {
+  const files = fs.readdirSync(path.join(dir, 'out'), { recursive: true, encoding: 'utf8' })
+    .filter((file) => file.endsWith('.ts'))
+    .map((file) => path.join(dir, 'out', file));
+  const program = ts.createProgram(files, { noResolve: true, noLib: true, target: ts.ScriptTarget.ES2022 });
+  return ts.formatDiagnostics(program.getSyntacticDiagnostics(), {
+    getCanonicalFileName: (f) => f,
+    getCurrentDirectory: () => dir,
+    getNewLine: () => '\n',
+  });
 }
 
 /**
@@ -198,7 +234,8 @@ function compile(dir: string): string {
  * The api-client generator used to set no Content-Type on a binary body, so axios sent
  * `application/x-www-form-urlencoded`, whose body a gateway running a form parser never forwards. It also JSON-encoded a
  * RequestDetailedFile, sending the wrapper instead of the file, and dropped every declared header parameter. These
- * generate a client, compile it and call it over HTTP, with axios configured as BaseApiClient configures it.
+ * generate a client, compile it and call it over HTTP, with axios configured as BaseApiClient configures it. They run
+ * only on Node; axios sends bodies differently in a browser, so a change here needs checking in one as well.
  */
 describe('api-client: binary bodies and header parameters', function () {
   this.timeout(120000);
@@ -273,8 +310,17 @@ describe('api-client: binary bodies and header parameters', function () {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('compiles, with every kind of body assignable to RequestFile', function () {
+  it('compiles, with every kind of body assignable to RequestFile and a */ in a description', function () {
     expect(diagnostics).to.equal('');
+  });
+
+  it('writes no file whose comments a */ in the spec ended early', function () {
+    expect(syntaxErrors(dir)).to.equal('');
+  });
+
+  it('keeps an enum value with a /* in it exact', function () {
+    const model = fs.readFileSync(path.join(dir, 'out/model/MediaRange.ts'), 'utf8');
+    expect(model).to.include("EnumValue.instance('MediaRange', 'Text', 'text/*')");
   });
 
   describe('Content-Type of a binary body', function () {
@@ -351,6 +397,70 @@ describe('api-client: binary bodies and header parameters', function () {
       expect(request.body.toString()).to.equal('a,b\n');
       const untyped = await sent((a) => a.uploadThing('t-1', { value: new Blob(['a,b\n']), options: { contentType: 'text/csv' } }));
       expect(untyped.headers['content-type']).to.equal('text/csv');
+    });
+  });
+
+  describe('bodies that aren\'t a declared RequestFile', function () {
+    it('sends a Uint8Array, and only the part of its buffer that it views', async function () {
+      const whole = await sent((a) => a.uploadThing('t-1', new Uint8Array([97, 98, 99])));
+      expect(whole.headers['content-type']).to.equal('application/octet-stream');
+      expect(whole.body.toString()).to.equal('abc');
+      const view = await sent((a) => a.uploadThing('t-1', new Uint8Array(new Uint8Array([120, 97, 98, 99, 120]).buffer, 1, 3)));
+      expect(view.body.toString()).to.equal('abc');
+    });
+
+    it('sends an ArrayBuffer', async function () {
+      const request = await sent((a) => a.uploadThing('t-1', new Uint8Array([97, 98, 99]).buffer));
+      expect(request.headers['content-type']).to.equal('application/octet-stream');
+      expect(request.body.toString()).to.equal('abc');
+    });
+
+    it('sends a plain object or an array as JSON, with a JSON type', async function () {
+      const object = await sent((a) => a.uploadThing('t-1', { a: 1 }));
+      expect(object.headers['content-type']).to.equal('application/json');
+      expect(object.body.toString()).to.equal('{"a":1}');
+      const array = await sent((a) => a.uploadThing('t-1', [1, 2]));
+      expect(array.headers['content-type']).to.equal('application/json');
+      expect(array.body.toString()).to.equal('[1,2]');
+    });
+
+    it('doesn\'t take an object\'s own type field for a media type', async function () {
+      const request = await sent((a) => a.uploadThing('t-1', { type: 'note', a: 1 }));
+      expect(request.headers['content-type']).to.equal('application/json');
+      expect(JSON.parse(request.body.toString())).to.deep.equal({ type: 'note', a: 1 });
+    });
+
+    it('sends any other object as axios did before: a class instance, one without a prototype, a Date', async function () {
+      class Note {
+        constructor(readonly text: string) {}
+      }
+      const bare = Object.assign(Object.create(null), { a: 1 });
+      for (const [body, json] of [[new Note('hi'), '{"text":"hi"}'], [bare, '{"a":1}'], [new Date(0), '"1970-01-01T00:00:00.000Z"']] as const) {
+        const request = await sent((a) => a.uploadThing('t-1', body));
+        expect(request.headers['content-type'], json).to.equal('application/json');
+        expect(request.body.toString()).to.equal(json);
+      }
+    });
+
+    it('doesn\'t take an object for a RequestDetailedFile when its value isn\'t contents', async function () {
+      const request = await sent((a) => a.uploadThing('t-1', { value: null }));
+      expect(request.headers['content-type']).to.equal('application/json');
+      expect(request.body.toString()).to.equal('{"value":null}');
+    });
+
+    it('keeps the case of a type sent with a string or bytes', async function () {
+      const contentType = 'multipart/mixed; boundary=AbC';
+      for (const value of ['--AbC--', new Uint8Array(Buffer.from('--AbC--'))]) {
+        const request = await sent((a) => a.uploadThing('t-1', { value, options: { contentType } }));
+        expect(request.headers['content-type']).to.equal(contentType);
+        expect(request.body.toString()).to.equal('--AbC--');
+      }
+    });
+
+    it('sends an object whole when it has more than a value and options', async function () {
+      const request = await sent((a) => a.uploadThing('t-1', { value: 'abc', other: 1 }));
+      expect(request.headers['content-type']).to.equal('application/json');
+      expect(JSON.parse(request.body.toString())).to.deep.equal({ value: 'abc', other: 1 });
     });
   });
 

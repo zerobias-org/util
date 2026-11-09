@@ -16,6 +16,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableMap;
+import com.samskivert.mustache.Mustache;
 import org.openapitools.codegen.CodegenComposedSchemas;
 import org.openapitools.codegen.CodegenConstants;
 import org.openapitools.codegen.CodegenModel;
@@ -965,6 +967,16 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
         // Don't escape HTML entities - just return the input as-is
         // This prevents < and > from being converted to &lt; and &gt;
         return input;
+    }
+
+    /**
+     * Adds `commentSafe`, for spec text that goes into a generated comment, where a star-slash would end the comment
+     * early. escapeText can't do it: it also renders enum values, defaults and patterns, which must stay exact.
+     */
+    @Override
+    protected ImmutableMap.Builder<String, Mustache.Lambda> addMustacheLambdas() {
+        return super.addMustacheLambdas()
+            .put("commentSafe", (fragment, writer) -> writer.write(escapeUnsafeCharacters(fragment.execute())));
     }
 
 
