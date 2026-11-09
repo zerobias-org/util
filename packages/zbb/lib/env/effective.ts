@@ -138,10 +138,11 @@ const ALL_CONTRACT_VARS: ReadonlySet<string> = new Set([
  * the prod-default OVERRIDES (must stay strippable) and framework vars handled
  * by the effective env / ZBB_ prefix. (PATH/HOME/NVM_DIR are in SYSTEM_BASE.)
  * ZB_ENV is one of those framework vars: resolveEffectiveEnv carries it from
- * the slot or the shell, along with the URL defaults it derives.
+ * the slot or the shell, along with the URL defaults it derives. ZB_API_KEY
+ * (org publish) is a credential dev-stack declares, so the stack env carries it.
  */
 export const ENV_CONTRACT_IGNORED: ReadonlySet<string> = new Set([
-  'PUBLISH_ORG_NPM_TOKEN', 'PUBLISH_ORG_REGISTRY_URL', 'ZB_PLATFORM_URL',
+  'PUBLISH_ORG_NPM_TOKEN', 'PUBLISH_ORG_REGISTRY_URL', 'ZB_PLATFORM_URL', 'ZB_API_KEY',
   'DATALOADER_SERVICE_URL', 'DATALOADER_SPEC',
   'ZB_SLOT', 'ZB_SLOT_DIR', 'ZB_STACK', 'ZB_ENV', 'ZBB_MONOREPO_EVENT_FILE',
 ]);
