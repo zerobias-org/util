@@ -565,6 +565,10 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
                     || bodyParam.isBoolean;
                 if (isBinaryBody) {
                     op.vendorExtensions.put("x-is-binary-body", true);
+                    // A wildcard names no type to send, and the generator leaves `*/*` out of `consumes` anyway.
+                    String declared = op.consumes == null || op.consumes.isEmpty() ? null : op.consumes.get(0).get("mediaType");
+                    op.vendorExtensions.put("x-request-content-type",
+                        declared == null || declared.contains("*") ? "application/octet-stream" : declared);
                 } else if (isArrayBody) {
                     op.vendorExtensions.put("x-is-array-body", true);
                 } else if (isPrimitiveBody) {
@@ -572,6 +576,10 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
                 } else {
                     op.vendorExtensions.put("x-single-body-param", true);
                 }
+            }
+
+            if (op.vendorExtensions.containsKey("x-request-content-type") || !op.headerParams.isEmpty()) {
+                op.vendorExtensions.put("x-has-request-headers", true);
             }
 
             if (op.vendorExtensions.containsKey("x-method-name")) {

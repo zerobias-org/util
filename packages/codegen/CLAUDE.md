@@ -157,6 +157,20 @@ reads a header lowercased (`{{#lambda.lowercase}}`), since Node lowercases incom
 `let ifMatch = … req.headers['if-match']`. `test/unit/serverParams.spec.ts` pins this: it generates a server,
 type-checks the controller against stubs of its imports, and runs it on a request with lowercased header names.
 
+### What an `api-client` sends for a binary body or a header parameter
+A binary body (`type: string, format: binary`) goes out with its bytes untransformed. Without an explicit type axios
+sends `application/x-www-form-urlencoded`, whose body dana's parsers consume, so the operation always sets one. The
+first of these wins:
+
+1. A `RequestDetailedFile`'s `options.contentType`.
+2. A `Blob`'s own `type`.
+3. The media type the spec declares, or `application/octet-stream` for `*/*`.
+
+A binary body sets `maxRedirects: 0`, because follow-redirects holds a whole stream in memory to replay it, and a 3xx
+then rejects, because the generated check only fails on 400 and above. Declared header parameters are sent, and left
+out when not given. `test/unit/apiClientBodies.spec.ts` pins this: it generates a client, type-checks it and calls it
+against a local server.
+
 ## Testing Changes
 
 1. Make changes to Java code or templates
