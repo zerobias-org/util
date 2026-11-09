@@ -5,6 +5,7 @@ import com.zerobias.buildtools.util.CurlUtils
 import com.zerobias.buildtools.util.ExecUtils
 import com.zerobias.buildtools.util.PackageJsonReader
 import com.zerobias.buildtools.util.PathConstants.ZBB_GRADLE_DIR
+import com.zerobias.buildtools.util.ZbEnv
 import org.gradle.api.Action
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
@@ -40,8 +41,17 @@ import java.nio.file.Files
  *               else with 403.
  *
  * Optional env:
- *   DATALOADER_SERVICE_URL — override the dataloader-service base URL.
- *                            Defaults to `https://app.zerobias.com/api/dataloader`.
+ *   ZB_ENV                 — the ZeroBias environment (`prod`, `uat`, `qa` or `ci`; `dev` is
+ *                            `ci`) whose dataloader-service the task talks to unless
+ *                            DATALOADER_SERVICE_URL says otherwise ([ZbEnv]); ZB_TOKEN must then
+ *                            be a key for that environment. Unset keeps prod's service.
+ *   DATALOADER_SERVICE_URL — override the dataloader-service base URL; wins over ZB_ENV.
+ *                            Defaults to the ZB_ENV environment's service (e.g.
+ *                            `https://uat.zerobias.com/api/dataloader`), or without ZB_ENV to
+ *                            prod's, `https://app.zerobias.com/api/dataloader`. A check against a
+ *                            uat, qa or ci service is recorded in the gate stamp the way a
+ *                            DATALOADER_ENV check is, so the package can't publish to uat or main
+ *                            on it either. See [checkedDataloaderEnv].
  *   DATALOADER_SPEC        — npm spec the loader is run from via `npx` for this
  *                            content-master gate. Defaults to
  *                            `@zerobias-com/platform-dataloader@prod` (the version in
@@ -605,12 +615,18 @@ abstract class NeonDataloaderTask : DefaultTask() {
         private const val LOADER_PACKAGE = "@zerobias-com/platform-dataloader"
         private val VERSION_REGEX = Regex("""\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?""")
 
+        /** The dataloader-service base URL, from `DATALOADER_SERVICE_URL` and `ZB_ENV`. */
+        internal fun serviceBaseUrl(): String =
+            serviceBaseUrl(System.getenv("DATALOADER_SERVICE_URL"), ZbEnv.current())
+
         /**
-         * Resolve the dataloader-service base URL. Reads `DATALOADER_SERVICE_URL`
-         * if set (and non-blank); otherwise falls back to the hardcoded prod URL.
+         * Resolve the dataloader-service base URL: [override] (`DATALOADER_SERVICE_URL`) if set
+         * and non-blank, else the service of the environment [zbEnv] (`ZB_ENV`) selects, else the
+         * hardcoded prod URL.
          */
-        private fun serviceBaseUrl(): String =
-            System.getenv("DATALOADER_SERVICE_URL")?.takeIf { it.isNotBlank() }
+        internal fun serviceBaseUrl(override: String?, zbEnv: ZbEnv?): String =
+            override?.takeIf { it.isNotBlank() }
+                ?: zbEnv?.dataloaderServiceUrl
                 ?: DEFAULT_SERVICE_BASE_URL
     }
 }
@@ -728,9 +744,9 @@ private val ENV_CHANNELS = setOf("dev", "qa")
 /**
  * The environment `DATALOADER_ENV` asks the content-master dataloader check to run against (`dev`
  * or `qa`), or null for the prod check (unset or `prod`). [registerDataloader] hands it to
- * [NeonDataloaderTask.envChannel], and zb.base's `writeGateStamp` records it in the gate stamp as
- * `dataloaderEnv`, which is how publishes to uat and main refuse a package that was only checked
- * against dev or qa.
+ * [NeonDataloaderTask.envChannel], and zb.base's `writeGateStamp` records it (through
+ * [checkedDataloaderEnv]) in the gate stamp as `dataloaderEnv`, which is how publishes to uat and
+ * main refuse a package that was only checked against dev or qa.
  */
 fun requestedDataloaderEnv(): String? {
     val value = System.getenv("DATALOADER_ENV")?.trim()?.lowercase()
@@ -741,3 +757,36 @@ fun requestedDataloaderEnv(): String? {
     }
     return value
 }
+
+/**
+ * The `dataloaderEnv` values a gate stamp can carry, in promotion order, which runs from the most
+ * restrictive check to the least: a branch that accepts one accepts every later one
+ * (StandardGateStampValidator.ACCEPTED_DATALOADER_ENVS). Prod, recorded as no value, comes after
+ * all of them.
+ */
+private val CHECKED_ENV_ORDER = listOf("dev", "qa", "uat")
+
+/**
+ * The environment this gate's dataloader check counts as, which zb.base's `writeGateStamp`
+ * records as the stamp's `dataloaderEnv`: [checkedDataloaderEnv] of `DATALOADER_ENV`
+ * ([requestedDataloaderEnv]) and the dataloader-service the check talks to
+ * ([NeonDataloaderTask.serviceBaseUrl], from `DATALOADER_SERVICE_URL` or `ZB_ENV`).
+ */
+fun checkedDataloaderEnv(): String? =
+    checkedDataloaderEnv(requestedDataloaderEnv(), NeonDataloaderTask.serviceBaseUrl())
+
+/**
+ * The more restrictive of [requestedEnv], the check `DATALOADER_ENV` asks for
+ * ([requestedDataloaderEnv]: `dev`, `qa`, or null for prod), and the environment of the
+ * dataloader-service at [serviceUrl] ([ZbEnv.forPlatformUrl]'s [ZbEnv.channel]: `uat`, `qa`,
+ * `dev` for ci, or null for prod and for any host that isn't an environment's, such as
+ * localhost). dev is the most restrictive, then qa, then uat, then prod (null); a value outside
+ * that order counts as the most restrictive.
+ *
+ * The service's environment comes from its URL rather than from `ZB_ENV` because zbb also sets
+ * `DATALOADER_SERVICE_URL` itself: however the check was pointed at a non-prod service, the
+ * stamp must not record it as a prod check.
+ */
+fun checkedDataloaderEnv(requestedEnv: String?, serviceUrl: String): String? =
+    listOfNotNull(requestedEnv, ZbEnv.forPlatformUrl(serviceUrl)?.channel)
+        .minByOrNull { CHECKED_ENV_ORDER.indexOf(it) }

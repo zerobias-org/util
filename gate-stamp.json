@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "branch": "fix/api-client-binary-bodies",
+  "branch": "feat/zb-env-npm-registry",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.1",
-      "sourceHash": "b473fac29d1a4a00761e8d1b692ec62dec2d840cea0e67de8476ecf5367dbd59",
+      "sourceHash": "afdb7087faea25095bff9ed58c7f20b95fb12994f660acf8b4c9f220b13e619d",
       "testHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tasks": {
         "lint": "passed",
@@ -367,8 +367,8 @@
     },
     "@zerobias-org/util-codegen": {
       "version": "3.0.15",
-      "sourceHash": "b665ef9bb0e3726fec99674f2ba6627afac2da40e4caf4047fcf025c738005af",
-      "testHash": "10b975060f45f288b693b7a7293b0ef60502b4b964d3fba653a61da3bd09bc0c",
+      "sourceHash": "b1a4ea98ce21efb655d87016b755e473de851627991f3216fd58c6533c1f3a6b",
+      "testHash": "c78afea3ddbccd64f4408d44fde7fb618a311cd63288366c4b63c7207149e649",
       "tasks": {
         "lint": "skipped",
         "compile": "skipped",
@@ -379,8 +379,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 47,
-          "ran": 47,
+          "expected": 13,
+          "ran": 13,
           "status": "passed"
         },
         "integration": {
@@ -615,8 +615,8 @@
     },
     "@zerobias-org/zbb": {
       "version": "1.0.17",
-      "sourceHash": "ceb449ce2136faf257b547669a56a6df989935fcf4559110a6130f2a777debab",
-      "testHash": "0460b4b235ff78fa8f222cc6dc31fa9950dad5f4103903826987946888c69b30",
+      "sourceHash": "57b250a6407431bc6a573d56fb932f0e83021fcfcff18a9d65dded28d7ae1bc1",
+      "testHash": "a9deaf311f100c16d80e6b7aab1e0e87a8eec4c7942f8748997721aa283b3a7c",
       "tasks": {
         "lint": "passed",
         "compile": "passed",

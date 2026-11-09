@@ -64,14 +64,17 @@ object StandardGateStampValidator {
     /**
      * The dataloader checks a branch's publishes accept, by the branch's npm dist-tag. A gate run
      * with `DATALOADER_ENV=dev` (or `qa`) checks the package against that environment's loader and
-     * hydra schema instead of prod's, and records it as the stamp's `dataloaderEnv`. Each branch
-     * accepts its own environment's check and any later one, so a package checked against dev can
-     * publish to dev and be tried there, but uat and main (and anything not listed) need the prod
-     * check.
+     * hydra schema instead of prod's, and a gate whose dataloader-service is uat's, qa's or ci's
+     * (from `ZB_ENV` or `DATALOADER_SERVICE_URL`) checks it on that environment's service, which
+     * records as `uat`, `qa` or `dev`. The stamp records either as its `dataloaderEnv`, the more
+     * restrictive one when both apply ([com.zerobias.buildtools.tasks.checkedDataloaderEnv]). The
+     * dev and qa branches accept their own environment's check and any later one, uat's included,
+     * so a package checked against dev can publish to dev and be tried there, but uat and main (and
+     * anything not listed) need the prod check.
      */
     val ACCEPTED_DATALOADER_ENVS: Map<String, Set<String>> = mapOf(
-        "dev" to setOf("dev", "qa", PROD_DATALOADER_ENV),
-        "qa" to setOf("qa", PROD_DATALOADER_ENV),
+        "dev" to setOf("dev", "qa", "uat", PROD_DATALOADER_ENV),
+        "qa" to setOf("qa", "uat", PROD_DATALOADER_ENV),
     )
 
     /**
@@ -191,21 +194,23 @@ object StandardGateStampValidator {
 
     /**
      * The load `writeGateStamp` records, from what this gate's [DATALOADER_TASK_NAME] did
-     * ([status]), the `DATALOADER_ENV` it ran with ([requestedEnv]) and the stamp it replaces
-     * ([previousStamp]). A load that did not run this time keeps the passing load [previousStamp]
-     * recorded for the same [sourceHash], with that load's `dataloaderEnv`. The load checks the
-     * package's source, which is unchanged since it passed, so a re-run without `ZB_TOKEN`, a
-     * TESTS_CHANGED publish or `-x dataloaderExec` doesn't throw away a result that still holds.
-     * Otherwise the stamp records this gate's own result, which [validate] refuses unless it passed.
+     * ([status]), the environment its check counts as ([checkedEnv], from
+     * [com.zerobias.buildtools.tasks.checkedDataloaderEnv]: `DATALOADER_ENV` or a non-prod
+     * dataloader-service) and the stamp it replaces ([previousStamp]). A load that did not run
+     * this time keeps the passing load [previousStamp] recorded for the same [sourceHash], with
+     * that load's `dataloaderEnv`. The load checks the package's source, which is unchanged since
+     * it passed, so a re-run without `ZB_TOKEN`, a TESTS_CHANGED publish or `-x dataloaderExec`
+     * doesn't throw away a result that still holds. Otherwise the stamp records this gate's own
+     * result, which [validate] refuses unless it passed.
      */
-    fun recordedLoad(status: String, requestedEnv: String?, sourceHash: String, previousStamp: String?): RecordedLoad {
+    fun recordedLoad(status: String, checkedEnv: String?, sourceHash: String, previousStamp: String?): RecordedLoad {
         if (status != DATALOADER_PASSING_STATUS && previousStamp != null &&
             stampField(previousStamp, "sourceHash") == sourceHash &&
             stampField(previousStamp, DATALOADER_TASK_NAME) == DATALOADER_PASSING_STATUS
         ) {
             return RecordedLoad(DATALOADER_PASSING_STATUS, stampField(previousStamp, "dataloaderEnv"), carried = true)
         }
-        return RecordedLoad(status, requestedEnv, carried = false)
+        return RecordedLoad(status, checkedEnv, carried = false)
     }
 
     /** The string value of [field] in a stamp's JSON, found the same way [validate] reads it. */

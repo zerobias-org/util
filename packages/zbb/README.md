@@ -434,6 +434,31 @@ zbb env reset
 
 Stack-level overrides follow the same model on the stack: `zbb env set` inside a stack context writes to the stack's `manifest.yaml` with `resolution: override` and regenerates the stack's `.env`.
 
+### Target Environment (`ZB_ENV`)
+
+`ZB_ENV` picks the ZeroBias environment this machine talks to: `prod`, `uat`, `qa` or `ci` (`dev` is accepted for `ci`). It is built into zbb, so no zbb.yaml declares it.
+
+```bash
+zbb env set ZB_ENV ci     # slot-wide: every stack in the slot
+export ZB_ENV=ci          # or from the shell (a slot value wins over it)
+zbb env unset ZB_ENV      # back to today's behaviour
+```
+
+Unset, nothing changes: npm uses the repo's own `.npmrc` and every endpoint defaults to prod. Set, every dispatched command gets:
+
+| | prod | uat / qa / ci |
+|---|---|---|
+| npm registry for the ZeroBias scopes | `https://pkg.zerobias.org/` | `https://<env>.pkg.zerobias.org/` |
+| `ZB_PLATFORM_URL` | `https://app.zerobias.com/api` | `https://<env>.zerobias.com/api` |
+| `DATALOADER_SERVICE_URL` | `https://app.zerobias.com/api/dataloader` | `https://<env>.zerobias.com/api/dataloader` |
+| `PUBLISH_ORG_REGISTRY_URL` | `https://pkg.zerobias.org` | `https://<env>.pkg.zerobias.org` |
+
+- **npm.** zbb writes `~/.zbb/npm/<env>.npmrc`, with the token as `${ZB_TOKEN}` so the file holds no secret. npm uses it in place of `~/.npmrc` and the global npmrc. The scope registries are also set in npm's environment, so a repo's `.npmrc` can't send them elsewhere.
+- **Lockfiles.** They keep `pkg.zerobias.org` URLs. A non-prod env fetches those from its own host (`replace-registry-host`). Any `<env>.pkg.zerobias.org` URL npm records is rewritten back to the canonical host when zbb exits.
+- **Releases.** `publish` and `publishRemote` keep the repo's registries, so a release never goes to a non-prod registry.
+- **Overrides.** The URL vars are defaults only. A `zbb env set` on the stack, or a non-default value (a local service, say), wins over them.
+- **`zbb env list`** shows a `[ZB_ENV: …]` block with the values a command receives. Changing `ZB_ENV` restarts the slot's Gradle daemons on the next command.
+
 ## Secrets
 
 Slot-scoped secret management for connection profiles and credentials. Secrets are YAML files stored at `${ZB_SLOT_STATE}/secrets/<name>.yml`. Values can contain refs (`{{env.VAR}}`) resolved at read time.

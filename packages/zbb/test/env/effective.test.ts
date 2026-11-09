@@ -1,6 +1,8 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { isSystemBaseVar, applyEffectiveEnv, commandPassthrough } from '../../lib/env/effective.js';
+import { isSystemBaseVar, applyEffectiveEnv, commandPassthrough, resolveEffectiveEnv } from '../../lib/env/effective.js';
+import type { Slot } from '../../lib/slot/Slot.js';
+import type { Stack } from '../../lib/stack/Stack.js';
 
 describe('effective env', () => {
   const saved = { ...process.env };
@@ -124,6 +126,68 @@ describe('effective env', () => {
       assert.equal(process.env.DOCKER_HOST, 'tcp://x');
       assert.equal(process.env.WHATEVER, 'keep');
       assert.deepEqual(stripped, []);
+    });
+
+    it('with the seal off, a hand-picked endpoint beats the ZB_ENV default but not a stale default', () => {
+      reset({ ZBB_HERMETIC: '0', DATALOADER_SERVICE_URL: 'http://localhost:15001/api/dataloader', ZB_PLATFORM_URL: 'https://app.zerobias.com/api' });
+      applyEffectiveEnv({
+        ZB_ENV: 'ci',
+        DATALOADER_SERVICE_URL: 'https://ci.zerobias.com/api/dataloader',
+        ZB_PLATFORM_URL: 'https://ci.zerobias.com/api',
+      }, new Set());
+      assert.equal(process.env.DATALOADER_SERVICE_URL, 'http://localhost:15001/api/dataloader');
+      assert.equal(process.env.ZB_PLATFORM_URL, 'https://ci.zerobias.com/api');
+    });
+
+    it('with the seal on, the ZB_ENV default replaces a shell endpoint', () => {
+      reset({ PATH: '/usr/bin', DATALOADER_SERVICE_URL: 'http://localhost:15001/api/dataloader' });
+      applyEffectiveEnv({ ZB_ENV: 'ci', DATALOADER_SERVICE_URL: 'https://ci.zerobias.com/api/dataloader' }, new Set());
+      assert.equal(process.env.DATALOADER_SERVICE_URL, 'https://ci.zerobias.com/api/dataloader');
+    });
+  });
+
+  describe('resolveEffectiveEnv with ZB_ENV', () => {
+    const fakeSlot = (vars: Record<string, string>) => ({ env: { getAll: () => vars } }) as unknown as Slot;
+    const fakeStack = (vars: Record<string, string>, overrides: string[] = []) => ({
+      name: 'dev',
+      env: {
+        getAll: () => vars,
+        getManifest: () => Object.fromEntries(Object.keys(vars).map(k => [k, { resolution: overrides.includes(k) ? 'override' : 'default' }])),
+      },
+    }) as unknown as Stack;
+
+    it('without ZB_ENV nothing is derived', () => {
+      const env = resolveEffectiveEnv(fakeSlot({ ZB_SLOT: 'local' }), fakeStack({ ZB_PLATFORM_URL: 'https://app.zerobias.com/api' }), {});
+      assert.equal(env.ZB_ENV, undefined);
+      assert.equal(env.ZB_PLATFORM_URL, 'https://app.zerobias.com/api');
+      assert.equal(env.DATALOADER_SERVICE_URL, undefined);
+    });
+
+    it('the shell ZB_ENV replaces the stack prod default and fills the other defaults', () => {
+      const env = resolveEffectiveEnv(
+        fakeSlot({ ZB_SLOT: 'local' }),
+        fakeStack({ ZB_PLATFORM_URL: 'https://app.zerobias.com/api' }),
+        { ZB_ENV: 'dev' },
+      );
+      assert.equal(env.ZB_ENV, 'ci');
+      assert.equal(env.ZB_PLATFORM_URL, 'https://ci.zerobias.com/api');
+      assert.equal(env.DATALOADER_SERVICE_URL, 'https://ci.zerobias.com/api/dataloader');
+      assert.equal(env.PUBLISH_ORG_REGISTRY_URL, 'https://ci.pkg.zerobias.org');
+    });
+
+    it('the slot ZB_ENV beats the shell, and a stack override survives', () => {
+      const env = resolveEffectiveEnv(
+        fakeSlot({ ZB_SLOT: 'local', ZB_ENV: 'qa' }),
+        fakeStack({ ZB_PLATFORM_URL: 'https://app.zerobias.com/api' }, ['ZB_PLATFORM_URL']),
+        { ZB_ENV: 'ci' },
+      );
+      assert.equal(env.ZB_ENV, 'qa');
+      assert.equal(env.ZB_PLATFORM_URL, 'https://app.zerobias.com/api');
+      assert.equal(env.DATALOADER_SERVICE_URL, 'https://qa.zerobias.com/api/dataloader');
+    });
+
+    it('an unknown ZB_ENV fails instead of falling back to prod', () => {
+      assert.throws(() => resolveEffectiveEnv(fakeSlot({}), null, { ZB_ENV: 'stage' }), /ZB_ENV must be/);
     });
   });
 });
