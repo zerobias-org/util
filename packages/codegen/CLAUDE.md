@@ -179,6 +179,14 @@ then rejects, because the generated check only fails on 400 and above. Declared 
 out when not given. `test/unit/apiClientBodies.spec.ts` pins this: it generates a client, type-checks it and calls it
 against a local server.
 
+### What an `api-client` returns for a file
+An operation whose response is a file (`RequestFile`, from `type: string, format: binary`) is marked
+`x-is-file-response` and asks axios for `responseType: 'arraybuffer'`. It returns the file's bytes: a Buffer where there
+are Buffers (Node), else a `Blob` of the type the response names (browsers). Text and JSON files come back as bytes too.
+Before, axios decoded every body as UTF-8 text, which mangles any byte that isn't, and then parsed it as JSON when it
+could, so a binary download came back corrupted and a JSON file as an object. An error response is still decoded and
+parsed, so it throws the same error an operation that returns a model throws. The same spec file pins this.
+
 ### A `*/` in a spec's description
 Spec text in a generated comment goes through the `commentSafe` lambda (`{{#lambda.commentSafe}}…{{/lambda.commentSafe}}`),
 which escapes a `*/`, such as the one in `*/*`, that would end the comment early and stop the SDK compiling. Wrap any new

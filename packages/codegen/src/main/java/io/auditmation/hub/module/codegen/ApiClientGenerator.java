@@ -584,6 +584,11 @@ public class ApiClientGenerator extends AbstractTypeScriptClientCodegen {
                 op.vendorExtensions.put("x-has-request-headers", true);
             }
 
+            // A file is read as bytes; read as text, axios decodes it as UTF-8 and parses it as JSON when it can.
+            if (isDataTypeFile(op.returnType) || op.isResponseFile) {
+                op.vendorExtensions.put("x-is-file-response", true);
+            }
+
             if (op.vendorExtensions.containsKey("x-method-name")) {
                 op.nickname = (String) op.vendorExtensions.get("x-method-name");
             }

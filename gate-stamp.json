@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/api-client-binary-bodies",
+  "branch": "fix/api-client-file-responses",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.2",
@@ -366,9 +366,9 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "3.0.15",
-      "sourceHash": "b665ef9bb0e3726fec99674f2ba6627afac2da40e4caf4047fcf025c738005af",
-      "testHash": "10b975060f45f288b693b7a7293b0ef60502b4b964d3fba653a61da3bd09bc0c",
+      "version": "3.0.16",
+      "sourceHash": "87e8c6e4d687d016f1bf1d1fb351e9613decd83d36f70b0ba1ba0797acfbd464",
+      "testHash": "f54ef1b6048338a91a206d176309e7ba5219599287a147e1c7ffb28317ba6545",
       "tasks": {
         "lint": "skipped",
         "compile": "skipped",
@@ -379,8 +379,8 @@
       },
       "tests": {
         "unit": {
-          "expected": 47,
-          "ran": 47,
+          "expected": 55,
+          "ran": 55,
           "status": "passed"
         },
         "integration": {
@@ -483,8 +483,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "3.0.12",
-      "sourceHash": "c1f5b2a54edd29741b4214c9b3fa7ac1bda293ab01c57bc8ada20a56f85eada7",
+      "version": "3.0.13",
+      "sourceHash": "686c7484269c3a0c63b2100ae0a33d0b8b3f1fb7a1b7360feffbe5bf8091203e",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
         "lint": "passed",
@@ -528,8 +528,8 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.17",
-      "sourceHash": "78ef6585c0f9b3ff870243e472eef166eed061695acd0bfc99faadce1c45c98b",
+      "version": "2.0.18",
+      "sourceHash": "1595adb08a53934fcfe1fd62652a4136fdcdc45a2dd44202fe661b54b46cdf83",
       "testHash": "7d8a21809b925f19525e2c030c6bba6930355e8f58180e2c6b08a56fc07fa983",
       "tasks": {
         "lint": "passed",

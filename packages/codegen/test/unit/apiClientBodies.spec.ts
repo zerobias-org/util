@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as http from 'http';
 import { createRequire } from 'module';
+import { randomBytes } from 'crypto';
 import type { AddressInfo } from 'net';
 import * as path from 'path';
 import { Readable } from 'stream';
@@ -141,6 +142,50 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/ThingResponse'
+  /things/{id}/contents:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getContents
+      tags: [things]
+      parameters:
+        - { name: X-Trace-Id, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: The thing's contents, of any type
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+    put:
+      operationId: renderContents
+      tags: [things]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Thing'
+      responses:
+        '200':
+          description: The thing rendered as a PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+    delete:
+      operationId: takeContents
+      tags: [things]
+      responses:
+        '200':
+          description: The contents that were removed
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
 components:
   responses:
     ThingResponse:
@@ -249,6 +294,7 @@ describe('api-client: binary bodies and header parameters', function () {
   let server: http.Server;
   let client: AxiosInstance;
   let api: any;
+  let ThingsApi: any;
 
   const ok = (res: http.ServerResponse): void => {
     res.writeHead(200, { 'content-type': 'application/json', count: '1' });
@@ -297,8 +343,8 @@ describe('api-client: binary bodies and header parameters', function () {
     const { port } = server.address() as AddressInfo;
     client = axios.create({ baseURL: `http://127.0.0.1:${port}`, validateStatus: () => true });
 
-    const { ThingsApiHttpImpl } = await import(pathToFileURL(path.join(dir, 'js/out/api/ThingsApi.js')).href);
-    api = new ThingsApiHttpImpl(client);
+    ({ ThingsApiHttpImpl: ThingsApi } = await import(pathToFileURL(path.join(dir, 'js/out/api/ThingsApi.js')).href));
+    api = new ThingsApi(client);
   });
 
   beforeEach(function () {
@@ -549,5 +595,79 @@ describe('api-client: binary bodies and header parameters', function () {
     const request = await sent((a) => a.createThing({ id: 't-2' }));
     expect(request.headers['content-type']).to.equal('application/json');
     expect(JSON.parse(request.body.toString())).to.deep.equal({ id: 't-2' });
+  });
+
+  /**
+   * An operation that returns a file used to get the body as axios reads text: decoded as UTF-8, which mangles any
+   * byte that isn't, and then parsed as JSON when it could be. A file now comes back as its bytes.
+   */
+  describe('a file response', function () {
+    // Bytes that are never UTF-8, then random ones.
+    const FILE = Buffer.concat([Buffer.from([0xff, 0xfe, 0x00, 0xc3]), randomBytes(4096)]);
+    const file = (body: Buffer, type: string) => (res: http.ServerResponse): void => {
+      res.writeHead(200, { 'content-type': type });
+      res.end(body);
+    };
+
+    it('returns a binary file byte for byte, as a Buffer', async function () {
+      reply = file(FILE, 'application/octet-stream');
+      const got = await api.getContents('t-1');
+      expect(Buffer.isBuffer(got)).to.equal(true);
+      expect(got.equals(FILE)).to.equal(true);
+    });
+
+    it('returns a text or JSON file as its bytes too, neither decoded nor parsed', async function () {
+      const csv = Buffer.from('﻿café,1\n');
+      reply = file(csv, 'text/csv; charset=utf-8');
+      expect((await api.getContents('t-1')).equals(csv)).to.equal(true);
+      reply = file(Buffer.from('{ "a": 1 }'), 'application/json');
+      expect((await api.getContents('t-1')).toString()).to.equal('{ "a": 1 }');
+    });
+
+    it('returns an empty file as no bytes', async function () {
+      reply = file(Buffer.alloc(0), 'text/plain');
+      expect((await api.getContents('t-1')).length).to.equal(0);
+    });
+
+    it('returns a file from a PUT and a DELETE as well', async function () {
+      reply = file(FILE, 'application/pdf');
+      expect((await api.renderContents('t-1', THING)).equals(FILE)).to.equal(true);
+      expect((await api.takeContents('t-1')).equals(FILE)).to.equal(true);
+    });
+
+    it('still sends its header parameters', async function () {
+      reply = file(FILE, 'application/octet-stream');
+      const request = await sent((a) => a.getContents('t-1', 'trace-7'));
+      expect(request.headers['x-trace-id']).to.equal('trace-7');
+    });
+
+    it('throws the same error for an error response as an operation that returns a model', async function () {
+      reply = (res) => {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ key: 'err.no.such.object', statusCode: 404, args: { type: 'File', id: 't-1' } }));
+      };
+      const fromModel = await failure((a) => a.getThing('t-1'));
+      const fromFile = await failure((a) => a.getContents('t-1'));
+      expect(fromFile.isAxiosError).to.equal(undefined);
+      expect(fromFile.constructor).to.equal(fromModel.constructor);
+      expect(fromFile.message).to.equal(fromModel.message);
+    });
+
+    it('returns a Blob of the type the response names where axios gives an ArrayBuffer, as in a browser', async function () {
+      const asInBrowser = axios.create({
+        validateStatus: () => true,
+        adapter: async (config) => ({
+          data: new Uint8Array(FILE).buffer, status: 200, statusText: 'OK', headers: { 'content-type': 'image/png' }, config,
+        }),
+      });
+      const got = await new ThingsApi(asInBrowser).getContents('t-1');
+      expect(got).to.be.instanceOf(Blob);
+      expect(got.type).to.equal('image/png');
+      expect(Buffer.from(await got.arrayBuffer()).equals(FILE)).to.equal(true);
+    });
+
+    it('leaves an operation that returns a model as it was', async function () {
+      expect(await api.getThing('t-1')).to.deep.include(THING);
+    });
   });
 });
