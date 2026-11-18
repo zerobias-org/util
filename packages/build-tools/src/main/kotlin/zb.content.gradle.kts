@@ -298,14 +298,21 @@ val restorePackageJson by tasks.registering {
 // tarball contains a lockfile. npm's `pack` hard-excludes package-lock.json
 // but auto-includes npm-shrinkwrap.json. Mirrors the original vendor
 // publish.sh which runs `npm shrinkwrap` before publish.
+// A package that commits its own npm-shrinkwrap.json (suite, vendor) keeps it:
+// staging never overwrites it and cleanup only removes a file staging created.
+var shrinkwrapStaged = false
+
 val stageShrinkwrapForPublish by tasks.registering {
     group = "publish"
     description = "Copy package-lock.json to npm-shrinkwrap.json for the publish tarball"
     doLast {
         val lock = project.file("package-lock.json")
         val shrink = project.file("npm-shrinkwrap.json")
-        if (lock.exists()) {
-            lock.copyTo(shrink, overwrite = true)
+        if (shrink.exists()) {
+            logger.lifecycle("Using committed npm-shrinkwrap.json")
+        } else if (lock.exists()) {
+            lock.copyTo(shrink)
+            shrinkwrapStaged = true
             logger.lifecycle("Staged npm-shrinkwrap.json from package-lock.json")
         } else {
             logger.warn("No package-lock.json found — tarball will not contain a lockfile")
@@ -318,7 +325,8 @@ val cleanupShrinkwrapAfterPublish by tasks.registering {
     description = "Remove ephemeral npm-shrinkwrap.json after publish (idempotent)"
     doLast {
         val shrink = project.file("npm-shrinkwrap.json")
-        if (shrink.exists() && shrink.delete()) {
+        if (shrinkwrapStaged && shrink.exists() && shrink.delete()) {
+            shrinkwrapStaged = false
             logger.lifecycle("Removed ephemeral npm-shrinkwrap.json")
         }
     }
