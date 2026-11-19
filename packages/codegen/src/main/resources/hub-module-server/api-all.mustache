@@ -33,6 +33,20 @@ type HttpError = Error & { status: number; errors: any[] };
 function isHttpError(err: unknown): err is HttpError {
   return err instanceof Error && 'status' in err && typeof err.status === 'number' && 'errors' in err && Array.isArray(err.errors);
 }
+
+/**
+ * The field a request-validation error path names, written the way a caller would: the validator's
+ * `/body/runtimeConfig/authorizedPrincipals/0` becomes `runtimeConfig.authorizedPrincipals[0]`, and
+ * `/params/id` becomes `id`. The leading request location is dropped unless it is all there is, and
+ * JSON Pointer escapes are undone.
+ */
+function fieldPath(path?: string): string {
+  const segments = (path ?? '').split('/').filter((s) => s !== '').map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'));
+  if (segments.length > 1 && ['body', 'params', 'query', 'headers', 'cookies'].includes(segments[0])) {
+    segments.shift();
+  }
+  return segments.reduce((field, s) => (/^\d+$/.test(s) ? `${field}[${s}]` : field ? `${field}.${s}` : s), '') || 'unknown';
+}
 import { {{apiName}} } from '{{modulePackage}}';
 import * as express from 'express';
 import * as path from 'path';
@@ -125,12 +139,9 @@ export async function install(factory: {{apiName}}Factory, app: Express, spec: s
         case 'type.openapi.validation':
           json = (new IllegalArgumentError(`${errorObj.path} - ${errorObj.message}`)).toJSON();
           break;
-        case 'format.openapi.validation': {
-          const format = (errorObj.path ? errorObj.path.split('/').pop() : undefined) || 'unknown';
-          const value = errorObj.message || 'invalid';
-          json = (new InvalidInputError(format, value)).toJSON();
+        case 'format.openapi.validation':
+          json = (new InvalidInputError(fieldPath(errorObj.path), errorObj.message || 'invalid')).toJSON();
           break;
-        }
         default:
           // pattern / enum / minLength / maxLength / minimum / maximum / minItems /
           // additionalProperties / ... or a BadRequest without structured errors —
