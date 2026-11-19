@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "branch": "fix/codegen-validation-error-path",
+  "branch": "fix/org-publish-dana-org-id",
   "packages": {
     "@zerobias-org/dev-stack": {
       "version": "1.0.2",
@@ -366,7 +366,7 @@
       }
     },
     "@zerobias-org/util-codegen": {
-      "version": "3.0.17",
+      "version": "3.0.18",
       "sourceHash": "659a410cb5f12b77301402b12cc008a3abd8a160c5d8e5362823f684fff98cab",
       "testHash": "ddab95fc5287ddf87321d7b78776870cd79bed51ff5dc94c8d7160d4b678ff7f",
       "tasks": {
@@ -483,8 +483,8 @@
       }
     },
     "@zerobias-org/util-hub-module-utils": {
-      "version": "3.0.14",
-      "sourceHash": "240552cf37c5932342f58b8b3242118fd2641415600c0693131344f892a95952",
+      "version": "3.0.15",
+      "sourceHash": "a8d0ead8d0f204271500bece75abd4b3714500b32ee81ea0517c0e5e83530e96",
       "testHash": "fe065a6d8112ab29d272e1ea7cfb5e2f2ad0991e2421a21b1de9de9193de5243",
       "tasks": {
         "lint": "passed",
@@ -528,8 +528,8 @@
       }
     },
     "@zerobias-org/util-secrets-manager": {
-      "version": "2.0.19",
-      "sourceHash": "6a6a40ff148352eea3dcaff4f2a9e4f55d79ef48df39853885cc9dcf55255250",
+      "version": "2.0.20",
+      "sourceHash": "9f0e6f388dfddbcee6c9bcd5151205ffe4fe038e5eac4e8df30154017441e237",
       "testHash": "7d8a21809b925f19525e2c030c6bba6930355e8f58180e2c6b08a56fc07fa983",
       "tasks": {
         "lint": "passed",

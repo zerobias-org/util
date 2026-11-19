@@ -329,12 +329,14 @@ object OrgPublish {
         url: String,
         body: String,
         token: String,
+        orgId: String,
         workingDir: File,
         log: (String) -> Unit,
     ): String {
         val cmd = mutableListOf("curl", "-s", "--fail-with-body")
         cmd.addAll(listOf(
             "-H", "Authorization: APIKey $token",
+            "-H", "dana-org-id: $orgId",
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
             "-X", "POST",

@@ -49,8 +49,10 @@ abstract class DataloaderOrgJobTask : DefaultTask() {
         val pkgName = PackageJsonReader.extractString(pkgRaw, "name")
             ?: throw GradleException("$name: package.json missing 'name'.")
         val version = artifactVersion.get()
+        // API keys are not org-bound: without dana-org-id the job runs in the caller's default org.
+        val orgId = OrgPublish.readOrgId(name, pkgRaw)
 
-        logger.lifecycle("$name: queueing dataloader job for $pkgName@$version...")
+        logger.lifecycle("$name: queueing dataloader job for $pkgName@$version into org $orgId...")
         val body = """{"artifactName":${PackageJsonReader.jsonEscape(pkgName)},""" +
             """"artifactVersion":${PackageJsonReader.jsonEscape(version)}}"""
         val jobJson = OrgPublish.curlPost(
@@ -58,6 +60,7 @@ abstract class DataloaderOrgJobTask : DefaultTask() {
             "${OrgPublish.platformUrl()}/dataloader/jobs",
             body,
             token,
+            orgId,
             pkgDir,
         ) { msg -> logger.lifecycle(msg) }
 
@@ -65,10 +68,10 @@ abstract class DataloaderOrgJobTask : DefaultTask() {
             ?: throw GradleException("$name: dataloader /jobs response missing 'id':\n$jobJson")
         logger.lifecycle("$name: job id = $jobId")
 
-        pollJob(jobId, token, pkgDir)
+        pollJob(jobId, token, orgId, pkgDir)
     }
 
-    private fun pollJob(jobId: String, token: String, workingDir: java.io.File) {
+    private fun pollJob(jobId: String, token: String, orgId: String, workingDir: java.io.File) {
         val url = "${OrgPublish.platformUrl()}/dataloader/jobs/$jobId"
         val startMs = System.currentTimeMillis()
         var lastStatus = ""
@@ -80,6 +83,7 @@ abstract class DataloaderOrgJobTask : DefaultTask() {
                 url,
                 listOf(
                     "-H", "Authorization: APIKey $token",
+                    "-H", "dana-org-id: $orgId",
                     "-H", "Accept: application/json"
                 ),
                 workingDir,
