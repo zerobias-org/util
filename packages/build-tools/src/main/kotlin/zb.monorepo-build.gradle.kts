@@ -1504,13 +1504,18 @@ fun registerDockerTasksForPackage(
                     emptyList()
                 }
 
+                // Dockerfiles mount the tokens as BuildKit secrets; the build args stay until none reads them.
+                val secretArgs = listOf("npm_token" to npmToken, "zb_token" to zbToken)
+                    .filter { (_, value) -> value.isNotEmpty() }
+                    .flatMap { (id, _) -> listOf("--secret", "id=$id,env=${id.uppercase()}") }
+
                 val fullCommand = listOf(
                     "docker", "build",
                     "--progress=plain",
                     "-t", imageTag,
                     "--build-arg", "npm_token=${npmToken}",
                     "--build-arg", "zb_token=${zbToken}",
-                ) + networkArgs + dockerfileArgs + listOf(".")
+                ) + secretArgs + networkArgs + dockerfileArgs + listOf(".")
 
                 // Capture docker's stdout/stderr to BOTH the per-task
                 // log file (for post-mortem inspection + the display's
