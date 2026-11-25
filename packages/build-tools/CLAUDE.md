@@ -140,7 +140,7 @@ A standard-mode release writes the package's `CHANGELOG.md` from conventional co
 - **Existing files:** the section goes above the first release already in the file, at whatever heading level. Lerna wrote minor and major releases as `# [x.y.z]`. A re-run replaces its own section.
 - **Gate stamp:** many packages list `CHANGELOG.md` in `files`, which makes it part of the stamp's source hash.
   - `commitVersion` writes and stages the notes before it refreshes the stamp.
-  - `versionStandardPackages` updates a stamp that was current to the new `sourceHash`, using the module's `computeSourceHash` extra. A stale stamp is left alone.
+  - `versionStandardPackages` updates a stamp that was current to the new `sourceHash`, using the module's `computeSourceHash` extra. A module whose stamp isn't current gets no notes, so notes can never turn a stamp the matrix would accept into one it refuses.
 - **Never blocks a release:** any failure, including a `CHANGELOG.md` that can't be staged, puts the file back, logs a warning, and the release goes on without notes.
 - **Switches** (root `gradle.properties` or `-P`): `zb.changelog=false` turns it off; `zb.changelog.dependencies=true` lists dependency updates.
 - **Announcement:** `ReleaseAnnouncement.notesFor` sends a release's own section, capped at 20,000 characters, and nothing when the newest section belongs to another version.

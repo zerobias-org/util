@@ -35,8 +35,9 @@ tasks.register("showSlot", ShowSlotTask::class.java, project)
  * The module's own Gradle project supplies its release tag prefix (`zb.vendor`/`zb.product`) and
  * its gate-stamp hasher (zb.base's `computeSourceHash`). CHANGELOG.md counts toward the stamp's
  * source hash when the package lists it in `files`, so a stamp that was current before the write
- * gets the new hash and is staged too; a stale stamp is left as it was. A directory with no such
- * project keeps its CHANGELOG.md untouched rather than risk invalidating its stamp.
+ * gets the new hash and is staged too. Notes must never turn a stamp the publish matrix would
+ * accept into one it refuses: when the stamp isn't current as hashed here, or the directory has
+ * no such project, CHANGELOG.md is left untouched and the module is released without notes.
  *
  * Never fails the version job: if anything here throws, CHANGELOG.md goes back to what it was
  * and the module is released without notes.
@@ -80,15 +81,19 @@ fun writeReleaseNotes(
         val paths = mutableListOf(changelog.relativeTo(project.rootDir).path)
 
         val stampFile = dir.resolve("gate-stamp.json")
-        if (stampFile.exists()) {
+        val hashAfter = sourceHash()
+        if (stampFile.exists() && hashAfter != hashBefore) {
             val stamp = stampFile.readText()
-            val hashAfter = sourceHash()
             val stampSourceHash = Regex(""""sourceHash"\s*:\s*"([^"]+)"""")
-            if (hashAfter != hashBefore && stampSourceHash.find(stamp)?.groupValues?.get(1) == hashBefore) {
-                stampFile.writeText(stamp.replace(stampSourceHash, """"sourceHash": "$hashAfter""""))
-                paths += "$rel/gate-stamp.json"
-                logger.lifecycle("[changelog] $rel: gate stamp's sourceHash updated for CHANGELOG.md")
+            if (stampSourceHash.find(stamp)?.groupValues?.get(1) != hashBefore) {
+                ChangelogWriter.restore(project.rootDir, changelogFile, previousNotes)
+                written = false
+                logger.warn("[changelog] $rel: its gate stamp isn't current and covers CHANGELOG.md, so no notes for $newVersion")
+                return emptyList()
             }
+            stampFile.writeText(stamp.replace(stampSourceHash, """"sourceHash": "$hashAfter""""))
+            paths += "$rel/gate-stamp.json"
+            logger.lifecycle("[changelog] $rel: gate stamp's sourceHash updated for CHANGELOG.md")
         }
         paths
     } catch (e: Exception) {

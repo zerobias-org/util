@@ -178,6 +178,44 @@ class ChangelogReleaseFunctionalTest {
     }
 
     /**
+     * A module whose gate stamp isn't current (source changed after its gate) gets no notes: its
+     * stamp covers CHANGELOG.md, and writing notes must not make a stamp any staler than it is.
+     * The module is still bumped.
+     */
+    @Test
+    fun `versionStandardPackages leaves the changelog alone when the stamp is not current`() {
+        assumeTrue(npmAvailable(), "npm is needed for VersionBumper's registry check")
+        val root = File(tmp, "stale").apply { mkdirs() }
+        File(root, "settings.gradle.kts").writeText(
+            "rootProject.name = \"stale\"\ninclude(\":widget\")\nproject(\":widget\").projectDir = file(\"package/acme/widget\")\n",
+        )
+        File(root, "build.gradle.kts").writeText("plugins { id(\"zb.workspace\") }\n")
+        File(root, ".gitignore").writeText(".gradle/\nbuild/\n.zbb-gradle/\n")
+        val widget = File(root, "package/acme/widget")
+        writePackage(widget, "widget", "plugins { id(\"zb.base\") }\n")
+        initRepo(root)
+        commitAll(root, "chore: initial")
+        git(root, "tag", "-a", "acme-widget-v1.0.0", "-m", "Release acme-widget v1.0.0")
+        gradle(root, ":widget:gate").build()
+        commitAll(root, "chore: update gate-stamp.json")
+        File(widget, "src/search.ts").writeText("export const search = 1\n")
+        commitAll(root, "feat(widget): add search without gating it (#10)")
+        val hashBefore = sourceHash(widget)
+
+        val result = gradle(root, "versionStandardPackages", "-PmodulesToVersion=acme/widget", "-Ppush=false").build()
+
+        assertEquals("chore(release): @zbtest/widget v1.0.1", git(root, "log", "-1", "--format=%s"), result.output)
+        assertTrue(result.output.contains("package/acme/widget: its gate stamp isn't current"), result.output)
+        assertEquals("", File(widget, "CHANGELOG.md").readText())
+        assertEquals(hashBefore, sourceHash(widget))
+        assertEquals(
+            setOf("package/acme/widget/gate-stamp.json", "package/acme/widget/package.json"),
+            git(root, "show", "--name-only", "--format=", "HEAD").lines().toSet(),
+        )
+        assertEquals("", git(root, "status", "--porcelain"), "the release commit left changes behind")
+    }
+
+    /**
      * A single module: `bumpVersion commitVersion` commits the version, the refreshed stamp and the
      * notes together under `chore(release): <vendor>-<product> v<version>`, and the stamp still
      * passes gateCheck.
