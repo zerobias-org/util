@@ -198,3 +198,59 @@ jobs:
                 }
               ]
             }
+
+  # build-tools is a Gradle plugin, outside the npm gate above: this is the only place its unit and TestKit tests run.
+  build-tools-test:
+    name: Test build-tools
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Run build-tools tests
+        run: cd packages/build-tools && ./gradlew test
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+
+      # Gradle prints nothing for passing tests, so the counts and every skipped test are listed here.
+      - name: Summarize test results
+        if: always()
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import glob
+          import xml.etree.ElementTree as ET
+
+          tests = skipped = failed = 0
+          seconds = 0.0
+          notes = []
+          for path in sorted(glob.glob('packages/build-tools/build/test-results/test/*.xml')):
+              suite = ET.parse(path).getroot()
+              tests += int(suite.get('tests', 0))
+              skipped += int(suite.get('skipped', 0))
+              failed += int(suite.get('failures', 0)) + int(suite.get('errors', 0))
+              seconds += float(suite.get('time', 0))
+              for case in suite.iter('testcase'):
+                  name = suite.get('name').split('.')[-1] + ' > ' + case.get('name')
+                  if case.find('failure') is not None or case.find('error') is not None:
+                      notes.append('- FAILED: ' + name)
+                  elif case.find('skipped') is not None:
+                      notes.append('- skipped: ' + name)
+          print(f'build-tools tests: {tests} run, {failed} failed, {skipped} skipped, {seconds:.0f} s')
+          print('\n'.join(sorted(notes)))
+          PY
