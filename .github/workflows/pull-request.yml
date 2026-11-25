@@ -198,3 +198,32 @@ jobs:
                 }
               ]
             }
+
+  # build-tools is a Gradle plugin, outside the npm gate above: this is the only place its unit and TestKit tests run.
+  build-tools-test:
+    name: Test build-tools
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Run build-tools tests
+        run: cd packages/build-tools && ./gradlew test
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
