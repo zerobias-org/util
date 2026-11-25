@@ -178,7 +178,8 @@ val propertyResolver = PropertyResolver(vaultService)
 
 // ────────────────────────────────────────────────────────────
 // Versioning — package.json is the version source of truth.
-// commit-and-tag-version bumps it from conventional commits.
+// VersionBumper patch-bumps it when it's already published; ChangelogWriter
+// writes the release notes from conventional commits.
 // Branch determines pre-release suffix and npm dist-tag.
 // ────────────────────────────────────────────────────────────
 val branch: String = providers.exec {
@@ -303,12 +304,15 @@ extra["npmDistTags"] = npmDistTags
 extra["isInterface"] = isInterface
 
 // ────────────────────────────────────────────────────────────
-// bumpVersion — conventional commits → package.json version bump
-// Uses commit-and-tag-version (npm), scoped to this module's path.
-// Only runs on main branch publish. Dev branches use current version + suffix.
+// bumpVersion — package.json version bump (VersionBumper: the first
+// unpublished patch). Only runs on main branch publish. Dev branches use
+// current version + suffix.
 // ────────────────────────────────────────────────────────────
 val moduleRelativePath = project.projectDir.relativeTo(project.rootDir).path
 val tagPrefix = "${zb.vendor.get()}-${zb.product.get()}-v"
+
+// Release notes: zb.changelog=false turns them off, zb.changelog.dependencies=true lists dependency updates.
+val changelogOptions = com.zerobias.buildtools.util.ChangelogWriter.Options.from { findProperty(it) }
 
 val bumpVersion by tasks.registering {
     group = "publish"
@@ -1053,6 +1057,9 @@ fun computeSourceHash(): String =
         SourceHasher.readFilesPatterns(project.projectDir),
     )
 
+// For zb.workspace's versionStandardPackages, which refreshes the stamp after writing CHANGELOG.md.
+extra["computeSourceHash"] = { computeSourceHash() }
+
 fun computeTestHash(): String =
     SourceHasher.hashTests(project.projectDir, resolvedTestDirs())
 
@@ -1636,6 +1643,20 @@ gradle.buildFinished {
         } catch (e: Exception) {
             logger.warn("  Failed to revert package.json: ${e.message}")
         }
+        // A tracked CHANGELOG.md that commitVersion wrote but didn't commit goes back too.
+        val changelogName = com.zerobias.buildtools.util.ChangelogWriter.FILE_NAME
+        val changelogTracked = project.file(changelogName).exists() && com.zerobias.buildtools.util.ExecUtils.execCapture(
+            command = listOf("git", "ls-files", "--", changelogName),
+            workingDir = project.projectDir,
+            throwOnError = false
+        ).isNotBlank()
+        if (changelogTracked) {
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "checkout", "--", changelogName),
+                workingDir = project.projectDir,
+                throwOnError = false
+            )
+        }
     }
 }
 
@@ -1695,6 +1716,25 @@ val commitVersion by tasks.registering {
         // Relative to rootDir, where the git commands run: plain "package.json" when the project is the build's root.
         val pkgPath = pkgFile.relativeTo(project.rootDir).path
         val stampPath = gateStampFile.asFile.relativeTo(project.rootDir).path
+
+        // Notes first and staged, so the stamp refresh below hashes them (CHANGELOG.md is often in `files`).
+        val changelog = com.zerobias.buildtools.util.ChangelogWriter.release(
+            repoRoot = project.rootDir,
+            packageDir = project.projectDir,
+            tagPrefix = tagPrefix,
+            previousVersion = readBaseVersion(),
+            newVersion = ver,
+            options = changelogOptions,
+            info = { logger.lifecycle(it) },
+            warn = { logger.warn(it) },
+        )
+        if (changelog != null) {
+            com.zerobias.buildtools.util.ExecUtils.exec(
+                command = listOf("git", "add", changelog.relativeTo(project.rootDir).path),
+                workingDir = project.rootDir,
+                throwOnError = true
+            )
+        }
 
         // commitVersion is the single authoritative writer for the committed
         // package.json version on main. bumpVersion only updates project.version

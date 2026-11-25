@@ -118,6 +118,26 @@ validate → generate → compile → test → buildArtifacts → gate → publi
 | `dockerRegistry` | `DOCKER_REGISTRY` |
 | ... (14 total) | ... |
 
+### Release notes (`util/ChangelogWriter.kt`)
+
+A standard-mode release writes the package's `CHANGELOG.md` from conventional commits, into the same `chore(release)` commit as the version bump. Single-module repos do this in `commitVersion`, multi-module repos in the pre-matrix `versionStandardPackages`. It runs on main only: branch pre-releases make no commit, so they write nothing.
+
+- **Range:** from the previous release tag to HEAD, along main's first-parent line.
+  - The previous tag is `<vendor>-<product>-v<previous version>`, fetched from origin when a local clone lacks it; otherwise the latest earlier tag is used.
+  - Each commit on that line is one entry: a squash-merged PR, a GitHub merge commit (the PR title comes from its body), or a direct commit.
+  - A merge that isn't a PR merge is opened up, and its commits are judged one by one.
+- **What counts:** only changes to the package's own files. These are ignored: `gate-stamp.json`, lockfiles, Markdown, `test/`, and package.json edits that only change versions. A change that only moves dependency versions is listed only with `zb.changelog.dependencies=true`.
+- **What is listed:**
+  - `feat`, `fix`, `perf` and `revert`, plus breaking changes (`!` or `BREAKING CHANGE:`).
+  - Left out: release commits, `[skip ci]` commits, other types and non-conventional messages. The publish log names each one and why.
+  - A revert and its target in the same release cancel out.
+  - When nothing is left there is no section, so versions without real changes have no entry.
+- **Gate stamp:** many packages list `CHANGELOG.md` in `files`, which makes it part of the stamp's source hash.
+  - `commitVersion` stages the notes before it refreshes the stamp.
+  - `versionStandardPackages` updates a stamp that was current to the new `sourceHash`, using the module's `computeSourceHash` extra. A stale stamp is left alone.
+- **Switches** (root `gradle.properties` or `-P`): `zb.changelog=false` turns it off; `zb.changelog.dependencies=true` lists dependency updates.
+- **Failures and format:** a changelog failure is logged and never fails the release. Sections use conventional-changelog's `## [version](compare) (date)` heading, and that block is what `ReleaseAnnouncement` puts in the Slack message.
+
 ### zb.typescript
 
 Extends base with Node.js/TypeScript lifecycle:

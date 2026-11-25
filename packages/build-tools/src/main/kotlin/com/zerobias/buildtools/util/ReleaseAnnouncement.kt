@@ -278,11 +278,7 @@ object ReleaseAnnouncement {
 
             // Extract changelog (first version block)
             val changelogFile = File(pkgDir, "CHANGELOG.md")
-            val changelog = if (changelogFile.exists()) {
-                val text = changelogFile.readText()
-                val match = Regex("^#+ \\[[\\s\\S]+?(?=^#+ \\[)", RegexOption.MULTILINE).find(text)
-                match?.value?.trim() ?: ""
-            } else ""
+            val changelog = if (changelogFile.exists()) firstChangelogBlock(changelogFile.readText()) else ""
 
             val changelogUrl = if (repository != null) {
                 "$repository/blob/main/${pkg.location}/CHANGELOG.md"
@@ -352,6 +348,14 @@ object ReleaseAnnouncement {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * The newest release section of a CHANGELOG: from its first `## [` heading up to the next
+     * one, or to the end of the file when it holds a single release (which the old pattern,
+     * requiring a following heading, returned as empty).
+     */
+    fun firstChangelogBlock(text: String): String =
+        Regex("^#+ \\[[\\s\\S]+?(?=^#+ \\[|\\z)", RegexOption.MULTILINE).find(text)?.value?.trim() ?: ""
 
     /**
      * Detect the "owner/repo" slug from the git remote origin URL.

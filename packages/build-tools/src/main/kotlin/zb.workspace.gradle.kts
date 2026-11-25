@@ -19,13 +19,72 @@
  *   ./gradlew versionStandardPackages -PmodulesToVersion=foo/bar,baz/qux
  */
 
+import com.zerobias.buildtools.module.ZbExtension
 import com.zerobias.buildtools.tasks.ListSlotsTask
 import com.zerobias.buildtools.tasks.ShowSlotTask
+import com.zerobias.buildtools.util.ChangelogWriter
 import com.zerobias.buildtools.util.ExecUtils
 import com.zerobias.buildtools.util.VersionBumper
 
 tasks.register("listSlots", ListSlotsTask::class.java, project)
 tasks.register("showSlot", ShowSlotTask::class.java, project)
+
+/**
+ * Writes the release notes for one module of [versionStandardPackages] and stages them.
+ *
+ * The module's own Gradle project supplies its release tag prefix (`zb.vendor`/`zb.product`) and
+ * its gate-stamp hasher (zb.base's `computeSourceHash`). CHANGELOG.md counts toward the stamp's
+ * source hash when the package lists it in `files`, so a stamp that was current before the write
+ * gets the new hash and is staged too; a stale stamp is left as it was. A directory with no such
+ * project keeps its CHANGELOG.md untouched rather than risk invalidating its stamp.
+ *
+ * @return the paths to stage, relative to the root (empty when nothing was written)
+ */
+fun writeReleaseNotes(
+    dir: java.io.File,
+    rel: String,
+    previousVersion: String,
+    newVersion: String,
+    options: ChangelogWriter.Options,
+): List<String> {
+    if (!options.enabled) return emptyList()
+    val module = project.subprojects.firstOrNull { it.projectDir.canonicalFile == dir.canonicalFile }
+    val extras = module?.extensions?.extraProperties
+    @Suppress("UNCHECKED_CAST")
+    val sourceHash = extras?.takeIf { it.has("computeSourceHash") }?.get("computeSourceHash") as? () -> String
+    if (module == null || sourceHash == null) {
+        logger.warn("[changelog] $rel: no zb.base project for this directory, so no notes for $newVersion")
+        return emptyList()
+    }
+    val zb = module.extensions.findByType(ZbExtension::class.java)
+    val tagPrefix = if (zb != null) "${zb.vendor.get()}-${zb.product.get()}-v" else "${dir.parentFile.name}-${dir.name}-v"
+    val hashBefore = sourceHash()
+    val changelog = ChangelogWriter.release(
+        repoRoot = project.rootDir,
+        packageDir = dir,
+        tagPrefix = tagPrefix,
+        previousVersion = previousVersion,
+        newVersion = newVersion,
+        options = options,
+        info = { logger.lifecycle(it) },
+        warn = { logger.warn(it) },
+    ) ?: return emptyList()
+    val paths = mutableListOf(changelog.relativeTo(project.rootDir).path)
+    ExecUtils.exec(command = listOf("git", "add", paths.first()), workingDir = project.rootDir, throwOnError = true)
+
+    val stampFile = dir.resolve("gate-stamp.json")
+    if (stampFile.exists()) {
+        val stamp = stampFile.readText()
+        val hashAfter = sourceHash()
+        val stampSourceHash = Regex(""""sourceHash"\s*:\s*"([^"]+)"""")
+        if (hashAfter != hashBefore && stampSourceHash.find(stamp)?.groupValues?.get(1) == hashBefore) {
+            stampFile.writeText(stamp.replace(stampSourceHash, """"sourceHash": "$hashAfter""""))
+            paths += "$rel/gate-stamp.json"
+            logger.lifecycle("[changelog] $rel: gate stamp's sourceHash updated for CHANGELOG.md")
+        }
+    }
+    return paths
+}
 
 // ────────────────────────────────────────────────────────────
 // versionStandardPackages — pre-matrix version bump for the standard path
@@ -85,9 +144,10 @@ val versionStandardPackages by tasks.registering {
         // Compute bump decisions and apply each in turn. Decisions are stable:
         // re-running with the same registry state produces the same bumps, so
         // an interrupted run can be safely retried.
-        data class Applied(val name: String, val rel: String, val from: String, val to: String, val bumped: Boolean)
+        data class Applied(val name: String, val rel: String, val from: String, val to: String, val bumped: Boolean, val notes: Boolean)
         val applied = mutableListOf<Applied>()
         val staged = mutableListOf<String>()
+        val changelogOptions = ChangelogWriter.Options.from { project.findProperty(it) }
         for (dir in targets) {
             val rel = dir.relativeTo(rootDir).path
             val decision = VersionBumper.decide(dir)
@@ -95,6 +155,8 @@ val versionStandardPackages by tasks.registering {
                 logger.warn("[version] $rel: cannot read name/version — skipping")
                 continue
             }
+            val notes = writeReleaseNotes(dir, rel, decision.currentVersion, decision.newVersion, changelogOptions)
+            staged.addAll(notes)
             if (decision.bumped) {
                 VersionBumper.writeVersion(dir, decision.newVersion)
                 staged.add("$rel/package.json")
@@ -113,10 +175,10 @@ val versionStandardPackages by tasks.registering {
                         staged.add("$rel/gate-stamp.json")
                     }
                 }
-                applied.add(Applied(decision.name, rel, decision.currentVersion, decision.newVersion, true))
+                applied.add(Applied(decision.name, rel, decision.currentVersion, decision.newVersion, true, notes.isNotEmpty()))
                 logger.lifecycle("[version] $rel: ${decision.currentVersion} → ${decision.newVersion}")
             } else {
-                applied.add(Applied(decision.name, rel, decision.currentVersion, decision.currentVersion, false))
+                applied.add(Applied(decision.name, rel, decision.currentVersion, decision.currentVersion, false, notes.isNotEmpty()))
                 logger.lifecycle("[version] $rel: ${decision.currentVersion} (not yet published — keeping as-is)")
             }
         }
@@ -142,12 +204,13 @@ val versionStandardPackages by tasks.registering {
             logger.lifecycle("[version] nothing actually staged after writes — exiting")
             return@doLast
         }
-        val commitSubject = if (applied.count { it.bumped } == 1) {
-            val one = applied.first { it.bumped }
+        // A module is in the release commit when it was bumped or got release notes.
+        val released = applied.filter { it.bumped || it.notes }
+        val commitSubject = if (released.size == 1) {
+            val one = released.first()
             "chore(release): ${one.name} v${one.to}"
         } else {
-            "chore(release): " + applied.filter { it.bumped }
-                .joinToString(", ") { "${it.name}@${it.to}" }
+            "chore(release): " + released.joinToString(", ") { "${it.name}@${it.to}" }
         }
         ExecUtils.exec(
             command = listOf("git", "commit", "-m", commitSubject),
