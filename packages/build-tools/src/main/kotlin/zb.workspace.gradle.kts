@@ -38,6 +38,9 @@ tasks.register("showSlot", ShowSlotTask::class.java, project)
  * gets the new hash and is staged too; a stale stamp is left as it was. A directory with no such
  * project keeps its CHANGELOG.md untouched rather than risk invalidating its stamp.
  *
+ * Never fails the version job: if anything here throws, CHANGELOG.md goes back to what it was
+ * and the module is released without notes.
+ *
  * @return the paths to stage, relative to the root (empty when nothing was written)
  */
 fun writeReleaseNotes(
@@ -48,42 +51,51 @@ fun writeReleaseNotes(
     options: ChangelogWriter.Options,
 ): List<String> {
     if (!options.enabled) return emptyList()
-    val module = project.subprojects.firstOrNull { it.projectDir.canonicalFile == dir.canonicalFile }
-    val extras = module?.extensions?.extraProperties
-    @Suppress("UNCHECKED_CAST")
-    val sourceHash = extras?.takeIf { it.has("computeSourceHash") }?.get("computeSourceHash") as? () -> String
-    if (module == null || sourceHash == null) {
-        logger.warn("[changelog] $rel: no zb.base project for this directory, so no notes for $newVersion")
-        return emptyList()
-    }
-    val zb = module.extensions.findByType(ZbExtension::class.java)
-    val tagPrefix = if (zb != null) "${zb.vendor.get()}-${zb.product.get()}-v" else "${dir.parentFile.name}-${dir.name}-v"
-    val hashBefore = sourceHash()
-    val changelog = ChangelogWriter.release(
-        repoRoot = project.rootDir,
-        packageDir = dir,
-        tagPrefix = tagPrefix,
-        previousVersion = previousVersion,
-        newVersion = newVersion,
-        options = options,
-        info = { logger.lifecycle(it) },
-        warn = { logger.warn(it) },
-    ) ?: return emptyList()
-    val paths = mutableListOf(changelog.relativeTo(project.rootDir).path)
-    ExecUtils.exec(command = listOf("git", "add", paths.first()), workingDir = project.rootDir, throwOnError = true)
-
-    val stampFile = dir.resolve("gate-stamp.json")
-    if (stampFile.exists()) {
-        val stamp = stampFile.readText()
-        val hashAfter = sourceHash()
-        val stampSourceHash = Regex(""""sourceHash"\s*:\s*"([^"]+)"""")
-        if (hashAfter != hashBefore && stampSourceHash.find(stamp)?.groupValues?.get(1) == hashBefore) {
-            stampFile.writeText(stamp.replace(stampSourceHash, """"sourceHash": "$hashAfter""""))
-            paths += "$rel/gate-stamp.json"
-            logger.lifecycle("[changelog] $rel: gate stamp's sourceHash updated for CHANGELOG.md")
+    val changelogFile = dir.resolve(ChangelogWriter.FILE_NAME)
+    val previousNotes = runCatching { if (changelogFile.exists()) changelogFile.readText() else null }.getOrNull()
+    var written = false
+    return try {
+        val module = project.subprojects.firstOrNull { it.projectDir.canonicalFile == dir.canonicalFile }
+        val extras = module?.extensions?.extraProperties
+        @Suppress("UNCHECKED_CAST")
+        val sourceHash = extras?.takeIf { it.has("computeSourceHash") }?.get("computeSourceHash") as? () -> String
+        if (module == null || sourceHash == null) {
+            logger.warn("[changelog] $rel: no zb.base project for this directory, so no notes for $newVersion")
+            return emptyList()
         }
+        val zb = module.extensions.findByType(ZbExtension::class.java)
+        val tagPrefix = if (zb != null) "${zb.vendor.get()}-${zb.product.get()}-v" else "${dir.parentFile.name}-${dir.name}-v"
+        val hashBefore = sourceHash()
+        val changelog = ChangelogWriter.release(
+            repoRoot = project.rootDir,
+            packageDir = dir,
+            tagPrefix = tagPrefix,
+            previousVersion = previousVersion,
+            newVersion = newVersion,
+            options = options,
+            info = { logger.lifecycle(it) },
+            warn = { logger.warn(it) },
+        ) ?: return emptyList()
+        written = true
+        val paths = mutableListOf(changelog.relativeTo(project.rootDir).path)
+
+        val stampFile = dir.resolve("gate-stamp.json")
+        if (stampFile.exists()) {
+            val stamp = stampFile.readText()
+            val hashAfter = sourceHash()
+            val stampSourceHash = Regex(""""sourceHash"\s*:\s*"([^"]+)"""")
+            if (hashAfter != hashBefore && stampSourceHash.find(stamp)?.groupValues?.get(1) == hashBefore) {
+                stampFile.writeText(stamp.replace(stampSourceHash, """"sourceHash": "$hashAfter""""))
+                paths += "$rel/gate-stamp.json"
+                logger.lifecycle("[changelog] $rel: gate stamp's sourceHash updated for CHANGELOG.md")
+            }
+        }
+        paths
+    } catch (e: Exception) {
+        if (written) ChangelogWriter.restore(project.rootDir, changelogFile, previousNotes)
+        logger.warn("[changelog] $rel: no notes for $newVersion: ${e.message}")
+        emptyList()
     }
-    return paths
 }
 
 // ────────────────────────────────────────────────────────────

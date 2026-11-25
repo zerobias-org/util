@@ -278,7 +278,7 @@ object ReleaseAnnouncement {
 
             // Extract changelog (first version block)
             val changelogFile = File(pkgDir, "CHANGELOG.md")
-            val changelog = if (changelogFile.exists()) firstChangelogBlock(changelogFile.readText()) else ""
+            val changelog = if (changelogFile.exists()) notesFor(changelogFile.readText(), pkg.version) else ""
 
             val changelogUrl = if (repository != null) {
                 "$repository/blob/main/${pkg.location}/CHANGELOG.md"
@@ -356,6 +356,24 @@ object ReleaseAnnouncement {
      */
     fun firstChangelogBlock(text: String): String =
         Regex("^#+ \\[[\\s\\S]+?(?=^#+ \\[|\\z)", RegexOption.MULTILINE).find(text)?.value?.trim() ?: ""
+
+    /**
+     * The notes to announce for [version]: the CHANGELOG's newest section, only when that
+     * section is this version's. A release that wrote no notes (and any pre-release) announces
+     * none, where the newest section used to go out under whatever version was published.
+     *
+     * The text is capped at [MAX_ANNOUNCED_NOTES] characters: the event is passed to
+     * `aws lambda invoke` as one command-line argument, which the OS limits to about 128 KB, and
+     * a failed invoke loses the release event that environments load content from.
+     */
+    fun notesFor(changelog: String, version: String): String {
+        val block = firstChangelogBlock(changelog)
+        val heading = block.lineSequence().firstOrNull() ?: return ""
+        if (!Regex("^#+ \\[${Regex.escape(version)}]").containsMatchIn(heading)) return ""
+        return if (block.length <= MAX_ANNOUNCED_NOTES) block else block.take(MAX_ANNOUNCED_NOTES).trimEnd() + "\n\n…"
+    }
+
+    const val MAX_ANNOUNCED_NOTES = 20_000
 
     /**
      * Detect the "owner/repo" slug from the git remote origin URL.

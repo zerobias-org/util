@@ -73,17 +73,33 @@ class ChangelogReleaseFunctionalTest {
         return output.trim()
     }
 
+    /** Starts a repo on `main` with its own identity: the builds under test commit through plain `git commit`. */
+    private fun initRepo(dir: File) {
+        git(dir, "init", "-q", "-b", "main")
+        git(dir, "config", "user.email", "test@zerobias.com")
+        git(dir, "config", "user.name", "test")
+        git(dir, "config", "commit.gpgsign", "false")
+        git(dir, "config", "tag.gpgsign", "false")
+    }
+
     private fun commitAll(dir: File, message: String) {
         git(dir, "add", "-A")
         git(dir, "commit", "-q", "-m", message)
     }
 
-    /** The test JVM's environment without CI, GitHub, token or npm registry settings that would change the run. */
+    /**
+     * The test JVM's environment without CI, GitHub, token or npm registry settings that would
+     * change the run, and with an empty global git config, so the builds' own `git commit` works
+     * from the repo's identity alone, as on a runner that has none.
+     */
     private fun env(): Map<String, String> =
         System.getenv().filterKeys {
-            it !in setOf("CI", "ZB_TOKEN", "ZB_ENV", "GITHUB_REPOSITORY", "GITHUB_SERVER_URL", "ZBB_MONOREPO_EVENT_FILE") &&
+            it !in setOf("CI", "GITHUB_ACTIONS", "ZB_TOKEN", "ZB_ENV", "GITHUB_REPOSITORY", "GITHUB_SERVER_URL", "ZBB_MONOREPO_EVENT_FILE") &&
                 !it.startsWith("DATALOADER_") && !it.lowercase().startsWith("npm_config_")
-        }
+        } + mapOf(
+            "GIT_CONFIG_GLOBAL" to File(tmp, "empty-gitconfig").apply { if (!exists()) writeText("") }.absolutePath,
+            "GIT_CONFIG_NOSYSTEM" to "1",
+        )
 
     private fun gradle(dir: File, vararg args: String): GradleRunner =
         GradleRunner.create()
@@ -102,9 +118,10 @@ class ChangelogReleaseFunctionalTest {
     }
 
     /**
-     * A multi-module repo: the release commit names both bumped modules, widget's CHANGELOG.md
+     * A multi-module repo: the release commit names every bumped module, widget's CHANGELOG.md
      * lists its feature (and not the stamp commit), gadget gets no notes, and both stamps still
-     * pass gateCheck, widget's because its sourceHash moved with the notes.
+     * pass gateCheck, widget's because its sourceHash moved with the notes. `plain`, a directory
+     * that is no Gradle project, is still bumped and simply gets no notes.
      */
     @Test
     fun `versionStandardPackages writes the notes into the release commit and keeps the stamps valid`() {
@@ -122,7 +139,10 @@ class ChangelogReleaseFunctionalTest {
         val gadget = File(root, "package/acme/gadget")
         writePackage(widget, "widget", "plugins { id(\"zb.base\") }\n")
         writePackage(gadget, "gadget", "plugins { id(\"zb.base\") }\n")
-        git(root, "init", "-q", "-b", "main")
+        val plain = File(root, "package/acme/plain").apply { mkdirs() }
+        File(plain, "package.json").writeText("""{ "name": "@zbtest/plain", "version": "1.0.0" }""" + "\n")
+        File(plain, ".npmrc").writeText("registry=$registryUrl\n")
+        initRepo(root)
         commitAll(root, "chore: initial")
         git(root, "tag", "-a", "acme-widget-v1.0.0", "-m", "Release acme-widget v1.0.0")
         git(root, "tag", "-a", "acme-gadget-v1.0.0", "-m", "Release acme-gadget v1.0.0")
@@ -134,9 +154,13 @@ class ChangelogReleaseFunctionalTest {
         val widgetHashBefore = sourceHash(widget)
         val gadgetHashBefore = sourceHash(gadget)
 
-        val result = gradle(root, "versionStandardPackages", "-PmodulesToVersion=acme/widget,acme/gadget", "-Ppush=false").build()
+        val result = gradle(root, "versionStandardPackages", "-PmodulesToVersion=acme/widget,acme/gadget,acme/plain", "-Ppush=false").build()
 
-        assertEquals("chore(release): @zbtest/widget@1.0.1, @zbtest/gadget@1.0.1", git(root, "log", "-1", "--format=%s"), result.output)
+        assertEquals(
+            "chore(release): @zbtest/widget@1.0.1, @zbtest/gadget@1.0.1, @zbtest/plain@1.0.1",
+            git(root, "log", "-1", "--format=%s"), result.output,
+        )
+        assertTrue(result.output.contains("package/acme/plain: no zb.base project for this directory"), result.output)
         assertTrue(result.output.contains("package/acme/widget: gate stamp's sourceHash updated for CHANGELOG.md"), result.output)
         assertTrue(sourceHash(widget) != widgetHashBefore, "widget's stamp kept the hash from before its notes")
         assertEquals(gadgetHashBefore, sourceHash(gadget))
@@ -161,18 +185,7 @@ class ChangelogReleaseFunctionalTest {
     @Test
     fun `commitVersion writes the notes into the release commit and keeps the stamp valid`() {
         assumeTrue(npmAvailable(), "npm is needed for VersionBumper's registry check")
-        val dir = File(tmp, "acme/single")
-        writePackage(dir, "single", "plugins { id(\"zb.base\") }\n")
-        File(dir, "settings.gradle.kts").writeText("rootProject.name = \"single\"\n")
-        File(dir, ".gitignore").writeText(".gradle/\nbuild/\n.zbb-gradle/\n")
-        git(dir, "init", "-q", "-b", "main")
-        commitAll(dir, "chore: initial")
-        git(dir, "tag", "-a", "acme-single-v1.0.0", "-m", "Release acme-single v1.0.0")
-
-        File(dir, "src/index.ts").writeText("export const single = 2\n")
-        commitAll(dir, "fix: handle empty input")
-        gradle(dir, "gate").build()
-        commitAll(dir, "chore: update gate-stamp.json")
+        val dir = singleModule()
         val hashBefore = sourceHash(dir)
 
         val result = gradle(dir, "bumpVersion", "commitVersion").build()
@@ -187,5 +200,36 @@ class ChangelogReleaseFunctionalTest {
         assertEquals("", git(dir, "status", "--porcelain"), "the release commit left changes behind")
 
         gradle(dir, "gateCheck").build()
+    }
+
+    /** `-Pzb.changelog=false` releases as before the notes existed: the commit holds the version and the stamp only. */
+    @Test
+    fun `commitVersion writes no notes when they are turned off`() {
+        assumeTrue(npmAvailable(), "npm is needed for VersionBumper's registry check")
+        val dir = singleModule()
+
+        gradle(dir, "bumpVersion", "commitVersion", "-Pzb.changelog=false").build()
+
+        assertEquals("chore(release): acme-single v1.0.1", git(dir, "log", "-1", "--format=%s"))
+        assertEquals(setOf("gate-stamp.json", "package.json"), git(dir, "show", "--name-only", "--format=", "HEAD").lines().toSet())
+        assertEquals("", File(dir, "CHANGELOG.md").readText())
+        gradle(dir, "gateCheck").build()
+    }
+
+    /** A single-module repo at `acme/single`, released as 1.0.0, with one fix since and a current, committed gate stamp. */
+    private fun singleModule(): File {
+        val dir = File(tmp, "acme/single")
+        writePackage(dir, "single", "plugins { id(\"zb.base\") }\n")
+        File(dir, "settings.gradle.kts").writeText("rootProject.name = \"single\"\n")
+        File(dir, ".gitignore").writeText(".gradle/\nbuild/\n.zbb-gradle/\n")
+        initRepo(dir)
+        commitAll(dir, "chore: initial")
+        git(dir, "tag", "-a", "acme-single-v1.0.0", "-m", "Release acme-single v1.0.0")
+
+        File(dir, "src/index.ts").writeText("export const single = 2\n")
+        commitAll(dir, "fix: handle empty input")
+        gradle(dir, "gate").build()
+        commitAll(dir, "chore: update gate-stamp.json")
+        return dir
     }
 }

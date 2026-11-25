@@ -1717,8 +1717,8 @@ val commitVersion by tasks.registering {
         val pkgPath = pkgFile.relativeTo(project.rootDir).path
         val stampPath = gateStampFile.asFile.relativeTo(project.rootDir).path
 
-        // Notes first and staged, so the stamp refresh below hashes them (CHANGELOG.md is often in `files`).
-        val changelog = com.zerobias.buildtools.util.ChangelogWriter.release(
+        // Notes first: release() stages them, so the stamp refresh below hashes them (CHANGELOG.md is often in `files`).
+        com.zerobias.buildtools.util.ChangelogWriter.release(
             repoRoot = project.rootDir,
             packageDir = project.projectDir,
             tagPrefix = tagPrefix,
@@ -1728,13 +1728,6 @@ val commitVersion by tasks.registering {
             info = { logger.lifecycle(it) },
             warn = { logger.warn(it) },
         )
-        if (changelog != null) {
-            com.zerobias.buildtools.util.ExecUtils.exec(
-                command = listOf("git", "add", changelog.relativeTo(project.rootDir).path),
-                workingDir = project.rootDir,
-                throwOnError = true
-            )
-        }
 
         // commitVersion is the single authoritative writer for the committed
         // package.json version on main. bumpVersion only updates project.version

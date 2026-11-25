@@ -12,18 +12,21 @@ import java.time.ZoneOffset
  * since its previous release tag.
  *
  * **What a change is.** The history from the previous release to HEAD is walked along the
- * first-parent line, and each commit on it is one change:
+ * first-parent line, and each commit on it that touched the package is one change:
  * - a squash-merged PR, whose subject is the PR title with ` (#N)`;
  * - a GitHub merge commit, whose PR title is the first line of the merge body;
  * - a commit pushed straight to main.
  *
- * A merge that is not a GitHub PR merge (a local `git merge`, or a `git pull` that merged) is
- * opened up, and the first-parent commits it brought in are judged one by one. A PR's own
- * commits, its WIP and "merge main" commits never show.
+ * A merge that is not a PR merge (a local `git merge`, or a `git pull` that merged) is opened
+ * up, and the first-parent commits it brought in are judged one by one. A PR's own commits, its
+ * WIP and "merge main" commits never show.
  *
  * **What counts for this package.** A change counts only if it changed files in the package
  * directory. These don't count:
- * - the gate stamp, lockfiles, Markdown, `test/` and `.github`/`.claude`;
+ * - the gate stamp and lockfiles;
+ * - Markdown at the package root (README, USAGE, the changelog itself), while nested Markdown
+ *   counts, because content packages keep real content in it;
+ * - `test/`, `.github` and `.claude`;
  * - a package.json edit that changes only the version or dependency versions. A change made
  *   up of that alone is a dependency update.
  *
@@ -32,17 +35,20 @@ import java.time.ZoneOffset
  *   `BREAKING CHANGE:` footer), which also goes under BREAKING CHANGES whatever its type.
  * - Listed only with [Options.includeDependencies]: dependency updates (type or scope `deps`,
  *   or a dependency-only diff).
- * - Left out: `chore(release)` commits, `[skip ci]` commits, every other type, and messages
- *   that aren't conventional. A PR merge whose title isn't conventional falls back to its
- *   branch prefix (`fix/…`).
- * - A revert and the change it reverts cancel out when both are in the range.
+ * - Left out: every other type, messages that aren't conventional, and the release commits
+ *   publish itself makes. A PR merge whose title isn't conventional falls back to its branch
+ *   prefix (`fix/…`).
+ * - A revert and the change it reverts cancel out when both are in the range, and a revert of
+ *   that revert puts the change back.
  *
  * When nothing is left, no section is written, so versions without user-facing changes have no
  * entry and no "version bump only" noise.
  *
- * Everything comes from git, so a local `zbb publish` writes the same notes as CI. The section
- * uses conventional-changelog's `## [version](compare) (date)` heading, which
- * [ReleaseAnnouncement.firstChangelogBlock] reads.
+ * Everything comes from git, so a local `zbb publish` writes the same notes as CI. Paths are
+ * taken relative to [release]'s `repoRoot`, which may be a subdirectory of the git repository
+ * (a build rooted below the repo's top level). The section uses conventional-changelog's
+ * `## [version](compare) (date)` heading, which [ReleaseAnnouncement.notesFor] reads; lerna's
+ * older sections, whatever their heading level, stay below it.
  */
 object ChangelogWriter {
 
@@ -103,6 +109,11 @@ object ChangelogWriter {
         val body: String get() = message.substringAfter('\n', "").trim()
     }
 
+    /** What a revert undoes: the reverted commit's sha, its PR, or its title, whichever the message gives. */
+    private data class Reverted(val sha: String?, val pr: Int?, val title: String?)
+
+    private class Counted(val change: Change, val subject: String, val entries: List<Entry>, val reverted: Reverted?)
+
     const val FILE_NAME = "CHANGELOG.md"
     private const val TITLE = "# Changelog"
     private const val INTRO = "Versions with no feature, fix, performance or breaking change have no entry."
@@ -110,33 +121,40 @@ object ChangelogWriter {
     private const val MAX_MERGE_DEPTH = 5
 
     private val HEADER = Regex("""^(\w+)(?:\(([^()]*)\))?(!)?:\s+(.+)$""")
-    private val BREAKING_FOOTER = Regex("""^BREAKING[ -]CHANGE:\s*(.+)$""", RegexOption.MULTILINE)
+    private val BREAKING_FOOTER = Regex("""^BREAKING[ -]CHANGE:\s*(.*)$""")
     private val SQUASH_PR = Regex("""\s+\(#(\d+)\)$""")
     private val PR_MERGE = Regex("""^Merge pull request #(\d+) from (\S+)""")
     private val GIT_REVERT = Regex("""^Revert "(.+)"$""")
+    private val GIT_REAPPLY = Regex("""^Reapply "(.+)"$""")
     private val REVERTED_SHA = Regex("""This reverts commit ([0-9a-f]{7,40})""")
     private val REVERTED_PR = Regex("""Reverts [\w.-]+/[\w.-]+#(\d+)""")
-    private val SKIP_CI = Regex("""\[(skip ci|ci skip)]""", RegexOption.IGNORE_CASE)
+    private val VERSION_HEADING = Regex("""^#{1,3} \[?v?\d+\.\d+\.\d+[^\n]*$""", RegexOption.MULTILINE)
+    private val LISTED_TYPES = setOf("feat", "fix", "perf")
     private val KNOWN_TYPES = setOf("feat", "fix", "perf", "revert", "refactor", "chore", "docs", "test", "build", "ci", "style", "deps")
-    private val IGNORED_NAMES = setOf("gate-stamp.json", "package-lock.json", "npm-shrinkwrap.json")
+    private val IGNORED_NAMES = setOf(
+        "gate-stamp.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb",
+    )
     private val IGNORED_TOP_DIRS = setOf("test", "tests", "__tests__", ".github", ".claude")
-    private val DEPENDENCY_FIELDS = listOf("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
+    private val DEPENDENCY_FIELDS = setOf("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
     private val RUNTIME_DEPENDENCY_FIELDS = listOf("dependencies", "peerDependencies", "optionalDependencies")
     private val RELEASE_OWNED_FILES = setOf("package.json", "gate-stamp.json", FILE_NAME, "package-lock.json")
     private val MAPPER = ObjectMapper().registerKotlinModule()
 
     /**
-     * Writes the section for [newVersion] into the package's CHANGELOG.md, called by the
-     * standard-mode release commit (`commitVersion`, `versionStandardPackages`) before staging.
+     * Writes the section for [newVersion] into the package's CHANGELOG.md and stages it, called by
+     * the standard-mode release commit (`commitVersion`, `versionStandardPackages`).
      *
      * The previous release is `<tagPrefix><previousVersion>`, fetched from origin when a local
-     * clone lacks it; without it, the latest earlier `<tagPrefix>*` tag is used. A package with
-     * no earlier release tag gets no notes. It also warns when the package has uncommitted
-     * changes, since they would ship without a commit to describe them.
+     * clone lacks it; without it, the highest earlier `<tagPrefix><version>` tag reachable from
+     * HEAD is used. A package with no earlier release tag gets no notes. Outside CI it also warns
+     * when the package has uncommitted changes, since they would ship without a commit to
+     * describe them.
      *
-     * Never throws: any failure goes to [warn] and the release carries on without notes.
+     * Never throws and never leaves a half-written file: on any failure, staging included (an
+     * ignored CHANGELOG.md, a locked index), the file goes back to what it was, the reason goes
+     * to [warn], and the release carries on without notes.
      *
-     * @return the CHANGELOG.md to stage when it now differs from HEAD, else null
+     * @return the staged CHANGELOG.md when it now differs from HEAD, else null
      */
     fun release(
         repoRoot: File,
@@ -149,17 +167,22 @@ object ChangelogWriter {
         warn: (String) -> Unit,
         date: LocalDate = LocalDate.now(ZoneOffset.UTC),
         repoUrl: String? = repositoryUrl(repoRoot),
+        checkUncommitted: Boolean = !inCi(),
     ): File? {
         if (!options.enabled) return null
-        val label = packageDir.relativeTo(repoRoot).invariantSeparatorsPath.ifEmpty { "." }
+        var label = packageDir.name
+        var written: Pair<File, String?>? = null
         return try {
-            val dirty = uncommittedChanges(repoRoot, packageDir)
-            if (dirty.isNotEmpty()) {
-                warn("[changelog] $label: uncommitted changes ship with this release, and no commit describes them: ${dirty.joinToString(", ")}")
+            label = packageDir.relativeTo(repoRoot).invariantSeparatorsPath.ifEmpty { "." }
+            if (checkUncommitted) {
+                val dirty = uncommittedChanges(repoRoot, packageDir)
+                if (dirty.isNotEmpty()) {
+                    warn("[changelog] $label: uncommitted changes ship with this release, and no commit describes them: ${dirty.joinToString(", ")}")
+                }
             }
             val baseTag = resolveBaseTag(repoRoot, tagPrefix, previousVersion, newVersion, warn)
             if (baseTag == null) {
-                info("[changelog] $label: no earlier $tagPrefix* release tag, so no notes for $newVersion")
+                info("[changelog] $label: no earlier $tagPrefix<version> release tag, so no notes for $newVersion")
                 return null
             }
             val notes = collect(repoRoot, packageDir, baseTag, options.includeDependencies)
@@ -169,48 +192,58 @@ object ChangelogWriter {
                 return null
             }
             val file = File(packageDir, FILE_NAME)
-            val existing = if (file.exists()) file.readText() else ""
-            val updated = insert(existing, render(newVersion, date, baseTag, tagPrefix + newVersion, repoUrl, notes.entries), newVersion)
-            if (updated != existing) file.writeText(updated)
+            val previous = if (file.exists()) file.readText() else null
+            val updated = insert(previous.orEmpty(), render(newVersion, date, baseTag, tagPrefix + newVersion, repoUrl, notes.entries), newVersion)
+            written = file to previous
+            if (updated != previous) file.writeText(updated)
+            val path = file.relativeTo(repoRoot).invariantSeparatorsPath
+            if (run(repoRoot, "add", "--", path).first != 0) {
+                restore(repoRoot, file, previous)
+                warn("[changelog] $label: CHANGELOG.md can't be staged (ignored or locked?), so no notes for $newVersion")
+                return null
+            }
             info("[changelog] $label: ${notes.entries.size} change(s) since $baseTag listed for $newVersion")
-            if (differsFromHead(repoRoot, file)) file else null
+            if (run(repoRoot, "diff", "--cached", "--quiet", "--", path).first != 0) file else null
         } catch (e: Exception) {
+            written?.let { (file, previous) -> restore(repoRoot, file, previous) }
             warn("[changelog] $label: no notes written for $newVersion: ${e.message}")
             null
         }
     }
 
     /**
+     * Puts [file] back as it was before [release] touched it: unstaged, with its [previous] text,
+     * or gone when it didn't exist. For callers that fail after [release] returned a file.
+     */
+    fun restore(repoRoot: File, file: File, previous: String?) {
+        try {
+            run(repoRoot, "reset", "-q", "HEAD", "--", file.relativeTo(repoRoot).invariantSeparatorsPath)
+            if (previous == null) file.delete() else file.writeText(previous)
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
      * Collects the entries for [packageDir] from [baseTag] to [head], applying the rules in the
-     * class comment. Pure apart from reading git, so it also works on a ref that isn't checked out.
+     * class comment. Git narrows the history to the commits that touched the package, so the
+     * cost follows the package's own changes, not the repository's size. Pure apart from reading
+     * git, so it also works on a ref that isn't checked out.
      */
     fun collect(repoRoot: File, packageDir: File, baseTag: String, includeDependencies: Boolean, head: String = "HEAD"): Notes {
         val dirRel = packageDir.relativeTo(repoRoot).invariantSeparatorsPath
+        val pathspec = dirRel.ifEmpty { "." }
         val prefix = if (dirRel.isEmpty()) "" else "$dirRel/"
-        val produced = mutableListOf<Pair<Change, List<Entry>>>()
+        val counted = mutableListOf<Counted>()
         val skipped = mutableListOf<Skipped>()
 
-        for (change in changes(repoRoot, "$baseTag..$head", 0)) {
-            if (change.subject.startsWith("chore(release)") || SKIP_CI.containsMatchIn(change.subject)) continue
-            val files = changedFiles(repoRoot, change, dirRel.ifEmpty { "." }).map { it.removePrefix(prefix) }
-            if (files.isEmpty()) continue
-            val counted = files.filterNot(::isIgnored)
+        for (change in changes(repoRoot, "$baseTag..$head", pathspec, 0)) {
             val subject = change.subject.replace(SQUASH_PR, "")
-            if (counted.none { it != "package.json" }) {
-                val dependencyChanges = if ("package.json" in counted) dependencyOnlyChanges(repoRoot, change, "${prefix}package.json") else null
-                when {
-                    "package.json" !in counted -> skipped += Skipped(change.sha, subject, "touches only the gate stamp, lockfiles, docs or tests")
-                    dependencyChanges == null -> {}
-                    dependencyChanges.isEmpty() -> skipped += Skipped(change.sha, subject, "changes only the version or dev dependencies")
-                    !includeDependencies -> skipped += Skipped(change.sha, subject, "dependency update")
-                    else -> produced += change to listOf(Entry(Section.DEPENDENCIES, null, "update ${dependencyChanges.joinToString(", ")}", change.sha, change.pr))
-                }
-                if (dependencyChanges != null || "package.json" !in counted) continue
-            }
-            val entries = classify(change, subject, includeDependencies, skipped)
-            if (entries.isNotEmpty()) produced += change to entries
+            if (change.pr == null && subject.startsWith("chore(release)")) continue
+            val files = changedFiles(repoRoot, change, pathspec).map { it.removePrefix(prefix) }.filterNot(::isIgnored)
+            val entries = entriesFor(repoRoot, change, subject, files, prefix, includeDependencies, skipped)
+            counted += Counted(change, subject, entries, revertedBy(change, subject))
         }
-        return Notes(cancelReverts(produced, skipped), skipped)
+        return Notes(cancelReverts(counted, skipped), skipped)
     }
 
     /** Parses a `type(scope)!: subject` header, or returns null when [line] isn't conventional. */
@@ -241,22 +274,24 @@ object ChangelogWriter {
     }
 
     /**
-     * Puts [section] at the top of the CHANGELOG [existing] text. A file's own title and intro are
-     * kept (an empty file gets the standard ones), and an existing top section for the same
-     * [version] is replaced, so a re-run doesn't add a second copy.
+     * Puts [section] above the first release in the CHANGELOG [existing] text. Releases are
+     * recognised at any heading level, bracketed or not, because lerna wrote minor and major
+     * releases as `# [x.y.z]` and patches as `## [x.y.z]`. Whatever precedes the first release
+     * (the file's title and intro) is kept, and an empty file gets the standard ones. A top
+     * section already for [version] is replaced, so a re-run doesn't add a second copy.
      */
     fun insert(existing: String, section: String, version: String): String {
         val text = existing.replace("\r\n", "\n").trim()
-        val firstSection = Regex("^## ", RegexOption.MULTILINE).find(text)?.range?.first ?: text.length
-        val preamble = text.substring(0, firstSection).trim().ifEmpty { "$TITLE\n\n$INTRO" }
-        var sections = text.substring(firstSection).trim()
-        if (sections.startsWith("## [$version]")) {
-            val next = Regex("^## ", RegexOption.MULTILINE).find(sections, 3)?.range?.first ?: sections.length
-            sections = sections.substring(next).trim()
+        val first = VERSION_HEADING.find(text)
+        val preamble = (if (first == null) text else text.substring(0, first.range.first)).trim().ifEmpty { "$TITLE\n\n$INTRO" }
+        var releases = if (first == null) "" else text.substring(first.range.first)
+        if (first != null && Regex("""^#{1,3} \[?v?${Regex.escape(version)}(?![\w.-])""").containsMatchIn(first.value)) {
+            val next = VERSION_HEADING.find(releases, first.value.length)
+            releases = if (next == null) "" else releases.substring(next.range.first)
         }
         return buildString {
             append(preamble).append("\n\n").append(section.trim()).append('\n')
-            if (sections.isNotEmpty()) append('\n').append(sections).append('\n')
+            if (releases.isNotBlank()) append('\n').append(releases.trim()).append('\n')
         }
     }
 
@@ -273,7 +308,8 @@ object ChangelogWriter {
 
     /**
      * The previous release's tag: `<tagPrefix><previousVersion>` when it exists here or on origin,
-     * else the latest earlier `<tagPrefix>*` tag reachable from HEAD, else null.
+     * else the highest earlier tag reachable from HEAD that is exactly `<tagPrefix><x.y.z>`, else
+     * null. The exact form keeps `api-v` from matching another package's `api-v2-v1.0.0`.
      */
     fun resolveBaseTag(repoRoot: File, tagPrefix: String, previousVersion: String?, newVersion: String, warn: (String) -> Unit): String? {
         val newTag = tagPrefix + newVersion
@@ -283,10 +319,11 @@ object ChangelogWriter {
                 gitOrNull(repoRoot, "fetch", "--quiet", "--no-tags", "origin", "refs/tags/$tag:refs/tags/$tag")
             }
             if (hasTag(repoRoot, tag)) return tag
-            warn("[changelog] previous release tag $tag not found; listing changes since the latest earlier $tagPrefix* tag")
+            warn("[changelog] previous release tag $tag not found; listing changes since the latest earlier $tagPrefix<version> tag")
         }
-        return gitOrNull(repoRoot, "describe", "--tags", "--abbrev=0", "--match", "$tagPrefix*", "--exclude", newTag, "HEAD")
-            ?.trim()?.takeIf { it.isNotEmpty() }
+        val exact = Regex("^${Regex.escape(tagPrefix)}\\d+\\.\\d+\\.\\d+$")
+        return gitOrNull(repoRoot, "for-each-ref", "--merged", "HEAD", "--sort=-v:refname", "--format=%(refname:strip=2)", "refs/tags/$tagPrefix*")
+            ?.lineSequence()?.map { it.trim() }?.firstOrNull { exact.matches(it) && it != newTag }
     }
 
     /** Uncommitted paths in the package, apart from the files the release itself writes. */
@@ -297,107 +334,203 @@ object ChangelogWriter {
             .filterNot { it.substringAfterLast('/') in RELEASE_OWNED_FILES }
     }
 
-    /** Turns one counted change into entries by its header, recording why a change got none. */
-    private fun classify(change: Change, subject: String, includeDependencies: Boolean, skipped: MutableList<Skipped>): List<Entry> {
-        val reverted = revertedSubject(subject)
-        val header = when {
-            reverted != null -> Header("revert", null, false, reverted)
-            else -> parseHeader(subject) ?: branchType(change.branch)?.let { Header(it, null, false, subject) }
-        }
-        if (header == null) {
-            skipped += Skipped(change.sha, subject, "not a conventional commit")
+    /** True on a CI runner, where the checkout is what was pushed and the build may touch tracked files. */
+    private fun inCi(): Boolean = System.getenv("CI") == "true"
+
+    /**
+     * The entries one change earns for the package given the [files] it counted for, recording in
+     * [skipped] why a change earns none. A change limited to package.json versions is a
+     * dependency update whatever its type says.
+     */
+    private fun entriesFor(
+        repoRoot: File,
+        change: Change,
+        subject: String,
+        files: List<String>,
+        prefix: String,
+        includeDependencies: Boolean,
+        skipped: MutableList<Skipped>,
+    ): List<Entry> {
+        if (files.isEmpty()) {
+            skipped += Skipped(change.sha, subject, "touches only the gate stamp, lockfiles, docs or tests")
             return emptyList()
         }
-        if (header.type == "revert") {
-            val target = parseHeader(header.subject.replace(SQUASH_PR, ""))
-            if (target == null || !(target.breaking || target.type in setOf("feat", "fix", "perf"))) {
-                skipped += Skipped(change.sha, subject, "reverts a change that isn't listed")
+        if (files.all { it == "package.json" }) {
+            val moved = dependencyOnlyChanges(repoRoot, change, "${prefix}package.json")
+            if (moved != null) {
+                if (moved.isNotEmpty() && includeDependencies) {
+                    return listOf(Entry(Section.DEPENDENCIES, null, "update ${moved.joinToString(", ")}", change.sha, change.pr))
+                }
+                skipped += Skipped(change.sha, subject, if (moved.isEmpty()) "changes only the version or dev dependencies" else "dependency update")
                 return emptyList()
             }
         }
-        val note = BREAKING_FOOTER.find(change.message)?.groupValues?.get(1)?.trim()
+        return classify(repoRoot, change, subject, includeDependencies, skipped)
+    }
+
+    /**
+     * Turns one counted change into entries by its header. A `Revert "…"` wrapped an odd number
+     * of times is a revert of the innermost change; wrapped an even number of times it puts that
+     * change back, and is listed as the change itself.
+     */
+    private fun classify(repoRoot: File, change: Change, subject: String, includeDependencies: Boolean, skipped: MutableList<Skipped>): List<Entry> {
+        val (depth, innermost) = unwrapReverts(subject)
+        val described = if (depth == 0 || parseHeader(innermost.replace(SQUASH_PR, "")) != null) innermost else revertedTitle(repoRoot, change) ?: innermost
+        val effective = described.replace(SQUASH_PR, "")
+        val header = parseHeader(effective)
+            ?: branchType(change.branch)?.let { Header(it, null, false, if (PR_MERGE.containsMatchIn(effective)) branchTitle(change.branch) else effective) }
+        if (header == null) {
+            skipped += Skipped(change.sha, subject, if (depth % 2 == 1) "reverts a change that isn't listed" else "not a conventional commit")
+            return emptyList()
+        }
+        if (depth % 2 == 1) {
+            if (!header.breaking && header.type !in LISTED_TYPES) {
+                skipped += Skipped(change.sha, subject, "reverts a change that isn't listed")
+                return emptyList()
+            }
+            return listOf(Entry(Section.REVERTS, null, described, change.sha, change.pr))
+        }
+        val note = breakingNote(change.message)
         val entries = mutableListOf<Entry>()
         if (header.breaking || note != null) {
             entries += Entry(Section.BREAKING, header.scope, note ?: header.subject, change.sha, change.pr)
         }
+        val dependency = header.type == "deps" || header.scope == "deps"
         val section = when {
-            header.type == "deps" || header.scope == "deps" -> if (includeDependencies) Section.DEPENDENCIES else null
+            dependency -> if (includeDependencies) Section.DEPENDENCIES else null
             header.type == "feat" -> Section.FEATURES
             header.type == "fix" -> Section.FIXES
             header.type == "perf" -> Section.PERFORMANCE
-            header.type == "revert" -> Section.REVERTS
             else -> null
         }
         if (section != null) {
             entries += Entry(section, header.scope, header.subject, change.sha, change.pr)
         } else if (entries.isEmpty()) {
-            val dependency = header.type == "deps" || header.scope == "deps"
             skipped += Skipped(change.sha, subject, if (dependency) "dependency update" else "${header.type} changes aren't listed")
         }
         return entries
     }
 
-    /**
-     * Drops a revert and the change it reverts when both are in the range, matched by the
-     * reverted sha, a `Reverts owner/repo#N` line, or (for a GitHub revert PR, whose merge body
-     * holds only its title) the reverted title. A revert of an older release stays listed.
-     */
-    private fun cancelReverts(produced: List<Pair<Change, List<Entry>>>, skipped: MutableList<Skipped>): List<Entry> {
-        val cancelled = mutableSetOf<String>()
-        for ((change, entries) in produced) {
-            if (entries.none { it.section == Section.REVERTS }) continue
-            val sha = REVERTED_SHA.find(change.message)?.groupValues?.get(1)
-            val pr = REVERTED_PR.find(change.message)?.groupValues?.get(1)?.toInt()
-            val title = revertedSubject(change.subject.replace(SQUASH_PR, ""))
-            val target = produced.firstOrNull { (other, _) ->
-                other.sha != change.sha && other.sha !in cancelled && (
-                    (sha != null && other.sha.startsWith(sha)) || (pr != null && other.pr == pr) ||
-                        (title != null && (other.subject == title || other.subject.replace(SQUASH_PR, "") == title.replace(SQUASH_PR, "")))
-                    )
-            } ?: continue
-            cancelled += change.sha
-            cancelled += target.first.sha
-            skipped += Skipped(change.sha, change.subject, "reverts ${target.first.sha.take(9)} in the same release")
-            skipped += Skipped(target.first.sha, target.first.subject, "reverted by ${change.sha.take(9)} in the same release")
-        }
-        return produced.filterNot { it.first.sha in cancelled }.flatMap { it.second }
+    /** The text of a `BREAKING CHANGE:` footer: its whole paragraph on one line, since footers wrap. */
+    private fun breakingNote(message: String): String? {
+        val lines = message.lines()
+        val start = lines.indexOfFirst { BREAKING_FOOTER.matches(it.trim()) }
+        if (start < 0) return null
+        val paragraph = listOf(BREAKING_FOOTER.matchEntire(lines[start].trim())!!.groupValues[1]) + lines.drop(start + 1).takeWhile { it.isNotBlank() }
+        return paragraph.joinToString(" ") { it.trim() }.trim().ifEmpty { null }
     }
 
-    /** The first-parent changes in [range], opening up merges that aren't GitHub PR merges. */
-    private fun changes(repoRoot: File, range: String, depth: Int): List<Change> {
+    /**
+     * Drops each revert together with the change it undoes when both are in the range, newest
+     * first, so a revert of a revert cancels that revert and leaves the original change listed.
+     * The target is the nearest older change matching the reverted sha, else its PR, else (for a
+     * GitHub revert PR, whose merge body holds only its title) its title. A revert whose target
+     * is in an older release keeps its entry.
+     */
+    private fun cancelReverts(counted: List<Counted>, skipped: MutableList<Skipped>): List<Entry> {
+        val cancelled = mutableSetOf<String>()
+        for ((index, item) in counted.withIndex()) {
+            val reverted = item.reverted ?: continue
+            if (item.change.sha in cancelled) continue
+            val older = counted.subList(index + 1, counted.size).filter { it.change.sha !in cancelled }
+            val target = older.firstOrNull { reverted.sha != null && it.change.sha.startsWith(reverted.sha) }
+                ?: older.firstOrNull { reverted.pr != null && it.change.pr == reverted.pr }
+                ?: older.firstOrNull { reverted.title != null && (it.change.subject == reverted.title || it.subject == reverted.title.replace(SQUASH_PR, "")) }
+                ?: continue
+            cancelled += item.change.sha
+            cancelled += target.change.sha
+            if (item.entries.isNotEmpty()) skipped += Skipped(item.change.sha, item.subject, "undoes ${target.change.sha.take(9)} in the same release")
+            if (target.entries.isNotEmpty()) skipped += Skipped(target.change.sha, target.subject, "undone by ${item.change.sha.take(9)} in the same release")
+        }
+        return counted.filterNot { it.change.sha in cancelled }.flatMap { it.entries }
+    }
+
+    /**
+     * What [change] directly reverts, or null when its subject isn't a `Revert "…"`, a
+     * `revert: …` or a `Reapply "…"` (git 2.43's title for reverting a revert, which undoes
+     * `Revert "…"`).
+     */
+    private fun revertedBy(change: Change, subject: String): Reverted? {
+        val title = GIT_REVERT.matchEntire(subject)?.groupValues?.get(1)
+            ?: GIT_REAPPLY.matchEntire(subject)?.groupValues?.get(1)?.let { "Revert \"$it\"" }
+            ?: parseHeader(subject)?.takeIf { it.type == "revert" }?.subject
+            ?: return null
+        val pr = REVERTED_PR.find(change.message)?.groupValues?.get(1)?.toInt()
+            ?: PR_MERGE.find(title)?.groupValues?.get(1)?.toInt()
+            ?: SQUASH_PR.find(title)?.groupValues?.get(1)?.toInt()
+        return Reverted(REVERTED_SHA.find(change.message)?.groupValues?.get(1), pr, title)
+    }
+
+    /**
+     * Strips the `Revert "…"` / `revert: …` wrappers off [subject]: how many there were, and what
+     * is inside. A `Reapply "…"` counts as two, being a revert of a revert.
+     */
+    private fun unwrapReverts(subject: String): Pair<Int, String> {
+        var depth = 0
+        var current = subject
+        while (depth < 10) {
+            val reapplied = GIT_REAPPLY.matchEntire(current)?.groupValues?.get(1)
+            val inner = reapplied
+                ?: GIT_REVERT.matchEntire(current)?.groupValues?.get(1)
+                ?: parseHeader(current)?.takeIf { it.type == "revert" }?.subject
+                ?: break
+            depth += if (reapplied != null) 2 else 1
+            current = inner.trim()
+        }
+        return depth to current
+    }
+
+    /** The title of the commit a revert names by sha, for a `Revert "Merge pull request …"` whose own subject says nothing. */
+    private fun revertedTitle(repoRoot: File, change: Change): String? {
+        val sha = REVERTED_SHA.find(change.message)?.groupValues?.get(1) ?: return null
+        val message = gitOrNull(repoRoot, "log", "-1", "--format=%B", sha)?.trim() ?: return null
+        val subject = message.lineSequence().first().trim()
+        val title = if (PR_MERGE.containsMatchIn(subject)) message.substringAfter('\n', "").trim().lineSequence().firstOrNull()?.trim() else subject
+        return title?.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * The first-parent changes in [range] that touched [pathspec]. A merge counts as one change
+     * when it is a GitHub PR merge or carries a PR title (`… (#N)`); any other merge is opened up
+     * and its own first-parent line is walked the same way.
+     */
+    private fun changes(repoRoot: File, range: String, pathspec: String, depth: Int): List<Change> {
         val result = mutableListOf<Change>()
-        for (commit in firstParentCommits(repoRoot, range)) {
-            if (commit.parents.size < 2) {
-                result += Change(commit.sha, commit.message, SQUASH_PR.find(commit.subject)?.groupValues?.get(1)?.toInt(), null, commit.parents.firstOrNull())
-                continue
-            }
-            val pr = PR_MERGE.find(commit.subject)
-            if (pr != null) {
-                val message = commit.body.ifEmpty { commit.subject }
-                result += Change(commit.sha, message, pr.groupValues[1].toInt(), pr.groupValues[2], commit.parents[0])
-            } else if (depth < MAX_MERGE_DEPTH) {
-                result += changes(repoRoot, "${commit.parents[0]}..${commit.parents[1]}", depth + 1)
+        for (commit in firstParentCommits(repoRoot, range, pathspec)) {
+            val titled = SQUASH_PR.find(commit.subject)?.groupValues?.get(1)?.toInt()
+            val merged = if (commit.parents.size > 1) PR_MERGE.find(commit.subject) else null
+            when {
+                merged != null ->
+                    result += Change(commit.sha, commit.body.ifEmpty { commit.subject }, merged.groupValues[1].toInt(), merged.groupValues[2], commit.parents[0])
+                commit.parents.size < 2 || titled != null ->
+                    result += Change(commit.sha, commit.message, titled, null, commit.parents.firstOrNull())
+                depth < MAX_MERGE_DEPTH ->
+                    result += changes(repoRoot, "${commit.parents[0]}..${commit.parents[1]}", pathspec, depth + 1)
             }
         }
         return result
     }
 
-    private fun firstParentCommits(repoRoot: File, range: String): List<Commit> =
-        git(repoRoot, "log", "--first-parent", "--format=%H%x1f%P%x1f%B%x1e", range).split('\u001e').mapNotNull { record ->
+    /**
+     * The commits on [range]'s first-parent line that differ from their first parent under
+     * [pathspec]; with `--first-parent`, git compares a merge to its first parent only.
+     */
+    private fun firstParentCommits(repoRoot: File, range: String, pathspec: String): List<Commit> =
+        git(repoRoot, "log", "--first-parent", "--format=%H%x1f%P%x1f%B%x1e", range, "--", pathspec).split('\u001e').mapNotNull { record ->
             val fields = record.trim('\n', '\r').split('\u001f')
             if (fields.size < 3 || fields[0].isBlank()) null
             else Commit(fields[0].trim(), fields[1].trim().split(' ').filter { it.isNotBlank() }, fields[2].trim())
         }
 
     private fun changedFiles(repoRoot: File, change: Change, pathspec: String): List<String> =
-        git(repoRoot, "diff", "--name-only", "--no-renames", change.from ?: EMPTY_TREE, change.sha, "--", pathspec)
-            .lines().map { it.trim() }.filter { it.isNotEmpty() }
+        git(repoRoot, "diff", "--name-only", "--no-renames", "--relative", "-z", change.from ?: EMPTY_TREE, change.sha, "--", pathspec)
+            .split('\u0000').filter { it.isNotEmpty() }
 
     private fun isIgnored(pathInPackage: String): Boolean {
         val name = pathInPackage.substringAfterLast('/')
-        val top = pathInPackage.substringBefore('/')
-        return name in IGNORED_NAMES || name.endsWith(".md", ignoreCase = true) ||
-            (pathInPackage.contains('/') && top in IGNORED_TOP_DIRS)
+        val nested = pathInPackage.contains('/')
+        return name in IGNORED_NAMES || (!nested && name.endsWith(".md", ignoreCase = true)) ||
+            (nested && pathInPackage.substringBefore('/') in IGNORED_TOP_DIRS)
     }
 
     /**
@@ -408,7 +541,7 @@ object ChangelogWriter {
     private fun dependencyOnlyChanges(repoRoot: File, change: Change, path: String): List<String>? {
         val before = readJson(repoRoot, change.from ?: return null, path) ?: return null
         val after = readJson(repoRoot, change.sha, path) ?: return null
-        if (before - "version" - DEPENDENCY_FIELDS.toSet() != after - "version" - DEPENDENCY_FIELDS.toSet()) return null
+        if (before - "version" - DEPENDENCY_FIELDS != after - "version" - DEPENDENCY_FIELDS) return null
         val changes = mutableListOf<String>()
         for (field in RUNTIME_DEPENDENCY_FIELDS) {
             val old = before[field] as? Map<*, *> ?: emptyMap<String, Any?>()
@@ -428,17 +561,16 @@ object ChangelogWriter {
     }
 
     private fun readJson(repoRoot: File, rev: String, path: String): Map<String, Any?>? {
-        val text = gitOrNull(repoRoot, "show", "$rev:$path") ?: return null
+        val text = gitOrNull(repoRoot, "show", "$rev:./$path") ?: return null
         return try { MAPPER.readValue<Map<String, Any?>>(text) } catch (_: Exception) { null }
     }
 
-    /** The reverted header of a `Revert "…"` subject or a `revert: …` header, else null. */
-    private fun revertedSubject(subject: String): String? =
-        GIT_REVERT.matchEntire(subject)?.groupValues?.get(1)
-            ?: parseHeader(subject)?.takeIf { it.type == "revert" }?.subject
-
     private fun branchType(branch: String?): String? =
         branch?.split('/')?.map { it.lowercase() }?.firstOrNull { it in KNOWN_TYPES }
+
+    /** A readable title from a branch name, for a PR merge that kept no title: `acme/fix/retry-upload` gives "retry upload". */
+    private fun branchTitle(branch: String?): String =
+        branch.orEmpty().substringAfterLast('/').replace(Regex("[-_]+"), " ").trim()
 
     private fun line(entry: Entry, repoUrl: String?): String {
         val scope = entry.scope?.let { "**$it:** " } ?: ""
@@ -450,12 +582,6 @@ object ChangelogWriter {
 
     private fun hasTag(repoRoot: File, tag: String): Boolean =
         gitOrNull(repoRoot, "rev-parse", "-q", "--verify", "refs/tags/$tag") != null
-
-    private fun differsFromHead(repoRoot: File, file: File): Boolean {
-        val path = file.relativeTo(repoRoot).invariantSeparatorsPath
-        val tracked = gitOrNull(repoRoot, "ls-files", "--error-unmatch", "--", path) != null
-        return !tracked || run(repoRoot, "diff", "--quiet", "HEAD", "--", path).first != 0
-    }
 
     private fun git(repoRoot: File, vararg args: String): String {
         val (code, out) = run(repoRoot, *args)
@@ -469,6 +595,7 @@ object ChangelogWriter {
     private fun run(repoRoot: File, vararg args: String): Pair<Int, String> {
         val builder = ProcessBuilder(listOf("git") + args).directory(repoRoot).redirectError(ProcessBuilder.Redirect.DISCARD)
         builder.environment()["GIT_TERMINAL_PROMPT"] = "0"
+        builder.environment()["GIT_LITERAL_PATHSPECS"] = "1"
         val process = builder.start()
         val out = process.inputStream.bufferedReader().readText()
         return process.waitFor() to out
