@@ -283,14 +283,89 @@ class ChangelogWriterTest {
         assertTrue(warnings.any { it.contains("widget-v1.0.4 not found") }, warnings.toString())
     }
 
-    /** A package with no earlier release tag gets no notes. */
+    /**
+     * A package with no release tag at all is on its first release: its whole history is listed,
+     * under a heading that links the new tag since there is nothing to compare with.
+     */
     @Test
-    fun `writes nothing without an earlier release tag`() {
+    fun `lists the whole history on a first release`() {
         val repo = repo()
         repo.git("tag", "-d", "widget-v1.0.0")
         repo.commit("feat: one", "$widget/src/one.ts" to "1\n")
 
-        assertNull(release(repo))
+        assertNotNull(release(repo, previous = "1.0.0", version = "1.0.0"))
+        val text = changelog(repo)
+        assertTrue(text.contains("## [1.0.0]($url/tree/widget-v1.0.0) (2026-11-25)"), text)
+        assertTrue(text.contains("### Features\n\n* one"), text)
+    }
+
+    /**
+     * A package moved to zbb has only its lerna tag (`<npm name>@<version>`): the notes start
+     * there, where lerna's changelog stops, and a lerna pre-release tag is not a release.
+     */
+    @Test
+    fun `starts at the lerna tag when zbb has not released the package yet`() {
+        val repo = repo()
+        repo.git("tag", "-d", "widget-v1.0.0")
+        repo.commit("feat: released under lerna", "$widget/src/old.ts" to "1\n")
+        repo.git("tag", "-a", "@acme/widget@1.0.0", "-m", "@acme/widget@1.0.0")
+        repo.commit("fix: after the move to zbb", "$widget/src/new.ts" to "1\n")
+        repo.git("tag", "-a", "@acme/widget@1.0.1-rc.0", "-m", "@acme/widget@1.0.1-rc.0")
+
+        release(repo, previous = "1.0.0", version = "1.0.1")
+        val text = changelog(repo)
+        assertTrue(text.contains("compare/@acme/widget@1.0.0...widget-v1.0.1"), text)
+        assertTrue(text.contains("* after the move to zbb"), text)
+        assertFalse(text.contains("released under lerna"), text)
+    }
+
+    /** Writes a package.json with the given `files` JSON (or none) and, unless null, a CHANGELOG.md. */
+    private fun packageWith(files: String?, changelog: String? = "# Changelog\n\n## [1.0.0] (2026-11-25)\n\n* a\n"): File {
+        val dir = File(tmp, "pkg-${System.nanoTime()}").apply { mkdirs() }
+        val filesJson = if (files == null) "" else "\n  \"files\": $files,"
+        File(dir, "package.json").writeText("{\n  \"name\": \"@acme/pkg\",\n  \"version\": \"1.0.0\",$filesJson\n  \"nyc\": { \"files\": [\"src\"] }\n}\n")
+        if (changelog != null) File(dir, "CHANGELOG.md").writeText(changelog)
+        return File(dir, "package.json")
+    }
+
+    /**
+     * For the publish, CHANGELOG.md joins the top-level `files` (npm no longer includes it by
+     * itself); the previous text comes back so the caller can restore it, and a `files` key
+     * nested elsewhere is left alone.
+     */
+    @Test
+    fun `adds the changelog to the published files`() {
+        val packageJson = packageWith("[\"dist\", \"api.yml\"]")
+        val before = packageJson.readText()
+
+        assertEquals(before, ChangelogWriter.shipWith(packageJson))
+        val tree = com.fasterxml.jackson.databind.ObjectMapper().readTree(packageJson)
+        assertEquals(listOf("dist", "api.yml", "CHANGELOG.md"), tree["files"].map { it.asText() })
+        assertEquals(listOf("src"), tree["nyc"]["files"].map { it.asText() })
+        assertEquals("@acme/pkg", tree["name"].asText())
+    }
+
+    /**
+     * package.json is left untouched when the changelog already ships (by name or by a glob),
+     * when there is no `files` list (npm then packs everything), and when there is no changelog
+     * or only an empty one.
+     */
+    @Test
+    fun `leaves the published files alone when there is nothing to add`() {
+        val untouched = listOf(
+            packageWith("[\"dist\", \"*.md\"]"),
+            packageWith("[\"CHANGELOG.md\"]"),
+            packageWith("[\"./changelog.md\"]"),
+            packageWith("[\"**\"]"),
+            packageWith(null),
+            packageWith("[\"dist\"]", changelog = null),
+            packageWith("[\"dist\"]", changelog = ""),
+        )
+        for (packageJson in untouched) {
+            val before = packageJson.readText()
+            assertNull(ChangelogWriter.shipWith(packageJson), before)
+            assertEquals(before, packageJson.readText())
+        }
     }
 
     /** Uncommitted changes in the package ship without a commit to describe them, so the release warns. */

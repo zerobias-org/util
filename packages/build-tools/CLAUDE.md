@@ -123,7 +123,9 @@ validate → generate → compile → test → buildArtifacts → gate → publi
 A standard-mode release writes the package's `CHANGELOG.md` from conventional commits, into the same `chore(release)` commit as the version bump. Single-module repos do this in `commitVersion`, multi-module repos in the pre-matrix `versionStandardPackages`. It runs on main only: branch pre-releases make no commit, so they write nothing. The dataloader loads this file into the catalog, where the artifact page shows it.
 
 - **Range:** from the previous release tag to HEAD, along main's first-parent line.
-  - The previous tag is `<vendor>-<product>-v<previous version>`, fetched from origin when a local clone lacks it. Without it, the highest earlier tag of exactly that form is used. A package with no earlier release tag gets no notes.
+  - The previous tag is `<vendor>-<product>-v<previous version>`, fetched from origin when a local clone lacks it. Without it, the highest earlier tag of exactly that form is used.
+  - A package zbb hasn't released yet starts at its lerna-era tag, `<npm name>@<version>`, so its notes continue where lerna's changelog stops.
+  - A package with no release tag of either kind is on its first release, and its whole history is listed.
   - Each commit on that line that touched the package is one entry: a squash-merged PR, a GitHub merge commit (the PR title comes from its body), or a direct commit. A PR's own commits never show.
   - A merge that isn't a PR merge is opened up, and its commits are judged one by one.
   - Git narrows the history to the package's path, so the cost follows the package's own changes: all 660 org/product packages take about 30 seconds.
@@ -138,7 +140,8 @@ A standard-mode release writes the package's `CHANGELOG.md` from conventional co
   - A revert and its target in the same release cancel out, and reverting that revert (`Reapply "…"`) puts the change back.
   - When nothing is left there is no section, so versions without real changes have no entry.
 - **Existing files:** the section goes above the first release already in the file, at whatever heading level. Lerna wrote minor and major releases as `# [x.y.z]`. A re-run replaces its own section.
-- **Gate stamp:** many packages list `CHANGELOG.md` in `files`, which makes it part of the stamp's source hash.
+- **Shipped in the package:** npm no longer packs a changelog by itself, and the catalog reads it from the published package. So `publishNpmExec` (zb.typescript, zb.typescript-collectorbot, zb.content, zb.npm-only) adds `CHANGELOG.md` to the `files` of the transient package.json right before `npm publish` and takes it out right after. The committed package.json is never changed, so gate stamps are unaffected.
+- **Gate stamp:** a few packages cover `CHANGELOG.md` in their committed `files` (org/collectorbot's, through `*.md`), which makes it part of the stamp's source hash.
   - `commitVersion` writes and stages the notes before it refreshes the stamp.
   - `versionStandardPackages` updates a stamp that was current to the new `sourceHash`, using the module's `computeSourceHash` extra. A module whose stamp isn't current gets no notes, so notes can never turn a stamp the matrix would accept into one it refuses.
 - **Never blocks a release:** any failure, including a `CHANGELOG.md` that can't be staged, puts the file back, logs a warning, and the release goes on without notes.

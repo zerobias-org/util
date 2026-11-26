@@ -1,6 +1,8 @@
 package com.zerobias.buildtools.standard
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sun.net.httpserver.HttpServer
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -10,20 +12,26 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.URLDecoder
+import java.util.Base64
+import java.util.zip.GZIPInputStream
 
 /**
- * Runs the standard-mode release steps for real, through the zb.base and zb.workspace plugins, on
- * throwaway git repos: `versionStandardPackages -Ppush=false` for a multi-module repo and
- * `bumpVersion commitVersion` for a single module. Nothing is published or pushed.
+ * Runs the standard-mode release steps for real, through the zb.base, zb.workspace and zb.npm-only
+ * plugins, on throwaway git repos: `versionStandardPackages -Ppush=false` for a multi-module repo,
+ * `bumpVersion commitVersion` for a single module, and `publishNpmExec` for the publish itself.
+ * Nothing leaves the machine: pushes are off, and npm talks to a fake registry in this test.
  *
- * Each package lists CHANGELOG.md in `files`, as most module packages do, so the notes are part of
- * the gate stamp's source hash. The tests check the release commit carries the notes, and that the
- * committed stamp still passes gateCheck afterwards. A local fake registry (each package's `.npmrc`)
- * reports 1.0.0 as published, so VersionBumper moves to 1.0.1 and the previous release's tag is
- * `<prefix>1.0.0`, without touching the network.
+ * The release tests' packages list CHANGELOG.md in `files`, as a few real ones do through `*.md`,
+ * so the notes are part of the gate stamp's source hash. Those tests check the release commit
+ * carries the notes, and that the committed stamp still passes gateCheck afterwards.
+ *
+ * The fake registry (each package's `.npmrc`) reports 1.0.0 as published, so VersionBumper moves
+ * to 1.0.1 and the previous release's tag is `<prefix>1.0.0`, without touching the network. It
+ * also accepts a publish and keeps the tarball for the test to open.
  */
 class ChangelogReleaseFunctionalTest {
 
@@ -32,21 +40,42 @@ class ChangelogReleaseFunctionalTest {
 
     private lateinit var registry: HttpServer
 
-    /** Serves every package as having exactly 1.0.0 published. */
+    /** The tarball of the last `npm publish` the fake registry received. */
+    @Volatile
+    private var publishedTarball: ByteArray? = null
+
+    /** Serves every package as having exactly 1.0.0 published, answers `npm whoami`, and accepts a publish (a PUT), keeping its tarball. */
     @BeforeEach
     fun startRegistry() {
         registry = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         registry.createContext("/") { exchange ->
             val name = URLDecoder.decode(exchange.requestURI.rawPath.removePrefix("/"), "UTF-8")
-            val body = """{"_id":"$name","name":"$name","dist-tags":{"latest":"1.0.0"},""" +
-                """"versions":{"1.0.0":{"name":"$name","version":"1.0.0","dist":{"tarball":"http://127.0.0.1/x.tgz","shasum":"0"}}},""" +
-                """"time":{"created":"2026-01-01T00:00:00.000Z","modified":"2026-01-01T00:00:00.000Z","1.0.0":"2026-01-01T00:00:00.000Z"}}"""
+            val body = if (exchange.requestMethod == "PUT") {
+                val attachment = ObjectMapper().readTree(exchange.requestBody.readBytes())["_attachments"].first()
+                publishedTarball = Base64.getDecoder().decode(attachment["data"].asText())
+                """{"ok":true,"id":"$name"}"""
+            } else if (name == "-/whoami") {
+                """{"username":"zbtest"}"""
+            } else {
+                """{"_id":"$name","name":"$name","dist-tags":{"latest":"1.0.0"},""" +
+                    """"versions":{"1.0.0":{"name":"$name","version":"1.0.0","dist":{"tarball":"http://127.0.0.1/x.tgz","shasum":"0"}}},""" +
+                    """"time":{"created":"2026-01-01T00:00:00.000Z","modified":"2026-01-01T00:00:00.000Z","1.0.0":"2026-01-01T00:00:00.000Z"}}"""
+            }
             val bytes = body.toByteArray()
             exchange.responseHeaders.add("Content-Type", "application/json")
-            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.sendResponseHeaders(if (exchange.requestMethod == "PUT") 201 else 200, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }
         registry.start()
+    }
+
+    /** The paths inside a published npm tarball. */
+    private fun tarEntries(tarball: ByteArray): List<String> {
+        val names = mutableListOf<String>()
+        TarArchiveInputStream(GZIPInputStream(ByteArrayInputStream(tarball))).use { tar ->
+            while (true) names += (tar.nextEntry ?: break).name
+        }
+        return names
     }
 
     @AfterEach
@@ -99,6 +128,7 @@ class ChangelogReleaseFunctionalTest {
         } + mapOf(
             "GIT_CONFIG_GLOBAL" to File(tmp, "empty-gitconfig").apply { if (!exists()) writeText("") }.absolutePath,
             "GIT_CONFIG_NOSYSTEM" to "1",
+            "NPM_TOKEN" to "test-token",
         )
 
     private fun gradle(dir: File, vararg args: String): GradleRunner =
@@ -252,6 +282,36 @@ class ChangelogReleaseFunctionalTest {
         assertEquals(setOf("gate-stamp.json", "package.json"), git(dir, "show", "--name-only", "--format=", "HEAD").lines().toSet())
         assertEquals("", File(dir, "CHANGELOG.md").readText())
         gradle(dir, "gateCheck").build()
+    }
+
+    /**
+     * The publish itself, through zb.npm-only: `files` doesn't list the changelog, yet the tarball
+     * the registry receives contains CHANGELOG.md, and package.json is back to its committed text
+     * once the build ends.
+     */
+    @Test
+    fun `publishNpmExec ships the changelog and leaves package json as committed`() {
+        assumeTrue(npmAvailable(), "npm is needed to publish")
+        val dir = File(tmp, "acme/pack").apply { mkdirs() }
+        File(dir, "settings.gradle.kts").writeText("rootProject.name = \"pack\"\n")
+        File(dir, "build.gradle.kts").writeText("plugins { id(\"zb.npm-only\") }\nextra[\"npmOnlyValidator\"] = { _: org.gradle.api.Project -> }\n")
+        File(dir, "package.json").writeText("""{ "name": "@zbtest/pack", "version": "1.0.1", "files": ["tsconfig.json"] }""" + "\n")
+        File(dir, "tsconfig.json").writeText("{}\n")
+        File(dir, "CHANGELOG.md").writeText("# Changelog\n\n## [1.0.1] (2026-11-26)\n\n### Features\n\n* a pack\n")
+        File(dir, ".npmrc").writeText("registry=$registryUrl\n//127.0.0.1:${registry.address.port}/:_authToken=test-token\n")
+        File(dir, ".gitignore").writeText(".gradle/\nbuild/\n.zbb-gradle/\n")
+        initRepo(dir)
+        commitAll(dir, "feat: a pack")
+        val committed = File(dir, "package.json").readText()
+
+        val result = gradle(dir, "publishNpmExec").build()
+
+        val tarball = publishedTarball
+        assertTrue(tarball != null, "nothing was published:\n${result.output}")
+        val entries = tarEntries(tarball!!)
+        assertTrue("package/CHANGELOG.md" in entries, entries.toString())
+        assertTrue("package/tsconfig.json" in entries, entries.toString())
+        assertEquals(committed, File(dir, "package.json").readText())
     }
 
     /** A single-module repo at `acme/single`, released as 1.0.0, with one fix since and a current, committed gate stamp. */
