@@ -1833,10 +1833,13 @@ val publishReleaseEvent by tasks.registering {
         // name+version so the CI workflow's release-announcement step uses
         // these values instead of its raw-package.json fallback (which can
         // report a pre-release suffix zbb already stripped on main).
-        com.zerobias.buildtools.util.ReleaseAnnouncement.writePackagesFile(
-            pkgs, project.rootDir, java.io.File("/tmp/published-packages.json"), logger
-        )
-        com.zerobias.buildtools.util.ReleaseAnnouncement.announce(pkgs, project.rootDir, branch, githubRepo, logger)
+        val packagesFile = java.io.File((project.findProperty("zb.publishedPackagesFile") as String?) ?: "/tmp/published-packages.json")
+        com.zerobias.buildtools.util.ReleaseAnnouncement.writePackagesFile(pkgs, project.rootDir, packagesFile, logger)
+        val eventSent = com.zerobias.buildtools.util.ReleaseAnnouncement.announce(pkgs, project.rootDir, branch, githubRepo, logger)
+        // Written again with the packages whose release event went out, so the workflow's step doesn't announce them twice.
+        if (eventSent.isNotEmpty()) {
+            com.zerobias.buildtools.util.ReleaseAnnouncement.writePackagesFile(pkgs, project.rootDir, packagesFile, logger, eventSent)
+        }
     }
 }
 

@@ -149,6 +149,17 @@ A standard-mode release writes the package's `CHANGELOG.md` from conventional co
 - **Announcement:** `ReleaseAnnouncement.notesFor` sends a release's own section, capped at 20,000 characters, and nothing when the newest section belongs to another version.
 - **Known limit:** a commit that lands on main while a single-module release is in flight ends up behind the release tag after `pushVersion` rebases. Neither the next publish's change detection nor its notes see it.
 
+### Release events (`util/ReleaseAnnouncement.kt`)
+
+`publishReleaseEvent` (zb.base) announces a standard-mode publish. Environments load a release when its event reaches them, so an event that is missing means the release is never loaded.
+
+- **The event:** one per published package, sent to the event router Lambda through the `aws` CLI. It carries the published name and version, the package's `zerobias` block and its npm dist-tags. It is sent only when `AWS_REGION` is set and `aws` is on the PATH, which is the case in the publish workflow.
+- **The packages file:** `/tmp/published-packages.json` lists what was published as `[{name, version, location}]`. The workflow's announcement step (org/devops `nx-actions/release-announcement`) reads it for its Slack message and sends a release event of its own for every package in it. `-Pzb.publishedPackagesFile=<path>` moves the file; the tests use that.
+- **One event per release:** a package whose event zbb sent gets `"releaseEventSent": true` in the file, and the workflow's step skips it.
+  - A package is marked only when the send succeeded and the dist-tags in the event name the published version (`namesVersion`). Environments decide what to load from the dist-tags, so an event with none, or with tags read before the registry caught up, loads nowhere.
+  - Every other package stays unmarked, and the workflow's step announces it. A wrong mark would mean no event at all, so when in doubt a package is left unmarked.
+- **Tests run a real `publish`.** `ChangelogReleaseFunctionalTest` gives its builds an environment of a few allowed variables and an empty home directory. Keep it that way: `publish` posts to Slack and calls AWS whenever its environment holds a webhook or credentials, and a developer's shell does.
+
 ### zb.typescript
 
 Extends base with Node.js/TypeScript lifecycle:
