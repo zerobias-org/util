@@ -1152,6 +1152,7 @@ fun patchPackageJsonVersion(pkgFile: java.io.File, newVersion: String): String {
 
 // Store original package.json content for restoration
 var originalPackageJson: String? = null
+var packageJsonBeforeChangelog: String? = null
 
 // restorePackageJson is defined BEFORE patchPackageJson so that
 // patchPackageJson.finalizedBy(restorePackageJson) can reference it. Anchoring
@@ -1350,8 +1351,11 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
             stagedPackages.add(name to project.projectDir)
             throw org.gradle.api.tasks.StopExecutionException()
         }
+        // CHANGELOG.md goes into the tarball: listed in `files` for the publish only, and taken out again in doLast.
+        packageJsonBeforeChangelog = com.zerobias.buildtools.util.ChangelogWriter.shipWith(project.file("package.json"))
     }
     doLast {
+        runCatching { packageJsonBeforeChangelog?.let { project.file("package.json").writeText(it) } }
         val (name, _) = readPackageNameVersion()
         stagedPackages.add(name to project.projectDir)
     }

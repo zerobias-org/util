@@ -28,6 +28,9 @@ object ReleaseAnnouncement {
         .connectTimeout(java.time.Duration.ofSeconds(10))
         .build()
 
+    /** The packages-file key that marks a package whose release event this build already sent. */
+    const val EVENT_SENT_KEY = "releaseEventSent"
+
     data class PublishedPackage(
         val name: String,
         val version: String,
@@ -49,6 +52,7 @@ object ReleaseAnnouncement {
      * @param branch    current git branch name
      * @param githubRepo  "owner/repo" slug (from git remote), or null
      * @param logger    Gradle logger for lifecycle/warn output
+     * @return the names of the packages whose release event was sent, complete (see [sendLambdaEvents])
      */
     fun announce(
         packages: List<PublishedPackage>,
@@ -56,11 +60,11 @@ object ReleaseAnnouncement {
         branch: String,
         githubRepo: String?,
         logger: Logger,
-    ) {
-        if (packages.isEmpty()) return
+    ): Set<String> {
+        if (packages.isEmpty()) return emptySet()
 
         sendSlack(packages, repoRoot, branch, githubRepo, logger)
-        sendLambdaEvents(packages, repoRoot, branch, githubRepo, logger)
+        return sendLambdaEvents(packages, repoRoot, branch, githubRepo, logger)
     }
 
     /**
@@ -80,6 +84,10 @@ object ReleaseAnnouncement {
      * (`"location":"$(pwd)"`); the action resolves it via
      * `realpath --relative-to=.` when building the changelog URL.
      *
+     * A package named in [eventSent] also gets `"releaseEventSent": true`. The workflow's
+     * announcement step sends a release event for every package in the file, and skips the
+     * marked ones, so a release is announced once and not twice.
+     *
      * Best-effort: a write failure logs a warning and never fails the build —
      * the workflow's fallback still produces a (less accurate) file.
      */
@@ -88,18 +96,23 @@ object ReleaseAnnouncement {
         repoRoot: File,
         outFile: File,
         logger: Logger,
+        eventSent: Set<String> = emptySet(),
     ) {
         if (packages.isEmpty()) return
         try {
             val entries = packages.map { pkg ->
-                mapOf(
+                val entry = mutableMapOf<String, Any>(
                     "name" to pkg.name,
                     "version" to pkg.version,
                     "location" to File(repoRoot, pkg.location).absolutePath,
                 )
+                if (pkg.name in eventSent) entry[EVENT_SENT_KEY] = true
+                entry
             }
             outFile.writeText(mapper.writeValueAsString(entries))
-            logger.lifecycle("[announce] wrote ${packages.size} package(s) to ${outFile.absolutePath}")
+            val marked = packages.count { it.name in eventSent }
+            val note = if (marked > 0) ", $marked marked as announced" else ""
+            logger.lifecycle("[announce] wrote ${packages.size} package(s) to ${outFile.absolutePath}$note")
         } catch (e: Exception) {
             logger.warn("[announce] failed to write ${outFile.absolutePath}: ${e.message}")
         }
@@ -225,6 +238,11 @@ object ReleaseAnnouncement {
      *
      * Uses the `aws` CLI so we don't need the AWS SDK as a Gradle dependency.
      * Requires: `aws` CLI on PATH + valid AWS credentials in the environment.
+     *
+     * Returns the names of the packages whose event was sent complete: the invoke succeeded and
+     * the dist-tags in the event name the published version ([namesVersion]). The caller marks
+     * those in the packages file, and the workflow's announcement step then sends no second
+     * event for them. Every other package is left to that step.
      */
     private fun sendLambdaEvents(
         packages: List<PublishedPackage>,
@@ -232,13 +250,13 @@ object ReleaseAnnouncement {
         @Suppress("UNUSED_PARAMETER") branch: String,
         githubRepo: String?,
         logger: Logger,
-    ) {
+    ): Set<String> {
         // Gate on AWS_REGION — if not set, we're not in a CI environment
         // with AWS credentials configured.
         val awsRegion = System.getenv("AWS_REGION")
         if (awsRegion.isNullOrBlank()) {
             logger.lifecycle("[announce] AWS_REGION not set — skipping Lambda release events")
-            return
+            return emptySet()
         }
 
         // Verify aws CLI is available
@@ -251,7 +269,7 @@ object ReleaseAnnouncement {
 
         if (!awsAvailable) {
             logger.lifecycle("[announce] aws CLI not available — skipping Lambda release events")
-            return
+            return emptySet()
         }
 
         val repository = if (githubRepo != null) {
@@ -264,6 +282,7 @@ object ReleaseAnnouncement {
         } else ""
 
         var sent = 0
+        val complete = linkedSetOf<String>()
         for (pkg in packages) {
             if (pkg.isJava) continue  // Java artifacts have no package.json / npm dist-tags
             val pkgDir = File(repoRoot, pkg.location)
@@ -289,6 +308,7 @@ object ReleaseAnnouncement {
                 val proc = ProcessBuilder(
                     "npm", "view", "${pkg.name}@${pkg.version}", "dist-tags", "--json"
                 )
+                    .directory(pkgDir)
                     .redirectErrorStream(true)
                     .start()
                 val output = proc.inputStream.bufferedReader().readText()
@@ -335,6 +355,11 @@ object ReleaseAnnouncement {
                 val output = proc.inputStream.bufferedReader().readText()
                 if (proc.waitFor(15, TimeUnit.SECONDS) && proc.exitValue() == 0) {
                     sent++
+                    if (namesVersion(distTags, pkg.version)) {
+                        complete += pkg.name
+                    } else {
+                        logger.warn("[announce] dist-tags read for ${pkg.name}@${pkg.version} don't name it yet ($distTags); leaving its release event to the workflow's announcement step")
+                    }
                 } else {
                     logger.warn("[announce] Lambda invoke failed for ${pkg.name}: ${output.take(300)}")
                 }
@@ -345,7 +370,16 @@ object ReleaseAnnouncement {
         if (sent > 0) {
             logger.lifecycle("[announce] sent $sent release event(s) to auditmation-event-router-events")
         }
+        return complete
     }
+
+    /**
+     * Whether dist-tags read from the registry already show a publish: one of the tags names the
+     * published version. Environments decide what to load from an event's dist-tags, so an event
+     * sent with none, or with tags read before the registry caught up, loads nowhere.
+     */
+    internal fun namesVersion(distTags: Map<*, *>, version: String): Boolean =
+        distTags.values.any { it?.toString() == version }
 
     // ── Helpers ──────────────────────────────────────────────────────────
 

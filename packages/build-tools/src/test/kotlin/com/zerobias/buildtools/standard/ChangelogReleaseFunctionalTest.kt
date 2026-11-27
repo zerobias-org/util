@@ -1,6 +1,8 @@
 package com.zerobias.buildtools.standard
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sun.net.httpserver.HttpServer
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -10,20 +12,30 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.URLDecoder
+import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.GZIPInputStream
 
 /**
- * Runs the standard-mode release steps for real, through the zb.base and zb.workspace plugins, on
- * throwaway git repos: `versionStandardPackages -Ppush=false` for a multi-module repo and
- * `bumpVersion commitVersion` for a single module. Nothing is published or pushed.
+ * Runs the standard-mode release steps for real, through the zb.base, zb.workspace and zb.npm-only
+ * plugins, on throwaway git repos: `versionStandardPackages -Ppush=false` for a multi-module repo,
+ * `bumpVersion commitVersion` for a single module, `publishNpmExec` for the publish itself, and a
+ * whole `publish` from a dev branch for the release event it sends. Nothing leaves the machine:
+ * pushes are off, npm talks to a fake registry in this test, the `aws` CLI is a stand-in script,
+ * and the builds get no AWS credentials.
  *
- * Each package lists CHANGELOG.md in `files`, as most module packages do, so the notes are part of
- * the gate stamp's source hash. The tests check the release commit carries the notes, and that the
- * committed stamp still passes gateCheck afterwards. A local fake registry (each package's `.npmrc`)
- * reports 1.0.0 as published, so VersionBumper moves to 1.0.1 and the previous release's tag is
- * `<prefix>1.0.0`, without touching the network.
+ * The release tests' packages list CHANGELOG.md in `files`, as a few real ones do through `*.md`,
+ * so the notes are part of the gate stamp's source hash. Those tests check the release commit
+ * carries the notes, and that the committed stamp still passes gateCheck afterwards.
+ *
+ * The fake registry (each package's `.npmrc`) reports 1.0.0 as published, so VersionBumper moves
+ * to 1.0.1 and the previous release's tag is `<prefix>1.0.0`, without touching the network. It
+ * also accepts a publish, keeps the tarball for the test to open, and from then on serves the
+ * published version and the dist-tags that `npm dist-tag` moved.
  */
 class ChangelogReleaseFunctionalTest {
 
@@ -32,21 +44,75 @@ class ChangelogReleaseFunctionalTest {
 
     private lateinit var registry: HttpServer
 
-    /** Serves every package as having exactly 1.0.0 published. */
+    private val json = ObjectMapper()
+
+    /** The tarball of the last `npm publish` the fake registry received. */
+    @Volatile
+    private var publishedTarball: ByteArray? = null
+
+    /** What the fake registry holds beyond `1.0.0` on `latest`, by package name: the versions published to it and the dist-tags set on it. */
+    private val publishedVersions = ConcurrentHashMap<String, MutableSet<String>>()
+    private val movedTags = ConcurrentHashMap<String, MutableMap<String, String>>()
+
+    private fun distTags(name: String): Map<String, String> = mapOf("latest" to "1.0.0") + (movedTags[name] ?: emptyMap())
+
+    /** A package's registry document: 1.0.0 and whatever was published since, under the current dist-tags. */
+    private fun packument(name: String): String {
+        val versions = listOf("1.0.0") + (publishedVersions[name] ?: emptySet())
+        return json.writeValueAsString(mapOf(
+            "_id" to name,
+            "name" to name,
+            "dist-tags" to distTags(name),
+            "versions" to versions.associateWith { mapOf("name" to name, "version" to it, "dist" to mapOf("tarball" to "http://127.0.0.1/x.tgz", "shasum" to "0")) },
+            "time" to mapOf("created" to "2026-01-01T00:00:00.000Z", "modified" to "2026-01-01T00:00:00.000Z") + versions.associateWith { "2026-01-01T00:00:00.000Z" },
+        ))
+    }
+
+    /**
+     * Serves every package as having 1.0.0 published and answers `npm whoami`. A publish (a PUT of
+     * the package) adds its version and keeps its tarball, and `npm dist-tag add` and `rm` move the
+     * package's dist-tags.
+     */
     @BeforeEach
     fun startRegistry() {
         registry = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         registry.createContext("/") { exchange ->
-            val name = URLDecoder.decode(exchange.requestURI.rawPath.removePrefix("/"), "UTF-8")
-            val body = """{"_id":"$name","name":"$name","dist-tags":{"latest":"1.0.0"},""" +
-                """"versions":{"1.0.0":{"name":"$name","version":"1.0.0","dist":{"tarball":"http://127.0.0.1/x.tgz","shasum":"0"}}},""" +
-                """"time":{"created":"2026-01-01T00:00:00.000Z","modified":"2026-01-01T00:00:00.000Z","1.0.0":"2026-01-01T00:00:00.000Z"}}"""
+            val path = URLDecoder.decode(exchange.requestURI.rawPath.removePrefix("/"), "UTF-8")
+            val method = exchange.requestMethod
+            val tagRoute = Regex("^-/package/(.+)/dist-tags(?:/(.+))?$").find(path)
+            val body = when {
+                path == "-/whoami" -> """{"username":"zbtest"}"""
+                tagRoute != null -> {
+                    val (name, tag) = tagRoute.destructured
+                    val tags = movedTags.getOrPut(name) { ConcurrentHashMap() }
+                    if (method == "PUT") tags[tag] = json.readTree(exchange.requestBody.readBytes()).asText()
+                    if (method == "DELETE") tags.remove(tag)
+                    json.writeValueAsString(distTags(name))
+                }
+                method == "PUT" -> {
+                    val publish = json.readTree(exchange.requestBody.readBytes())
+                    publishedTarball = Base64.getDecoder().decode(publish["_attachments"].first()["data"].asText())
+                    publish["versions"].fieldNames().forEach { publishedVersions.getOrPut(path) { ConcurrentHashMap.newKeySet() } += it }
+                    publish["dist-tags"]?.fields()?.forEach { movedTags.getOrPut(path) { ConcurrentHashMap() }[it.key] = it.value.asText() }
+                    """{"ok":true,"id":"$path"}"""
+                }
+                else -> packument(path)
+            }
             val bytes = body.toByteArray()
             exchange.responseHeaders.add("Content-Type", "application/json")
-            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.sendResponseHeaders(if (method == "PUT" && tagRoute == null) 201 else 200, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }
         registry.start()
+    }
+
+    /** The paths inside a published npm tarball. */
+    private fun tarEntries(tarball: ByteArray): List<String> {
+        val names = mutableListOf<String>()
+        TarArchiveInputStream(GZIPInputStream(ByteArrayInputStream(tarball))).use { tar ->
+            while (true) names += (tar.nextEntry ?: break).name
+        }
+        return names
     }
 
     @AfterEach
@@ -88,25 +154,54 @@ class ChangelogReleaseFunctionalTest {
     }
 
     /**
-     * The test JVM's environment without CI, GitHub, token or npm registry settings that would
-     * change the run, and with an empty global git config, so the builds' own `git commit` works
-     * from the repo's identity alone, as on a runner that has none.
+     * The environment of the builds under test: only what java, git, node and npm need to run,
+     * an empty home directory, and a few fixed settings. Nothing else of the test JVM's
+     * environment gets through.
+     *
+     * That is deliberate. zbb's `publish` announces a release wherever its environment lets it:
+     * to Slack through a webhook, to AWS, to GitHub with a token. A developer's shell holds all
+     * of those, and a build under test that inherited them posted real announcements. With this
+     * environment it can reach the fake registry and nothing else: no webhook, no token, no AWS
+     * credentials or config, and no `~/.npmrc` pointing at a real registry.
+     *
+     * The global git config is empty too, so the builds' own `git commit` works from the repo's
+     * identity alone, as on a runner that has none.
      */
-    private fun env(): Map<String, String> =
-        System.getenv().filterKeys {
-            it !in setOf("CI", "GITHUB_ACTIONS", "ZB_TOKEN", "ZB_ENV", "GITHUB_REPOSITORY", "GITHUB_SERVER_URL", "ZBB_MONOREPO_EVENT_FILE") &&
-                !it.startsWith("DATALOADER_") && !it.lowercase().startsWith("npm_config_")
-        } + mapOf(
-            "GIT_CONFIG_GLOBAL" to File(tmp, "empty-gitconfig").apply { if (!exists()) writeText("") }.absolutePath,
+    private fun env(): Map<String, String> {
+        val kept = setOf("PATH", "USER", "LOGNAME", "SHELL", "LANG", "TZ", "TERM", "TMPDIR", "TMP", "TEMP", "JAVA_HOME")
+        val empty = File(tmp, "empty-config").apply { if (!exists()) writeText("") }.absolutePath
+        return System.getenv().filterKeys { it in kept || it.startsWith("LC_") } + mapOf(
+            "HOME" to File(tmp, "home").apply { mkdirs() }.absolutePath,
+            "GIT_CONFIG_GLOBAL" to empty,
             "GIT_CONFIG_NOSYSTEM" to "1",
+            "NPM_TOKEN" to "test-token",
+            "AWS_CONFIG_FILE" to empty,
+            "AWS_SHARED_CREDENTIALS_FILE" to empty,
+            "AWS_EC2_METADATA_DISABLED" to "true",
         )
+    }
 
-    private fun gradle(dir: File, vararg args: String): GradleRunner =
+    private fun gradle(dir: File, vararg args: String, extraEnv: Map<String, String> = emptyMap()): GradleRunner =
         GradleRunner.create()
             .withProjectDir(dir)
             .withPluginClasspath()
-            .withEnvironment(env())
+            .withEnvironment(env() + extraEnv)
             .withArguments(*args, "--stacktrace")
+
+    /**
+     * Puts a stand-in for the `aws` CLI first on the build's PATH and sets a region, which is what
+     * makes zbb send release events. The stand-in answers `--version`, appends every other call's
+     * arguments to the returned file, one per line, and exits with [exitCode].
+     */
+    private fun fakeAws(exitCode: Int): Pair<Map<String, String>, File> {
+        val calls = File(tmp, "aws-calls.txt")
+        val bin = File(tmp, "fakebin").apply { mkdirs() }
+        File(bin, "aws").apply {
+            writeText("#!/bin/sh\nif [ \"\$1\" = \"--version\" ]; then echo aws-cli/fake; exit 0; fi\nprintf '%s\\n' \"\$@\" >> '${calls.absolutePath}'\nexit $exitCode\n")
+            setExecutable(true)
+        }
+        return mapOf("PATH" to bin.absolutePath + File.pathSeparator + System.getenv("PATH"), "AWS_REGION" to "us-east-1") to calls
+    }
 
     private fun sourceHash(packageDir: File): String =
         Regex(""""sourceHash"\s*:\s*"([^"]+)"""").find(File(packageDir, "gate-stamp.json").readText())!!.groupValues[1]
@@ -252,6 +347,105 @@ class ChangelogReleaseFunctionalTest {
         assertEquals(setOf("gate-stamp.json", "package.json"), git(dir, "show", "--name-only", "--format=", "HEAD").lines().toSet())
         assertEquals("", File(dir, "CHANGELOG.md").readText())
         gradle(dir, "gateCheck").build()
+    }
+
+    /**
+     * The publish itself, through zb.npm-only: `files` doesn't list the changelog, yet the tarball
+     * the registry receives contains CHANGELOG.md, and package.json is back to its committed text
+     * once the build ends.
+     */
+    @Test
+    fun `publishNpmExec ships the changelog and leaves package json as committed`() {
+        assumeTrue(npmAvailable(), "npm is needed to publish")
+        val dir = File(tmp, "acme/pack").apply { mkdirs() }
+        File(dir, "settings.gradle.kts").writeText("rootProject.name = \"pack\"\n")
+        File(dir, "build.gradle.kts").writeText("plugins { id(\"zb.npm-only\") }\nextra[\"npmOnlyValidator\"] = { _: org.gradle.api.Project -> }\n")
+        File(dir, "package.json").writeText("""{ "name": "@zbtest/pack", "version": "1.0.1", "files": ["tsconfig.json"] }""" + "\n")
+        File(dir, "tsconfig.json").writeText("{}\n")
+        File(dir, "CHANGELOG.md").writeText("# Changelog\n\n## [1.0.1] (2026-11-26)\n\n### Features\n\n* a pack\n")
+        File(dir, ".npmrc").writeText("registry=$registryUrl\n//127.0.0.1:${registry.address.port}/:_authToken=test-token\n")
+        File(dir, ".gitignore").writeText(".gradle/\nbuild/\n.zbb-gradle/\n")
+        initRepo(dir)
+        commitAll(dir, "feat: a pack")
+        val committed = File(dir, "package.json").readText()
+
+        val result = gradle(dir, "publishNpmExec").build()
+
+        val tarball = publishedTarball
+        assertTrue(tarball != null, "nothing was published:\n${result.output}")
+        val entries = tarEntries(tarball!!)
+        assertTrue("package/CHANGELOG.md" in entries, entries.toString())
+        assertTrue("package/tsconfig.json" in entries, entries.toString())
+        assertEquals(committed, File(dir, "package.json").readText())
+    }
+
+    /** An npm-only package at `acme/pack`, version 1.0.1 in package.json, committed on a `dev` branch. */
+    private fun packOnDev(): File {
+        val dir = File(tmp, "acme/pack").apply { mkdirs() }
+        File(dir, "settings.gradle.kts").writeText("rootProject.name = \"pack\"\n")
+        File(dir, "build.gradle.kts").writeText("plugins { id(\"zb.npm-only\") }\nextra[\"npmOnlyValidator\"] = { _: org.gradle.api.Project -> }\n")
+        File(dir, "package.json").writeText("""{ "name": "@zbtest/pack", "version": "1.0.1", "files": ["tsconfig.json"] }""" + "\n")
+        File(dir, "tsconfig.json").writeText("{}\n")
+        File(dir, ".npmrc").writeText("registry=$registryUrl\n//127.0.0.1:${registry.address.port}/:_authToken=test-token\n")
+        File(dir, ".gitignore").writeText(".gradle/\nbuild/\n.zbb-gradle/\n")
+        initRepo(dir)
+        git(dir, "checkout", "-q", "-b", "dev")
+        commitAll(dir, "feat: a pack")
+        return dir
+    }
+
+    /**
+     * Runs `publish` in [dir] as CI's publish job does, and returns the build output and the one
+     * record of the packages file it wrote. It also checks the build found no Slack webhook.
+     */
+    private fun publishFromBranch(dir: File, awsEnv: Map<String, String>): Pair<String, com.fasterxml.jackson.databind.JsonNode> {
+        val packagesFile = File(tmp, "published-packages.json")
+        val result = gradle(dir, "publish", "-PversionAlreadyCommitted=true", "-Pzb.publishedPackagesFile=${packagesFile.absolutePath}", extraEnv = awsEnv).build()
+        assertTrue("SLACK_RELEASES_WEBHOOK not set" in result.output && "Slack notification sent" !in result.output, "the build could reach Slack:\n${result.output}")
+        assertTrue(packagesFile.isFile, "no packages file was written:\n${result.output}")
+        return result.output to json.readTree(packagesFile).single()
+    }
+
+    /**
+     * A whole `publish` from a dev branch. package.json keeps saying 1.0.1 while `1.0.1-dev.0` is
+     * what goes to npm, and the release event zbb sends carries that published version and the
+     * dist-tags that name it. The packages file then marks the package, which is how the
+     * workflow's announcement step knows not to send a second event.
+     */
+    @Test
+    fun `a branch publish marks the package whose release event it sent`() {
+        assumeTrue(npmAvailable(), "npm is needed to publish")
+        val dir = packOnDev()
+        val (awsEnv, awsCalls) = fakeAws(exitCode = 0)
+
+        val (output, record) = publishFromBranch(dir, awsEnv)
+
+        val call = if (awsCalls.isFile) awsCalls.readLines() else emptyList()
+        assertEquals(listOf("lambda", "invoke"), call.take(2), "no release event was sent:\n$output")
+        val event = json.readTree(call[call.indexOf("--payload") + 1])["body"]
+        assertEquals("@zbtest/pack", event["name"].asText())
+        assertEquals("1.0.1-dev.0", event["version"].asText())
+        assertEquals("1.0.1-dev.0", event["distTags"]["dev"]?.asText(), "$event\n$output")
+
+        assertEquals("@zbtest/pack", record["name"].asText())
+        assertEquals("1.0.1-dev.0", record["version"].asText())
+        assertEquals(dir.canonicalFile, File(record["location"].asText()).canonicalFile)
+        assertTrue(record["releaseEventSent"]?.asBoolean() == true, "$record\n$output")
+        assertTrue("\"version\": \"1.0.1\"" in File(dir, "package.json").readText())
+    }
+
+    /** When the event can't be sent, the package stays unmarked, so the workflow's step still announces it. */
+    @Test
+    fun `a branch publish leaves the package unmarked when its release event was not sent`() {
+        assumeTrue(npmAvailable(), "npm is needed to publish")
+        val dir = packOnDev()
+        val (awsEnv, awsCalls) = fakeAws(exitCode = 1)
+
+        val (output, record) = publishFromBranch(dir, awsEnv)
+
+        assertTrue(awsCalls.isFile && "invoke" in awsCalls.readLines(), "the send was never tried:\n$output")
+        assertEquals("1.0.1-dev.0", record["version"].asText())
+        assertFalse(record.has("releaseEventSent"), record.toString())
     }
 
     /** A single-module repo at `acme/single`, released as 1.0.0, with one fix since and a current, committed gate stamp. */

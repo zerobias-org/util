@@ -134,6 +134,7 @@ fun patchPackageJsonVersion(pkgFile: java.io.File, newVersion: String): String {
 }
 
 var originalPackageJson: String? = null
+var packageJsonBeforeChangelog: String? = null
 
 val patchPackageJson by tasks.registering {
     group = "publish"
@@ -208,6 +209,11 @@ val publishNpmExec by tasks.registering(NpmTask::class) {
             logger.lifecycle("[publishNpmExec] ${name}@${ver} already published — skipping")
             throw org.gradle.api.tasks.StopExecutionException()
         }
+        // CHANGELOG.md goes into the tarball: listed in `files` for the publish only, and taken out again in doLast.
+        packageJsonBeforeChangelog = com.zerobias.buildtools.util.ChangelogWriter.shipWith(project.file("package.json"))
+    }
+    doLast {
+        runCatching { packageJsonBeforeChangelog?.let { project.file("package.json").writeText(it) } }
     }
 }
 

@@ -1,6 +1,8 @@
 package com.zerobias.buildtools.util
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ArrayNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.io.File
@@ -43,6 +45,11 @@ import java.time.ZoneOffset
  *
  * When nothing is left, no section is written, so versions without user-facing changes have no
  * entry and no "version bump only" noise.
+ *
+ * **Where the range starts.** At the previous release's tag, `<tagPrefix><version>`. A package
+ * that has none yet starts at its lerna-era tag, `<npm name>@<version>`, so a package moved to
+ * zbb continues where lerna's changelog stops. A package with no release tag of either kind is
+ * on its first release, and its whole history is listed.
  *
  * Everything comes from git, so a local `zbb publish` writes the same notes as CI. Paths are
  * taken relative to [release]'s `repoRoot`, which may be a subdirectory of the git repository
@@ -145,10 +152,10 @@ object ChangelogWriter {
      * the standard-mode release commit (`commitVersion`, `versionStandardPackages`).
      *
      * The previous release is `<tagPrefix><previousVersion>`, fetched from origin when a local
-     * clone lacks it; without it, the highest earlier `<tagPrefix><version>` tag reachable from
-     * HEAD is used. A package with no earlier release tag gets no notes. Outside CI it also warns
-     * when the package has uncommitted changes, since they would ship without a commit to
-     * describe them.
+     * clone lacks it; [resolveBaseTag] has the fallbacks. A package with no release tag at all is
+     * on its first release, and the notes list its whole history. Outside CI it also warns when
+     * the package has uncommitted changes, since they would ship without a commit to describe
+     * them.
      *
      * Never throws and never leaves a half-written file: on any failure, staging included (an
      * ignored CHANGELOG.md, a locked index), the file goes back to what it was, the reason goes
@@ -180,15 +187,12 @@ object ChangelogWriter {
                     warn("[changelog] $label: uncommitted changes ship with this release, and no commit describes them: ${dirty.joinToString(", ")}")
                 }
             }
-            val baseTag = resolveBaseTag(repoRoot, tagPrefix, previousVersion, newVersion, warn)
-            if (baseTag == null) {
-                info("[changelog] $label: no earlier $tagPrefix<version> release tag, so no notes for $newVersion")
-                return null
-            }
+            val baseTag = resolveBaseTag(repoRoot, tagPrefix, previousVersion, newVersion, warn, packageName(packageDir))
+            val since = if (baseTag != null) "since $baseTag" else "in the package's history (first release)"
             val notes = collect(repoRoot, packageDir, baseTag, options.includeDependencies)
             notes.skipped.forEach { info("[changelog] $label: left out ${it.sha.take(9)} \"${it.subject}\": ${it.reason}") }
             if (notes.entries.isEmpty()) {
-                info("[changelog] $label: nothing to list since $baseTag")
+                info("[changelog] $label: nothing to list $since")
                 return null
             }
             val file = File(packageDir, FILE_NAME)
@@ -202,7 +206,7 @@ object ChangelogWriter {
                 warn("[changelog] $label: CHANGELOG.md can't be staged (ignored or locked?), so no notes for $newVersion")
                 return null
             }
-            info("[changelog] $label: ${notes.entries.size} change(s) since $baseTag listed for $newVersion")
+            info("[changelog] $label: ${notes.entries.size} change(s) $since listed for $newVersion")
             if (run(repoRoot, "diff", "--cached", "--quiet", "--", path).first != 0) file else null
         } catch (e: Exception) {
             written?.let { (file, previous) -> restore(repoRoot, file, previous) }
@@ -224,19 +228,20 @@ object ChangelogWriter {
     }
 
     /**
-     * Collects the entries for [packageDir] from [baseTag] to [head], applying the rules in the
-     * class comment. Git narrows the history to the commits that touched the package, so the
-     * cost follows the package's own changes, not the repository's size. Pure apart from reading
-     * git, so it also works on a ref that isn't checked out.
+     * Collects the entries for [packageDir] from [baseTag] to [head], or over the package's whole
+     * history when [baseTag] is null (a first release), applying the rules in the class comment.
+     * Git narrows the history to the commits that touched the package, so the cost follows the
+     * package's own changes, not the repository's size. Pure apart from reading git, so it also
+     * works on a ref that isn't checked out.
      */
-    fun collect(repoRoot: File, packageDir: File, baseTag: String, includeDependencies: Boolean, head: String = "HEAD"): Notes {
+    fun collect(repoRoot: File, packageDir: File, baseTag: String?, includeDependencies: Boolean, head: String = "HEAD"): Notes {
         val dirRel = packageDir.relativeTo(repoRoot).invariantSeparatorsPath
         val pathspec = dirRel.ifEmpty { "." }
         val prefix = if (dirRel.isEmpty()) "" else "$dirRel/"
         val counted = mutableListOf<Counted>()
         val skipped = mutableListOf<Skipped>()
 
-        for (change in changes(repoRoot, "$baseTag..$head", pathspec, 0)) {
+        for (change in changes(repoRoot, if (baseTag != null) "$baseTag..$head" else head, pathspec, 0)) {
             val subject = change.subject.replace(SQUASH_PR, "")
             if (change.pr == null && subject.startsWith("chore(release)")) continue
             val files = changedFiles(repoRoot, change, pathspec).map { it.removePrefix(prefix) }.filterNot(::isIgnored)
@@ -307,23 +312,89 @@ object ChangelogWriter {
     }
 
     /**
-     * The previous release's tag: `<tagPrefix><previousVersion>` when it exists here or on origin,
-     * else the highest earlier tag reachable from HEAD that is exactly `<tagPrefix><x.y.z>`, else
-     * null. The exact form keeps `api-v` from matching another package's `api-v2-v1.0.0`.
+     * The tag the notes start from, in this order:
+     * 1. `<tagPrefix><previousVersion>`, when it exists here or on origin;
+     * 2. the highest earlier tag reachable from HEAD that is exactly `<tagPrefix><x.y.z>`. The
+     *    exact form keeps `api-v` from matching another package's `api-v2-v1.0.0`;
+     * 3. the highest lerna-era tag reachable from HEAD, `<packageName>@<x.y.z>`, for a package
+     *    that hasn't been released by zbb yet;
+     * 4. null: no release tag of either kind, so this is the package's first release.
      */
-    fun resolveBaseTag(repoRoot: File, tagPrefix: String, previousVersion: String?, newVersion: String, warn: (String) -> Unit): String? {
+    fun resolveBaseTag(
+        repoRoot: File,
+        tagPrefix: String,
+        previousVersion: String?,
+        newVersion: String,
+        warn: (String) -> Unit,
+        packageName: String? = null,
+    ): String? {
         val newTag = tagPrefix + newVersion
+        var missing: String? = null
         if (previousVersion != null && previousVersion != newVersion) {
             val tag = tagPrefix + previousVersion
             if (!hasTag(repoRoot, tag)) {
                 gitOrNull(repoRoot, "fetch", "--quiet", "--no-tags", "origin", "refs/tags/$tag:refs/tags/$tag")
             }
             if (hasTag(repoRoot, tag)) return tag
-            warn("[changelog] previous release tag $tag not found; listing changes since the latest earlier $tagPrefix<version> tag")
+            missing = tag
         }
-        val exact = Regex("^${Regex.escape(tagPrefix)}\\d+\\.\\d+\\.\\d+$")
-        return gitOrNull(repoRoot, "for-each-ref", "--merged", "HEAD", "--sort=-v:refname", "--format=%(refname:strip=2)", "refs/tags/$tagPrefix*")
-            ?.lineSequence()?.map { it.trim() }?.firstOrNull { exact.matches(it) && it != newTag }
+        val earlier = highestTag(repoRoot, tagPrefix, newTag)
+        if (earlier != null) {
+            if (missing != null) warn("[changelog] previous release tag $missing not found; listing changes since $earlier")
+            return earlier
+        }
+        return packageName?.let { highestTag(repoRoot, "$it@", null) }
+    }
+
+    /** The highest tag reachable from HEAD that is exactly `<prefix><x.y.z>`, other than [except]. */
+    private fun highestTag(repoRoot: File, prefix: String, except: String?): String? {
+        val exact = Regex("^${Regex.escape(prefix)}\\d+\\.\\d+\\.\\d+$")
+        return gitOrNull(repoRoot, "for-each-ref", "--merged", "HEAD", "--sort=-v:refname", "--format=%(refname:strip=2)", "refs/tags/$prefix*")
+            ?.lineSequence()?.map { it.trim() }?.firstOrNull { exact.matches(it) && it != except }
+    }
+
+    /** The npm name in [packageDir]'s package.json, which lerna used as its tag prefix. */
+    private fun packageName(packageDir: File): String? {
+        val packageJson = File(packageDir, "package.json")
+        if (!packageJson.isFile) return null
+        return Regex(""""name"\s*:\s*"([^"]+)"""").find(packageJson.readText())?.groupValues?.get(1)
+    }
+
+    /**
+     * Makes `npm publish` include the changelog: adds `CHANGELOG.md` to the `files` list of
+     * [packageJson] when the package has a changelog and `files` doesn't already cover it. npm no
+     * longer includes a changelog by itself, and the catalog reads it from the published package.
+     *
+     * For the publish step's transient package.json only. The committed one must not list it, or
+     * the gate stamp's source hash would cover the release notes.
+     *
+     * Never throws, so it can't fail a publish.
+     *
+     * @return the file's previous text, to write back once `npm publish` has run; null when the
+     *   file was left alone
+     */
+    fun shipWith(packageJson: File): String? = try {
+        val changelog = File(packageJson.parentFile, FILE_NAME)
+        val previous = packageJson.readText()
+        val tree = MAPPER.readTree(previous) as? ObjectNode
+        val files = tree?.get("files") as? ArrayNode
+        if (!changelog.isFile || changelog.length() == 0L || files == null || files.any { it.isTextual && coversChangelog(it.asText()) }) {
+            null
+        } else {
+            files.add(FILE_NAME)
+            packageJson.writeText(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(tree) + "\n")
+            previous
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** True when a `files` pattern already selects a root-level CHANGELOG.md: its name, or a glob such as `*.md` or `**`. */
+    private fun coversChangelog(pattern: String): Boolean {
+        val name = pattern.trim().removePrefix("./").removePrefix("/").removePrefix("**/")
+        if (name.contains('/')) return false
+        val glob = Regex.escape(name).replace("*", "\\E.*\\Q").replace("?", "\\E.\\Q")
+        return Regex(glob, RegexOption.IGNORE_CASE).matches(FILE_NAME)
     }
 
     /** Uncommitted paths in the package, apart from the files the release itself writes. */
